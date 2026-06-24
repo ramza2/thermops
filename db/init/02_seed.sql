@@ -176,3 +176,29 @@ INSERT INTO tb_system_config (config_key, config_value, config_type, scope, desc
 ('mape_alert_threshold', '6.0', 'NUMBER', 'GLOBAL', 'MAPE 알림 임계치(%)'),
 ('drift_score_threshold', '0.35', 'NUMBER', 'GLOBAL', '드리프트 점수 임계치')
 ON CONFLICT DO NOTHING;
+
+-- CSV sample data sources (실제 파일 적재 1단계)
+INSERT INTO tb_data_source (data_source_id, source_name, source_type, source_category, connection_ref, connection_info, load_cycle, active_yn) VALUES
+('DS-CSV-001', '열수요 CSV 샘플', 'CSV', 'HEAT_DEMAND', 'heat_demand_sample.csv',
+ '{"file_path":"data/samples/heat_demand_sample.csv","encoding":"utf-8","delimiter":","}', 'HOURLY', 'Y'),
+('DS-CSV-002', '기상 CSV 샘플', 'CSV', 'WEATHER', 'weather_observation_sample.csv',
+ '{"file_path":"data/samples/weather_observation_sample.csv","encoding":"utf-8","delimiter":","}', 'HOURLY', 'Y')
+ON CONFLICT DO NOTHING;
+
+INSERT INTO tb_data_mapping (mapping_id, source_id, mapping_name, target_table, columns) VALUES
+('MAP-CSV-001', 'DS-CSV-001', '열수요 CSV 표준 매핑', 'heat_demand_actual', '[
+  {"source_column":"site_id","target_column":"site_id","required_yn":true},
+  {"source_column":"measured_at","target_column":"measured_at","required_yn":true},
+  {"source_column":"heat_demand","target_column":"heat_demand","required_yn":true},
+  {"source_column":"supply_temp","target_column":"supply_temp","required_yn":false}
+]'),
+('MAP-CSV-002', 'DS-CSV-002', '기상 CSV 표준 매핑', 'weather_observation', '[
+  {"source_column":"weather_area_id","target_column":"weather_area_id","required_yn":true},
+  {"source_column":"measured_at","target_column":"measured_at","required_yn":true},
+  {"source_column":"data_type","target_column":"data_type","required_yn":false},
+  {"source_column":"temperature","target_column":"temperature","required_yn":false},
+  {"source_column":"humidity","target_column":"humidity","required_yn":false},
+  {"source_column":"rainfall","target_column":"rainfall","required_yn":false},
+  {"source_column":"wind_speed","target_column":"wind_speed","required_yn":false}
+]')
+ON CONFLICT DO NOTHING;

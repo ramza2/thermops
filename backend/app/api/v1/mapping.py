@@ -1,4 +1,3 @@
-from datetime import datetime, timezone
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -7,8 +6,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.response import ok, paged
-from app.models.entities import DataMapping
+from app.core.time import utc_now
+from app.models.entities import DataMapping, DataSource
 from app.schemas.api import MappingCreate, MappingUpdate
+from app.services.mapping_service import preview_mapping_data, validate_mapping_rules
 
 router = APIRouter(prefix="/mappings", tags=["Mapping"])
 
@@ -23,6 +24,20 @@ def _mapping_dict(m: DataMapping) -> dict:
         "active_yn": m.active_yn == "Y",
         "created_at": m.created_at.isoformat() if m.created_at else None,
     }
+
+
+async def _get_mapping(db: AsyncSession, mapping_id: str) -> DataMapping:
+    m = (await db.execute(select(DataMapping).where(DataMapping.mapping_id == mapping_id))).scalar_one_or_none()
+    if not m:
+        raise HTTPException(status_code=404, detail="NOT_FOUND")
+    return m
+
+
+async def _get_source(db: AsyncSession, source_id: str) -> DataSource:
+    s = (await db.execute(select(DataSource).where(DataSource.data_source_id == source_id))).scalar_one_or_none()
+    if not s:
+        raise HTTPException(status_code=404, detail="SOURCE_NOT_FOUND")
+    return s
 
 
 @router.get("")
@@ -47,7 +62,7 @@ async def create_mapping(body: MappingCreate, db: AsyncSession = Depends(get_db)
         target_table=body.target_table,
         columns=[c.model_dump() for c in body.columns],
         active_yn="Y",
-        created_at=datetime.now(timezone.utc),
+        created_at=utc_now(),
     )
     db.add(m)
     await db.flush()
@@ -56,44 +71,33 @@ async def create_mapping(body: MappingCreate, db: AsyncSession = Depends(get_db)
 
 @router.put("/{mapping_id}")
 async def update_mapping(mapping_id: str, body: MappingUpdate, db: AsyncSession = Depends(get_db)):
-    m = (await db.execute(select(DataMapping).where(DataMapping.mapping_id == mapping_id))).scalar_one_or_none()
-    if not m:
-        raise HTTPException(status_code=404, detail="NOT_FOUND")
+    m = await _get_mapping(db, mapping_id)
     if body.mapping_name:
         m.mapping_name = body.mapping_name
     if body.target_table:
         m.target_table = body.target_table
     if body.columns:
         m.columns = [c.model_dump() for c in body.columns]
-    m.updated_at = datetime.now(timezone.utc)
+    m.updated_at = utc_now()
     return ok({"mapping_id": mapping_id}, message="데이터 매핑이 수정되었습니다.")
 
 
 @router.post("/{mapping_id}/validate")
 async def validate_mapping(mapping_id: str, db: AsyncSession = Depends(get_db)):
-    m = (await db.execute(select(DataMapping).where(DataMapping.mapping_id == mapping_id))).scalar_one_or_none()
-    if not m:
-        raise HTTPException(status_code=404, detail="NOT_FOUND")
-    cols = m.columns or []
-    errors = [f"필수 컬럼 {c['target_column']} 매핑 누락" for c in cols if c.get("required_yn") and not c.get("source_column")]
-    warnings = ["선택 컬럼 supply_temp가 매핑되지 않았습니다."] if len(cols) < 4 else []
-    return ok({
-        "mapping_id": mapping_id,
-        "valid": len(errors) == 0,
-        "warnings": warnings,
-        "errors": errors,
-    })
+    m = await _get_mapping(db, mapping_id)
+    source = await _get_source(db, m.source_id)
+    return ok(validate_mapping_rules(m, source))
 
 
 @router.post("/{mapping_id}/preview")
 async def preview_mapping(mapping_id: str, db: AsyncSession = Depends(get_db)):
-    m = (await db.execute(select(DataMapping).where(DataMapping.mapping_id == mapping_id))).scalar_one_or_none()
-    if not m:
-        raise HTTPException(status_code=404, detail="NOT_FOUND")
+    m = await _get_mapping(db, mapping_id)
+    source = await _get_source(db, m.source_id)
+    try:
+        rows = preview_mapping_data(source, m, limit=10)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     return ok({
         "mapping_id": mapping_id,
-        "preview_rows": [
-            {"site_id": "SITE-001", "measured_at": "2026-06-24T01:00:00+09:00", "heat_demand": 124.52},
-            {"site_id": "SITE-001", "measured_at": "2026-06-24T02:00:00+09:00", "heat_demand": 118.30},
-        ],
+        "preview_rows": rows,
     })

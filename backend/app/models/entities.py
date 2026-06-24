@@ -156,6 +156,26 @@ class HeatDemandActual(Base):
     site_id: Mapped[str] = mapped_column(String(50))
     measured_at: Mapped[datetime] = mapped_column(DateTime)
     heat_demand: Mapped[float] = mapped_column(Numeric(18, 6))
+    supply_temp: Mapped[float | None] = mapped_column(Numeric(10, 3))
+    return_temp: Mapped[float | None] = mapped_column(Numeric(10, 3))
+    flow_rate: Mapped[float | None] = mapped_column(Numeric(18, 6))
+    quality_flag: Mapped[str | None] = mapped_column(String(20))
+    source_system: Mapped[str | None] = mapped_column(String(100))
+    loaded_at: Mapped[datetime | None] = mapped_column(DateTime)
+
+
+class WeatherObservation(Base):
+    __tablename__ = "tb_weather_observation"
+    weather_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    weather_area_id: Mapped[str] = mapped_column(String(50))
+    measured_at: Mapped[datetime] = mapped_column(DateTime)
+    data_type: Mapped[str] = mapped_column(String(20))
+    temperature: Mapped[float | None] = mapped_column(Numeric(10, 3))
+    humidity: Mapped[float | None] = mapped_column(Numeric(10, 3))
+    wind_speed: Mapped[float | None] = mapped_column(Numeric(10, 3))
+    rainfall: Mapped[float | None] = mapped_column(Numeric(10, 3))
+    apparent_temp: Mapped[float | None] = mapped_column(Numeric(10, 3))
+    loaded_at: Mapped[datetime | None] = mapped_column(DateTime)
 
 
 class ModelPerformanceMetric(Base):

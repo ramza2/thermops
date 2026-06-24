@@ -1,4 +1,3 @@
-from datetime import datetime, timezone
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -6,9 +5,12 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.core.response import accepted, ok, paged
+from app.core.response import ok, paged
+from app.core.time import utc_now
 from app.models.entities import DataQualityRun, DataSource
 from app.schemas.api import DataSourceCreate, DataSourceUpdate
+from app.services.csv_source_service import is_csv_source, test_csv_connection
+from app.services.ingestion_service import IngestionError, fail_ingestion_job, run_ingestion
 
 router = APIRouter(tags=["Data"])
 
@@ -48,7 +50,7 @@ async def create_data_source(body: DataSourceCreate, db: AsyncSession = Depends(
         source_category=body.data_domain,
         connection_info=body.connection_info,
         active_yn="Y" if body.active_yn else "N",
-        created_at=datetime.now(timezone.utc),
+        created_at=utc_now(),
     )
     db.add(ds)
     await db.flush()
@@ -93,14 +95,27 @@ async def test_connection(source_id: str, db: AsyncSession = Depends(get_db)):
     s = (await db.execute(select(DataSource).where(DataSource.data_source_id == source_id))).scalar_one_or_none()
     if not s:
         raise HTTPException(status_code=404, detail="NOT_FOUND")
-    success = s.active_yn == "Y"
+    if s.active_yn != "Y":
+        return ok({
+            "source_id": source_id,
+            "success": False,
+            "message": "연결 테스트에 실패했습니다.",
+            "latency_ms": 0,
+            "error_message": "데이터 소스가 비활성 상태입니다.",
+            "sample_row_count": 0,
+            "columns": [],
+        })
+    if is_csv_source(s.source_type):
+        result = test_csv_connection(s.connection_info)
+        return ok({"source_id": source_id, **result})
     return ok({
         "source_id": source_id,
-        "success": success,
-        "message": "연결 테스트에 성공했습니다." if success else "연결 테스트에 실패했습니다.",
-        "latency_ms": 42,
-        "error_message": None if success else "데이터 소스가 비활성 상태이거나 연결 정보가 올바르지 않습니다.",
-        "sample_row_count": 1284 if success else 0,
+        "success": False,
+        "message": "연결 테스트에 실패했습니다.",
+        "latency_ms": 0,
+        "error_message": "1단계 CSV 적재에서는 CSV/FILE_CSV 소스만 파일 연결 테스트를 지원합니다.",
+        "sample_row_count": 0,
+        "columns": [],
     })
 
 
@@ -109,16 +124,36 @@ async def create_ingestion_job(
     source_id: str = Query(...),
     db: AsyncSession = Depends(get_db),
 ):
+    source = (await db.execute(select(DataSource).where(DataSource.data_source_id == source_id))).scalar_one_or_none()
+    if not source:
+        raise HTTPException(status_code=404, detail="NOT_FOUND")
+
     job_id = f"ING-{uuid4().hex[:8].upper()}"
     run = DataQualityRun(
         run_id=job_id,
         source_id=source_id,
         check_type="INGESTION",
         run_status="RUNNING",
-        started_at=datetime.now(timezone.utc),
+        started_at=utc_now(),
     )
     db.add(run)
-    return accepted({"job_id": job_id, "status": "RUNNING"}, message="데이터 적재가 시작되었습니다.")
+    await db.flush()
+
+    try:
+        result = await run_ingestion(db, source_id, job_id)
+        message = f"데이터 {result['inserted_count']}건이 적재되었습니다."
+        if result.get("failed_count", 0) > 0:
+            message += f" (실패 {result['failed_count']}건)"
+        return ok({
+            "job_id": job_id,
+            "status": result["status"],
+            "inserted_count": result["inserted_count"],
+            "failed_count": result["failed_count"],
+            "result_summary": result["result_summary"],
+        }, message=message)
+    except IngestionError as exc:
+        await fail_ingestion_job(db, job_id, str(exc))
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.get("/ingestion-jobs/{job_id}")
@@ -126,28 +161,33 @@ async def get_ingestion_job(job_id: str, db: AsyncSession = Depends(get_db)):
     run = (await db.execute(select(DataQualityRun).where(DataQualityRun.run_id == job_id))).scalar_one_or_none()
     if not run:
         raise HTTPException(status_code=404, detail="NOT_FOUND")
+    summary = run.result_summary or {}
     return ok({
         "job_id": run.run_id,
         "status": run.run_status,
         "started_at": run.started_at.isoformat(),
         "finished_at": run.finished_at.isoformat() if run.finished_at else None,
+        "result_summary": summary,
+        "inserted_count": summary.get("inserted_count"),
+        "failed_count": summary.get("failed_count"),
+        "error_message": summary.get("error_message"),
     })
 
 
 @router.post("/data-quality/checks")
 async def run_quality_check(source_id: str | None = Query(default=None), db: AsyncSession = Depends(get_db)):
-    run_id = f"DQR-{datetime.now(timezone.utc).strftime('%Y%m%d')}-{uuid4().hex[:4].upper()}"
+    run_id = f"DQR-{utc_now().strftime('%Y%m%d')}-{uuid4().hex[:4].upper()}"
     run = DataQualityRun(
         run_id=run_id,
         source_id=source_id,
         check_type="FULL",
         run_status="SUCCESS",
         result_summary={"missing_rate": 0.02, "duplicate_count": 0, "outlier_count": 1},
-        started_at=datetime.now(timezone.utc),
-        finished_at=datetime.now(timezone.utc),
+        started_at=utc_now(),
+        finished_at=utc_now(),
     )
     db.add(run)
-    return accepted({"run_id": run_id, "status": "SUCCESS"}, message="품질 점검이 완료되었습니다.")
+    return ok({"run_id": run_id, "status": "SUCCESS"}, message="품질 점검이 완료되었습니다.")
 
 
 @router.get("/data-quality/runs")

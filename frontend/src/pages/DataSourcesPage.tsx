@@ -27,6 +27,7 @@ interface ConnectionTestResult {
   latency_ms: number;
   error_message: string | null;
   sample_row_count: number;
+  columns?: string[];
 }
 
 const EMPTY_FORM = {
@@ -36,8 +37,13 @@ const EMPTY_FORM = {
   host: "",
   database: "",
   table: "",
+  file_path: "data/samples/heat_demand_sample.csv",
   active_yn: true,
 };
+
+function isCsvType(t: string) {
+  return t === "CSV" || t === "FILE_CSV";
+}
 
 function formFromSource(ds: DataSource) {
   const ci = ds.connection_info || {};
@@ -48,8 +54,20 @@ function formFromSource(ds: DataSource) {
     host: ci.host || "",
     database: ci.database || "",
     table: ci.table || "",
+    file_path: ci.file_path || "",
     active_yn: ds.active_yn,
   };
+}
+
+function buildConnectionInfo(form: typeof EMPTY_FORM) {
+  if (isCsvType(form.source_type)) {
+    return {
+      file_path: form.file_path,
+      encoding: "utf-8",
+      delimiter: ",",
+    };
+  }
+  return { host: form.host, database: form.database, table: form.table };
 }
 
 export default function DataSourcesPage() {
@@ -88,7 +106,7 @@ export default function DataSourcesPage() {
     source_name: form.source_name,
     source_type: form.source_type,
     data_domain: form.data_domain,
-    connection_info: { host: form.host, database: form.database, table: form.table },
+    connection_info: buildConnectionInfo(form),
     active_yn: form.active_yn,
   });
 
@@ -122,7 +140,7 @@ export default function DataSourcesPage() {
       await putApi(`/data-sources/${editTarget.source_id}`, {
         source_name: form.source_name,
         source_type: form.source_type,
-        connection_info: { host: form.host, database: form.database, table: form.table },
+        connection_info: buildConnectionInfo(form),
         active_yn: form.active_yn,
       });
       showToast("success", "데이터 소스가 수정되었습니다.");
@@ -179,8 +197,20 @@ export default function DataSourcesPage() {
   const handleIngest = async (row: DataSource) => {
     setIngesting(row.source_id);
     try {
-      const res = await postApi<{ job_id: string; status: string }>(`/ingestion-jobs?source_id=${encodeURIComponent(row.source_id)}`);
-      showToast("success", `데이터 적재가 시작되었습니다. (${res.job_id})`);
+      const res = await postApi<{
+        job_id: string;
+        status: string;
+        inserted_count?: number;
+        failed_count?: number;
+      }>(`/ingestion-jobs?source_id=${encodeURIComponent(row.source_id)}`);
+      const count = res.inserted_count ?? 0;
+      const failed = res.failed_count ?? 0;
+      showToast(
+        "success",
+        failed > 0
+          ? `적재 완료: ${count}건 (실패 ${failed}건) — ${res.job_id}`
+          : `적재 완료: ${count}건 — ${res.job_id}`,
+      );
       load();
     } catch {
       showToast("error", "적재 실행에 실패했습니다.");
@@ -212,20 +242,29 @@ export default function DataSourcesPage() {
             ]} />
         </div>
       </div>
-      <div>
-        <label className="block text-xs text-slate-500 mb-1">호스트</label>
-        <TextInput value={form.host} onChange={(v) => setForm({ ...form, host: v })} placeholder="10.0.0.10" />
-      </div>
-      <div className="grid grid-cols-2 gap-3">
+      {isCsvType(form.source_type) ? (
         <div>
-          <label className="block text-xs text-slate-500 mb-1">데이터베이스</label>
-          <TextInput value={form.database} onChange={(v) => setForm({ ...form, database: v })} />
+          <label className="block text-xs text-slate-500 mb-1">CSV 파일 경로</label>
+          <TextInput value={form.file_path} onChange={(v) => setForm({ ...form, file_path: v })} placeholder="data/samples/heat_demand_sample.csv" />
         </div>
-        <div>
-          <label className="block text-xs text-slate-500 mb-1">테이블</label>
-          <TextInput value={form.table} onChange={(v) => setForm({ ...form, table: v })} />
-        </div>
-      </div>
+      ) : (
+        <>
+          <div>
+            <label className="block text-xs text-slate-500 mb-1">호스트</label>
+            <TextInput value={form.host} onChange={(v) => setForm({ ...form, host: v })} placeholder="10.0.0.10" />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs text-slate-500 mb-1">데이터베이스</label>
+              <TextInput value={form.database} onChange={(v) => setForm({ ...form, database: v })} />
+            </div>
+            <div>
+              <label className="block text-xs text-slate-500 mb-1">테이블</label>
+              <TextInput value={form.table} onChange={(v) => setForm({ ...form, table: v })} />
+            </div>
+          </div>
+        </>
+      )}
       {editTarget && (
         <div>
           <label className="flex items-center gap-2 text-sm">
@@ -333,6 +372,12 @@ export default function DataSourcesPage() {
               <dt className="text-slate-500 w-28">샘플 데이터</dt>
               <dd>{testResult.sample_row_count.toLocaleString()} 건</dd>
             </div>
+            {testResult.columns && testResult.columns.length > 0 && (
+              <div>
+                <dt className="text-slate-500 mb-1">컬럼 목록</dt>
+                <dd className="text-xs bg-slate-50 p-2 rounded font-mono">{testResult.columns.join(", ")}</dd>
+              </div>
+            )}
             {testResult.error_message && (
               <div>
                 <dt className="text-slate-500 mb-1">오류 메시지</dt>

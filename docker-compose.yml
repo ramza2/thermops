@@ -57,12 +57,14 @@ services:
       DATABASE_URL: postgresql+asyncpg://thermops:thermops@postgres:5432/thermops
       MLFLOW_TRACKING_URI: http://mlflow:5000
       CORS_ORIGINS: http://localhost:5173,http://localhost:3000
+      THERMOPS_PROJECT_ROOT: /workspace
     ports:
       - "8000:8000"
     volumes:
       - ./backend:/app
       - ./ml:/ml
       - ./configs:/configs
+      - .:/workspace:ro
     depends_on:
       postgres:
         condition: service_healthy
