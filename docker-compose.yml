@@ -1,0 +1,118 @@
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: thermops-postgres
+    environment:
+      POSTGRES_USER: thermops
+      POSTGRES_PASSWORD: thermops
+      POSTGRES_DB: thermops
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./db/init:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U thermops -d thermops"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  minio:
+    image: minio/minio:latest
+    container_name: thermops-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:v2.14.3
+    container_name: thermops-mlflow
+    command: >
+      mlflow server
+      --host 0.0.0.0
+      --port 5000
+      --backend-store-uri postgresql://thermops:thermops@postgres:5432/thermops
+      --default-artifact-root s3://mlflow/
+    environment:
+      AWS_ACCESS_KEY_ID: minioadmin
+      AWS_SECRET_ACCESS_KEY: minioadmin
+      MLFLOW_S3_ENDPOINT_URL: http://minio:9000
+    ports:
+      - "5000:5000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_started
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: thermops-backend
+    environment:
+      DATABASE_URL: postgresql+asyncpg://thermops:thermops@postgres:5432/thermops
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+      CORS_ORIGINS: http://localhost:5173,http://localhost:3000
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+      - ./ml:/ml
+      - ./configs:/configs
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: thermops-frontend
+    environment:
+      VITE_API_BASE_URL: http://localhost:8000/api/v1
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    depends_on:
+      - backend
+    command: npm run dev -- --host 0.0.0.0
+
+  airflow:
+    build:
+      context: ./airflow
+      dockerfile: Dockerfile
+    container_name: thermops-airflow
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://thermops:thermops@postgres:5432/thermops_airflow
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "true"
+      THERMOps_DB_URL: postgresql://thermops:thermops@postgres:5432/thermops
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+      - ./ml:/opt/airflow/ml
+      - ./configs:/opt/airflow/configs
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: >
+      bash -c "airflow db migrate &&
+      airflow users create --username admin --password admin --firstname Admin --lastname User --role Admin --email admin@thermops.local || true &&
+      airflow webserver & airflow scheduler"
+
+volumes:
+  postgres_data:
+  minio_data:

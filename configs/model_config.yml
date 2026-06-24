@@ -1,0 +1,27 @@
+default_model_name: heat_demand_lgbm
+algorithms:
+  baseline:
+    type: seasonal_naive
+    lag_hours: 168
+  lightgbm:
+    type: lightgbm
+    params:
+      n_estimators: 100
+      learning_rate: 0.05
+      max_depth: 6
+      num_leaves: 31
+  xgboost:
+    type: xgboost
+    params:
+      n_estimators: 100
+      learning_rate: 0.05
+      max_depth: 6
+
+metrics:
+  - mae
+  - rmse
+  - mape
+
+retraining:
+  mape_threshold: 6.0
+  drift_score_threshold: 0.35

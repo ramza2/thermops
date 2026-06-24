@@ -1,0 +1,27 @@
+orchestrator: airflow
+timezone: Asia/Seoul
+
+prediction:
+  default_horizon: D_PLUS_1
+  target_frequency: hourly
+  champion_model_policy: mlflow_stage
+
+training:
+  train_period_months: 24
+  validation_period_months: 3
+  algorithms:
+    - baseline
+    - lightgbm
+    - xgboost
+  primary_metric: mape
+
+quality:
+  max_missing_rate: 0.05
+  max_outlier_rate: 0.03
+  fail_on_required_feature_missing: true
+
+schedule:
+  heat_actual_ingestion: "0 * * * *"
+  weather_ingestion: "30 */3 * * *"
+  batch_prediction: "0 5 * * *"
+  monitoring_report: "0 8 * * *"

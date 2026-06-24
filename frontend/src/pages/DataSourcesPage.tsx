@@ -1,0 +1,361 @@
+import { useEffect, useState } from "react";
+import { Plus, Plug, Trash2, Eye, Pencil, Upload } from "lucide-react";
+import { deleteApi, fetchApi, postApi, putApi, PagedData } from "@/api/client";
+import { Button } from "@/components/Button";
+import { DataTable } from "@/components/DataTable";
+import { Modal } from "@/components/Modal";
+import { StatusBadge } from "@/components/StatusBadge";
+import { Pagination, LoadingState, ErrorState } from "@/components/Pagination";
+import { SelectInput, TextInput } from "@/components/SearchPanel";
+import { useToast } from "@/hooks/useToast";
+import { PageHeader } from "@/layouts/MainLayout";
+
+interface DataSource {
+  source_id: string;
+  source_name: string;
+  source_type: string;
+  data_domain: string;
+  connection_info: Record<string, string>;
+  active_yn: boolean;
+  last_loaded_at: string | null;
+  created_at?: string | null;
+}
+
+interface ConnectionTestResult {
+  success: boolean;
+  message: string;
+  latency_ms: number;
+  error_message: string | null;
+  sample_row_count: number;
+}
+
+const EMPTY_FORM = {
+  source_name: "",
+  source_type: "DB",
+  data_domain: "HEAT_DEMAND",
+  host: "",
+  database: "",
+  table: "",
+  active_yn: true,
+};
+
+function formFromSource(ds: DataSource) {
+  const ci = ds.connection_info || {};
+  return {
+    source_name: ds.source_name,
+    source_type: ds.source_type,
+    data_domain: ds.data_domain,
+    host: ci.host || "",
+    database: ci.database || "",
+    table: ci.table || "",
+    active_yn: ds.active_yn,
+  };
+}
+
+export default function DataSourcesPage() {
+  const { showToast } = useToast();
+  const [items, setItems] = useState<DataSource[]>([]);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [createOpen, setCreateOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<DataSource | null>(null);
+  const [detail, setDetail] = useState<DataSource | null>(null);
+  const [editTarget, setEditTarget] = useState<DataSource | null>(null);
+  const [testResult, setTestResult] = useState<ConnectionTestResult | null>(null);
+  const [form, setForm] = useState(EMPTY_FORM);
+  const [saving, setSaving] = useState(false);
+  const [ingesting, setIngesting] = useState<string | null>(null);
+
+  const load = async (p = page) => {
+    setLoading(true);
+    setError("");
+    try {
+      const res = await fetchApi<PagedData<DataSource>>("/data-sources", { page: p, size: 20 });
+      setItems(res.items);
+      setTotalPages(res.total_pages);
+    } catch {
+      setError("데이터 소스 목록을 불러오지 못했습니다.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { load(page); }, [page]);
+
+  const buildPayload = () => ({
+    source_name: form.source_name,
+    source_type: form.source_type,
+    data_domain: form.data_domain,
+    connection_info: { host: form.host, database: form.database, table: form.table },
+    active_yn: form.active_yn,
+  });
+
+  const handleCreate = async () => {
+    if (!form.source_name.trim()) {
+      showToast("warning", "소스명을 입력하세요.");
+      return;
+    }
+    setSaving(true);
+    try {
+      await postApi("/data-sources", buildPayload());
+      showToast("success", "데이터 소스가 등록되었습니다.");
+      setCreateOpen(false);
+      setForm(EMPTY_FORM);
+      load(1);
+      setPage(1);
+    } catch {
+      showToast("error", "등록에 실패했습니다.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleUpdate = async () => {
+    if (!editTarget || !form.source_name.trim()) {
+      showToast("warning", "소스명을 입력하세요.");
+      return;
+    }
+    setSaving(true);
+    try {
+      await putApi(`/data-sources/${editTarget.source_id}`, {
+        source_name: form.source_name,
+        source_type: form.source_type,
+        connection_info: { host: form.host, database: form.database, table: form.table },
+        active_yn: form.active_yn,
+      });
+      showToast("success", "데이터 소스가 수정되었습니다.");
+      setEditTarget(null);
+      load();
+    } catch {
+      showToast("error", "수정에 실패했습니다.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    try {
+      await deleteApi(`/data-sources/${deleteTarget.source_id}`);
+      showToast("success", "데이터 소스가 삭제되었습니다.");
+      setDeleteTarget(null);
+      load();
+    } catch {
+      showToast("error", "삭제에 실패했습니다.");
+    }
+  };
+
+  const handleDetail = async (row: DataSource) => {
+    try {
+      const res = await fetchApi<DataSource>(`/data-sources/${row.source_id}`);
+      setDetail(res);
+    } catch {
+      showToast("error", "상세 정보를 불러오지 못했습니다.");
+    }
+  };
+
+  const openEdit = (row: DataSource) => {
+    setEditTarget(row);
+    setForm(formFromSource(row));
+  };
+
+  const handleTest = async (row: DataSource) => {
+    try {
+      const res = await postApi<ConnectionTestResult>(`/data-sources/${row.source_id}/test-connection`);
+      setTestResult(res);
+    } catch {
+      setTestResult({
+        success: false,
+        message: "연결 테스트에 실패했습니다.",
+        latency_ms: 0,
+        error_message: "API 요청 오류",
+        sample_row_count: 0,
+      });
+    }
+  };
+
+  const handleIngest = async (row: DataSource) => {
+    setIngesting(row.source_id);
+    try {
+      const res = await postApi<{ job_id: string; status: string }>(`/ingestion-jobs?source_id=${encodeURIComponent(row.source_id)}`);
+      showToast("success", `데이터 적재가 시작되었습니다. (${res.job_id})`);
+      load();
+    } catch {
+      showToast("error", "적재 실행에 실패했습니다.");
+    } finally {
+      setIngesting(null);
+    }
+  };
+
+  const sourceFormFields = (
+    <div className="space-y-3">
+      <div>
+        <label className="block text-xs text-slate-500 mb-1">소스명</label>
+        <TextInput value={form.source_name} onChange={(v) => setForm({ ...form, source_name: v })} placeholder="열수요 실적 DB" />
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className="block text-xs text-slate-500 mb-1">유형</label>
+          <SelectInput value={form.source_type} onChange={(v) => setForm({ ...form, source_type: v })}
+            options={[{ value: "DB", label: "DB" }, { value: "CSV", label: "CSV" }, { value: "API", label: "API" }]} />
+        </div>
+        <div>
+          <label className="block text-xs text-slate-500 mb-1">도메인</label>
+          <SelectInput value={form.data_domain} onChange={(v) => setForm({ ...form, data_domain: v })}
+            options={[
+              { value: "HEAT_DEMAND", label: "열수요" },
+              { value: "WEATHER", label: "기상" },
+              { value: "OPERATION", label: "운영" },
+              { value: "CALENDAR", label: "캘린더" },
+            ]} />
+        </div>
+      </div>
+      <div>
+        <label className="block text-xs text-slate-500 mb-1">호스트</label>
+        <TextInput value={form.host} onChange={(v) => setForm({ ...form, host: v })} placeholder="10.0.0.10" />
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className="block text-xs text-slate-500 mb-1">데이터베이스</label>
+          <TextInput value={form.database} onChange={(v) => setForm({ ...form, database: v })} />
+        </div>
+        <div>
+          <label className="block text-xs text-slate-500 mb-1">테이블</label>
+          <TextInput value={form.table} onChange={(v) => setForm({ ...form, table: v })} />
+        </div>
+      </div>
+      {editTarget && (
+        <div>
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={form.active_yn} onChange={(e) => setForm({ ...form, active_yn: e.target.checked })} />
+            활성 상태
+          </label>
+        </div>
+      )}
+    </div>
+  );
+
+  if (loading && !items.length) return <LoadingState />;
+  if (error && !items.length) return <ErrorState message={error} onRetry={() => load()} />;
+
+  return (
+    <div>
+      <PageHeader
+        title="데이터 소스 관리"
+        description="원천 데이터 소스를 등록하고 연결 상태를 확인합니다."
+        breadcrumbs={[
+          { label: "데이터 관리", path: "/data/sources" },
+          { label: "데이터 소스" },
+        ]}
+        actions={<Button icon={<Plus className="w-4 h-4" />} onClick={() => { setForm(EMPTY_FORM); setCreateOpen(true); }}>신규 등록</Button>}
+      />
+
+      <DataTable
+        loading={loading}
+        columns={[
+          { key: "source_id", header: "ID", width: "120px" },
+          { key: "source_name", header: "소스명" },
+          { key: "source_type", header: "유형" },
+          { key: "data_domain", header: "도메인" },
+          { key: "active_yn", header: "상태", render: (r) => <StatusBadge status={r.active_yn ? "ACTIVE" : "INACTIVE"} /> },
+          { key: "last_loaded_at", header: "최근 적재", render: (r) => r.last_loaded_at ? new Date(r.last_loaded_at as string).toLocaleString("ko-KR") : "-" },
+          {
+            key: "actions", header: "작업", render: (r) => {
+              const row = r as unknown as DataSource;
+              return (
+                <div className="flex flex-wrap gap-1" onClick={(e) => e.stopPropagation()}>
+                  <Button variant="ghost" icon={<Eye className="w-3 h-3" />} onClick={() => handleDetail(row)}>상세</Button>
+                  <Button variant="secondary" icon={<Pencil className="w-3 h-3" />} onClick={() => openEdit(row)}>수정</Button>
+                  <Button variant="secondary" icon={<Plug className="w-3 h-3" />} onClick={() => handleTest(row)}>연결 테스트</Button>
+                  <Button variant="secondary" icon={<Upload className="w-3 h-3" />}
+                    disabled={ingesting === row.source_id}
+                    onClick={() => handleIngest(row)}>
+                    {ingesting === row.source_id ? "적재 중..." : "적재 실행"}
+                  </Button>
+                  <Button variant="danger" icon={<Trash2 className="w-3 h-3" />} onClick={() => setDeleteTarget(row)}>삭제</Button>
+                </div>
+              );
+            },
+          },
+        ]}
+        data={items as unknown as Record<string, unknown>[]}
+      />
+      <Pagination page={page} totalPages={totalPages} onChange={setPage} />
+
+      <Modal open={createOpen} title="데이터 소스 등록" onClose={() => setCreateOpen(false)}
+        footer={<>
+          <Button variant="secondary" onClick={() => setCreateOpen(false)}>취소</Button>
+          <Button onClick={handleCreate} disabled={saving}>{saving ? "저장 중..." : "저장"}</Button>
+        </>}>
+        {sourceFormFields}
+      </Modal>
+
+      <Modal open={!!editTarget} title="데이터 소스 수정" onClose={() => setEditTarget(null)}
+        footer={<>
+          <Button variant="secondary" onClick={() => setEditTarget(null)}>취소</Button>
+          <Button onClick={handleUpdate} disabled={saving}>{saving ? "저장 중..." : "저장"}</Button>
+        </>}>
+        {sourceFormFields}
+      </Modal>
+
+      <Modal open={!!detail} title="데이터 소스 상세" onClose={() => setDetail(null)} size="lg"
+        footer={<Button variant="secondary" onClick={() => setDetail(null)}>닫기</Button>}>
+        {detail && (
+          <dl className="grid grid-cols-2 gap-3 text-sm">
+            <div><dt className="text-slate-500">ID</dt><dd className="font-medium">{detail.source_id}</dd></div>
+            <div><dt className="text-slate-500">소스명</dt><dd className="font-medium">{detail.source_name}</dd></div>
+            <div><dt className="text-slate-500">유형</dt><dd>{detail.source_type}</dd></div>
+            <div><dt className="text-slate-500">도메인</dt><dd>{detail.data_domain}</dd></div>
+            <div><dt className="text-slate-500">상태</dt><dd><StatusBadge status={detail.active_yn ? "ACTIVE" : "INACTIVE"} /></dd></div>
+            <div><dt className="text-slate-500">최근 적재</dt><dd>{detail.last_loaded_at ? new Date(detail.last_loaded_at).toLocaleString("ko-KR") : "-"}</dd></div>
+            <div className="col-span-2"><dt className="text-slate-500">연결 정보</dt>
+              <dd className="mt-1 font-mono text-xs bg-slate-50 p-2 rounded">{JSON.stringify(detail.connection_info, null, 2)}</dd>
+            </div>
+          </dl>
+        )}
+      </Modal>
+
+      <Modal open={!!testResult} title="연결 테스트 결과" onClose={() => setTestResult(null)}
+        footer={<Button variant="secondary" onClick={() => setTestResult(null)}>닫기</Button>}>
+        {testResult && (
+          <dl className="space-y-3 text-sm">
+            <div className="flex items-center gap-2">
+              <dt className="text-slate-500 w-28">결과</dt>
+              <dd><StatusBadge status={testResult.success ? "SUCCESS" : "FAILED"} /></dd>
+            </div>
+            <div className="flex gap-2">
+              <dt className="text-slate-500 w-28">응답시간</dt>
+              <dd>{testResult.latency_ms} ms</dd>
+            </div>
+            <div className="flex gap-2">
+              <dt className="text-slate-500 w-28">샘플 데이터</dt>
+              <dd>{testResult.sample_row_count.toLocaleString()} 건</dd>
+            </div>
+            {testResult.error_message && (
+              <div>
+                <dt className="text-slate-500 mb-1">오류 메시지</dt>
+                <dd className="text-red-600 bg-red-50 p-2 rounded text-xs">{testResult.error_message}</dd>
+              </div>
+            )}
+            <div>
+              <dt className="text-slate-500 mb-1">메시지</dt>
+              <dd className="text-slate-700">{testResult.message}</dd>
+            </div>
+          </dl>
+        )}
+      </Modal>
+
+      <Modal open={!!deleteTarget} title="삭제 확인" onClose={() => setDeleteTarget(null)}
+        footer={<>
+          <Button variant="secondary" onClick={() => setDeleteTarget(null)}>취소</Button>
+          <Button variant="danger" onClick={handleDelete}>삭제</Button>
+        </>}>
+        <p className="text-sm text-slate-600">
+          <strong>{deleteTarget?.source_name}</strong> 소스를 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.
+        </p>
+      </Modal>
+    </div>
+  );
+}
