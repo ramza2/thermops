@@ -33,12 +33,9 @@ services:
   mlflow:
     image: ghcr.io/mlflow/mlflow:v2.14.3
     container_name: thermops-mlflow
-    command: >
-      mlflow server
-      --host 0.0.0.0
-      --port 5000
-      --backend-store-uri postgresql://thermops:thermops@postgres:5432/thermops
-      --default-artifact-root s3://mlflow/
+    entrypoint: ["/bin/bash", "/scripts/mlflow_entrypoint.sh"]
+    volumes:
+      - ./scripts/mlflow_entrypoint.sh:/scripts/mlflow_entrypoint.sh:ro
     environment:
       AWS_ACCESS_KEY_ID: minioadmin
       AWS_SECRET_ACCESS_KEY: minioadmin
@@ -78,6 +75,7 @@ services:
     container_name: thermops-frontend
     environment:
       VITE_API_BASE_URL: http://localhost:8000/api/v1
+      VITE_USER_ROLE: ${VITE_USER_ROLE:-ADMIN}
     ports:
       - "5173:5173"
     volumes:
@@ -105,13 +103,11 @@ services:
       - ./airflow/dags:/opt/airflow/dags
       - ./ml:/opt/airflow/ml
       - ./configs:/opt/airflow/configs
+      - ./scripts/airflow_entrypoint.sh:/opt/airflow/entrypoint.sh
     depends_on:
       postgres:
         condition: service_healthy
-    command: >
-      bash -c "airflow db migrate &&
-      airflow users create --username admin --password admin --firstname Admin --lastname User --role Admin --email admin@thermops.local || true &&
-      airflow webserver & airflow scheduler"
+    command: ["bash", "/opt/airflow/entrypoint.sh"]
 
 volumes:
   postgres_data:

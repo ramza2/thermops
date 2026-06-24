@@ -24,15 +24,92 @@ thermops/                          # 프로젝트 루트
 
 ## 설치 및 실행 (Docker Compose)
 
-```bash
-# 1. 환경 변수 복사
-cp .env.example .env
+Docker Desktop이 실행 중인지 확인한 뒤, 프로젝트 루트에서 아래 명령을 실행합니다.
 
-# 2. 전체 스택 실행
+```powershell
+# Windows (PowerShell)
+cd d:\Projects\Cursor\thermops
+copy .env.example .env
+
+# 전체 스택 빌드 및 기동
 docker compose up -d --build
 
-# 3. 서비스 기동 확인 (PostgreSQL healthcheck 후 backend 기동)
+# 기동 상태 확인 (postgres healthy 후 backend/airflow 기동)
 docker compose ps
+```
+
+```bash
+# macOS / Linux
+cp .env.example .env
+docker compose up -d --build
+docker compose ps
+```
+
+**첫 기동 시 참고:** Airflow 웹서버는 DB 마이그레이션 후 약 30~60초 후 `http://localhost:8080` 에 응답합니다. MLflow는 `psycopg2` 설치 후 기동됩니다.
+
+### API 스모크 테스트
+
+백엔드가 기동된 상태에서:
+
+```powershell
+python scripts/smoke_test_api.py
+```
+
+12개 주요 API + `/health` 의 HTTP 200 응답을 확인합니다.
+
+### 권한 설정 (VITE_USER_ROLE)
+
+프론트엔드 버튼 활성화는 `VITE_USER_ROLE` 환경 변수로 제어됩니다.
+
+| 값 | 저장/실행 | 삭제 | 파이프라인 수동 실행 |
+|----|-----------|------|---------------------|
+| `ADMIN` | 가능 | 가능 | 가능 |
+| `OPERATOR` | 가능 | 불가 | 가능 |
+| `VIEWER` | 불가 (Disabled + 권한 Modal) | 불가 | 불가 |
+
+**Docker Compose (권장):** `docker-compose.yml` frontend 서비스에 `VITE_USER_ROLE` 이 설정되어 있습니다. 기본값은 `ADMIN`이며, `.env` 파일에서 변경할 수 있습니다.
+
+```env
+# .env
+VITE_USER_ROLE=ADMIN
+```
+
+변경 후 프론트엔드 컨테이너를 재기동합니다.
+
+```powershell
+docker compose up -d --build frontend
+```
+
+**VIEWER 동작 확인:** `.env` 에 `VITE_USER_ROLE=VIEWER` 로 설정 후 frontend 재기동 → Feature Set 관리 화면의 `신규 Feature Set` 버튼이 비활성화되고, 클릭 시 권한 없음 Modal이 표시됩니다.
+
+코드 기본값(`frontend/src/hooks/useRole.ts`)은 `VIEWER` 입니다. Docker 없이 `npm run dev` 로만 실행할 때는 `.env` 또는 `frontend/.env.local` 에 `VITE_USER_ROLE=ADMIN` 을 직접 설정해야 합니다.
+
+### 자주 발생하는 오류와 해결
+
+| 증상 | 원인 | 해결 |
+|------|------|------|
+| 모든 화면에서 "데이터를 불러오지 못했습니다" | backend 또는 postgres 미기동 | `docker compose ps` 로 상태 확인 후 `docker compose up -d postgres backend` |
+| `port is already allocated` (5432, 8000 등) | 포트 충돌 | 해당 포트를 사용 중인 프로세스 종료 또는 `docker-compose.yml` 의 `ports` 매핑 변경 |
+| MLflow 컨테이너 `Exited (1)` | PostgreSQL 백엔드용 `psycopg2` 미포함 | `docker compose up -d --build mlflow` 재기동 (이미지 entrypoint에서 자동 설치) |
+| Airflow `Exited (1)` — db init 오류 | `thermops_airflow` DB 마이그레이션 실패 | `docker compose up -d --build airflow` 재시도. 지속 시 `docker compose down -v` 후 재기동(DB 초기화) |
+| Airflow UI 접속 불가 (연결 거부) | 웹서버 기동 대기 중 | 1분 정도 대기 후 `http://localhost:8080` 재접속 |
+| 프론트 변경이 반영되지 않음 | Vite env는 빌드/기동 시점에 주입 | `docker compose up -d --build frontend` |
+| `thermops_airflow` DB 없음 | postgres 볼륨이 init 스크립트 이전에 생성됨 | `docker compose down -v` 후 `docker compose up -d --build` |
+
+```powershell
+# 전체 재시작 (코드 변경 반영)
+docker compose up -d --build
+
+# 로그 확인
+docker compose logs -f backend
+docker compose logs -f airflow
+
+# 전체 중지
+docker compose down
+
+# DB 포함 초기화 (스키마/시드 재적용)
+docker compose down -v
+docker compose up -d --build
 ```
 
 ### 서비스 접속 URL
