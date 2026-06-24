@@ -57,6 +57,28 @@ python scripts/smoke_test_api.py
 
 12개 주요 API + `/health` 의 HTTP 200 응답을 확인합니다.
 
+### 데이터 품질 점검 테스트 (P0-2)
+
+CSV 적재가 완료된 상태(`P0-1`)에서 품질 점검 API를 검증합니다.
+
+```powershell
+# 열수요·기상 각각 품질 점검 + 이력 조회
+python scripts/test_data_quality.py
+
+# 도메인별 수동 호출 예시
+curl -X POST "http://localhost:8000/api/v1/data-quality/checks?data_domain=HEAT_DEMAND"
+curl -X POST "http://localhost:8000/api/v1/data-quality/checks?data_domain=WEATHER"
+curl "http://localhost:8000/api/v1/data-quality/runs?page=1&size=20"
+```
+
+품질 점검은 `tb_heat_demand_actual`, `tb_weather_observation`의 결측·중복·시간 누락·이상치·참조 정합성을 점검하고 `tb_data_quality_run`에 결과를 저장합니다.
+
+### CSV 적재 테스트 (P0-1)
+
+```powershell
+python scripts/test_csv_ingestion.py
+```
+
 ## 인증/권한 (1차 범위 — Mock)
 
 **1차 구현 범위에서는 로그인, 인증, SSO, JWT, 세션, 사용자 관리 기능을 구현하지 않습니다.**

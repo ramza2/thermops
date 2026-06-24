@@ -9,14 +9,43 @@ import { Pagination, LoadingState, ErrorState } from "@/components/Pagination";
 import { useToast } from "@/hooks/useToast";
 import { PageHeader } from "@/layouts/MainLayout";
 
+interface QualitySummary {
+  quality_score?: number;
+  missing_count?: number;
+  duplicate_count?: number;
+  time_gap_count?: number;
+  outlier_count?: number;
+  missing_rate?: number;
+  target_table?: string;
+  data_domain?: string;
+}
+
 interface QualityRun {
   run_id: string;
   source_id: string | null;
   check_type: string;
   run_status: string;
-  result_summary: { missing_rate?: number; duplicate_count?: number; outlier_count?: number } | null;
+  result_summary: QualitySummary | null;
   started_at: string;
   finished_at: string | null;
+}
+
+function formatSummary(s: QualitySummary | null | undefined): string {
+  if (!s) return "-";
+  const score = s.quality_score != null ? `점수 ${s.quality_score.toFixed(1)}` : null;
+  const missing = s.missing_count != null
+    ? `결측 ${s.missing_count}`
+    : s.missing_rate != null
+      ? `결측 ${(s.missing_rate * 100).toFixed(1)}%`
+      : null;
+  const parts = [
+    score,
+    missing,
+    `중복 ${s.duplicate_count ?? 0}`,
+    `시간누락 ${s.time_gap_count ?? 0}`,
+    `이상치 ${s.outlier_count ?? 0}`,
+  ].filter(Boolean);
+  return parts.join(" · ");
 }
 
 export default function DataQualityPage() {
@@ -47,8 +76,18 @@ export default function DataQualityPage() {
   const handleRunCheck = async () => {
     setRunning(true);
     try {
-      const res = await postApi<{ run_id: string; status: string }>("/data-quality/checks");
-      showToast("success", `품질 점검이 완료되었습니다. (${res.run_id})`);
+      const res = await postApi<{
+        run_id: string;
+        status: string;
+        result_summary?: QualitySummary;
+      }>("/data-quality/checks");
+      const score = res.result_summary?.quality_score;
+      showToast(
+        "success",
+        score != null
+          ? `품질 점검 완료 — 점수 ${score.toFixed(1)} (${res.run_id})`
+          : `품질 점검이 완료되었습니다. (${res.run_id})`,
+      );
       load(1);
       setPage(1);
     } catch {
@@ -59,6 +98,7 @@ export default function DataQualityPage() {
   };
 
   const successCount = items.filter((i) => i.run_status === "SUCCESS").length;
+  const latest = items[0]?.result_summary;
 
   if (loading && !items.length) return <LoadingState />;
   if (error && !items.length) return <ErrorState message={error} onRetry={() => load()} />;
@@ -71,9 +111,14 @@ export default function DataQualityPage() {
         actions={<Button icon={<Play className="w-4 h-4" />} onClick={handleRunCheck} disabled={running}>{running ? "실행 중..." : "품질 점검 실행"}</Button>}
       />
 
-      <div className="grid grid-cols-3 gap-4 mb-6">
+      <div className="grid grid-cols-4 gap-4 mb-6">
         <MetricCard title="총 점검 횟수" value={items.length} />
         <MetricCard title="성공" value={successCount} subtitle="현재 페이지 기준" />
+        <MetricCard
+          title="최근 품질 점수"
+          value={latest?.quality_score != null ? latest.quality_score.toFixed(1) : "-"}
+          subtitle={latest?.target_table || "이력 없음"}
+        />
         <div className="bg-white rounded-lg border border-slate-200 p-4 shadow-sm">
           <p className="text-xs text-slate-500 font-medium uppercase tracking-wide">최근 상태</p>
           <div className="mt-2">{items[0] ? <StatusBadge status={items[0].run_status} /> : <span className="text-2xl font-bold text-slate-900">-</span>}</div>
@@ -89,11 +134,9 @@ export default function DataQualityPage() {
           { key: "check_type", header: "점검 유형" },
           { key: "run_status", header: "상태", render: (r) => <StatusBadge status={r.run_status as string} /> },
           {
-            key: "result_summary", header: "결과 요약", render: (r) => {
-              const s = r.result_summary as QualityRun["result_summary"];
-              if (!s) return "-";
-              return `결측 ${((s.missing_rate ?? 0) * 100).toFixed(1)}% · 중복 ${s.duplicate_count ?? 0} · 이상치 ${s.outlier_count ?? 0}`;
-            },
+            key: "result_summary",
+            header: "결과 요약",
+            render: (r) => formatSummary(r.result_summary as QualitySummary | null),
           },
           { key: "started_at", header: "시작", render: (r) => new Date(r.started_at as string).toLocaleString("ko-KR") },
         ]}

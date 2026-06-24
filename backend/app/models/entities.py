@@ -17,6 +17,15 @@ class Site(Base):
     active_yn: Mapped[str] = mapped_column(String(1), default="Y")
 
 
+class WeatherArea(Base):
+    __tablename__ = "tb_weather_area"
+    weather_area_id: Mapped[str] = mapped_column(String(50), primary_key=True)
+    area_name: Mapped[str | None] = mapped_column(String(100))
+    latitude: Mapped[float | None] = mapped_column(Numeric(10, 6))
+    longitude: Mapped[float | None] = mapped_column(Numeric(10, 6))
+    provider: Mapped[str | None] = mapped_column(String(50))
+
+
 class DataSource(Base):
     __tablename__ = "tb_data_source"
     data_source_id: Mapped[str] = mapped_column(String(50), primary_key=True)

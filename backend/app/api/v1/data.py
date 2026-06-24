@@ -1,3 +1,4 @@
+from datetime import datetime
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -10,6 +11,7 @@ from app.core.time import utc_now
 from app.models.entities import DataQualityRun, DataSource
 from app.schemas.api import DataSourceCreate, DataSourceUpdate
 from app.services.csv_source_service import is_csv_source, test_csv_connection
+from app.services.data_quality_service import QualityCheckParams, run_quality_check
 from app.services.ingestion_service import IngestionError, fail_ingestion_job, run_ingestion
 
 router = APIRouter(tags=["Data"])
@@ -174,20 +176,41 @@ async def get_ingestion_job(job_id: str, db: AsyncSession = Depends(get_db)):
     })
 
 
+def _parse_optional_dt(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    text = value.strip()
+    if text.endswith("Z"):
+        text = text[:-1] + "+00:00"
+    return datetime.fromisoformat(text).replace(tzinfo=None)
+
+
 @router.post("/data-quality/checks")
-async def run_quality_check(source_id: str | None = Query(default=None), db: AsyncSession = Depends(get_db)):
-    run_id = f"DQR-{utc_now().strftime('%Y%m%d')}-{uuid4().hex[:4].upper()}"
-    run = DataQualityRun(
-        run_id=run_id,
+async def run_quality_check_endpoint(
+    source_id: str | None = Query(default=None),
+    data_domain: str | None = Query(default=None, description="HEAT_DEMAND | WEATHER | ALL"),
+    site_id: str | None = Query(default=None),
+    weather_area_id: str | None = Query(default=None),
+    start_at: str | None = Query(default=None),
+    end_at: str | None = Query(default=None),
+    db: AsyncSession = Depends(get_db),
+):
+    params = QualityCheckParams(
         source_id=source_id,
-        check_type="FULL",
-        run_status="SUCCESS",
-        result_summary={"missing_rate": 0.02, "duplicate_count": 0, "outlier_count": 1},
-        started_at=utc_now(),
-        finished_at=utc_now(),
+        data_domain=data_domain,
+        site_id=site_id,
+        weather_area_id=weather_area_id,
+        start_at=_parse_optional_dt(start_at),
+        end_at=_parse_optional_dt(end_at),
     )
-    db.add(run)
-    return ok({"run_id": run_id, "status": "SUCCESS"}, message="품질 점검이 완료되었습니다.")
+    try:
+        result = await run_quality_check(db, params)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    score = (result.get("result_summary") or {}).get("quality_score")
+    message = f"품질 점검이 완료되었습니다. (점수: {score})" if score is not None else "품질 점검이 완료되었습니다."
+    return ok(result, message=message)
 
 
 @router.get("/data-quality/runs")
@@ -196,7 +219,13 @@ async def list_quality_runs(
     size: int = Query(20, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
 ):
-    rows = (await db.execute(select(DataQualityRun).order_by(DataQualityRun.started_at.desc()))).scalars().all()
+    rows = (
+        await db.execute(
+            select(DataQualityRun)
+            .where(DataQualityRun.check_type != "INGESTION")
+            .order_by(DataQualityRun.started_at.desc())
+        )
+    ).scalars().all()
     items = [
         {
             "run_id": r.run_id,
