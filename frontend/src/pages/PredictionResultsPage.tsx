@@ -89,6 +89,7 @@ export default function PredictionResultsPage() {
         fields={[
           {
             label: "조회 기간",
+            colSpan: 2,
             element: <DateRangePicker from={dateRange.from} to={dateRange.to} onChange={(from, to) => setDateRange({ from, to })} />,
           },
           {

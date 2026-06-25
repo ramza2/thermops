@@ -5,20 +5,21 @@ interface DateRangePickerProps {
 }
 
 export function DateRangePicker({ from, to, onChange }: DateRangePickerProps) {
+  const inputClass = "flex-1 min-w-0 w-0 border border-slate-200 rounded-md px-2 py-1.5 text-sm bg-slate-50";
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex items-center gap-1.5 min-w-0 w-full">
       <input
         type="date"
         value={from}
         onChange={(e) => onChange(e.target.value, to)}
-        className="border border-slate-200 rounded-md px-2 py-1.5 text-sm bg-slate-50"
+        className={inputClass}
       />
-      <span className="text-slate-400 text-xs">~</span>
+      <span className="text-slate-400 text-xs shrink-0">~</span>
       <input
         type="date"
         value={to}
         onChange={(e) => onChange(from, e.target.value)}
-        className="border border-slate-200 rounded-md px-2 py-1.5 text-sm bg-slate-50"
+        className={inputClass}
       />
     </div>
   );

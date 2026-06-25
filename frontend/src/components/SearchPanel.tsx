@@ -5,6 +5,14 @@ import { Button } from "./Button";
 interface Field {
   label: string;
   element: ReactNode;
+  /** 기본 1. 조회 기간 등 넓은 필드는 2 이상 권장 */
+  colSpan?: 1 | 2 | 3;
+}
+
+function colSpanClass(colSpan?: Field["colSpan"]): string {
+  if (colSpan === 2) return "col-span-2";
+  if (colSpan === 3) return "col-span-3";
+  return "";
 }
 
 export function SearchPanel({ fields, onSearch, onReset }: { fields: Field[]; onSearch: () => void; onReset?: () => void }) {
@@ -12,7 +20,7 @@ export function SearchPanel({ fields, onSearch, onReset }: { fields: Field[]; on
     <div className="bg-white rounded-lg border border-slate-200 p-4 mb-4 shadow-sm">
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3 items-end">
         {fields.map((f) => (
-          <div key={f.label}>
+          <div key={f.label} className={`min-w-0 ${colSpanClass(f.colSpan)}`}>
             <label className="block text-xs text-slate-500 mb-1">{f.label}</label>
             {f.element}
           </div>
