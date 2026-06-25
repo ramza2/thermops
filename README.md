@@ -138,6 +138,20 @@ curl "http://localhost:8000/api/v1/system-configs"
 python scripts/test_performance_eval_type.py
 ```
 
+### 예측 추이 API 테스트 (Mock 제거 1차 C)
+
+대시보드·모니터링의 `prediction-trend` 차트가 **실제 매칭/예측 DB 데이터**만 사용하는지 검증합니다. 데이터가 없으면 API는 빈 배열(`data_source: EMPTY`)을 반환하며, 프론트는 가짜 차트 대신 empty state를 표시합니다.
+
+```powershell
+python scripts/test_prediction_trend.py
+```
+
+예측 추이 조회 API:
+
+```powershell
+curl "http://localhost:8000/api/v1/dashboard/prediction-trend?start_at=2026-06-01T00:00:00&end_at=2026-06-07T23:59:59"
+```
+
 ### CSV 적재 테스트 (P0-1)
 
 ```powershell

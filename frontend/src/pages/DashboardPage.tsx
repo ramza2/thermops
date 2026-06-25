@@ -9,8 +9,14 @@ import { ChartCard } from "@/components/ChartCard";
 import { MetricCard } from "@/components/MetricCard";
 import { StatusBadge } from "@/components/StatusBadge";
 import { DataTable } from "@/components/DataTable";
-import { ErrorState, LoadingState } from "@/components/Pagination";
+import { EmptyState, ErrorState, LoadingState } from "@/components/Pagination";
 import { PageHeader } from "@/layouts/MainLayout";
+import {
+  normalizeTrendResponse,
+  trendChartSubtitle,
+  trendChartTitle,
+  type TrendResponse,
+} from "@/utils/trend";
 
 interface Overview {
   prediction_status: string;
@@ -20,13 +26,6 @@ interface Overview {
   champion_model: { model_name: string; version: string } | null;
   failed_pipeline_count: number;
   retraining_candidate_count: number;
-}
-
-interface TrendItem {
-  time: string;
-  predicted: number;
-  actual: number | null;
-  error: number | null;
 }
 
 interface ModelHealth {
@@ -48,7 +47,7 @@ function mapeSourceLabel(source: ModelHealth["mape_source"]): string {
 
 export default function DashboardPage() {
   const [overview, setOverview] = useState<Overview | null>(null);
-  const [trend, setTrend] = useState<TrendItem[]>([]);
+  const [trendData, setTrendData] = useState<TrendResponse>({ data_source: "EMPTY", items: [], count: 0 });
   const [health, setHealth] = useState<ModelHealth[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -59,11 +58,11 @@ export default function DashboardPage() {
     try {
       const [ov, tr, mh] = await Promise.all([
         fetchApi<Overview>("/dashboard/overview"),
-        fetchApi<TrendItem[]>("/dashboard/prediction-trend"),
+        fetchApi<unknown>("/dashboard/prediction-trend"),
         fetchApi<ModelHealth[]>("/dashboard/model-health"),
       ]);
       setOverview(ov);
-      setTrend(tr);
+      setTrendData(normalizeTrendResponse(tr));
       setHealth(mh);
     } catch {
       setError("대시보드 데이터를 불러오지 못했습니다.");
@@ -77,6 +76,8 @@ export default function DashboardPage() {
   if (loading) return <LoadingState />;
   if (error) return <ErrorState message={error} onRetry={load} />;
 
+  const trend = trendData.items ?? [];
+  const hasActual = trendData.data_source === "MATCHED" && trend.some((t) => t.actual != null);
   const errorTrend = trend.filter((t) => t.error != null).map((t) => ({ time: t.time, error: t.error }));
 
   return (
@@ -119,30 +120,43 @@ export default function DashboardPage() {
       </div>
 
       <div className="grid lg:grid-cols-2 gap-4 mb-6">
-        <ChartCard title="예측 vs 실제 추이">
-          <ResponsiveContainer width="100%" height={280}>
-            <LineChart data={trend}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-              <XAxis dataKey="time" tick={{ fontSize: 11 }} />
-              <YAxis tick={{ fontSize: 11 }} />
-              <Tooltip />
-              <Legend />
-              <Line type="monotone" dataKey="predicted" name="예측" stroke="#1d4ed8" strokeWidth={2} dot={false} />
-              <Line type="monotone" dataKey="actual" name="실제" stroke="#059669" strokeWidth={2} dot={false} />
-            </LineChart>
-          </ResponsiveContainer>
+        <ChartCard
+          title={trendChartTitle(trendData.data_source)}
+          subtitle={trendChartSubtitle(trendData.data_source)}
+        >
+          {trend.length === 0 ? (
+            <EmptyState message="예측 추이 데이터 없음" />
+          ) : (
+            <ResponsiveContainer width="100%" height={280}>
+              <LineChart data={trend}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                <XAxis dataKey="time" tick={{ fontSize: 11 }} />
+                <YAxis tick={{ fontSize: 11 }} />
+                <Tooltip />
+                <Legend />
+                <Line type="monotone" dataKey="predicted" name="예측" stroke="#1d4ed8" strokeWidth={2} dot={false} />
+                {hasActual && (
+                  <Line type="monotone" dataKey="actual" name="실제" stroke="#059669" strokeWidth={2} dot={false} />
+                )}
+              </LineChart>
+            </ResponsiveContainer>
+          )}
         </ChartCard>
 
         <ChartCard title="시간대별 오차">
-          <ResponsiveContainer width="100%" height={280}>
-            <BarChart data={errorTrend}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-              <XAxis dataKey="time" tick={{ fontSize: 11 }} />
-              <YAxis tick={{ fontSize: 11 }} />
-              <Tooltip />
-              <Bar dataKey="error" name="절대오차" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
+          {errorTrend.length === 0 ? (
+            <EmptyState message="오차 추이 데이터 없음 (실제값 매칭 후 표시)" />
+          ) : (
+            <ResponsiveContainer width="100%" height={280}>
+              <BarChart data={errorTrend}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                <XAxis dataKey="time" tick={{ fontSize: 11 }} />
+                <YAxis tick={{ fontSize: 11 }} />
+                <Tooltip />
+                <Bar dataKey="error" name="절대오차" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          )}
         </ChartCard>
       </div>
 

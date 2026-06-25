@@ -9,8 +9,6 @@ from app.core.database import get_db
 from app.core.response import accepted, ok, paged
 from app.models.entities import (
     DriftReport,
-    HeatDemandActual,
-    HeatDemandPrediction,
     ModelPerformanceMetric,
     ModelVersion,
     PipelineRun,
@@ -20,6 +18,7 @@ from app.models.entities import (
     TrainingJob,
 )
 from app.services.prediction_evaluation_service import EVAL_TYPE_PREDICTION, get_prediction_performance_avg_mape
+from app.services.prediction_trend_service import TrendParams, get_prediction_trend
 
 router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
 
@@ -66,43 +65,26 @@ async def dashboard_overview(db: AsyncSession = Depends(get_db)):
 
 @router.get("/prediction-trend")
 async def prediction_trend(
-    site_id: str = Query(default="SITE-001"),
+    site_id: str | None = Query(default=None),
+    model_version_id: str | None = Query(default=None),
+    model_name: str | None = Query(default=None),
+    start_at: datetime | None = Query(default=None),
+    end_at: datetime | None = Query(default=None),
+    limit: int = Query(default=168, ge=1, le=2000),
+    aggregation: str = Query(default="HOURLY"),
     db: AsyncSession = Depends(get_db),
 ):
-    preds = (await db.execute(
-        select(HeatDemandPrediction)
-        .where(HeatDemandPrediction.site_id == site_id)
-        .order_by(HeatDemandPrediction.target_at)
-        .limit(24)
-    )).scalars().all()
-
-    actuals = (await db.execute(
-        select(HeatDemandActual)
-        .where(HeatDemandActual.site_id == site_id)
-        .order_by(HeatDemandActual.measured_at.desc())
-        .limit(24)
-    )).scalars().all()
-    actual_map = {a.measured_at.strftime("%H:%M"): float(a.heat_demand) for a in actuals}
-
-    items = []
-    for p in preds:
-        t = p.target_at.strftime("%H:%M")
-        pred_val = float(p.predicted_demand)
-        actual_val = actual_map.get(t)
-        items.append({
-            "time": t,
-            "predicted": pred_val,
-            "actual": actual_val,
-            "error": round(abs(pred_val - actual_val), 2) if actual_val else None,
-        })
-
-    if not items:
-        items = [
-            {"time": f"{h:02d}:00", "predicted": 120 + h * 3, "actual": 118 + h * 3, "error": 2.0}
-            for h in range(0, 24, 2)
-        ]
-
-    return ok(items)
+    params = TrendParams(
+        site_id=site_id,
+        model_version_id=model_version_id,
+        model_name=model_name,
+        start_at=start_at,
+        end_at=end_at,
+        limit=limit,
+        aggregation=aggregation,
+    )
+    result = await get_prediction_trend(db, params)
+    return ok(result)
 
 
 @router.get("/model-health")
