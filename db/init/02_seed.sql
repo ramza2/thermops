@@ -202,3 +202,65 @@ INSERT INTO tb_data_mapping (mapping_id, source_id, mapping_name, target_table, 
   {"source_column":"wind_speed","target_column":"wind_speed","required_yn":false}
 ]')
 ON CONFLICT DO NOTHING;
+
+-- Calendar (샘플 CSV 기간 + 여유)
+INSERT INTO tb_calendar (calendar_date, day_of_week, is_weekend, is_holiday, holiday_name, season)
+SELECT
+  d::date,
+  EXTRACT(DOW FROM d)::int,
+  CASE WHEN EXTRACT(DOW FROM d) IN (0, 6) THEN 'Y' ELSE 'N' END,
+  CASE WHEN d::date IN ('2026-05-05'::date, '2026-06-06'::date) THEN 'Y' ELSE 'N' END,
+  CASE
+    WHEN d::date = '2026-05-05'::date THEN '어린이날'
+    WHEN d::date = '2026-06-06'::date THEN '현충일'
+    ELSE NULL
+  END,
+  CASE
+    WHEN EXTRACT(MONTH FROM d) IN (12, 1, 2) THEN 'WINTER'
+    WHEN EXTRACT(MONTH FROM d) IN (6, 7, 8) THEN 'SUMMER'
+    ELSE 'SHOULDER'
+  END
+FROM generate_series('2026-05-01'::date, '2026-07-31'::date, '1 day') AS d
+ON CONFLICT (calendar_date) DO NOTHING;
+
+-- Feature registry (P0-3)
+INSERT INTO tb_feature (feature_id, feature_name, feature_group, feature_type, calc_expression, status) VALUES
+('FEAT-101', 'month', '시간', 'DERIVED', '관측 월', 'ACTIVE'),
+('FEAT-102', 'hour', '시간', 'DERIVED', '관측 시각', 'ACTIVE'),
+('FEAT-103', 'month_sin', '시간', 'DERIVED', '월 주기 sin', 'ACTIVE'),
+('FEAT-104', 'month_cos', '시간', 'DERIVED', '월 주기 cos', 'ACTIVE'),
+('FEAT-105', 'hour_sin', '시간', 'DERIVED', '시간 주기 sin', 'ACTIVE'),
+('FEAT-106', 'hour_cos', '시간', 'DERIVED', '시간 주기 cos', 'ACTIVE'),
+('FEAT-107', 'is_weekend', '달력', 'DERIVED', '주말 여부', 'ACTIVE'),
+('FEAT-108', 'season_winter', '달력', 'DERIVED', '겨울 시즌', 'ACTIVE'),
+('FEAT-109', 'season_summer', '달력', 'DERIVED', '여름 시즌', 'ACTIVE'),
+('FEAT-110', 'rainfall', '기상', 'RAW', '강수량', 'ACTIVE'),
+('FEAT-111', 'wind_speed', '기상', 'RAW', '풍속', 'ACTIVE'),
+('FEAT-112', 'temperature_diff_24h', '기상', 'DERIVED', '전일 온도차', 'ACTIVE'),
+('FEAT-113', 'demand_lag_24h', '열수요 이력', 'DERIVED', '24h lag', 'ACTIVE'),
+('FEAT-114', 'demand_lag_168h', '열수요 이력', 'DERIVED', '168h lag', 'ACTIVE'),
+('FEAT-115', 'demand_ma_24h', '열수요 이력', 'DERIVED', '24h 이동평균', 'ACTIVE'),
+('FEAT-116', 'demand_ma_168h', '열수요 이력', 'DERIVED', '168h 이동평균', 'ACTIVE'),
+('FEAT-117', 'temperature_lag_24h', '기상', 'DERIVED', '기온 24h lag', 'ACTIVE'),
+('FEAT-118', 'humidity_lag_24h', '기상', 'DERIVED', '습도 24h lag', 'ACTIVE'),
+('FEAT-119', 'temperature_ma_24h', '기상', 'DERIVED', '기온 24h MA', 'ACTIVE'),
+('FEAT-120', 'heating_degree_days', '쾌적도', 'DERIVED', '난방도일', 'ACTIVE'),
+('FEAT-121', 'cooling_degree_days', '쾌적도', 'DERIVED', '냉방도일', 'ACTIVE'),
+('FEAT-122', 'comfort_distance', '쾌적도', 'DERIVED', '쾌적 거리', 'ACTIVE')
+ON CONFLICT DO NOTHING;
+
+-- Feature Set templates (논문 반영 메모 §4)
+INSERT INTO tb_feature_set (feature_set_id, feature_set_name, target_domain, features, apply_site_scope, description) VALUES
+('FS-TPL-MINIMAL', 'Minimal Weather Feature Set', 'HEAT_DEMAND',
+ '["temperature","hour","day_of_week","month"]', 'ALL', '최소 기상·시간 Feature'),
+('FS-TPL-BEHAVIOR', 'Behavior Pattern Feature Set', 'HEAT_DEMAND',
+ '["temperature","hour","day_of_week","month","is_weekend","is_holiday"]', 'ALL', '행동 패턴 Feature'),
+('FS-TPL-WEATHER-EXT', 'Weather Extended Feature Set', 'HEAT_DEMAND',
+ '["temperature","humidity","rainfall","wind_speed","hour","day_of_week","month","is_weekend","is_holiday"]', 'ALL', '기상 확장 Feature'),
+('FS-TPL-LAG-ROLL', 'Lag/Rolling Feature Set', 'HEAT_DEMAND',
+ '["temperature","humidity","rainfall","wind_speed","hour","day_of_week","month","is_weekend","is_holiday","demand_lag_24h","demand_lag_168h","demand_ma_24h","demand_ma_168h","temperature_lag_24h","humidity_lag_24h","temperature_ma_24h"]', 'ALL', 'Lag·이동평균 Feature'),
+('FS-TPL-COMFORT', 'Comfort Index Feature Set', 'HEAT_DEMAND',
+ '["temperature","humidity","rainfall","wind_speed","hour","day_of_week","month","is_weekend","is_holiday","demand_lag_24h","demand_lag_168h","demand_ma_24h","demand_ma_168h","temperature_lag_24h","humidity_lag_24h","temperature_ma_24h","heating_degree_days","cooling_degree_days","comfort_distance"]', 'ALL', '쾌적도 Feature'),
+('FS-TPL-TWO-STAGE', 'Two-Stage Ready Feature Set', 'HEAT_DEMAND',
+ '["month","day_of_week","hour","month_sin","month_cos","hour_sin","hour_cos","is_weekend","is_holiday","season_winter","season_summer","temperature","humidity","rainfall","wind_speed","temperature_diff_24h","demand_lag_24h","demand_lag_168h","demand_ma_24h","demand_ma_168h","temperature_lag_24h","humidity_lag_24h","temperature_ma_24h","heating_degree_days","cooling_degree_days","comfort_distance"]', 'ALL', '2-Stage 준비 풀 Feature')
+ON CONFLICT DO NOTHING;

@@ -26,6 +26,53 @@ class WeatherArea(Base):
     provider: Mapped[str | None] = mapped_column(String(50))
 
 
+class SiteWeatherMapping(Base):
+    __tablename__ = "tb_site_weather_mapping"
+    mapping_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    site_id: Mapped[str] = mapped_column(String(50))
+    weather_area_id: Mapped[str] = mapped_column(String(50))
+    priority_no: Mapped[int] = mapped_column(Integer, default=1)
+    active_yn: Mapped[str] = mapped_column(String(1), default="Y")
+
+
+class Calendar(Base):
+    __tablename__ = "tb_calendar"
+    calendar_date: Mapped[date] = mapped_column(Date, primary_key=True)
+    day_of_week: Mapped[int] = mapped_column(Integer)
+    is_weekend: Mapped[str] = mapped_column(String(1))
+    is_holiday: Mapped[str] = mapped_column(String(1))
+    holiday_name: Mapped[str | None] = mapped_column(String(100))
+    season: Mapped[str | None] = mapped_column(String(20))
+
+
+class DatasetVersion(Base):
+    __tablename__ = "tb_dataset_version"
+    dataset_version_id: Mapped[str] = mapped_column(String(80), primary_key=True)
+    dataset_type: Mapped[str] = mapped_column(String(30))
+    base_start_at: Mapped[datetime | None] = mapped_column(DateTime)
+    base_end_at: Mapped[datetime | None] = mapped_column(DateTime)
+    feature_config_hash: Mapped[str | None] = mapped_column(String(128))
+    record_count: Mapped[int | None] = mapped_column(Integer)
+    created_by: Mapped[str | None] = mapped_column(String(50))
+    created_at: Mapped[datetime] = mapped_column(DateTime)
+
+
+class FeatureDataset(Base):
+    __tablename__ = "tb_feature_dataset"
+    feature_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    dataset_version_id: Mapped[str] = mapped_column(String(80))
+    site_id: Mapped[str] = mapped_column(String(50))
+    feature_at: Mapped[datetime] = mapped_column(DateTime)
+    target_heat_demand: Mapped[float | None] = mapped_column(Numeric(18, 6))
+    temp: Mapped[float | None] = mapped_column(Numeric(10, 3))
+    humidity: Mapped[float | None] = mapped_column(Numeric(10, 3))
+    lag_24h_demand: Mapped[float | None] = mapped_column(Numeric(18, 6))
+    lag_168h_demand: Mapped[float | None] = mapped_column(Numeric(18, 6))
+    rolling_24h_avg: Mapped[float | None] = mapped_column(Numeric(18, 6))
+    feature_json: Mapped[dict | None] = mapped_column(JSONB)
+    created_at: Mapped[datetime] = mapped_column(DateTime)
+
+
 class DataSource(Base):
     __tablename__ = "tb_data_source"
     data_source_id: Mapped[str] = mapped_column(String(50), primary_key=True)

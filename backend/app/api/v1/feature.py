@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -7,10 +7,26 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.response import ok, paged
+from app.core.time import utc_now
 from app.models.entities import Feature, FeatureSet
 from app.schemas.api import FeatureCreate, FeatureSetCreate
+from app.services.feature_build_service import (
+    FeatureBuildParams,
+    get_feature_build_job,
+    preview_features,
+    run_feature_build,
+)
 
 router = APIRouter(tags=["Feature"])
+
+
+def _parse_optional_dt(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    text = value.strip()
+    if text.endswith("Z"):
+        text = text[:-1] + "+00:00"
+    return datetime.fromisoformat(text).replace(tzinfo=None)
 
 
 @router.get("/features")
@@ -47,7 +63,7 @@ async def create_feature(body: FeatureCreate, db: AsyncSession = Depends(get_db)
         calc_expression=body.calc_expression,
         status="ACTIVE",
         description=body.description,
-        created_at=datetime.now(timezone.utc),
+        created_at=utc_now(),
     )
     db.add(f)
     return ok({"feature_id": fid}, message="Feature가 등록되었습니다.")
@@ -102,7 +118,7 @@ async def create_feature_set(body: FeatureSetCreate, db: AsyncSession = Depends(
         apply_site_scope=body.apply_site_scope,
         description=body.description,
         active_yn="Y",
-        created_at=datetime.now(timezone.utc),
+        created_at=utc_now(),
     )
     db.add(fs)
     return ok({"feature_set_id": fsid}, message="Feature Set이 등록되었습니다.")
@@ -145,14 +161,58 @@ async def update_feature_set(feature_set_id: str, body: FeatureSetCreate, db: As
 
 
 @router.post("/feature-sets/{feature_set_id}/preview")
-async def preview_feature_set(feature_set_id: str, db: AsyncSession = Depends(get_db)):
-    fs = (await db.execute(select(FeatureSet).where(FeatureSet.feature_set_id == feature_set_id))).scalar_one_or_none()
-    if not fs:
+async def preview_feature_set(
+    feature_set_id: str,
+    site_id: str | None = Query(default=None),
+    start_at: str | None = Query(default=None),
+    end_at: str | None = Query(default=None),
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        result = await preview_features(
+            db,
+            feature_set_id,
+            site_id=site_id,
+            start_at=_parse_optional_dt(start_at),
+            end_at=_parse_optional_dt(end_at),
+            limit=10,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return ok(result)
+
+
+@router.post("/feature-build-jobs")
+async def create_feature_build_job(
+    feature_set_id: str = Query(...),
+    site_id: str | None = Query(default=None),
+    start_at: str | None = Query(default=None),
+    end_at: str | None = Query(default=None),
+    db: AsyncSession = Depends(get_db),
+):
+    params = FeatureBuildParams(
+        feature_set_id=feature_set_id,
+        site_id=site_id,
+        start_at=_parse_optional_dt(start_at),
+        end_at=_parse_optional_dt(end_at),
+    )
+    try:
+        result = await run_feature_build(db, params)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    if result.get("status") == "FAILED":
+        raise HTTPException(status_code=400, detail=result.get("error_message", "Feature 생성 실패"))
+
+    msg = f"Feature {result['inserted_count']}건이 생성되었습니다."
+    if result.get("warnings"):
+        msg += f" (경고 {len(result['warnings'])}건)"
+    return ok(result, message=msg)
+
+
+@router.get("/feature-build-jobs/{job_id}")
+async def get_feature_build_job_endpoint(job_id: str, db: AsyncSession = Depends(get_db)):
+    result = await get_feature_build_job(db, job_id)
+    if not result:
         raise HTTPException(status_code=404, detail="NOT_FOUND")
-    return ok({
-        "feature_set_id": feature_set_id,
-        "preview": [
-            {"feature_at": "2026-06-24T01:00:00", "temperature": -2.5, "humidity": 65.0, "lag_24h": 120.5},
-            {"feature_at": "2026-06-24T02:00:00", "temperature": -3.1, "humidity": 68.0, "lag_24h": 115.2},
-        ],
-    })
+    return ok(result)

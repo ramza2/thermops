@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, Plus, Save, Trash2 } from "lucide-react";
-import { deleteApi, fetchApi, putApi, PagedData } from "@/api/client";
+import { ArrowLeft, Eye, Play, Plus, Save, Trash2 } from "lucide-react";
+import { deleteApi, fetchApi, postApi, putApi, PagedData } from "@/api/client";
 import { Button } from "@/components/Button";
 import { DataTable } from "@/components/DataTable";
 import { Modal } from "@/components/Modal";
@@ -45,6 +45,19 @@ export default function FeatureSetDetailPage() {
   const [saving, setSaving] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [addFeatureOpen, setAddFeatureOpen] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [buildLoading, setBuildLoading] = useState(false);
+  const [previewRows, setPreviewRows] = useState<Record<string, unknown>[]>([]);
+  const [previewWarnings, setPreviewWarnings] = useState<string[]>([]);
+  const [buildResult, setBuildResult] = useState<{
+    job_id: string;
+    inserted_count: number;
+    checked_start_at?: string;
+    checked_end_at?: string;
+    feature_names?: string[];
+    warnings?: string[];
+  } | null>(null);
   const [allFeatures, setAllFeatures] = useState<FeatureItem[]>([]);
   const [selectedToAdd, setSelectedToAdd] = useState<string[]>([]);
 
@@ -133,6 +146,50 @@ export default function FeatureSetDetailPage() {
     }
   };
 
+  const handlePreview = async () => {
+    if (!id) return;
+    setPreviewLoading(true);
+    try {
+      const res = await postApi<{
+        preview: Record<string, unknown>[];
+        preview_rows?: Record<string, unknown>[];
+        warnings?: string[];
+      }>(`/feature-sets/${id}/preview`);
+      setPreviewRows(res.preview_rows || res.preview || []);
+      setPreviewWarnings(res.warnings || []);
+      setPreviewOpen(true);
+    } catch {
+      showToast("error", "Feature 미리보기에 실패했습니다.");
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
+
+  const handleBuild = async () => {
+    if (!id) return;
+    setBuildLoading(true);
+    try {
+      const res = await postApi<{
+        job_id: string;
+        inserted_count: number;
+        checked_start_at?: string;
+        checked_end_at?: string;
+        feature_names?: string[];
+        warnings?: string[];
+      }>(`/feature-build-jobs?${new URLSearchParams({ feature_set_id: id })}`);
+      setBuildResult(res);
+      showToast("success", `Feature ${res.inserted_count}건 생성 완료 (${res.job_id})`);
+    } catch {
+      showToast("error", "Feature 생성에 실패했습니다.");
+    } finally {
+      setBuildLoading(false);
+    }
+  };
+
+  const previewColumns = previewRows.length
+    ? ["site_id", "measured_at", "heat_demand", ...form.features.filter((f) => f in previewRows[0])].slice(0, 8)
+    : ["site_id", "measured_at", "heat_demand"];
+
   if (loading) return <LoadingState />;
   if (error) return <ErrorState message={error} onRetry={load} />;
 
@@ -145,6 +202,12 @@ export default function FeatureSetDetailPage() {
           <>
             <Button variant="secondary" icon={<ArrowLeft className="w-4 h-4" />} onClick={() => navigate("/feature-sets")}>
               목록
+            </Button>
+            <Button variant="secondary" icon={<Eye className="w-4 h-4" />} onClick={handlePreview} disabled={previewLoading}>
+              {previewLoading ? "미리보기 중..." : "Feature 미리보기"}
+            </Button>
+            <Button variant="secondary" icon={<Play className="w-4 h-4" />} onClick={handleBuild} disabled={buildLoading}>
+              {buildLoading ? "생성 중..." : "Feature 생성"}
             </Button>
             <Button variant="danger" icon={<Trash2 className="w-4 h-4" />} onClick={() => setDeleteOpen(true)}>
               삭제
@@ -208,6 +271,23 @@ export default function FeatureSetDetailPage() {
         </div>
       </div>
 
+      {buildResult && (
+        <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4 mb-6 text-sm">
+          <p className="font-semibold text-emerald-800">최근 Feature 생성 결과</p>
+          <p className="mt-1 text-emerald-700">
+            {buildResult.inserted_count.toLocaleString()}건 · {buildResult.job_id}
+          </p>
+          {buildResult.checked_start_at && (
+            <p className="text-emerald-600 text-xs mt-1">
+              기간: {buildResult.checked_start_at} ~ {buildResult.checked_end_at}
+            </p>
+          )}
+          {buildResult.warnings && buildResult.warnings.length > 0 && (
+            <p className="text-amber-700 text-xs mt-1">경고 {buildResult.warnings.length}건</p>
+          )}
+        </div>
+      )}
+
       <div className="bg-white rounded-lg border border-slate-200 p-4">
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-sm font-semibold text-slate-800">포함 Feature 목록 ({form.features.length})</h3>
@@ -259,6 +339,31 @@ export default function FeatureSetDetailPage() {
             </label>
           ))}
         </div>
+      </Modal>
+
+      <Modal
+        open={previewOpen}
+        title="Feature 미리보기"
+        onClose={() => setPreviewOpen(false)}
+        size="lg"
+        footer={<Button variant="secondary" onClick={() => setPreviewOpen(false)}>닫기</Button>}
+      >
+        {previewWarnings.length > 0 && (
+          <div className="mb-3 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded p-2">
+            {previewWarnings.map((w) => <div key={w}>{w}</div>)}
+          </div>
+        )}
+        <DataTable
+          columns={previewColumns.map((key) => ({
+            key,
+            header: key,
+            render: (r) => {
+              const v = r[key];
+              return v == null ? "-" : String(v);
+            },
+          }))}
+          data={previewRows}
+        />
       </Modal>
 
       <Modal

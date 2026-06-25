@@ -73,6 +73,21 @@ curl "http://localhost:8000/api/v1/data-quality/runs?page=1&size=20"
 
 품질 점검은 `tb_heat_demand_actual`, `tb_weather_observation`의 결측·중복·시간 누락·이상치·참조 정합성을 점검하고 `tb_data_quality_run`에 결과를 저장합니다.
 
+### Feature 생성 테스트 (P0-3)
+
+CSV 적재·품질 점검 후 Feature Dataset 생성을 검증합니다.
+
+```powershell
+python scripts/test_feature_build.py
+```
+
+Feature Set 미리보기·생성 API:
+
+```powershell
+curl -X POST "http://localhost:8000/api/v1/feature-sets/FS-TPL-LAG-ROLL/preview"
+curl -X POST "http://localhost:8000/api/v1/feature-build-jobs?feature_set_id=FS-TPL-LAG-ROLL"
+```
+
 ### CSV 적재 테스트 (P0-1)
 
 ```powershell

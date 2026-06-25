@@ -222,7 +222,7 @@ async def list_quality_runs(
     rows = (
         await db.execute(
             select(DataQualityRun)
-            .where(DataQualityRun.check_type != "INGESTION")
+            .where(DataQualityRun.check_type.notin_(["INGESTION", "FEATURE_BUILD"]))
             .order_by(DataQualityRun.started_at.desc())
         )
     ).scalars().all()
