@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { RotateCcw, Save, Settings } from "lucide-react";
-import { fetchApi } from "@/api/client";
+import { RotateCcw, Settings } from "lucide-react";
+import { fetchApi, postApi, putApi } from "@/api/client";
 import { Button } from "@/components/Button";
 import { DataTable } from "@/components/DataTable";
 import { Modal } from "@/components/Modal";
@@ -8,13 +8,6 @@ import { TextInput } from "@/components/SearchPanel";
 import { LoadingState, ErrorState } from "@/components/Pagination";
 import { useToast } from "@/hooks/useToast";
 import { PageHeader } from "@/layouts/MainLayout";
-
-/**
- * TODO: 백엔드 API 연동 필요
- * - GET  /api/v1/system-configs
- * - PUT  /api/v1/system-configs/{config_key}
- * - POST /api/v1/system-configs/reset (선택)
- */
 
 interface CommonCode {
   code_group: string;
@@ -24,17 +17,13 @@ interface CommonCode {
 
 interface SystemConfig {
   config_key: string;
+  config_name: string;
   config_value: string;
   config_type: string;
-  scope: string;
   description: string;
+  editable_yn: boolean;
+  updated_at: string | null;
 }
-
-const DEFAULT_CONFIGS: SystemConfig[] = [
-  { config_key: "default_champion_model", config_value: "heat_demand_lgbm", config_type: "STRING", scope: "GLOBAL", description: "기본 Champion 모델명" },
-  { config_key: "mape_alert_threshold", config_value: "6.0", config_type: "NUMBER", scope: "GLOBAL", description: "MAPE 알림 임계치(%)" },
-  { config_key: "drift_score_threshold", config_value: "0.35", config_type: "NUMBER", scope: "GLOBAL", description: "드리프트 점수 임계치" },
-];
 
 export default function SystemConfigPage() {
   const { showToast } = useToast();
@@ -45,17 +34,20 @@ export default function SystemConfigPage() {
   const [editTarget, setEditTarget] = useState<SystemConfig | null>(null);
   const [editValue, setEditValue] = useState("");
   const [saving, setSaving] = useState(false);
+  const [resetting, setResetting] = useState(false);
 
   const load = async () => {
     setLoading(true);
     setError("");
     try {
-      const codeRes = await fetchApi<CommonCode[]>("/codes");
+      const [codeRes, configRes] = await Promise.all([
+        fetchApi<CommonCode[]>("/codes"),
+        fetchApi<SystemConfig[]>("/system-configs"),
+      ]);
       setCodes(codeRes);
-      const stored = localStorage.getItem("thermops_system_configs");
-      setConfigs(stored ? JSON.parse(stored) as SystemConfig[] : DEFAULT_CONFIGS);
+      setConfigs(configRes);
     } catch {
-      setError("공통 코드를 불러오지 못했습니다.");
+      setError("공통 코드 또는 시스템 설정을 불러오지 못했습니다.");
     } finally {
       setLoading(false);
     }
@@ -63,34 +55,40 @@ export default function SystemConfigPage() {
 
   useEffect(() => { load(); }, []);
 
-  const persistConfigs = (next: SystemConfig[]) => {
-    setConfigs(next);
-    localStorage.setItem("thermops_system_configs", JSON.stringify(next));
-  };
-
   const handleSave = async () => {
     if (!editTarget) return;
     setSaving(true);
     try {
-      const next = configs.map((c) =>
-        c.config_key === editTarget.config_key ? { ...c, config_value: editValue } : c,
+      const updated = await putApi<SystemConfig>(
+        `/system-configs/${encodeURIComponent(editTarget.config_key)}`,
+        { config_value: editValue },
       );
-      persistConfigs(next);
+      setConfigs((prev) =>
+        prev.map((c) => (c.config_key === updated.config_key ? updated : c)),
+      );
       showToast("success", "시스템 설정이 저장되었습니다.");
       setEditTarget(null);
+    } catch {
+      showToast("error", "시스템 설정 저장에 실패했습니다.");
     } finally {
       setSaving(false);
     }
   };
 
-  const handleSaveAll = () => {
-    persistConfigs(configs);
-    showToast("success", "모든 설정이 저장되었습니다.");
-  };
-
-  const handleReset = () => {
-    persistConfigs(DEFAULT_CONFIGS);
-    showToast("success", "시스템 설정이 초기값으로 복원되었습니다.");
+  const handleReset = async () => {
+    setResetting(true);
+    try {
+      const res = await postApi<{ reset_count: number; items: SystemConfig[] }>("/system-configs/reset");
+      setConfigs((prev) => {
+        const map = new Map(res.items.map((i) => [i.config_key, i]));
+        return prev.map((c) => map.get(c.config_key) ?? c);
+      });
+      showToast("success", `시스템 설정 ${res.reset_count}건이 기본값으로 초기화되었습니다.`);
+    } catch {
+      showToast("error", "시스템 설정 초기화에 실패했습니다.");
+    } finally {
+      setResetting(false);
+    }
   };
 
   if (loading) return <LoadingState />;
@@ -106,10 +104,14 @@ export default function SystemConfigPage() {
           { label: "공통 코드/설정" },
         ]}
         actions={
-          <>
-            <Button variant="secondary" icon={<RotateCcw className="w-4 h-4" />} onClick={handleReset}>초기화</Button>
-            <Button icon={<Save className="w-4 h-4" />} onClick={handleSaveAll}>저장</Button>
-          </>
+          <Button
+            variant="secondary"
+            icon={<RotateCcw className="w-4 h-4" />}
+            onClick={handleReset}
+            disabled={resetting || !configs.some((c) => c.editable_yn)}
+          >
+            {resetting ? "초기화 중..." : "기본값 초기화"}
+          </Button>
         }
       />
 
@@ -129,29 +131,49 @@ export default function SystemConfigPage() {
 
       <div>
         <h2 className="text-sm font-semibold text-slate-800 mb-2">시스템 설정 목록</h2>
-        <p className="text-xs text-amber-600 mb-2">※ 시스템 설정 API 미구현 — Mock 데이터 + localStorage 저장 (TODO: GET/PUT /system-configs)</p>
-        <DataTable
-          columns={[
-            { key: "config_key", header: "설정 키" },
-            { key: "config_value", header: "설정값" },
-            { key: "config_type", header: "유형" },
-            { key: "scope", header: "범위" },
-            { key: "description", header: "설명" },
-            {
-              key: "actions", header: "작업", render: (r) => {
-                const row = r as unknown as SystemConfig;
-                return (
-                  <Button variant="secondary" onClick={(e) => {
-                    e.stopPropagation();
-                    setEditTarget(row);
-                    setEditValue(row.config_value);
-                  }}>수정</Button>
-                );
+        {configs.length === 0 ? (
+          <p className="text-sm text-slate-500 py-8 text-center">등록된 시스템 설정이 없습니다.</p>
+        ) : (
+          <DataTable
+            columns={[
+              { key: "config_key", header: "설정 키" },
+              { key: "config_name", header: "설정명" },
+              { key: "config_value", header: "설정값" },
+              { key: "config_type", header: "유형" },
+              { key: "description", header: "설명" },
+              {
+                key: "updated_at",
+                header: "수정일",
+                render: (r) => r.updated_at
+                  ? new Date(r.updated_at as string).toLocaleString("ko-KR")
+                  : "-",
               },
-            },
-          ]}
-          data={configs as unknown as Record<string, unknown>[]}
-        />
+              {
+                key: "actions",
+                header: "작업",
+                render: (r) => {
+                  const row = r as unknown as SystemConfig;
+                  if (!row.editable_yn) {
+                    return <span className="text-xs text-slate-400">읽기 전용</span>;
+                  }
+                  return (
+                    <Button
+                      variant="secondary"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setEditTarget(row);
+                        setEditValue(row.config_value);
+                      }}
+                    >
+                      수정
+                    </Button>
+                  );
+                },
+              },
+            ]}
+            data={configs as unknown as Record<string, unknown>[]}
+          />
+        )}
       </div>
 
       <Modal
@@ -170,6 +192,10 @@ export default function SystemConfigPage() {
             <div>
               <label className="block text-xs text-slate-500 mb-1">설정 키</label>
               <p className="text-sm font-medium">{editTarget.config_key}</p>
+            </div>
+            <div>
+              <label className="block text-xs text-slate-500 mb-1">설정명</label>
+              <p className="text-sm text-slate-700">{editTarget.config_name}</p>
             </div>
             <div>
               <label className="block text-xs text-slate-500 mb-1">설명</label>

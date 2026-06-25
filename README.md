@@ -116,6 +116,20 @@ python scripts/test_batch_prediction.py
 curl -X POST "http://localhost:8000/api/v1/prediction-jobs" -H "Content-Type: application/json" -d "{\"feature_set_id\":\"FS-TPL-LAG-ROLL\",\"model_version_id\":\"MV-heat_demand_lightgbm-1\",\"start_at\":\"2026-06-01T00:00:00\",\"end_at\":\"2026-06-20T23:00:00\"}"
 ```
 
+### 시스템 설정 API 테스트 (Mock 제거 1차)
+
+`SystemConfigPage`의 localStorage Mock을 제거하고 DB 기반 설정 API를 검증합니다.
+
+```powershell
+python scripts/test_system_config.py
+```
+
+설정 조회 API:
+
+```powershell
+curl "http://localhost:8000/api/v1/system-configs"
+```
+
 ### CSV 적재 테스트 (P0-1)
 
 ```powershell

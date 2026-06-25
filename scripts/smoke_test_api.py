@@ -23,6 +23,7 @@ ENDPOINTS = [
     "/api/v1/pipeline-runs",
     "/api/v1/drift-reports",
     "/api/v1/retraining-candidates",
+    "/api/v1/system-configs",
 ]
 
 

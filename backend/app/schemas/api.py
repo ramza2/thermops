@@ -116,6 +116,10 @@ class PredictionEvaluateRequest(BaseModel):
     end_at: datetime | None = None
 
 
+class SystemConfigUpdate(BaseModel):
+    config_value: str
+
+
 # Model
 class ChampionRequest(BaseModel):
     reason: str | None = None

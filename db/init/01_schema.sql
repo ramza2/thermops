@@ -345,10 +345,12 @@ CREATE INDEX IF NOT EXISTS ix_pipeline_run ON tb_pipeline_run(pipeline_type, run
 
 CREATE TABLE IF NOT EXISTS tb_system_config (
     config_key VARCHAR(100) PRIMARY KEY,
+    config_name VARCHAR(200),
     config_value TEXT,
     config_type VARCHAR(20),
     scope VARCHAR(50),
     description VARCHAR(500),
+    editable_yn CHAR(1) NOT NULL DEFAULT 'Y',
     updated_by VARCHAR(50),
     updated_at TIMESTAMP
 );

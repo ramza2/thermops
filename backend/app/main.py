@@ -12,6 +12,7 @@ from app.api.v1 import (
     monitoring,
     pipeline,
     prediction,
+    system,
     training,
 )
 
@@ -43,6 +44,7 @@ app.include_router(model.router, prefix=api_prefix)
 app.include_router(prediction.router, prefix=api_prefix)
 app.include_router(monitoring.router, prefix=api_prefix)
 app.include_router(pipeline.router, prefix=api_prefix)
+app.include_router(system.router, prefix=api_prefix)
 
 
 @app.get("/health")

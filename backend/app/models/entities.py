@@ -337,7 +337,11 @@ class CommonCode(Base):
 class SystemConfig(Base):
     __tablename__ = "tb_system_config"
     config_key: Mapped[str] = mapped_column(String(100), primary_key=True)
+    config_name: Mapped[str | None] = mapped_column(String(200))
     config_value: Mapped[str | None] = mapped_column(Text)
     config_type: Mapped[str | None] = mapped_column(String(20))
     scope: Mapped[str | None] = mapped_column(String(50))
     description: Mapped[str | None] = mapped_column(String(500))
+    editable_yn: Mapped[str] = mapped_column(String(1), default="Y")
+    updated_by: Mapped[str | None] = mapped_column(String(50))
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime)

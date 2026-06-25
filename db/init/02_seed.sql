@@ -173,11 +173,14 @@ FROM generate_series('2026-06-23 00:00:00'::timestamp, '2026-06-24 23:00:00'::ti
 ON CONFLICT DO NOTHING;
 
 -- System config
-INSERT INTO tb_system_config (config_key, config_value, config_type, scope, description) VALUES
-('default_champion_model', 'heat_demand_lgbm', 'STRING', 'GLOBAL', '기본 Champion 모델명'),
-('mape_alert_threshold', '6.0', 'NUMBER', 'GLOBAL', 'MAPE 알림 임계치(%)'),
-('drift_score_threshold', '0.35', 'NUMBER', 'GLOBAL', '드리프트 점수 임계치')
-ON CONFLICT DO NOTHING;
+INSERT INTO tb_system_config (config_key, config_name, config_value, config_type, scope, description, editable_yn) VALUES
+('default_model_name', '기본 모델명', 'heat_demand_lightgbm', 'STRING', 'GLOBAL', 'Champion 미지정 시 사용할 기본 모델명', 'Y'),
+('mape_warning_threshold', 'MAPE 경고 임계치', '8.0', 'NUMBER', 'GLOBAL', '운영 MAPE 경고 알림 임계치(%)', 'Y'),
+('drift_warning_threshold', '드리프트 경고 임계치', '0.40', 'NUMBER', 'GLOBAL', 'Feature 드리프트 경고 점수 임계치', 'Y'),
+('retraining_mape_threshold', '재학습 MAPE 임계치', '10.0', 'NUMBER', 'GLOBAL', '재학습 후보 산출 MAPE 임계치(%)', 'Y'),
+('batch_prediction_default_horizon', '배치 예측 기본 범위', '24', 'NUMBER', 'GLOBAL', '배치 예측 기본 시간 범위(시간)', 'Y'),
+('system_version', '시스템 버전', '0.1.0', 'STRING', 'GLOBAL', 'THERMOps 릴리스 버전', 'N')
+ON CONFLICT (config_key) DO NOTHING;
 
 -- CSV sample data sources (실제 파일 적재 1단계)
 INSERT INTO tb_data_source (data_source_id, source_name, source_type, source_category, connection_ref, connection_info, load_cycle, active_yn) VALUES
