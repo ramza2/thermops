@@ -93,7 +93,7 @@ export default function ModelMonitoringPage() {
     <div>
       <PageHeader
         title="성능 모니터링"
-        description={`${perf?.model_name} v${perf?.model_version} 운영 성능 (${perf?.period?.from ?? dateRange.from} ~ ${perf?.period?.to ?? dateRange.to})`}
+        description={`${perf?.model_name} v${perf?.model_version} · 운영 예측 성능 (예측값-실제값 매칭) · ${perf?.period?.from ?? dateRange.from} ~ ${perf?.period?.to ?? dateRange.to}`}
         breadcrumbs={[
           { label: "운영 관리", path: "/ops/pipeline-runs" },
           { label: "성능 모니터링" },

@@ -130,6 +130,14 @@ python scripts/test_system_config.py
 curl "http://localhost:8000/api/v1/system-configs"
 ```
 
+### 성능 지표 eval_type 테스트 (Mock 제거 1차 B)
+
+학습 검증 성능과 운영 예측 성능 API 필터를 검증합니다.
+
+```powershell
+python scripts/test_performance_eval_type.py
+```
+
 ### CSV 적재 테스트 (P0-1)
 
 ```powershell

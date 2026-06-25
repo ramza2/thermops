@@ -19,7 +19,7 @@ from app.models.entities import (
     Site,
     TrainingJob,
 )
-from app.services.prediction_evaluation_service import get_prediction_performance_avg_mape
+from app.services.prediction_evaluation_service import EVAL_TYPE_PREDICTION, get_prediction_performance_avg_mape
 
 router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
 
@@ -108,13 +108,42 @@ async def prediction_trend(
 @router.get("/model-health")
 async def model_health(db: AsyncSession = Depends(get_db)):
     models = (await db.execute(select(ModelVersion).order_by(ModelVersion.registered_at.desc()))).scalars().all()
-    return ok([
-        {
+
+    op_rows = (
+        await db.execute(
+            select(ModelPerformanceMetric).where(
+                ModelPerformanceMetric.metric_json["eval_type"].astext == EVAL_TYPE_PREDICTION,
+            )
+        )
+    ).scalars().all()
+    op_mape_by_mv: dict[str, list[float]] = {}
+    for r in op_rows:
+        if r.mape is not None:
+            op_mape_by_mv.setdefault(r.model_version_id, []).append(float(r.mape))
+
+    items = []
+    for m in models:
+        op_mapes = op_mape_by_mv.get(m.model_version_id, [])
+        training_mape = m.metric_summary_json.get("mape") if m.metric_summary_json else None
+
+        if op_mapes:
+            mape = round(sum(op_mapes) / len(op_mapes), 4)
+            mape_source = "OPERATIONAL"
+        elif training_mape is not None:
+            mape = float(training_mape)
+            mape_source = "TRAINING"
+        else:
+            mape = None
+            mape_source = "NONE"
+
+        items.append({
             "model_name": m.model_name,
             "version": m.version_no,
             "stage": m.model_stage,
-            "mape": m.metric_summary_json.get("mape") if m.metric_summary_json else None,
+            "mape": mape,
+            "mape_source": mape_source,
+            "mape_operational": round(sum(op_mapes) / len(op_mapes), 4) if op_mapes else None,
+            "mape_training": float(training_mape) if training_mape is not None else None,
             "registered_at": m.registered_at.isoformat(),
-        }
-        for m in models
-    ])
+        })
+    return ok(items)

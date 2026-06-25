@@ -34,7 +34,16 @@ interface ModelHealth {
   version: string;
   stage: string;
   mape: number | null;
+  mape_source: "OPERATIONAL" | "TRAINING" | "NONE";
+  mape_operational: number | null;
+  mape_training: number | null;
   registered_at: string;
+}
+
+function mapeSourceLabel(source: ModelHealth["mape_source"]): string {
+  if (source === "OPERATIONAL") return "운영 예측";
+  if (source === "TRAINING") return "학습 검증 (운영 데이터 없음)";
+  return "성능 데이터 없음";
 }
 
 export default function DashboardPage() {
@@ -143,7 +152,20 @@ export default function DashboardPage() {
             { key: "model_name", header: "모델명" },
             { key: "version", header: "버전" },
             { key: "stage", header: "상태", render: (r) => <StatusBadge status={r.stage as string} /> },
-            { key: "mape", header: "MAPE(%)", render: (r) => r.mape != null ? `${r.mape}%` : "-" },
+            {
+              key: "mape",
+              header: "MAPE(%)",
+              render: (r) => {
+                const row = r as unknown as ModelHealth;
+                if (row.mape == null) return "-";
+                return `${Number(row.mape).toFixed(2)}%`;
+              },
+            },
+            {
+              key: "mape_source",
+              header: "MAPE 기준",
+              render: (r) => mapeSourceLabel((r as unknown as ModelHealth).mape_source),
+            },
             { key: "registered_at", header: "등록일", render: (r) => new Date(r.registered_at as string).toLocaleDateString("ko-KR") },
           ]}
           data={health as unknown as Record<string, unknown>[]}
