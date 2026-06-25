@@ -102,6 +102,20 @@ python scripts/test_model_training.py
 curl -X POST "http://localhost:8000/api/v1/training-jobs" -H "Content-Type: application/json" -d "{\"config_id\":\"TRC-TPL-LAG-ROLL\",\"register_model_yn\":true}"
 ```
 
+### 배치 예측 테스트 (P0-5)
+
+모델 학습 완료 후 배치 예측·결과 DB 저장을 검증합니다.
+
+```powershell
+python scripts/test_batch_prediction.py
+```
+
+배치 예측 실행 API:
+
+```powershell
+curl -X POST "http://localhost:8000/api/v1/prediction-jobs" -H "Content-Type: application/json" -d "{\"feature_set_id\":\"FS-TPL-LAG-ROLL\",\"model_version_id\":\"MV-heat_demand_lightgbm-1\",\"start_at\":\"2026-06-01T00:00:00\",\"end_at\":\"2026-06-20T23:00:00\"}"
+```
+
 ### CSV 적재 테스트 (P0-1)
 
 ```powershell

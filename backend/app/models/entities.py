@@ -202,8 +202,11 @@ class PredictionJob(Base):
     target_end_at: Mapped[datetime] = mapped_column(DateTime)
     site_ids: Mapped[list | None] = mapped_column(JSONB)
     job_status: Mapped[str] = mapped_column(String(20))
-    created_at: Mapped[datetime] = mapped_column(DateTime)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime)
+    result_summary: Mapped[dict | None] = mapped_column(JSONB)
+    error_message: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime)
 
 
 class HeatDemandPrediction(Base):
@@ -216,6 +219,8 @@ class HeatDemandPrediction(Base):
     lower_bound: Mapped[float | None] = mapped_column(Numeric(18, 6))
     upper_bound: Mapped[float | None] = mapped_column(Numeric(18, 6))
     model_version_id: Mapped[str] = mapped_column(String(80))
+    feature_set_id: Mapped[str | None] = mapped_column(String(50))
+    created_at: Mapped[datetime | None] = mapped_column(DateTime)
 
 
 class HeatDemandActual(Base):

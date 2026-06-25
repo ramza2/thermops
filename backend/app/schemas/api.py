@@ -95,13 +95,17 @@ class TrainingJobCreate(BaseModel):
 
 # Prediction
 class PredictionJobCreate(BaseModel):
-    site_ids: list[str]
-    target_start_at: datetime
-    target_end_at: datetime
-    prediction_horizon: str
+    feature_set_id: str
+    site_ids: list[str] | None = None
+    start_at: datetime | None = None
+    end_at: datetime | None = None
+    target_start_at: datetime | None = None
+    target_end_at: datetime | None = None
+    prediction_horizon: str = "BATCH"
+    model_version_id: str | None = None
     model_name: str | None = None
     model_version: str | None = None
-    overwrite_yn: bool = False
+    overwrite_yn: bool = True
 
 
 # Model

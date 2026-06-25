@@ -238,8 +238,11 @@ CREATE TABLE IF NOT EXISTS tb_prediction_job (
     target_end_at TIMESTAMP NOT NULL,
     site_ids JSONB,
     job_status VARCHAR(20) NOT NULL,
-    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-    finished_at TIMESTAMP
+    started_at TIMESTAMP,
+    finished_at TIMESTAMP,
+    result_summary JSONB,
+    error_message TEXT,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS tb_heat_demand_prediction (
@@ -251,9 +254,13 @@ CREATE TABLE IF NOT EXISTS tb_heat_demand_prediction (
     lower_bound NUMERIC(18,6),
     upper_bound NUMERIC(18,6),
     model_version_id VARCHAR(80) NOT NULL REFERENCES tb_model_version(model_version_id),
+    feature_set_id VARCHAR(50),
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     CONSTRAINT uk_heat_prediction UNIQUE(prediction_job_id, site_id, target_at)
 );
+
+CREATE UNIQUE INDEX IF NOT EXISTS uk_heat_pred_site_model_time
+    ON tb_heat_demand_prediction(site_id, target_at, model_version_id);
 
 CREATE INDEX IF NOT EXISTS ix_heat_prediction_site_time ON tb_heat_demand_prediction(site_id, target_at DESC);
 
