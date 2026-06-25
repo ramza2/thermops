@@ -15,7 +15,8 @@ import { PageHeader } from "@/layouts/MainLayout";
 interface Overview {
   prediction_status: string;
   latest_prediction_at: string | null;
-  avg_mape_7d: number;
+  avg_mape_7d: number | null;
+  prediction_accuracy: number | null;
   champion_model: { model_name: string; version: string } | null;
   failed_pipeline_count: number;
   retraining_candidate_count: number;
@@ -91,8 +92,8 @@ export default function DashboardPage() {
         </div>
         <MetricCard
           title="7일 평균 MAPE"
-          value={`${overview?.avg_mape_7d ?? "-"}%`}
-          subtitle="전체 지사 기준"
+          value={overview?.avg_mape_7d != null ? `${overview.avg_mape_7d}%` : "-"}
+          subtitle={overview?.prediction_accuracy != null ? `정확도 ${overview.prediction_accuracy}%` : "전체 지사 기준"}
           icon={<TrendingUp className="w-5 h-5" />}
         />
         <MetricCard

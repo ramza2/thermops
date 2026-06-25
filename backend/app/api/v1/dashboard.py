@@ -19,6 +19,7 @@ from app.models.entities import (
     Site,
     TrainingJob,
 )
+from app.services.prediction_evaluation_service import get_prediction_performance_avg_mape
 
 router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
 
@@ -37,9 +38,13 @@ async def dashboard_overview(db: AsyncSession = Depends(get_db)):
         select(func.count()).select_from(RetrainingCandidate).where(RetrainingCandidate.status == "REVIEW")
     )).scalar() or 0
 
-    avg_mape = (await db.execute(
-        select(func.avg(ModelPerformanceMetric.mape))
-    )).scalar()
+    avg_mape = await get_prediction_performance_avg_mape(db, days=7)
+    if avg_mape is None:
+        avg_mape = (await db.execute(
+            select(func.avg(ModelPerformanceMetric.mape)).where(
+                ModelPerformanceMetric.metric_json["eval_type"].astext == "PREDICTION_ACTUAL_MATCH"
+            )
+        )).scalar()
 
     latest_pred = (await db.execute(
         select(PredictionJob).order_by(PredictionJob.created_at.desc()).limit(1)
@@ -48,7 +53,8 @@ async def dashboard_overview(db: AsyncSession = Depends(get_db)):
     return ok({
         "prediction_status": latest_pred.job_status if latest_pred else "READY",
         "latest_prediction_at": latest_pred.created_at.isoformat() if latest_pred else None,
-        "avg_mape_7d": round(float(avg_mape), 2) if avg_mape else 4.92,
+        "avg_mape_7d": round(float(avg_mape), 2) if avg_mape is not None else None,
+        "prediction_accuracy": round(100 - float(avg_mape), 2) if avg_mape is not None else None,
         "champion_model": {
             "model_name": champion.model_name,
             "version": champion.version_no,

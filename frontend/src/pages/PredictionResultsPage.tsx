@@ -14,7 +14,9 @@ interface Prediction {
   target_at: string;
   predicted_demand: number;
   actual_demand: number | null;
+  error: number | null;
   absolute_error: number | null;
+  ape: number | null;
   model_name: string | null;
   model_version: string | null;
 }
@@ -114,7 +116,9 @@ export default function PredictionResultsPage() {
               { key: "target_at", header: "대상 시각", render: (r) => new Date(r.target_at as string).toLocaleString("ko-KR") },
               { key: "predicted_demand", header: "예측값", render: (r) => Number(r.predicted_demand).toFixed(2) },
               { key: "actual_demand", header: "실제값", render: (r) => r.actual_demand != null ? Number(r.actual_demand).toFixed(2) : "-" },
+              { key: "error", header: "오차", render: (r) => r.error != null ? Number(r.error).toFixed(2) : "-" },
               { key: "absolute_error", header: "절대오차", render: (r) => r.absolute_error != null ? Number(r.absolute_error).toFixed(2) : "-" },
+              { key: "ape", header: "APE(%)", render: (r) => r.ape != null ? Number(r.ape).toFixed(2) : "-" },
               { key: "model_name", header: "모델", render: (r) => r.model_name ? `${r.model_name} v${r.model_version}` : "-" },
             ]}
             data={items as unknown as Record<string, unknown>[]}

@@ -108,6 +108,14 @@ class PredictionJobCreate(BaseModel):
     overwrite_yn: bool = True
 
 
+class PredictionEvaluateRequest(BaseModel):
+    model_version_id: str | None = None
+    prediction_job_id: str | None = None
+    site_ids: list[str] | None = None
+    start_at: datetime | None = None
+    end_at: datetime | None = None
+
+
 # Model
 class ChampionRequest(BaseModel):
     reason: str | None = None

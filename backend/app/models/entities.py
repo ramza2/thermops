@@ -6,6 +6,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
+from app.core.time import utc_now
 
 
 class Site(Base):
@@ -223,6 +224,23 @@ class HeatDemandPrediction(Base):
     created_at: Mapped[datetime | None] = mapped_column(DateTime)
 
 
+class PredictionActualMatch(Base):
+    __tablename__ = "tb_prediction_actual_match"
+    match_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    prediction_id: Mapped[int] = mapped_column(BigInteger)
+    site_id: Mapped[str] = mapped_column(String(50))
+    target_at: Mapped[datetime] = mapped_column(DateTime)
+    model_version_id: Mapped[str] = mapped_column(String(80))
+    prediction_job_id: Mapped[str | None] = mapped_column(String(80))
+    predicted_demand: Mapped[float] = mapped_column(Numeric(18, 6))
+    actual_demand: Mapped[float] = mapped_column(Numeric(18, 6))
+    error: Mapped[float | None] = mapped_column(Numeric(18, 6))
+    abs_error: Mapped[float | None] = mapped_column(Numeric(18, 6))
+    squared_error: Mapped[float | None] = mapped_column(Numeric(18, 6))
+    ape: Mapped[float | None] = mapped_column(Numeric(18, 6))
+    created_at: Mapped[datetime] = mapped_column(DateTime)
+
+
 class HeatDemandActual(Base):
     __tablename__ = "tb_heat_demand_actual"
     actual_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
@@ -262,6 +280,8 @@ class ModelPerformanceMetric(Base):
     rmse: Mapped[float | None] = mapped_column(Numeric(18, 6))
     mape: Mapped[float | None] = mapped_column(Numeric(18, 6))
     sample_count: Mapped[int | None] = mapped_column(Integer)
+    metric_json: Mapped[dict | None] = mapped_column(JSONB)
+    created_at: Mapped[datetime] = mapped_column(DateTime, insert_default=utc_now)
 
 
 class DriftReport(Base):

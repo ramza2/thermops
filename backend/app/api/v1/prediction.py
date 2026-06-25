@@ -9,8 +9,9 @@ import csv
 
 from app.core.database import get_db
 from app.core.response import ok, paged
-from app.models.entities import HeatDemandActual, HeatDemandPrediction, ModelVersion
-from app.schemas.api import PredictionJobCreate
+from app.models.entities import HeatDemandActual, HeatDemandPrediction, ModelVersion, PredictionActualMatch
+from app.schemas.api import PredictionEvaluateRequest, PredictionJobCreate
+from app.services.prediction_evaluation_service import EvaluateParams, list_prediction_errors, run_prediction_evaluation
 from app.services.prediction_service import (
     get_prediction_job,
     params_from_schema,
@@ -82,17 +83,39 @@ async def list_predictions(
         rows = [p for p in rows if mv_map.get(p.model_version_id) and mv_map[p.model_version_id].model_name == model_name]
 
     items = []
-    for p in rows:
-        a = (
+    pred_ids = [p.prediction_id for p in rows]
+    match_map: dict[int, PredictionActualMatch] = {}
+    if pred_ids:
+        matches = (
             await db.execute(
-                select(HeatDemandActual).where(
-                    HeatDemandActual.site_id == p.site_id,
-                    HeatDemandActual.measured_at == p.target_at,
-                )
+                select(PredictionActualMatch).where(PredictionActualMatch.prediction_id.in_(pred_ids))
             )
-        ).scalar_one_or_none()
-        actual = float(a.heat_demand) if a else None
-        pred_val = float(p.predicted_demand)
+        ).scalars().all()
+        match_map = {m.prediction_id: m for m in matches}
+
+    for p in rows:
+        match = match_map.get(p.prediction_id)
+        if match:
+            actual = float(match.actual_demand)
+            pred_val = float(match.predicted_demand)
+            abs_err = float(match.abs_error) if match.abs_error is not None else None
+            ape = float(match.ape) if match.ape is not None else None
+            error = float(match.error) if match.error is not None else None
+        else:
+            a = (
+                await db.execute(
+                    select(HeatDemandActual).where(
+                        HeatDemandActual.site_id == p.site_id,
+                        HeatDemandActual.measured_at == p.target_at,
+                    )
+                )
+            ).scalar_one_or_none()
+            actual = float(a.heat_demand) if a else None
+            pred_val = float(p.predicted_demand)
+            abs_err = round(abs(pred_val - actual), 2) if actual is not None else None
+            ape = round(abs((actual - pred_val) / actual) * 100, 4) if actual and abs(actual) > 1e-8 else None
+            error = round(actual - pred_val, 2) if actual is not None else None
+
         mv = mv_map.get(p.model_version_id)
 
         items.append({
@@ -100,7 +123,9 @@ async def list_predictions(
             "target_at": p.target_at.isoformat(),
             "predicted_demand": pred_val,
             "actual_demand": actual,
-            "absolute_error": round(abs(pred_val - actual), 2) if actual is not None else None,
+            "error": error,
+            "absolute_error": abs_err,
+            "ape": ape,
             "model_name": mv.model_name if mv else None,
             "model_version": mv.version_no if mv else None,
             "model_version_id": p.model_version_id,
@@ -158,6 +183,46 @@ async def predictions_summary(
         "period": {"from": period_from, "to": period_to},
         "horizon": "BATCH",
     })
+
+
+@router.post("/predictions/evaluate")
+async def evaluate_predictions(body: PredictionEvaluateRequest, db: AsyncSession = Depends(get_db)):
+    params = EvaluateParams(
+        model_version_id=body.model_version_id,
+        prediction_job_id=body.prediction_job_id,
+        site_ids=body.site_ids,
+        start_at=body.start_at,
+        end_at=body.end_at,
+    )
+    try:
+        result = await run_prediction_evaluation(db, params)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    return ok(result, message=f"예측 성능 평가 완료 ({result['matched_count']}건 매칭)")
+
+
+@router.get("/predictions/errors")
+async def list_prediction_errors_endpoint(
+    site_id: str | None = Query(default=None),
+    model_version_id: str | None = Query(default=None),
+    from_dt: datetime | None = Query(default=None, alias="from"),
+    to_dt: datetime | None = Query(default=None, alias="to"),
+    page: int = Query(1, ge=1),
+    size: int = Query(20, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+):
+    items, total = await list_prediction_errors(
+        db,
+        site_id=site_id,
+        model_version_id=model_version_id,
+        start_at=from_dt,
+        end_at=to_dt,
+        page=page,
+        size=size,
+    )
+    return paged(items, page, size, total)
 
 
 @router.get("/predictions/export")

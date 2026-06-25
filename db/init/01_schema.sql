@@ -264,6 +264,29 @@ CREATE UNIQUE INDEX IF NOT EXISTS uk_heat_pred_site_model_time
 
 CREATE INDEX IF NOT EXISTS ix_heat_prediction_site_time ON tb_heat_demand_prediction(site_id, target_at DESC);
 
+CREATE TABLE IF NOT EXISTS tb_prediction_actual_match (
+    match_id BIGSERIAL PRIMARY KEY,
+    prediction_id BIGINT NOT NULL REFERENCES tb_heat_demand_prediction(prediction_id),
+    site_id VARCHAR(50) NOT NULL REFERENCES tb_site(site_id),
+    target_at TIMESTAMP NOT NULL,
+    model_version_id VARCHAR(80) NOT NULL REFERENCES tb_model_version(model_version_id),
+    prediction_job_id VARCHAR(80),
+    predicted_demand NUMERIC(18,6) NOT NULL,
+    actual_demand NUMERIC(18,6) NOT NULL,
+    error NUMERIC(18,6),
+    abs_error NUMERIC(18,6),
+    squared_error NUMERIC(18,6),
+    ape NUMERIC(18,6),
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    CONSTRAINT uk_pred_actual_match_prediction UNIQUE(prediction_id)
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uk_pred_actual_match_site_time_model
+    ON tb_prediction_actual_match(site_id, target_at, model_version_id);
+
+CREATE INDEX IF NOT EXISTS ix_pred_actual_match_model_time
+    ON tb_prediction_actual_match(model_version_id, target_at DESC);
+
 -- 모니터링
 CREATE TABLE IF NOT EXISTS tb_model_performance_metric (
     metric_id BIGSERIAL PRIMARY KEY,
@@ -275,6 +298,7 @@ CREATE TABLE IF NOT EXISTS tb_model_performance_metric (
     rmse NUMERIC(18,6),
     mape NUMERIC(18,6),
     sample_count INTEGER,
+    metric_json JSONB,
     created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 

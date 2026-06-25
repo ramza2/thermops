@@ -352,6 +352,7 @@ async def run_training_job(db: AsyncSession, params: TrainingJobParams) -> dict[
                     rmse=site_row["rmse"],
                     mape=site_row["mape"],
                     sample_count=site_row["sample_count"],
+                    metric_json={"eval_type": "TRAINING_VALIDATION"},
                 )
             )
 

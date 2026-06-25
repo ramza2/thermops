@@ -15,6 +15,7 @@ from app.models.entities import (
     Site,
 )
 from app.schemas.api import DriftCheckCreate
+from app.services.prediction_evaluation_service import EVAL_TYPE_PREDICTION
 
 router = APIRouter(tags=["Monitoring"])
 
@@ -23,11 +24,17 @@ router = APIRouter(tags=["Monitoring"])
 async def performance_metrics(
     model_name: str | None = Query(default=None),
     model_version: str | None = Query(default=None),
+    model_version_id: str | None = Query(default=None),
     site_id: str | None = Query(default=None),
+    eval_type: str | None = Query(default=None),
     db: AsyncSession = Depends(get_db),
 ):
     mv: ModelVersion | None = None
-    if model_name and model_version:
+    if model_version_id:
+        mv = (
+            await db.execute(select(ModelVersion).where(ModelVersion.model_version_id == model_version_id))
+        ).scalar_one_or_none()
+    elif model_name and model_version:
         mv = (
             await db.execute(
                 select(ModelVersion).where(
@@ -58,7 +65,22 @@ async def performance_metrics(
     if site_id:
         q = q.where(ModelPerformanceMetric.site_id == site_id)
 
-    rows = (await db.execute(q.order_by(ModelPerformanceMetric.site_id))).scalars().all()
+    effective_eval_type = eval_type
+    if effective_eval_type is None:
+        effective_eval_type = EVAL_TYPE_PREDICTION
+
+    if effective_eval_type:
+        q = q.where(ModelPerformanceMetric.metric_json["eval_type"].astext == effective_eval_type)
+
+    rows = list((await db.execute(q.order_by(ModelPerformanceMetric.site_id))).scalars().all())
+
+    if not rows and eval_type is None and effective_eval_type == EVAL_TYPE_PREDICTION:
+        q = select(ModelPerformanceMetric)
+        if mv:
+            q = q.where(ModelPerformanceMetric.model_version_id == mv.model_version_id)
+        if site_id:
+            q = q.where(ModelPerformanceMetric.site_id == site_id)
+        rows = list((await db.execute(q.order_by(ModelPerformanceMetric.site_id))).scalars().all())
 
     period_from = None
     period_to = None
@@ -69,18 +91,26 @@ async def performance_metrics(
     metrics = []
     for r in rows:
         site = (await db.execute(select(Site).where(Site.site_id == r.site_id))).scalar_one_or_none()
+        extra = r.metric_json or {}
         metrics.append({
             "site_id": r.site_id,
             "site_name": site.site_name if site else r.site_id,
             "mae": float(r.mae) if r.mae is not None else None,
             "rmse": float(r.rmse) if r.rmse is not None else None,
             "mape": float(r.mape) if r.mape is not None else None,
+            "r2": extra.get("r2"),
+            "sample_count": r.sample_count,
+            "max_abs_error": extra.get("max_abs_error"),
+            "avg_actual_demand": extra.get("avg_actual_demand"),
+            "avg_predicted_demand": extra.get("avg_predicted_demand"),
+            "eval_type": extra.get("eval_type"),
         })
 
     return ok({
         "model_name": mv.model_name if mv else (model_name or "heat_demand_lightgbm"),
         "model_version": mv.version_no if mv else (model_version or "-"),
-        "model_version_id": mv.model_version_id if mv else None,
+        "model_version_id": mv.model_version_id if mv else model_version_id,
+        "eval_type": effective_eval_type,
         "period": {
             "from": period_from or datetime.utcnow().date().isoformat(),
             "to": period_to or datetime.utcnow().date().isoformat(),
