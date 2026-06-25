@@ -20,6 +20,7 @@ def _model_dict(m: ModelVersion) -> dict:
         "version": m.version_no,
         "model_stage": m.model_stage,
         "mlflow_model_uri": m.mlflow_model_uri,
+        "artifact_uri": m.artifact_uri,
         "metrics": metrics,
         "registered_at": m.registered_at.isoformat(),
     }

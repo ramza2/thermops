@@ -1,4 +1,3 @@
-from datetime import datetime, timezone
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -6,9 +5,16 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.core.response import accepted, ok, paged
-from app.models.entities import PipelineRun, TrainingConfig, TrainingJob
+from app.core.response import ok, paged
+from app.core.time import utc_now
+from app.models.entities import TrainingConfig, TrainingJob
 from app.schemas.api import TrainingConfigCreate, TrainingJobCreate
+from app.services.training_service import (
+    _job_dict,
+    get_training_job,
+    params_from_schema,
+    run_training_job,
+)
 
 router = APIRouter(tags=["Training"])
 
@@ -43,7 +49,7 @@ async def create_training_config(body: TrainingConfigCreate, db: AsyncSession = 
         validation_period_months=body.validation_period_months,
         hyperparams=body.hyperparams,
         active_yn="Y",
-        created_at=datetime.now(timezone.utc),
+        created_at=utc_now(),
     )
     db.add(c)
     return ok({"config_id": cid}, message="학습 설정이 등록되었습니다.")
@@ -63,40 +69,20 @@ async def update_training_config(config_id: str, body: TrainingConfigCreate, db:
 
 @router.post("/training-jobs")
 async def create_training_job(body: TrainingJobCreate, db: AsyncSession = Depends(get_db)):
-    job_id = f"TRJ-{datetime.now(timezone.utc).strftime('%Y%m%d')}-{uuid4().hex[:6].upper()}"
-    run_id = f"AIRFLOW-RUN-{uuid4().hex[:6].upper()}"
-    now = datetime.now(timezone.utc)
+    try:
+        result = await run_training_job(db, params_from_schema(body))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
-    pipeline = PipelineRun(
-        pipeline_run_id=run_id,
-        pipeline_id="model_training_dag",
-        pipeline_name="model_training_dag",
-        pipeline_type="TRAINING",
-        orchestrator="AIRFLOW",
-        run_status="RUNNING",
-        started_at=now,
-        message="모델 학습 파이프라인 실행 중",
-    )
-    job = TrainingJob(
-        job_id=job_id,
-        config_id=body.config_id,
-        pipeline_run_id=run_id,
-        status="RUNNING",
-        site_ids=body.site_ids,
-        train_start_at=body.train_start_at,
-        train_end_at=body.train_end_at,
-        validation_start_at=body.validation_start_at,
-        validation_end_at=body.validation_end_at,
-        started_at=now,
-        created_at=now,
-    )
-    db.add(pipeline)
-    db.add(job)
-    return accepted({
-        "job_id": job_id,
-        "pipeline_run_id": run_id,
-        "status": "RUNNING",
-    }, message="모델 학습 파이프라인이 실행 요청되었습니다.")
+    if result.get("status") == "FAILED":
+        raise HTTPException(status_code=400, detail=result.get("error_message", "모델 학습 실패"))
+
+    msg = "모델 학습이 완료되었습니다."
+    if result.get("warnings"):
+        msg += f" (경고 {len(result['warnings'])}건)"
+    return ok(result, message=msg)
 
 
 @router.get("/training-jobs")
@@ -112,37 +98,22 @@ async def list_training_jobs(
 
 
 @router.get("/training-jobs/{job_id}")
-async def get_training_job(job_id: str, db: AsyncSession = Depends(get_db)):
-    j = (await db.execute(select(TrainingJob).where(TrainingJob.job_id == job_id))).scalar_one_or_none()
-    if not j:
+async def get_training_job_endpoint(job_id: str, db: AsyncSession = Depends(get_db)):
+    result = await get_training_job(db, job_id)
+    if not result:
         raise HTTPException(status_code=404, detail="NOT_FOUND")
-    return ok(_job_dict(j))
+    return ok(result)
 
 
 @router.post("/training-jobs/{job_id}/cancel")
 async def cancel_training_job(job_id: str, db: AsyncSession = Depends(get_db)):
+    from app.core.time import utc_now
+
     j = (await db.execute(select(TrainingJob).where(TrainingJob.job_id == job_id))).scalar_one_or_none()
     if not j:
         raise HTTPException(status_code=404, detail="NOT_FOUND")
     if j.status not in ("RUNNING", "READY"):
         raise HTTPException(status_code=409, detail="CONFLICT")
     j.status = "CANCELED"
-    j.ended_at = datetime.now(timezone.utc)
+    j.ended_at = utc_now()
     return ok({"job_id": job_id, "status": "CANCELED"}, message="학습 작업이 취소되었습니다.")
-
-
-def _job_dict(j: TrainingJob) -> dict:
-    config = None
-    return {
-        "job_id": j.job_id,
-        "config_id": j.config_id,
-        "status": j.status,
-        "pipeline_run_id": j.pipeline_run_id,
-        "site_ids": j.site_ids,
-        "mlflow_run_id": j.mlflow_run_id,
-        "registered_model_name": j.registered_model_name,
-        "registered_model_version": j.registered_model_version,
-        "metrics": j.metrics,
-        "started_at": j.started_at.isoformat() if j.started_at else None,
-        "ended_at": j.ended_at.isoformat() if j.ended_at else None,
-    }

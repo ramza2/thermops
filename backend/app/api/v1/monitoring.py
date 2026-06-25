@@ -7,7 +7,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.response import accepted, ok, paged
-from app.models.entities import DriftReport, ModelPerformanceMetric, ModelVersion, RetrainingCandidate, Site
+from app.models.entities import (
+    DriftReport,
+    ModelPerformanceMetric,
+    ModelVersion,
+    RetrainingCandidate,
+    Site,
+)
 from app.schemas.api import DriftCheckCreate
 
 router = APIRouter(tags=["Monitoring"])
@@ -20,16 +26,45 @@ async def performance_metrics(
     site_id: str | None = Query(default=None),
     db: AsyncSession = Depends(get_db),
 ):
+    mv: ModelVersion | None = None
+    if model_name and model_version:
+        mv = (
+            await db.execute(
+                select(ModelVersion).where(
+                    ModelVersion.model_name == model_name,
+                    ModelVersion.version_no == model_version,
+                )
+            )
+        ).scalar_one_or_none()
+    elif model_name:
+        mv = (
+            await db.execute(
+                select(ModelVersion)
+                .where(ModelVersion.model_name == model_name)
+                .order_by(ModelVersion.registered_at.desc())
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+    else:
+        mv = (
+            await db.execute(
+                select(ModelVersion).order_by(ModelVersion.registered_at.desc()).limit(1)
+            )
+        ).scalar_one_or_none()
+
     q = select(ModelPerformanceMetric)
+    if mv:
+        q = q.where(ModelPerformanceMetric.model_version_id == mv.model_version_id)
     if site_id:
         q = q.where(ModelPerformanceMetric.site_id == site_id)
-    rows = (await db.execute(q)).scalars().all()
 
-    mv = None
-    if model_name:
-        mv = (await db.execute(
-            select(ModelVersion).where(ModelVersion.model_name == model_name).limit(1)
-        )).scalar_one_or_none()
+    rows = (await db.execute(q.order_by(ModelPerformanceMetric.site_id))).scalars().all()
+
+    period_from = None
+    period_to = None
+    if rows:
+        period_from = min(r.eval_start_at for r in rows).date().isoformat()
+        period_to = max(r.eval_end_at for r in rows).date().isoformat()
 
     metrics = []
     for r in rows:
@@ -37,15 +72,19 @@ async def performance_metrics(
         metrics.append({
             "site_id": r.site_id,
             "site_name": site.site_name if site else r.site_id,
-            "mae": float(r.mae) if r.mae else None,
-            "rmse": float(r.rmse) if r.rmse else None,
-            "mape": float(r.mape) if r.mape else None,
+            "mae": float(r.mae) if r.mae is not None else None,
+            "rmse": float(r.rmse) if r.rmse is not None else None,
+            "mape": float(r.mape) if r.mape is not None else None,
         })
 
     return ok({
-        "model_name": model_name or (mv.model_name if mv else "heat_demand_lgbm"),
-        "model_version": model_version or (mv.version_no if mv else "12"),
-        "period": {"from": "2026-06-01", "to": "2026-06-23"},
+        "model_name": mv.model_name if mv else (model_name or "heat_demand_lightgbm"),
+        "model_version": mv.version_no if mv else (model_version or "-"),
+        "model_version_id": mv.model_version_id if mv else None,
+        "period": {
+            "from": period_from or datetime.utcnow().date().isoformat(),
+            "to": period_to or datetime.utcnow().date().isoformat(),
+        },
         "metrics": metrics,
     })
 

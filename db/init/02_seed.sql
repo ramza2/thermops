@@ -80,7 +80,9 @@ ON CONFLICT DO NOTHING;
 
 -- Training config
 INSERT INTO tb_training_config (config_id, config_name, feature_set_id, algorithm, train_period_months, validation_period_months, hyperparams) VALUES
-('TRC-000001', 'LightGBM 기본 학습 설정', 'FS-000001', 'LightGBM', 24, 3, '{"n_estimators":100,"learning_rate":0.05,"max_depth":6}')
+('TRC-000001', 'LightGBM 기본 학습 설정', 'FS-000001', 'LightGBM', 24, 3, '{"n_estimators":100,"learning_rate":0.05,"max_depth":6}'),
+('TRC-TPL-LAG-ROLL', 'Lag/Rolling LightGBM 학습', 'FS-TPL-LAG-ROLL', 'lightgbm', 1, 1, '{"validation_ratio":0.2,"n_estimators":80,"learning_rate":0.05,"max_depth":6}'),
+('TRC-TPL-BASELINE', 'Baseline Lag24h 학습', 'FS-TPL-LAG-ROLL', 'baseline', 1, 1, '{"validation_ratio":0.2}')
 ON CONFLICT DO NOTHING;
 
 -- Dataset version

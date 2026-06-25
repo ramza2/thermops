@@ -22,7 +22,8 @@ interface ModelVersionRow {
   version: string;
   model_stage: string;
   mlflow_model_uri: string | null;
-  metrics: { mae?: number; rmse?: number; mape?: number };
+  artifact_uri?: string | null;
+  metrics: { mae?: number; rmse?: number; mape?: number; r2?: number };
   registered_at: string;
 }
 
@@ -142,9 +143,11 @@ export default function ModelRegistryPage() {
             <div><dt className="text-slate-500">상태</dt><dd><StatusBadge status={detail.model_stage} /></dd></div>
             <div><dt className="text-slate-500">등록일</dt><dd>{new Date(detail.registered_at).toLocaleString("ko-KR")}</dd></div>
             <div className="col-span-2"><dt className="text-slate-500">MLflow URI</dt><dd className="break-all text-xs mt-1">{detail.mlflow_model_uri || "-"}</dd></div>
+            <div className="col-span-2"><dt className="text-slate-500">Artifact URI</dt><dd className="break-all text-xs mt-1">{detail.artifact_uri || "-"}</dd></div>
             <div><dt className="text-slate-500">MAE</dt><dd>{detail.metrics?.mae ?? "-"}</dd></div>
             <div><dt className="text-slate-500">RMSE</dt><dd>{detail.metrics?.rmse ?? "-"}</dd></div>
             <div><dt className="text-slate-500">MAPE</dt><dd>{detail.metrics?.mape != null ? `${detail.metrics.mape}%` : "-"}</dd></div>
+            <div><dt className="text-slate-500">R²</dt><dd>{detail.metrics?.r2 != null ? detail.metrics.r2.toFixed(4) : "-"}</dd></div>
           </dl>
         )}
       </Modal>

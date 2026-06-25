@@ -88,6 +88,20 @@ curl -X POST "http://localhost:8000/api/v1/feature-sets/FS-TPL-LAG-ROLL/preview"
 curl -X POST "http://localhost:8000/api/v1/feature-build-jobs?feature_set_id=FS-TPL-LAG-ROLL"
 ```
 
+### 모델 학습 테스트 (P0-4-1)
+
+Feature 생성 완료 후 모델 학습·MLflow·DB 반영을 검증합니다. MLflow 컨테이너가 기동 중이어야 합니다.
+
+```powershell
+python scripts/test_model_training.py
+```
+
+학습 실행 API:
+
+```powershell
+curl -X POST "http://localhost:8000/api/v1/training-jobs" -H "Content-Type: application/json" -d "{\"config_id\":\"TRC-TPL-LAG-ROLL\",\"register_model_yn\":true}"
+```
+
 ### CSV 적재 테스트 (P0-1)
 
 ```powershell

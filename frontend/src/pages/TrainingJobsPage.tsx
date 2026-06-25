@@ -146,7 +146,7 @@ export default function TrainingJobsPage() {
             {detail.metrics && (
               <div className="col-span-2">
                 <dt className="text-slate-500 mb-1">성능 지표</dt>
-                <dd>MAE: {detail.metrics.mae ?? "-"} / RMSE: {detail.metrics.rmse ?? "-"} / MAPE: {detail.metrics.mape ?? "-"}%</dd>
+                <dd>MAE: {detail.metrics.mae ?? "-"} / RMSE: {detail.metrics.rmse ?? "-"} / MAPE: {detail.metrics.mape ?? "-"}% / R²: {detail.metrics.r2 != null ? detail.metrics.r2.toFixed(4) : "-"}</dd>
               </div>
             )}
           </dl>

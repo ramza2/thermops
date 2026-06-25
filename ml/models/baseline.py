@@ -26,3 +26,34 @@ class SeasonalNaiveBaseline:
             how="left",
         )
         return merged["pred"].fillna(self.history_["heat_demand"].mean()).values
+
+
+class FeatureColumnBaseline:
+    """Feature Matrix의 특정 컬럼 값을 예측값으로 사용 (lag/MA baseline)."""
+
+    def __init__(self, column: str, fallback_column: str | None = None):
+        self.column = column
+        self.fallback_column = fallback_column
+        self.fallback_value_: float = 0.0
+
+    def fit(self, X: pd.DataFrame, y: pd.Series):
+        col = self.column if self.column in X.columns else self.fallback_column
+        if col and col in X.columns:
+            self.fallback_value_ = float(X[col].dropna().mean()) if X[col].notna().any() else float(y.mean())
+        else:
+            self.fallback_value_ = float(y.mean())
+        return self
+
+    def predict(self, X: pd.DataFrame) -> np.ndarray:
+        col = self.column if self.column in X.columns else self.fallback_column
+        if col and col in X.columns:
+            return X[col].fillna(self.fallback_value_).astype(float).values
+        return np.full(len(X), self.fallback_value_)
+
+
+def lag24h_baseline() -> FeatureColumnBaseline:
+    return FeatureColumnBaseline("demand_lag_24h", fallback_column="lag_24h_demand")
+
+
+def moving_average_baseline() -> FeatureColumnBaseline:
+    return FeatureColumnBaseline("demand_ma_24h", fallback_column="rolling_24h_avg")

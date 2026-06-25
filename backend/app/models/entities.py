@@ -167,6 +167,18 @@ class TrainingJob(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime)
 
 
+class ModelExperiment(Base):
+    __tablename__ = "tb_model_experiment"
+    experiment_id: Mapped[str] = mapped_column(String(80), primary_key=True)
+    mlflow_run_id: Mapped[str | None] = mapped_column(String(80))
+    dataset_version_id: Mapped[str | None] = mapped_column(String(80))
+    algorithm: Mapped[str] = mapped_column(String(50))
+    parameter_json: Mapped[dict | None] = mapped_column(JSONB)
+    metric_json: Mapped[dict | None] = mapped_column(JSONB)
+    trained_at: Mapped[datetime] = mapped_column(DateTime)
+    created_by: Mapped[str | None] = mapped_column(String(50))
+
+
 class ModelVersion(Base):
     __tablename__ = "tb_model_version"
     model_version_id: Mapped[str] = mapped_column(String(80), primary_key=True)
