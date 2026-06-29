@@ -21,3 +21,6 @@ minio_data/
 # OS
 .DS_Store
 Thumbs.db
+
+# Regression test logs
+logs/regression/

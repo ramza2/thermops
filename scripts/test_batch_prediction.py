@@ -88,24 +88,51 @@ def ensure_feature_dataset() -> None:
     api("POST", f"/feature-build-jobs?feature_set_id={FEATURE_SET_ID}", timeout=180)
 
 
+def find_compatible_model_version(feature_set_id: str) -> str | None:
+    sql = f"""
+    SELECT mv.model_version_id
+    FROM tb_model_version mv
+    JOIN tb_model_experiment me ON mv.experiment_id = me.experiment_id
+    WHERE me.parameter_json->>'feature_set_id' = '{feature_set_id}'
+    ORDER BY
+      CASE WHEN mv.model_name LIKE '%lightgbm%' THEN 0 ELSE 1 END,
+      mv.registered_at DESC
+    LIMIT 1
+    """
+    return psql_scalar(sql) or None
+
+
 def ensure_trained_model() -> str:
-    row = psql_scalar(
-        "SELECT model_version_id FROM tb_model_version ORDER BY registered_at DESC LIMIT 1"
-    )
+    row = find_compatible_model_version(FEATURE_SET_ID)
     if row:
+        print(f"  [model] compatible model_version_id={row}")
         return row
-    print("  [train] no model found, running training...")
+
+    print("  [train] no compatible model found, running LightGBM training...")
     configs = api("GET", "/training-configs")
     config_id = next(
-        (c["config_id"] for c in configs if c.get("feature_set_id") == FEATURE_SET_ID),
-        configs[0]["config_id"] if configs else None,
+        (
+            c["config_id"]
+            for c in configs
+            if c.get("feature_set_id") == FEATURE_SET_ID
+            and "lightgbm" in c.get("algorithm", "").lower()
+        ),
+        None,
     )
+    if not config_id:
+        config_id = next(
+            (c["config_id"] for c in configs if c.get("feature_set_id") == FEATURE_SET_ID),
+            configs[0]["config_id"] if configs else None,
+        )
     if not config_id:
         raise RuntimeError("training config not found")
     result = api("POST", "/training-jobs", {"config_id": config_id}, timeout=300)
     if result.get("status") != "SUCCESS":
         raise RuntimeError(f"training failed: {result}")
-    return result["model_version_id"]
+    model_version_id = result.get("model_version_id")
+    if not model_version_id:
+        raise RuntimeError("model_version_id missing after training")
+    return model_version_id
 
 
 def prediction_period() -> tuple[str, str]:

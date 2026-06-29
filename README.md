@@ -100,6 +100,29 @@ curl -X POST "http://localhost:8000/api/v1/pipelines/thermops_full_pipeline_dag/
 
 ### 4. P0 최종 검증 (전체 테스트)
 
+**권장: 회귀 테스트 Runner로 일괄 실행**
+
+```powershell
+# 빠른 API·적재·품질 검증 (수 분)
+python scripts/run_regression_tests.py --group quick
+
+# 전체 회귀 (20~60분+, Airflow·학습 포함)
+python scripts/run_regression_tests.py --group full
+
+# Airflow 제외 전체
+python scripts/run_regression_tests.py --group full --skip-airflow
+
+# Frontend build 제외
+python scripts/run_regression_tests.py --group full --skip-frontend
+
+# 느린 환경 (timeout 2배)
+python scripts/run_regression_tests.py --group full --timeout-scale 2
+```
+
+로그·요약: `logs/regression/YYYYMMDD_HHMMSS/summary.md`
+
+**개별 스크립트 수동 실행 (레거시)**
+
 ```powershell
 python scripts/test_system_config.py
 python scripts/test_performance_eval_type.py
@@ -140,6 +163,39 @@ python scripts/smoke_test_api.py
 ```
 
 12개 주요 API + `/health` 의 HTTP 200 응답을 확인합니다.
+
+### 전체 회귀 테스트 Runner
+
+커밋·태그 전 전체 테스트를 한 번에 실행하고 결과를 요약합니다.
+
+```powershell
+python scripts/run_regression_tests.py --group quick      # API·적재·품질 (약 1~3분)
+python scripts/run_regression_tests.py --group connector  # DB/API Connector
+python scripts/run_regression_tests.py --group model      # Feature·학습·예측·평가
+python scripts/run_regression_tests.py --group retraining # Drift·재학습
+python scripts/run_regression_tests.py --group airflow    # Airflow DAG
+python scripts/run_regression_tests.py --group frontend   # npm build + check-pages
+python scripts/run_regression_tests.py --group full       # 전체 (20~60분+)
+python scripts/run_regression_tests.py --all              # full과 동일
+```
+
+**주요 옵션**
+
+| 옵션 | 설명 |
+|------|------|
+| `--fail-fast` | 첫 실패 시 즉시 중단 |
+| `--skip-airflow` | full 실행 시 Airflow 테스트 제외 |
+| `--skip-frontend` | Frontend build/check 제외 |
+| `--timeout-scale 2` | timeout 2배 (느린 환경) |
+| `--log-dir PATH` | 로그 디렉터리 지정 |
+
+**로그 구조:** `logs/regression/YYYYMMDD_HHMMSS/`
+
+- `01_test_system_config.log` … 개별 테스트 stdout/stderr
+- `summary.json` — 기계 판독용 요약
+- `summary.md` — 사람이 읽기 쉬운 요약
+
+**커밋 전 권장:** `python scripts/run_regression_tests.py --group quick` + 변경 영역 그룹 (예: `--group model`)
 
 ### 데이터 품질 점검 테스트 (P0-2)
 
@@ -237,6 +293,8 @@ python scripts/test_batch_prediction.py
 ```
 
 배치 예측 실행 API:
+
+`model_version_id`를 명시하지 않으면 요청 `feature_set_id`와 호환되는 모델 버전 중 CHAMPION을 우선 선택하고, 없으면 최신 CANDIDATE를 사용합니다. 명시한 `model_version_id`가 다른 feature_set으로 학습된 경우 `MODEL_FEATURE_SET_MISMATCH` 오류(400)를 반환합니다.
 
 ```powershell
 curl -X POST "http://localhost:8000/api/v1/prediction-jobs" -H "Content-Type: application/json" -d "{\"feature_set_id\":\"FS-TPL-LAG-ROLL\",\"model_version_id\":\"MV-heat_demand_lightgbm-1\",\"start_at\":\"2026-06-01T00:00:00\",\"end_at\":\"2026-06-20T23:00:00\"}"

@@ -13,6 +13,7 @@ from app.models.entities import HeatDemandPrediction
 from app.schemas.api import PredictionEvaluateRequest, PredictionJobCreate
 from app.services.prediction_evaluation_service import EvaluateParams, list_prediction_errors, run_prediction_evaluation
 from app.services.prediction_service import (
+    PredictionModelError,
     get_prediction_job,
     list_predictions_paged,
     params_from_schema,
@@ -28,6 +29,8 @@ async def create_prediction_job(body: PredictionJobCreate, db: AsyncSession = De
     try:
         params = params_from_schema(body)
         result = await run_prediction_job(db, params)
+    except PredictionModelError as exc:
+        raise HTTPException(status_code=400, detail=exc.to_dict()) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:

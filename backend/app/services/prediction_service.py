@@ -29,6 +29,18 @@ from app.models.entities import (
 from app.schemas.api import PredictionJobCreate
 
 
+class PredictionModelError(ValueError):
+    """예측 모델 선택/호환성 오류."""
+
+    def __init__(self, error_code: str, message: str):
+        self.error_code = error_code
+        self.message = message
+        super().__init__(message)
+
+    def to_dict(self) -> dict[str, str]:
+        return {"error_code": self.error_code, "message": self.message}
+
+
 @dataclass
 class PredictionJobParams:
     feature_set_id: str
@@ -124,34 +136,99 @@ async def _load_feature_records(
     return records
 
 
-async def _resolve_model_version(
+async def _get_experiment_feature_set_id(db: AsyncSession, mv: ModelVersion) -> str | None:
+    if not mv.experiment_id:
+        return None
+    exp = (
+        await db.execute(
+            select(ModelExperiment).where(ModelExperiment.experiment_id == mv.experiment_id)
+        )
+    ).scalar_one_or_none()
+    if not exp or not exp.parameter_json:
+        return None
+    value = exp.parameter_json.get("feature_set_id")
+    return str(value) if value else None
+
+
+async def _validate_feature_set_compat(
+    db: AsyncSession,
+    mv: ModelVersion,
+    requested_feature_set_id: str | None,
+) -> None:
+    if not requested_feature_set_id:
+        return
+    model_fs = await _get_experiment_feature_set_id(db, mv)
+    if model_fs and model_fs != requested_feature_set_id:
+        raise PredictionModelError(
+            "MODEL_FEATURE_SET_MISMATCH",
+            (
+                f"Selected model version was trained with feature_set_id={model_fs} "
+                f"but prediction requested feature_set_id={requested_feature_set_id}."
+            ),
+        )
+
+
+def _compatible_versions_query(
+    feature_set_id: str,
+    model_name: str | None = None,
+    model_version: str | None = None,
+):
+    q = (
+        select(ModelVersion)
+        .join(ModelExperiment, ModelVersion.experiment_id == ModelExperiment.experiment_id)
+        .where(ModelExperiment.parameter_json["feature_set_id"].astext == feature_set_id)
+    )
+    if model_name:
+        q = q.where(ModelVersion.model_name == model_name)
+    if model_version:
+        q = q.where(ModelVersion.version_no == model_version)
+    return q
+
+
+async def _select_compatible_model_version(
+    db: AsyncSession,
+    feature_set_id: str,
+    model_name: str | None = None,
+    model_version: str | None = None,
+) -> tuple[ModelVersion | None, list[str]]:
+    warnings: list[str] = []
+    base = _compatible_versions_query(feature_set_id, model_name, model_version)
+
+    mv = (
+        await db.execute(
+            base.where(ModelVersion.model_stage == "CHAMPION")
+            .order_by(ModelVersion.registered_at.desc())
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    if mv:
+        return mv, warnings
+
+    mv = (
+        await db.execute(
+            base.where(ModelVersion.model_stage == "CANDIDATE")
+            .order_by(ModelVersion.registered_at.desc())
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    if mv:
+        warnings.append(
+            f"CHAMPION 모델이 없어 feature_set_id={feature_set_id} 호환 CANDIDATE 모델을 사용합니다: "
+            f"{mv.model_name} v{mv.version_no}"
+        )
+        return mv, warnings
+
+    return None, warnings
+
+
+async def _resolve_model_version_legacy(
     db: AsyncSession,
     params: PredictionJobParams,
 ) -> tuple[ModelVersion, list[str]]:
     warnings: list[str] = []
-    mv: ModelVersion | None = None
-
-    if params.model_version_id:
-        mv = (
-            await db.execute(
-                select(ModelVersion).where(ModelVersion.model_version_id == params.model_version_id)
-            )
-        ).scalar_one_or_none()
-        if not mv:
-            raise ValueError(f"모델 버전을 찾을 수 없습니다: {params.model_version_id}")
-        return mv, warnings
-
-    if params.model_name and params.model_version:
-        mv = (
-            await db.execute(
-                select(ModelVersion).where(
-                    ModelVersion.model_name == params.model_name,
-                    ModelVersion.version_no == params.model_version,
-                )
-            )
-        ).scalar_one_or_none()
-        if mv:
-            return mv, warnings
+    warnings.append(
+        "feature_set_id 호환 필터 없이 CHAMPION/CANDIDATE 전역 검색으로 모델을 선택했습니다."
+    )
 
     q = select(ModelVersion).where(ModelVersion.model_stage == "CHAMPION")
     if params.model_name:
@@ -171,6 +248,55 @@ async def _resolve_model_version(
         return mv, warnings
 
     raise ValueError("사용 가능한 모델 버전이 없습니다. 먼저 모델 학습을 실행하세요.")
+
+
+async def _resolve_model_version(
+    db: AsyncSession,
+    params: PredictionJobParams,
+) -> tuple[ModelVersion, list[str]]:
+    warnings: list[str] = []
+
+    if params.model_version_id:
+        mv = (
+            await db.execute(
+                select(ModelVersion).where(ModelVersion.model_version_id == params.model_version_id)
+            )
+        ).scalar_one_or_none()
+        if not mv:
+            raise ValueError(f"모델 버전을 찾을 수 없습니다: {params.model_version_id}")
+        await _validate_feature_set_compat(db, mv, params.feature_set_id)
+        return mv, warnings
+
+    if params.model_name and params.model_version:
+        mv = (
+            await db.execute(
+                select(ModelVersion).where(
+                    ModelVersion.model_name == params.model_name,
+                    ModelVersion.version_no == params.model_version,
+                )
+            )
+        ).scalar_one_or_none()
+        if mv:
+            await _validate_feature_set_compat(db, mv, params.feature_set_id)
+            return mv, warnings
+
+    if params.feature_set_id:
+        mv, select_warnings = await _select_compatible_model_version(
+            db,
+            params.feature_set_id,
+            params.model_name,
+            params.model_version,
+        )
+        warnings.extend(select_warnings)
+        if mv:
+            return mv, warnings
+        suffix = f" model_name={params.model_name}." if params.model_name else "."
+        raise PredictionModelError(
+            "NO_COMPATIBLE_MODEL",
+            f"No compatible model version found for feature_set_id={params.feature_set_id}.{suffix}",
+        )
+
+    return await _resolve_model_version_legacy(db, params)
 
 
 async def _get_mlflow_run_id(db: AsyncSession, mv: ModelVersion) -> str | None:
