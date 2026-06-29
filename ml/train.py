@@ -13,6 +13,7 @@ from evaluation import compute_metrics
 from models.baseline import FeatureColumnBaseline, lag24h_baseline, moving_average_baseline
 from models.ml_models import train_lightgbm, predict_model
 from models.sklearn_model import train_hist_gradient_boosting, train_random_forest
+from models.two_stage_catboost import TwoStageCatBoostRegressor
 
 
 @dataclass
@@ -54,8 +55,12 @@ def resolve_model_type(algorithm: str | None) -> str:
         return "sklearn_rf"
     if "xgboost" in key or key == "xgb":
         raise ValueError("XGBoost는 이번 단계에서 지원하지 않습니다.")
-    if "catboost" in key or "twostage" in key:
-        raise ValueError("2-Stage CatBoost는 이번 단계에서 지원하지 않습니다.")
+    if key in ("twostagecatboost", "2stagecatboost") or (
+        ("twostage" in key or ("two" in key and "stage" in key)) and "catboost" in key
+    ):
+        return "two_stage_catboost"
+    if "catboost" in key:
+        return "catboost"
     return "sklearn_gbdt"
 
 
@@ -66,6 +71,8 @@ def model_name_for_type(model_type: str) -> str:
         "sklearn_rf": "heat_demand_rf",
         "baseline_lag24h": "heat_demand_baseline_lag24h",
         "baseline_ma": "heat_demand_baseline_ma",
+        "catboost": "heat_demand_catboost",
+        "two_stage_catboost": "heat_demand_two_stage_catboost",
     }.get(model_type, "heat_demand_model")
 
 
@@ -181,6 +188,14 @@ def train_model(
             return train_lightgbm(X_train, y_train, params)
         except (ImportError, OSError) as exc:
             raise ImportError("lightgbm unavailable") from exc
+    if model_type == "catboost":
+        from models.catboost_model import train_catboost
+
+        return train_catboost(X_train, y_train, params)
+    if model_type == "two_stage_catboost":
+        model = TwoStageCatBoostRegressor(params)
+        model.fit(X_train, y_train)
+        return model
     if model_type == "sklearn_rf":
         return train_random_forest(X_train, y_train, params)
     return train_hist_gradient_boosting(X_train, y_train, params)
@@ -188,6 +203,8 @@ def train_model(
 
 def predict(model: Any, X: pd.DataFrame) -> np.ndarray:
     if isinstance(model, FeatureColumnBaseline):
+        return model.predict(X)
+    if isinstance(model, TwoStageCatBoostRegressor):
         return model.predict(X)
     return predict_model(model, X)
 
@@ -228,6 +245,11 @@ def run_training(
     try:
         model = train_model(model_type, split.X_train, split.y_train, hyperparams)
     except (ImportError, OSError) as exc:
+        if model_type in ("catboost", "two_stage_catboost"):
+            raise ImportError(
+                "catboost 패키지가 설치되어 있지 않습니다. "
+                "pip install catboost 후 model_type=CATBOOST 또는 TWO_STAGE_CATBOOST 학습을 다시 시도하세요."
+            ) from exc
         if model_type == "lightgbm":
             train_warnings.append(f"LightGBM 사용 불가, sklearn_gbdt로 대체: {exc}")
             model_type = "sklearn_gbdt"
@@ -240,6 +262,12 @@ def run_training(
 
     train_metrics = compute_metrics(split.y_train.values, train_pred)
     metrics = compute_metrics(split.y_val.values, val_pred)
+    if model_type == "two_stage_catboost" and isinstance(model, TwoStageCatBoostRegressor):
+        stage1_val = model.predict_stage1(split.X_val)
+        stage1_metrics = compute_metrics(split.y_val.values, stage1_val)
+        metrics["stage1_validation_mape"] = stage1_metrics["mape"]
+        metrics["final_validation_mape"] = metrics["mape"]
+        metrics["residual_mae"] = float(np.mean(np.abs(split.y_val.values - val_pred)))
     metrics["train_count"] = float(len(split.X_train))
     metrics["validation_count"] = float(len(split.X_val))
     metrics["primary_metric"] = metrics["mape"]

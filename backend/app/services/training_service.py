@@ -184,6 +184,15 @@ def _run_training_sync(
     }
     if hyperparams:
         params.update({k: v for k, v in hyperparams.items() if k != "validation_ratio"})
+    if result.model_type in ("catboost", "two_stage_catboost"):
+        hp = hyperparams or {}
+        params["stage_count"] = 2 if result.model_type == "two_stage_catboost" else 1
+        params["stage1_model_type"] = "catboost"
+        if result.model_type == "two_stage_catboost":
+            params["stage2_model_type"] = "catboost"
+        params["catboost_iterations"] = hp.get("iterations") or hp.get("n_estimators") or 300
+        params["catboost_depth"] = hp.get("depth") or hp.get("max_depth") or 6
+        params["catboost_learning_rate"] = hp.get("learning_rate") or 0.05
 
     mlflow_warnings: list[str] = []
     run_id = None
@@ -312,6 +321,9 @@ async def run_training_job(db: AsyncSession, params: TrainingJobParams) -> dict[
             "validation_count": result.validation_count,
             "primary_metric": result.metrics["mape"],
         }
+        for extra_key in ("stage1_validation_mape", "final_validation_mape", "residual_mae"):
+            if extra_key in result.metrics:
+                metric_summary[extra_key] = result.metrics[extra_key]
 
         experiment = ModelExperiment(
             experiment_id=experiment_id,

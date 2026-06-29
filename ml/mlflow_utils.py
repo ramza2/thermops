@@ -91,6 +91,13 @@ def log_training_run(
                         mlflow.lightgbm.log_model(model, "model")
                     except Exception:
                         mlflow.sklearn.log_model(model, "model")
+                elif model_type == "catboost":
+                    try:
+                        mlflow.catboost.log_model(model, "model")
+                    except Exception:
+                        mlflow.sklearn.log_model(model, "model")
+                elif model_type == "two_stage_catboost":
+                    mlflow.sklearn.log_model(model, "model")
                 else:
                     mlflow.sklearn.log_model(model, "model")
             except Exception:

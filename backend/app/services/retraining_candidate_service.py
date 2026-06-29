@@ -34,12 +34,27 @@ EXECUTION_MODE_SYNC = "SYNC"
 EXECUTION_MODE_AIRFLOW = "AIRFLOW"
 AIRFLOW_ACTIVE_STATES = {"queued", "running"}
 
+_PREFERRED_CONFIG_BY_MODEL: dict[str, str] = {
+    "heat_demand_two_stage_catboost": "TRC-TPL-TWO-STAGE-CATBOOST",
+    "heat_demand_catboost": "TRC-TPL-CATBOOST",
+    "heat_demand_lightgbm": "TRC-TPL-LAG-ROLL",
+    "heat_demand_baseline_lag24h": "TRC-TPL-BASELINE",
+    "heat_demand_baseline_ma": "TRC-TPL-BASELINE",
+    "heat_demand_gbdt": "TRC-TPL-LAG-ROLL",
+}
+
 
 def _retrained_model_name(base_name: str | None) -> str:
     name = (base_name or DEFAULT_CONFIG_VALUES.get("default_model_name", "heat_demand_lightgbm")).strip()
     if name.endswith("_retrained"):
         return name
     return f"{name}_retrained"
+
+
+def _preferred_config_for_model(model_name: str | None) -> str | None:
+    if not model_name:
+        return None
+    return _PREFERRED_CONFIG_BY_MODEL.get(model_name.replace("_retrained", ""))
 
 
 async def _get_candidate(db: AsyncSession, candidate_id: str) -> RetrainingCandidate:
@@ -96,7 +111,27 @@ async def _resolve_feature_set_id(
     return DEFAULT_FEATURE_SET_ID
 
 
-async def _resolve_config_id(db: AsyncSession, feature_set_id: str, warnings: list[str]) -> str:
+async def _resolve_config_id(
+    db: AsyncSession,
+    feature_set_id: str,
+    warnings: list[str],
+    source_model_name: str | None = None,
+) -> str:
+    preferred_id = _preferred_config_for_model(source_model_name)
+    if preferred_id:
+        preferred_cfg = (
+            await db.execute(select(TrainingConfig).where(TrainingConfig.config_id == preferred_id))
+        ).scalar_one_or_none()
+        if preferred_cfg:
+            if preferred_cfg.feature_set_id == feature_set_id:
+                return preferred_cfg.config_id
+            warnings.append(
+                f"source model {source_model_name} 선호 config {preferred_id}의 feature_set 불일치 — "
+                f"{feature_set_id}용 설정 검색"
+            )
+        else:
+            warnings.append(f"선호 config {preferred_id} 없음 — {feature_set_id}용 설정 검색")
+
     cfg = (
         await db.execute(
             select(TrainingConfig)
@@ -192,8 +227,6 @@ async def _execute_retraining_core(
 
     warnings: list[str] = []
     feature_set_id = await _resolve_feature_set_id(db, candidate, drift_report, warnings)
-    config_id = await _resolve_config_id(db, feature_set_id, warnings)
-    train_start, train_end = await _resolve_train_period(db, drift_report, feature_set_id, warnings)
 
     base_model_name = candidate.model_name
     if candidate.model_version_id:
@@ -202,6 +235,9 @@ async def _execute_retraining_core(
         ).scalar_one_or_none()
         if mv:
             base_model_name = mv.model_name
+
+    config_id = await _resolve_config_id(db, feature_set_id, warnings, base_model_name)
+    train_start, train_end = await _resolve_train_period(db, drift_report, feature_set_id, warnings)
 
     site_ids = [candidate.site_id] if candidate.site_id else None
     model_name_override = _retrained_model_name(base_model_name)

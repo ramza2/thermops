@@ -111,6 +111,15 @@ MIGRATIONS = [
         LIMIT 500;
         """,
     ),
+    (
+        "P1-4 CatBoost training configs",
+        """
+        INSERT INTO tb_training_config (config_id, config_name, feature_set_id, algorithm, train_period_months, validation_period_months, hyperparams) VALUES
+        ('TRC-TPL-CATBOOST', 'CatBoost 학습', 'FS-TPL-LAG-ROLL', 'catboost', 1, 1, '{"validation_ratio":0.2,"iterations":80,"learning_rate":0.05,"depth":6}'),
+        ('TRC-TPL-TWO-STAGE-CATBOOST', '2-Stage CatBoost 학습', 'FS-TPL-TWO-STAGE', 'two_stage_catboost', 1, 1, '{"validation_ratio":0.2,"iterations":80,"learning_rate":0.05,"depth":6}')
+        ON CONFLICT DO NOTHING;
+        """,
+    ),
 ]
 
 

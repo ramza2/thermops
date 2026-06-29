@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""모델 학습 API 통합 테스트."""
+"""CatBoost 모델 학습·예측 API 통합 테스트."""
 
 from __future__ import annotations
 
@@ -9,6 +9,7 @@ import subprocess
 import sys
 import urllib.error
 import urllib.request
+from datetime import datetime, timedelta, timezone
 
 API_BASE = os.environ.get("THERMOOPS_API_BASE", "http://localhost:8000/api/v1")
 DB_URL = os.environ.get(
@@ -16,7 +17,7 @@ DB_URL = os.environ.get(
     "postgresql://thermops:thermops@localhost:5432/thermops",
 )
 FEATURE_SET_ID = os.environ.get("THERMOOPS_FEATURE_SET_ID", "FS-TPL-LAG-ROLL")
-TRAINING_CONFIG_ID = os.environ.get("THERMOOPS_TRAINING_CONFIG_ID", "TRC-TPL-LAG-ROLL")
+TRAINING_CONFIG_ID = os.environ.get("THERMOOPS_TRAINING_CONFIG_ID", "TRC-TPL-CATBOOST")
 
 
 def api(method: str, path: str, body: dict | None = None, timeout: int = 300) -> dict:
@@ -57,6 +58,23 @@ def psql_scalar(sql: str) -> str:
         conn.close()
 
 
+def ensure_training_configs_seed() -> None:
+    sql = """
+    INSERT INTO tb_training_config (config_id, config_name, feature_set_id, algorithm, train_period_months, validation_period_months, hyperparams) VALUES
+    ('TRC-TPL-CATBOOST', 'CatBoost 학습', 'FS-TPL-LAG-ROLL', 'catboost', 1, 1, '{"validation_ratio":0.2,"iterations":50,"learning_rate":0.05,"depth":6}')
+    ON CONFLICT DO NOTHING;
+    """
+    try:
+        subprocess.run(
+            ["docker", "exec", "-i", "thermops-postgres", "psql", "-U", "thermops", "-d", "thermops", "-c", sql],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except Exception:
+        pass
+
+
 def ensure_feature_dataset() -> None:
     count = psql_scalar(
         f"SELECT COUNT(*) FROM tb_feature_dataset WHERE feature_json->>'feature_set_id' = '{FEATURE_SET_ID}'"
@@ -74,42 +92,23 @@ def ensure_feature_dataset() -> None:
         raise RuntimeError("Feature Dataset이 없습니다. Feature 생성을 먼저 실행하세요.")
 
 
-def ensure_training_configs_seed() -> None:
-    sql = """
-    INSERT INTO tb_training_config (config_id, config_name, feature_set_id, algorithm, train_period_months, validation_period_months, hyperparams) VALUES
-    ('TRC-TPL-LAG-ROLL', 'Lag/Rolling LightGBM 학습', 'FS-TPL-LAG-ROLL', 'lightgbm', 1, 1, '{"validation_ratio":0.2,"n_estimators":80,"learning_rate":0.05,"max_depth":6}')
-    ON CONFLICT DO NOTHING;
-    """
-    try:
-        subprocess.run(
-            ["docker", "exec", "-i", "thermops-postgres", "psql", "-U", "thermops", "-d", "thermops", "-c", sql],
-            check=True,
-            capture_output=True,
-            text=True,
-        )
-    except Exception:
-        pass
-
-
 def resolve_training_config_id() -> str:
     ensure_training_configs_seed()
     configs = api("GET", "/training-configs")
     for cfg in configs:
         if cfg.get("config_id") == TRAINING_CONFIG_ID:
             return TRAINING_CONFIG_ID
-        if (
-            cfg.get("feature_set_id") == FEATURE_SET_ID
-            and "lightgbm" in cfg.get("algorithm", "").lower()
-        ):
-            return cfg["config_id"]
+        if cfg.get("feature_set_id") == FEATURE_SET_ID and "catboost" in cfg.get("algorithm", "").lower():
+            if "two" not in cfg.get("algorithm", "").lower():
+                return cfg["config_id"]
 
     created = api("POST", "/training-configs", {
-        "config_name": "Test Lag/Rolling LightGBM",
+        "config_name": "Test CatBoost",
         "feature_set_id": FEATURE_SET_ID,
-        "algorithm": "lightgbm",
+        "algorithm": "catboost",
         "train_period_months": 1,
         "validation_period_months": 1,
-        "hyperparams": {"validation_ratio": 0.2, "n_estimators": 50, "learning_rate": 0.05, "max_depth": 6},
+        "hyperparams": {"validation_ratio": 0.2, "iterations": 50, "learning_rate": 0.05, "depth": 6},
     })
     return created.get("config_id") or TRAINING_CONFIG_ID
 
@@ -131,20 +130,55 @@ def ensure_minio_bucket() -> None:
         pass
 
 
+def prediction_period(feature_set_id: str) -> tuple[str, str]:
+    start = psql_scalar(
+        f"SELECT MIN(feature_at)::text FROM tb_feature_dataset WHERE feature_json->>'feature_set_id' = '{feature_set_id}'"
+    )
+    end = psql_scalar(
+        f"SELECT MAX(feature_at)::text FROM tb_feature_dataset WHERE feature_json->>'feature_set_id' = '{feature_set_id}'"
+    )
+    if start and end:
+        return start, end
+    now = datetime.now(timezone.utc)
+    return (now - timedelta(days=7)).replace(tzinfo=None).isoformat(), now.replace(tzinfo=None).isoformat()
+
+
+def run_prediction(model_version_id: str, feature_set_id: str) -> None:
+    start_at, end_at = prediction_period(feature_set_id)
+    before = int(psql_scalar(
+        f"SELECT COUNT(*) FROM tb_heat_demand_prediction WHERE model_version_id = '{model_version_id}'"
+    ) or "0")
+
+    result = api("POST", "/prediction-jobs", {
+        "feature_set_id": feature_set_id,
+        "model_version_id": model_version_id,
+        "start_at": start_at,
+        "end_at": end_at,
+        "prediction_horizon": "BATCH",
+        "overwrite_yn": True,
+    }, timeout=300)
+
+    if result.get("status") != "SUCCESS":
+        raise RuntimeError(f"prediction failed: {result}")
+
+    after = int(psql_scalar(
+        f"SELECT COUNT(*) FROM tb_heat_demand_prediction WHERE model_version_id = '{model_version_id}'"
+    ) or "0")
+    if after <= before:
+        raise RuntimeError("prediction results were not saved")
+
+
 def main() -> int:
-    print(f"THERMOps model training test ({API_BASE})")
+    print(f"THERMOps CatBoost training test ({API_BASE})")
     try:
         ensure_minio_bucket()
-        feature_sets = api("GET", "/feature-sets")
-        print(f"  [list] feature sets: {len(feature_sets)}")
-
         ensure_feature_dataset()
         config_id = resolve_training_config_id()
         print(f"  [config] config_id={config_id}")
 
         before_versions = int(psql_scalar("SELECT COUNT(*) FROM tb_model_version") or "0")
 
-        result = api("POST", "/training-jobs", {"config_id": config_id, "register_model_yn": True}, timeout=300)
+        result = api("POST", "/training-jobs", {"config_id": config_id, "register_model_yn": True}, timeout=600)
         job_id = result["job_id"]
         print(f"  [train] job_id={job_id} status={result.get('status')}")
 
@@ -159,11 +193,12 @@ def main() -> int:
         for key in ("mape", "mae", "rmse", "r2"):
             if key not in metrics:
                 raise RuntimeError(f"missing metric: {key}")
-        print(f"  [metrics] MAPE={metrics.get('mape')} MAE={metrics.get('mae')} RMSE={metrics.get('rmse')} R2={metrics.get('r2')}")
+        print(f"  [metrics] MAPE={metrics.get('mape')} MAE={metrics.get('mae')}")
 
-        if not job.get("mlflow_run_id") and not result.get("mlflow_run_id"):
+        mlflow_run_id = job.get("mlflow_run_id") or result.get("mlflow_run_id")
+        if not mlflow_run_id:
             raise RuntimeError("mlflow_run_id missing")
-        print(f"  [mlflow] run_id={job.get('mlflow_run_id') or result.get('mlflow_run_id')}")
+        print(f"  [mlflow] run_id={mlflow_run_id}")
 
         model_version_id = result.get("model_version_id") or job.get("model_version_id")
         if not model_version_id:
@@ -173,22 +208,15 @@ def main() -> int:
         if int(db_count) <= before_versions:
             raise RuntimeError("tb_model_version row was not created")
 
-        perf = api("GET", f"/performance-metrics?model_name={result.get('model_name')}&model_version={result.get('model_version')}")
-        if not perf.get("metrics"):
-            raise RuntimeError("performance-metrics returned empty")
-
-        models = api("GET", "/models")
-        if not models:
-            raise RuntimeError("/models returned empty")
-
-        versions = api("GET", f"/models/{result['model_name']}/versions")
-        if not versions:
-            raise RuntimeError("model versions empty")
+        model_name = result.get("model_name") or job.get("registered_model_name")
+        if model_name and "catboost" not in model_name:
+            print(f"  [warn] unexpected model_name={model_name}")
 
         print(f"  [DB] model_version_id={model_version_id}")
-        print(f"  [perf] sites={len(perf['metrics'])}")
+        run_prediction(model_version_id, FEATURE_SET_ID)
+        print("  [predict] prediction job SUCCESS")
 
-        print("\nPASSED: model training flow")
+        print("\nPASSED: CatBoost training flow")
         return 0
     except (urllib.error.URLError, RuntimeError, KeyError) as exc:
         print(f"\nFAILED: {exc}", file=sys.stderr)

@@ -141,7 +141,9 @@ export default function TrainingConfigsPage() {
         <SelectInput value={form.algorithm} onChange={(v) => setForm({ ...form, algorithm: v })}
           options={[
             { value: "lightgbm", label: "LightGBM" },
-            { value: "xgboost", label: "XGBoost" },
+            { value: "catboost", label: "CatBoost" },
+            { value: "two_stage_catboost", label: "2-Stage CatBoost" },
+            { value: "sklearn_gbdt", label: "sklearn GBDT (fallback)" },
             { value: "baseline", label: "Baseline" },
           ]} />
       </div>

@@ -22,4 +22,7 @@ def load_model(mlflow_model_uri: str | None, artifact_uri: str | None = None) ->
     try:
         return mlflow.pyfunc.load_model(uri)
     except Exception:
-        return mlflow.sklearn.load_model(uri)
+        try:
+            return mlflow.sklearn.load_model(uri)
+        except Exception:
+            return mlflow.catboost.load_model(uri)
