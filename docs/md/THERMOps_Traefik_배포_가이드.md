@@ -364,6 +364,23 @@ docker compose -f docker-compose.traefik.yml --env-file .env.deploy up -d --buil
 THERMOPS_DEPLOY_ENV=clean python scripts/reset_clean_deploy.py --yes
 ```
 
+### 배포 후 회귀·API 검증 (선택)
+
+배치 예측·Feature Dataset 기간 검증 변경 반영 후:
+
+```bash
+# API base — Traefik 공개 URL 또는 compose exec backend 환경
+export THERMOOPS_API_BASE=https://thermops.openlink.kr/api/v1
+
+python scripts/test_feature_dataset_range.py
+python scripts/test_prediction_period_validation.py
+python scripts/test_batch_prediction.py
+python scripts/run_regression_tests.py --group model --timeout-scale 2
+python scripts/run_regression_tests.py --group quick
+```
+
+`/predictions/jobs` UI: Feature Set별 Dataset 기간 표시, 최신 24시간 자동 설정, 범위 이탈 시 실행 차단.
+
 ---
 
 ## 14. 관련 파일

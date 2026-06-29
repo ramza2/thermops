@@ -136,14 +136,9 @@ def ensure_trained_model() -> str:
 
 
 def prediction_period() -> tuple[str, str]:
-    start = psql_scalar(
-        f"SELECT MIN(feature_at)::text FROM tb_feature_dataset WHERE feature_json->>'feature_set_id' = '{FEATURE_SET_ID}'"
-    )
-    end = psql_scalar(
-        f"SELECT MAX(feature_at)::text FROM tb_feature_dataset WHERE feature_json->>'feature_set_id' = '{FEATURE_SET_ID}'"
-    )
-    if start and end:
-        return start, end
+    data = api("GET", f"/feature-sets/{FEATURE_SET_ID}/dataset-range")
+    if data.get("exists") and data.get("min_target_at") and data.get("max_target_at"):
+        return data["min_target_at"], data["max_target_at"]
     now = datetime.now(timezone.utc)
     return (now - timedelta(days=7)).isoformat(), now.isoformat()
 

@@ -131,6 +131,8 @@ python scripts/test_csv_ingestion.py
 python scripts/test_data_quality.py
 python scripts/test_feature_build.py
 python scripts/test_model_training.py
+python scripts/test_feature_dataset_range.py
+python scripts/test_prediction_period_validation.py
 python scripts/test_batch_prediction.py
 python scripts/test_prediction_evaluation.py
 python scripts/test_airflow_pipeline.py
@@ -171,12 +173,18 @@ python scripts/smoke_test_api.py
 ```powershell
 python scripts/run_regression_tests.py --group quick      # API·적재·품질 (약 1~3분)
 python scripts/run_regression_tests.py --group connector  # DB/API Connector
-python scripts/run_regression_tests.py --group model      # Feature·학습·예측·평가
+python scripts/run_regression_tests.py --group model      # Feature·학습·예측·Dataset range·기간 검증·평가 (8개)
 python scripts/run_regression_tests.py --group retraining # Drift·재학습
 python scripts/run_regression_tests.py --group airflow    # Airflow DAG
 python scripts/run_regression_tests.py --group frontend   # npm build + check-pages
 python scripts/run_regression_tests.py --group full       # 전체 (20~60분+)
 python scripts/run_regression_tests.py --all              # full과 동일
+```
+
+**`model` 그룹 (8개):** Feature 생성 → LightGBM/CatBoost/2-Stage 학습 → **Feature Dataset range API** (`test_feature_dataset_range.py`) → **예측 기간 검증** (`test_prediction_period_validation.py`) → 배치 예측 → 예측-실적 평가. 배치 예측·기간 검증 관련 변경 후 권장:
+
+```powershell
+python scripts/run_regression_tests.py --group model --timeout-scale 2
 ```
 
 **주요 옵션**
@@ -196,6 +204,37 @@ python scripts/run_regression_tests.py --all              # full과 동일
 - `summary.md` — 사람이 읽기 쉬운 요약
 
 **커밋 전 권장:** `python scripts/run_regression_tests.py --group quick` + 변경 영역 그룹 (예: `--group model`)
+
+### Traefik 배포 서버 — 적용·검증
+
+스택 반영:
+
+```bash
+cd ~/thermops
+git pull
+docker compose -f docker-compose.traefik.yml --env-file .env.deploy up -d --build backend frontend
+```
+
+배포 후 API 검증 (호스트에서 backend `localhost:8000` 또는 `THERMOOPS_API_BASE` 설정):
+
+```bash
+export THERMOOPS_API_BASE=https://thermops.openlink.kr/api/v1   # Traefik 경유 시
+
+python scripts/test_feature_dataset_range.py
+python scripts/test_prediction_period_validation.py
+python scripts/test_batch_prediction.py
+python scripts/run_regression_tests.py --group model --timeout-scale 2
+python scripts/run_regression_tests.py --group quick
+```
+
+**`/predictions/jobs` 화면 확인 체크리스트**
+
+- Feature Set 선택 시 **사용 가능한 Feature Dataset 기간** 표시
+- Feature Dataset 없음 → Feature 생성 안내·링크
+- Dataset 있음 → **최신 24시간** 예측 기간 자동 설정
+- 범위 밖 기간 → 경고·**예측 실행 버튼 비활성**
+- 정상 범위 → 예측 실행 성공
+- 실패 시 API `detail` 기반 한국어 메시지
 
 ### 데이터 품질 점검 테스트 (P0-2)
 

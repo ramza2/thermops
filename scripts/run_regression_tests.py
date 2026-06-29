@@ -149,6 +149,18 @@ def _build_registry() -> list[TestCase]:
             timeout_seconds=600,
         ),
         _python_test(
+            "test_feature_dataset_range.py",
+            groups=["model", "full"],
+            description="Feature Dataset 기간 조회 API",
+            timeout_seconds=180,
+        ),
+        _python_test(
+            "test_prediction_period_validation.py",
+            groups=["model", "full"],
+            description="배치 예측 기간 검증",
+            timeout_seconds=240,
+        ),
+        _python_test(
             "test_batch_prediction.py",
             groups=["model", "full"],
             description="배치 예측",
