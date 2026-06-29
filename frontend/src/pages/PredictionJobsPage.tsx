@@ -120,8 +120,9 @@ export default function PredictionJobsPage() {
       );
       setConfirmOpen(false);
       navigate("/predictions/results");
-    } catch {
-      showToast("error", "예측 실행에 실패했습니다.");
+    } catch (err: unknown) {
+      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+      showToast("error", typeof detail === "string" ? detail : "예측 실행에 실패했습니다.");
     } finally {
       setRunning(false);
     }

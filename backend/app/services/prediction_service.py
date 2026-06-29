@@ -14,7 +14,7 @@ from sqlalchemy import and_, delete, func, select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
-from app.core.time import utc_now
+from app.core.time import to_db_datetime, utc_now
 from app.models.entities import (
     FeatureDataset,
     FeatureSet,
@@ -337,6 +337,7 @@ async def _upsert_predictions(
         target_at = row["feature_at"]
         if hasattr(target_at, "to_pydatetime"):
             target_at = target_at.to_pydatetime()
+        target_at = to_db_datetime(target_at)
         site_id = str(row["site_id"])
         rows.append({
             "site_id": site_id,
@@ -379,8 +380,8 @@ def params_from_schema(body: PredictionJobCreate) -> PredictionJobParams:
     return PredictionJobParams(
         feature_set_id=body.feature_set_id,
         site_ids=body.site_ids,
-        start_at=start_at,
-        end_at=end_at,
+        start_at=to_db_datetime(start_at),
+        end_at=to_db_datetime(end_at),
         prediction_horizon=body.prediction_horizon,
         model_version_id=body.model_version_id,
         model_name=body.model_name,
