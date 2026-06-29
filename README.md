@@ -108,6 +108,7 @@ python scripts/test_batch_prediction.py
 python scripts/test_prediction_evaluation.py
 python scripts/test_airflow_pipeline.py
 python scripts/test_full_pipeline_airflow.py
+python scripts/test_drift_retraining.py
 python scripts/smoke_test_api.py
 cd frontend && npm run build
 ```
@@ -225,6 +226,36 @@ python scripts/test_prediction_trend.py
 
 ```powershell
 curl "http://localhost:8000/api/v1/dashboard/prediction-trend?start_at=2026-06-01T00:00:00&end_at=2026-06-07T23:59:59"
+```
+
+### Drift 감지 및 재학습 후보 테스트 (P1-1)
+
+예측–실적 매칭 및 Feature Dataset이 존재하는 상태에서 Drift 감지를 검증합니다.
+
+```powershell
+python scripts/test_drift_retraining.py
+```
+
+Drift 점검 API 수동 실행:
+
+```powershell
+curl -X POST "http://localhost:8000/api/v1/drift-checks" -H "Content-Type: application/json" -d "{\"model_version_id\":\"MV-heat_demand_lightgbm-1\",\"feature_set_id\":\"FS-TPL-LAG-ROLL\",\"baseline_start_at\":\"2026-05-22T00:00:00\",\"baseline_end_at\":\"2026-06-05T23:00:00\",\"current_start_at\":\"2026-06-06T00:00:00\",\"current_end_at\":\"2026-06-20T23:00:00\"}"
+```
+
+**Drift 감지 기준 (요약)**
+
+| 유형 | 판단 |
+|------|------|
+| 성능 Drift | 최근 운영 MAPE ≥ `mape_warning_threshold` → WARNING, ≥ `retraining_mape_threshold` → CRITICAL |
+| 예측 오차 Drift | current MAPE가 baseline 대비 1.2배 → WARNING, 1.5배 → CRITICAL |
+| Feature Drift | mean/std shift + KS-test, `drift_warning_threshold` 기준 |
+
+**재학습 후보:** WARNING/CRITICAL Drift 시 `tb_retraining_candidate`에 PENDING 후보 자동 생성. 승인/반려 API는 **상태만 변경**하며, 실제 재학습 Job 생성은 후속 단계입니다.
+
+기존 DB 볼륨 사용 시 P1-1 컬럼 반영:
+
+```powershell
+python scripts/apply_dev_migrations.py
 ```
 
 ### Airflow DAG 연동 테스트 (P0-7)
@@ -417,10 +448,13 @@ Swagger UI: http://localhost:8000/docs
 | DAG ID | 설명 |
 |--------|------|
 | `data_ingestion_dag` | 열수요/기상 데이터 적재 |
+| `data_quality_dag` | 데이터 품질 점검 |
 | `feature_build_dag` | Feature 생성 |
 | `model_training_dag` | Baseline/ML 모델 학습 |
-| `batch_prediction_dag` | D+1/D+7 배치 예측 |
-| `monitoring_dag` | 성능 평가, 드리프트, 재학습 후보 |
+| `batch_prediction_dag` | 배치 예측 |
+| `monitoring_dag` | 예측-실적 매칭 및 성능 평가 |
+| `drift_detection_dag` | Drift 감지 및 재학습 후보 자동 생성 (P1-1) |
+| `thermops_full_pipeline_dag` | 전체 MLOps 파이프라인 |
 
 Airflow UI에서 DAG를 활성화( unpause )한 뒤 수동 실행하거나 스케줄에 따라 자동 실행됩니다.
 

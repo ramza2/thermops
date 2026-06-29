@@ -34,7 +34,9 @@ async def dashboard_overview(db: AsyncSession = Depends(get_db)):
     )).scalar() or 0
 
     retrain_count = (await db.execute(
-        select(func.count()).select_from(RetrainingCandidate).where(RetrainingCandidate.status == "REVIEW")
+        select(func.count()).select_from(RetrainingCandidate).where(
+            RetrainingCandidate.status.in_(("PENDING", "REVIEW"))
+        )
     )).scalar() or 0
 
     avg_mape = await get_prediction_performance_avg_mape(db, days=7)

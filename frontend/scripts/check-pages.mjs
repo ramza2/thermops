@@ -11,6 +11,8 @@ const PATHS = [
   "/predictions/errors",
   "/ops/pipeline-runs",
   "/ops/model-monitoring",
+  "/ops/drift-reports",
+  "/ops/retraining-candidates",
   "/system/configs",
 ];
 

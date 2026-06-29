@@ -57,6 +57,13 @@ PIPELINE_DEFINITIONS: list[dict[str, Any]] = [
         "schedule": "0 8 * * *",
     },
     {
+        "pipeline_id": "drift_detection_dag",
+        "name": "drift_detection_dag",
+        "type": "MONITORING",
+        "description": "Drift 감지 및 재학습 후보 자동 생성",
+        "schedule": "0 9 * * *",
+    },
+    {
         "pipeline_id": "thermops_full_pipeline_dag",
         "name": "thermops_full_pipeline_dag",
         "type": "INGESTION",
@@ -90,6 +97,10 @@ DEFAULT_CONF_BY_PIPELINE: dict[str, dict[str, Any]] = {
         "overwrite_yn": True,
     },
     "monitoring_dag": {
+        "model_name": "heat_demand_lightgbm",
+    },
+    "drift_detection_dag": {
+        "feature_set_id": "FS-TPL-LAG-ROLL",
         "model_name": "heat_demand_lightgbm",
     },
     "thermops_full_pipeline_dag": {

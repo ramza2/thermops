@@ -146,4 +146,11 @@ class PipelineRunStatusUpdate(BaseModel):
 # Drift
 class DriftCheckCreate(BaseModel):
     model_version_id: str | None = None
+    feature_set_id: str | None = None
     dataset_version_id: str | None = None
+    site_ids: list[str] | None = None
+    baseline_start_at: datetime | None = None
+    baseline_end_at: datetime | None = None
+    current_start_at: datetime | None = None
+    current_end_at: datetime | None = None
+    force_candidate: bool = False

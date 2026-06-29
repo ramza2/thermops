@@ -1,12 +1,12 @@
-from datetime import datetime, timezone
-from uuid import uuid4
+from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.core.response import accepted, ok, paged
+from app.core.response import ok, paged
+from app.core.time import utc_now
 from app.models.entities import (
     DriftReport,
     ModelPerformanceMetric,
@@ -15,6 +15,12 @@ from app.models.entities import (
     Site,
 )
 from app.schemas.api import DriftCheckCreate
+from app.services.drift_detection_service import (
+    DriftCheckParams,
+    drift_report_to_dict,
+    retraining_candidate_to_dict,
+    run_drift_detection,
+)
 from app.services.prediction_evaluation_service import EVAL_TYPE_PREDICTION, EVAL_TYPE_TRAINING
 
 router = APIRouter(tags=["Monitoring"])
@@ -157,51 +163,101 @@ async def performance_metrics(
 
 @router.post("/drift-checks")
 async def run_drift_check(body: DriftCheckCreate, db: AsyncSession = Depends(get_db)):
-    report_id = f"DRIFT-{datetime.now(timezone.utc).strftime('%Y%m%d')}-{uuid4().hex[:4].upper()}"
-    report = DriftReport(
-        drift_report_id=report_id,
-        dataset_version_id=body.dataset_version_id or "DSV-20260601-TRAIN",
-        model_version_id=body.model_version_id,
-        base_period="2024-01 ~ 2026-03",
-        current_period="2026-06-01 ~ 2026-06-23",
-        drift_status="WARNING",
-        drift_score_json={"temperature": 0.35, "lag_24h_demand": 0.22},
-        created_at=datetime.now(timezone.utc),
-    )
-    db.add(report)
-    return accepted({"report_id": report_id, "status": "WARNING"}, message="드리프트 점검이 요청되었습니다.")
+    try:
+        result = await run_drift_detection(
+            db,
+            DriftCheckParams(
+                model_version_id=body.model_version_id,
+                feature_set_id=body.feature_set_id,
+                site_ids=body.site_ids,
+                baseline_start_at=body.baseline_start_at,
+                baseline_end_at=body.baseline_end_at,
+                current_start_at=body.current_start_at,
+                current_end_at=body.current_end_at,
+                force_candidate=body.force_candidate,
+            ),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return ok(result, message="드리프트 점검이 완료되었습니다.")
 
 
 @router.get("/drift-reports")
 async def list_drift_reports(
     page: int = Query(1, ge=1),
     size: int = Query(20, ge=1, le=100),
+    model_version_id: str | None = Query(default=None),
+    site_id: str | None = Query(default=None),
+    drift_status: str | None = Query(default=None),
+    start_at: datetime | None = Query(default=None),
+    end_at: datetime | None = Query(default=None),
+    computed_only: bool = Query(default=False),
     db: AsyncSession = Depends(get_db),
 ):
-    rows = (await db.execute(select(DriftReport).order_by(DriftReport.created_at.desc()))).scalars().all()
-    items = [
-        {
-            "drift_report_id": r.drift_report_id,
-            "base_period": r.base_period,
-            "current_period": r.current_period,
-            "drift_status": r.drift_status,
-            "drift_score_json": r.drift_score_json,
-            "created_at": r.created_at.isoformat(),
-        }
-        for r in rows
-    ]
+    q = select(DriftReport).order_by(DriftReport.created_at.desc())
+    if model_version_id:
+        q = q.where(DriftReport.model_version_id == model_version_id)
+    if site_id:
+        q = q.where(DriftReport.site_id == site_id)
+    if drift_status:
+        q = q.where(DriftReport.drift_status == drift_status)
+    if start_at:
+        q = q.where(DriftReport.created_at >= start_at)
+    if end_at:
+        q = q.where(DriftReport.created_at <= end_at)
+
+    rows = list((await db.execute(q)).scalars().all())
+    if computed_only:
+        rows = [r for r in rows if (r.drift_score_json or {}).get("computed")]
+
+    items = []
+    for r in rows:
+        site_name = None
+        if r.site_id:
+            site = (await db.execute(select(Site).where(Site.site_id == r.site_id))).scalar_one_or_none()
+            site_name = site.site_name if site else None
+        items.append(drift_report_to_dict(r, site_name))
+
     start = (page - 1) * size
     return paged(items[start:start + size], page, size, len(items))
+
+
+@router.get("/drift-reports/{drift_report_id}")
+async def get_drift_report(drift_report_id: str, db: AsyncSession = Depends(get_db)):
+    report = (
+        await db.execute(select(DriftReport).where(DriftReport.drift_report_id == drift_report_id))
+    ).scalar_one_or_none()
+    if not report:
+        raise HTTPException(status_code=404, detail="드리프트 리포트를 찾을 수 없습니다.")
+    site_name = None
+    if report.site_id:
+        site = (await db.execute(select(Site).where(Site.site_id == report.site_id))).scalar_one_or_none()
+        site_name = site.site_name if site else None
+    return ok(drift_report_to_dict(report, site_name))
 
 
 @router.get("/retraining-candidates")
 async def list_retraining_candidates(
     status: str | None = Query(default=None),
+    severity: str | None = Query(default=None),
+    model_version_id: str | None = Query(default=None),
+    site_id: str | None = Query(default=None),
     db: AsyncSession = Depends(get_db),
 ):
     q = select(RetrainingCandidate).order_by(RetrainingCandidate.created_at.desc())
     if status:
         q = q.where(RetrainingCandidate.status == status)
+    if severity:
+        q = q.where(
+            or_(
+                RetrainingCandidate.severity == severity,
+                RetrainingCandidate.risk_level == severity,
+            )
+        )
+    if model_version_id:
+        q = q.where(RetrainingCandidate.model_version_id == model_version_id)
+    if site_id:
+        q = q.where(RetrainingCandidate.site_id == site_id)
     rows = (await db.execute(q)).scalars().all()
 
     items = []
@@ -209,15 +265,36 @@ async def list_retraining_candidates(
         site = None
         if r.site_id:
             site = (await db.execute(select(Site).where(Site.site_id == r.site_id))).scalar_one_or_none()
-        items.append({
-            "candidate_id": r.candidate_id,
-            "reason": r.reason,
-            "model_name": r.model_name,
-            "model_version": r.model_version,
-            "site_id": r.site_id,
-            "site_name": site.site_name if site else "전체",
-            "risk_level": r.risk_level,
-            "status": r.status,
-            "created_at": r.created_at.isoformat(),
-        })
+        items.append(retraining_candidate_to_dict(r, site.site_name if site else None))
     return ok(items)
+
+
+@router.post("/retraining-candidates/{candidate_id}/approve")
+async def approve_retraining_candidate(candidate_id: str, db: AsyncSession = Depends(get_db)):
+    row = (
+        await db.execute(select(RetrainingCandidate).where(RetrainingCandidate.candidate_id == candidate_id))
+    ).scalar_one_or_none()
+    if not row:
+        raise HTTPException(status_code=404, detail="재학습 후보를 찾을 수 없습니다.")
+    if row.status in ("APPROVED", "TRAINED"):
+        raise HTTPException(status_code=400, detail=f"이미 {row.status} 상태입니다.")
+    row.status = "APPROVED"
+    row.updated_at = utc_now()
+    await db.commit()
+    # TODO(P1-2): 승인 후보 기반 training job 자동 생성
+    return ok(retraining_candidate_to_dict(row), message="재학습 후보가 승인되었습니다.")
+
+
+@router.post("/retraining-candidates/{candidate_id}/reject")
+async def reject_retraining_candidate(candidate_id: str, db: AsyncSession = Depends(get_db)):
+    row = (
+        await db.execute(select(RetrainingCandidate).where(RetrainingCandidate.candidate_id == candidate_id))
+    ).scalar_one_or_none()
+    if not row:
+        raise HTTPException(status_code=404, detail="재학습 후보를 찾을 수 없습니다.")
+    if row.status == "REJECTED":
+        raise HTTPException(status_code=400, detail="이미 반려된 후보입니다.")
+    row.status = "REJECTED"
+    row.updated_at = utc_now()
+    await db.commit()
+    return ok(retraining_candidate_to_dict(row), message="재학습 후보가 반려되었습니다.")

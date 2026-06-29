@@ -236,3 +236,46 @@ def run_monitoring(**context):
         raise RuntimeError(result.get("error_message") or "prediction evaluation failed")
     _complete_step(context, pipeline_run_id, "prediction_evaluation", "예측 평가 완료", summary)
     return summary
+
+
+def run_drift_detection(**context):
+    conf = extract_conf(context)
+    pipeline_run_id = conf.get("pipeline_run_id")
+
+    body: dict = {}
+    if conf.get("model_version_id"):
+        body["model_version_id"] = conf["model_version_id"]
+    if conf.get("feature_set_id"):
+        body["feature_set_id"] = conf["feature_set_id"]
+    if conf.get("site_ids"):
+        body["site_ids"] = conf["site_ids"]
+    start_at = _parse_dt(conf.get("baseline_start_at"))
+    end_at = _parse_dt(conf.get("baseline_end_at"), end=True)
+    if start_at:
+        body["baseline_start_at"] = start_at
+    if end_at:
+        body["baseline_end_at"] = end_at
+    start_at = _parse_dt(conf.get("current_start_at"))
+    end_at = _parse_dt(conf.get("current_end_at"), end=True)
+    if start_at:
+        body["current_start_at"] = start_at
+    if end_at:
+        body["current_end_at"] = end_at
+    if conf.get("force_candidate"):
+        body["force_candidate"] = conf["force_candidate"]
+
+    update_pipeline_status(pipeline_run_id, "RUNNING", "drift_detection", "Drift 감지 시작")
+    result = call_backend_api("POST", "/drift-checks", json_body=body)
+    summary = {
+        "status": result.get("status"),
+        "overall_drift_status": result.get("overall_drift_status"),
+        "drift_report_id": result.get("drift_report_id"),
+        "created_retraining_candidates": result.get("created_retraining_candidates"),
+        "retraining_candidate_id": result.get("retraining_candidate_id"),
+        "metric_summary": result.get("metric_summary"),
+    }
+    if result.get("status") != "SUCCESS":
+        update_pipeline_status(pipeline_run_id, "FAILED", "drift_detection", "Drift 감지 실패", summary)
+        raise RuntimeError("drift detection failed")
+    _complete_step(context, pipeline_run_id, "drift_detection", "Drift 감지 완료", summary)
+    return summary

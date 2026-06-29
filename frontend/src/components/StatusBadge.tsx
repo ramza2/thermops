@@ -17,6 +17,12 @@ const STATUS_MAP: Record<string, { label: string; className: string }> = {
   REQUESTED: { label: "요청완료", className: "bg-blue-100 text-blue-700" },
   HIGH: { label: "높음", className: "bg-red-100 text-red-700" },
   MEDIUM: { label: "중간", className: "bg-amber-100 text-amber-700" },
+  CRITICAL: { label: "심각", className: "bg-red-100 text-red-700" },
+  PENDING: { label: "대기", className: "bg-amber-100 text-amber-700" },
+  APPROVED: { label: "승인", className: "bg-emerald-100 text-emerald-700" },
+  REJECTED: { label: "반려", className: "bg-slate-100 text-slate-500" },
+  TRAINED: { label: "학습완료", className: "bg-blue-100 text-blue-700" },
+  LOW: { label: "낮음", className: "bg-slate-100 text-slate-600" },
 };
 
 export function StatusBadge({ status }: { status: string }) {
