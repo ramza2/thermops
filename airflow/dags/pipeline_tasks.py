@@ -45,10 +45,19 @@ def run_ingestion(**context):
 
     update_pipeline_status(pipeline_run_id, "RUNNING", "data_ingestion", "데이터 적재 시작")
     results = []
-    heat = call_backend_api("POST", "/ingestion-jobs", params={"source_id": source_id})
+
+    def _ingest_params(sid: str) -> dict:
+        params: dict = {"source_id": sid}
+        if conf.get("start_at"):
+            params["start_at"] = conf.get("start_at")
+        if conf.get("end_at"):
+            params["end_at"] = conf.get("end_at")
+        return params
+
+    heat = call_backend_api("POST", "/ingestion-jobs", params=_ingest_params(source_id))
     results.append({"source_id": source_id, **heat})
     if weather_source_id:
-        weather = call_backend_api("POST", "/ingestion-jobs", params={"source_id": weather_source_id})
+        weather = call_backend_api("POST", "/ingestion-jobs", params=_ingest_params(weather_source_id))
         results.append({"source_id": weather_source_id, **weather})
 
     summary = {

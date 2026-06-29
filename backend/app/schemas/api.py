@@ -1,7 +1,11 @@
 from datetime import date, datetime
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+from app.services.connectors.registry import SUPPORTED_SOURCE_TYPES
+
+SUPPORTED_DATA_SOURCE_TYPES = set(SUPPORTED_SOURCE_TYPES)
 
 
 # Common
@@ -25,6 +29,14 @@ class DataSourceCreate(BaseModel):
     data_domain: str
     connection_info: dict[str, Any]
     active_yn: bool = True
+
+    @field_validator("source_type")
+    @classmethod
+    def validate_source_type(cls, v: str) -> str:
+        key = (v or "").upper()
+        if key not in SUPPORTED_DATA_SOURCE_TYPES:
+            raise ValueError(f"source_type은 {sorted(SUPPORTED_DATA_SOURCE_TYPES)} 중 하나여야 합니다.")
+        return key
 
 
 class DataSourceUpdate(BaseModel):

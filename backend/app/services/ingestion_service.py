@@ -1,21 +1,23 @@
-"""CSV ingestion into operational tables."""
+"""데이터 적재 서비스 — CSV/DB/API Connector 공통."""
 
 from __future__ import annotations
 
-from app.core.time import utc_now
+import asyncio
+from datetime import datetime
 from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.time import utc_now
 from app.models.entities import DataMapping, DataQualityRun, DataSource, HeatDemandActual, WeatherObservation
-from app.services.csv_source_service import is_csv_source, read_csv_rows
+from app.services.connectors.base import ConnectorError
+from app.services.connectors.registry import get_connector, normalize_source_type
 from app.services.mapping_service import (
     HEAT_TARGET,
     WEATHER_TARGET,
     _target_table_key,
-    apply_mapping,
     normalize_row_for_insert,
 )
 
@@ -33,7 +35,15 @@ async def get_active_mapping(db: AsyncSession, source_id: str) -> DataMapping | 
     return result.scalars().first()
 
 
-async def run_ingestion(db: AsyncSession, source_id: str, job_id: str) -> dict[str, Any]:
+async def run_ingestion(
+    db: AsyncSession,
+    source_id: str,
+    job_id: str,
+    *,
+    start_at: datetime | None = None,
+    end_at: datetime | None = None,
+    limit: int | None = None,
+) -> dict[str, Any]:
     source = (
         await db.execute(select(DataSource).where(DataSource.data_source_id == source_id))
     ).scalar_one_or_none()
@@ -41,8 +51,6 @@ async def run_ingestion(db: AsyncSession, source_id: str, job_id: str) -> dict[s
         raise IngestionError("데이터 소스를 찾을 수 없습니다.")
     if source.active_yn != "Y":
         raise IngestionError("비활성 데이터 소스입니다.")
-    if not is_csv_source(source.source_type):
-        raise IngestionError(f"CSV 적재는 source_type CSV/FILE_CSV만 지원합니다. (현재: {source.source_type})")
 
     mapping = await get_active_mapping(db, source_id)
     if not mapping:
@@ -52,15 +60,28 @@ async def run_ingestion(db: AsyncSession, source_id: str, job_id: str) -> dict[s
     if table not in (HEAT_TARGET, WEATHER_TARGET):
         raise IngestionError(f"지원하지 않는 저장 대상: {mapping.target_table}")
 
-    raw_rows, _ = read_csv_rows(source.connection_info)
-    mapped_rows = apply_mapping(raw_rows, mapping)
+    try:
+        connector = get_connector(source)
+        mapped_rows, _ = await asyncio.to_thread(
+            connector.fetch_rows,
+            source,
+            mapping=mapping,
+            start_at=start_at,
+            end_at=end_at,
+            limit=limit,
+        )
+    except ConnectorError as exc:
+        raise IngestionError(str(exc)) from exc
 
     inserted = 0
     failed = 0
+    skipped = 0
     missing_optional = 0
     duplicate_keys: set[tuple] = set()
     duplicate_in_file = 0
+    warnings: list[str] = []
     now = utc_now()
+    source_type = normalize_source_type(source.source_type)
 
     for raw_mapped in mapped_rows:
         normalized = normalize_row_for_insert(raw_mapped, mapping)
@@ -72,6 +93,7 @@ async def run_ingestion(db: AsyncSession, source_id: str, job_id: str) -> dict[s
             key = (normalized["site_id"], normalized["measured_at"])
             if key in duplicate_keys:
                 duplicate_in_file += 1
+                skipped += 1
                 continue
             duplicate_keys.add(key)
 
@@ -107,6 +129,7 @@ async def run_ingestion(db: AsyncSession, source_id: str, job_id: str) -> dict[s
             )
             if key in duplicate_keys:
                 duplicate_in_file += 1
+                skipped += 1
                 continue
             duplicate_keys.add(key)
 
@@ -143,25 +166,32 @@ async def run_ingestion(db: AsyncSession, source_id: str, job_id: str) -> dict[s
     ).scalar_one_or_none()
     summary = {
         "inserted_count": inserted,
+        "updated_count": inserted,
         "failed_count": failed,
+        "skipped_count": skipped,
+        "duplicate_count": duplicate_in_file,
         "missing_optional_count": missing_optional,
-        "duplicate_in_file_count": duplicate_in_file,
-        "source_row_count": len(raw_rows),
+        "source_row_count": len(mapped_rows),
         "target_table": mapping.target_table,
+        "source_type": source_type,
+        "connector_type": source_type,
+        "warnings": warnings,
     }
+    status = "SUCCESS" if inserted > 0 or len(mapped_rows) == 0 else "FAILED"
     if run:
-        run.run_status = "SUCCESS" if inserted > 0 or len(raw_rows) == 0 else "FAILED"
+        run.run_status = status
         run.finished_at = now
         run.result_summary = summary
-        if run.run_status == "FAILED":
+        if status == "FAILED":
             run.result_summary = {**summary, "error_message": "적재된 행이 없습니다."}
 
     return {
         "job_id": job_id,
-        "status": run.run_status if run else "SUCCESS",
+        "status": status,
         "inserted_count": inserted,
         "failed_count": failed,
         "result_summary": summary,
+        "source_type": source_type,
     }
 
 

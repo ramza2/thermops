@@ -70,6 +70,8 @@ docker compose ps
 | 단계 | 스크립트 | 설명 |
 |------|----------|------|
 | P0-1 CSV 적재 | `python scripts/test_csv_ingestion.py` | 열수요·기상 CSV → DB |
+| P1-3 DB Connector | `python scripts/test_db_connector.py` | PostgreSQL 적재 |
+| P1-3 API Connector | `python scripts/test_api_connector.py` | REST JSON API 적재 |
 | P0-2 품질 점검 | `python scripts/test_data_quality.py` | 결측·중복·이상치 |
 | P0-3 Feature | `python scripts/test_feature_build.py` | Feature Dataset 생성 |
 | P0-4-1 학습 | `python scripts/test_model_training.py` | LightGBM + MLflow |
@@ -315,6 +317,89 @@ curl "http://localhost:8000/api/v1/retraining-candidates?computed_only=true"
 ```powershell
 python scripts/apply_dev_migrations.py
 ```
+
+### DB/API 데이터소스 Connector (P1-3)
+
+CSV 외에 **PostgreSQL(`DB_POSTGRES`)** 및 **REST JSON API(`REST_API`)** 데이터소스를 등록·연결 테스트·스키마 탐색·미리보기·적재할 수 있습니다. 기존 CSV 적재(`FILE_CSV`/`CSV`)는 그대로 동작합니다.
+
+**지원 source_type**
+
+| source_type | 설명 |
+|-------------|------|
+| `CSV` / `FILE_CSV` | 로컬 CSV 파일 |
+| `DB_POSTGRES` | PostgreSQL 테이블 또는 SELECT 쿼리 |
+| `REST_API` | REST JSON GET API |
+
+**Connector 공통 흐름:** 연결 테스트 → 스키마 탐색 → 매핑 → 미리보기 → `POST /ingestion-jobs`
+
+**PostgreSQL connection_info 예시** (backend 컨테이너 기준 `host=postgres`):
+
+```json
+{
+  "host": "postgres",
+  "port": 5432,
+  "database": "thermops",
+  "schema": "public",
+  "table": "external_heat_demand_sample",
+  "username": "thermops",
+  "password": "thermops",
+  "query": null,
+  "timestamp_column": "measured_at"
+}
+```
+
+**REST API connection_info 예시** (개발용 sample endpoint, `item_path`는 API 응답 래퍼 `data.items`):
+
+```json
+{
+  "base_url": "http://127.0.0.1:8000/api/v1",
+  "endpoint": "/sample-external/heat-demand",
+  "method": "GET",
+  "query_params": { "start_at": "{start_at}", "end_at": "{end_at}" },
+  "auth_type": "NONE",
+  "item_path": "data.items"
+}
+```
+
+**개발용 테스트 리소스 (운영 기능 아님)**
+
+- DB: `external_heat_demand_sample`, `external_weather_sample` (`apply_dev_migrations.py`로 생성)
+- API: `GET /api/v1/sample-external/heat-demand`, `/sample-external/weather`
+
+**API**
+
+| 메서드 | 경로 | 설명 |
+|--------|------|------|
+| POST | `/data-sources/{id}/test-connection` | 연결 테스트 |
+| GET | `/data-sources/{id}/discover-schema` | 컬럼/JSON 필드 탐색 |
+| POST | `/data-sources/{id}/preview` | 원천 데이터 미리보기 |
+| POST | `/ingestion-jobs?source_id=...&start_at=...&end_at=...` | 적재 실행 |
+
+**Airflow `data_ingestion_dag` conf 예시** (DB/API source_id 사용):
+
+```json
+{
+  "source_id": "DS-XXXXXXXX",
+  "data_domain": "HEAT_DEMAND",
+  "start_at": "2026-05-22T00:00:00",
+  "end_at": "2026-05-23T23:00:00"
+}
+```
+
+**테스트**
+
+```powershell
+python scripts/apply_dev_migrations.py   # external_* 샘플 테이블
+python scripts/test_db_connector.py
+python scripts/test_api_connector.py
+```
+
+**보안·제한 (TODO)**
+
+- `connection_info`에 credential이 평문 저장될 수 있음 → 운영 시 secret manager/암호화 필요
+- DB `query`는 **SELECT만** 허용
+- REST API: OAuth/BASIC 미지원, 복잡한 pagination 미지원
+- SCADA/PI, Kafka/MQTT, 대용량 incremental loading은 후속 과제
 
 ### Airflow DAG 연동 테스트 (P0-7)
 

@@ -1,6 +1,8 @@
 from datetime import datetime
 from uuid import uuid4
 
+import asyncio
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -10,9 +12,10 @@ from app.core.response import ok, paged
 from app.core.time import utc_now
 from app.models.entities import DataQualityRun, DataSource
 from app.schemas.api import DataSourceCreate, DataSourceUpdate
-from app.services.csv_source_service import is_csv_source, test_csv_connection
+from app.services.connectors.base import ConnectorError
+from app.services.connectors.registry import get_connector
 from app.services.data_quality_service import QualityCheckParams, run_quality_check
-from app.services.ingestion_service import IngestionError, fail_ingestion_job, run_ingestion
+from app.services.ingestion_service import IngestionError, fail_ingestion_job, get_active_mapping, run_ingestion
 
 router = APIRouter(tags=["Data"])
 
@@ -107,23 +110,65 @@ async def test_connection(source_id: str, db: AsyncSession = Depends(get_db)):
             "sample_row_count": 0,
             "columns": [],
         })
-    if is_csv_source(s.source_type):
-        result = test_csv_connection(s.connection_info)
-        return ok({"source_id": source_id, **result})
-    return ok({
-        "source_id": source_id,
-        "success": False,
-        "message": "연결 테스트에 실패했습니다.",
-        "latency_ms": 0,
-        "error_message": "1단계 CSV 적재에서는 CSV/FILE_CSV 소스만 파일 연결 테스트를 지원합니다.",
-        "sample_row_count": 0,
-        "columns": [],
-    })
+    try:
+        result = await asyncio.to_thread(get_connector(s).test_connection, s)
+    except ConnectorError as exc:
+        return ok({
+            "source_id": source_id,
+            "success": False,
+            "message": "연결 테스트에 실패했습니다.",
+            "latency_ms": 0,
+            "error_message": str(exc),
+            "sample_row_count": 0,
+            "columns": [],
+        })
+    return ok({"source_id": source_id, **result})
+
+
+@router.get("/data-sources/{source_id}/discover-schema")
+async def discover_schema(source_id: str, db: AsyncSession = Depends(get_db)):
+    s = (await db.execute(select(DataSource).where(DataSource.data_source_id == source_id))).scalar_one_or_none()
+    if not s:
+        raise HTTPException(status_code=404, detail="NOT_FOUND")
+    try:
+        result = await asyncio.to_thread(get_connector(s).discover_schema, s)
+    except ConnectorError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return ok({"source_id": source_id, **result})
+
+
+@router.post("/data-sources/{source_id}/preview")
+async def preview_data_source(
+    source_id: str,
+    limit: int = Query(default=10, ge=1, le=100),
+    start_at: str | None = Query(default=None),
+    end_at: str | None = Query(default=None),
+    db: AsyncSession = Depends(get_db),
+):
+    s = (await db.execute(select(DataSource).where(DataSource.data_source_id == source_id))).scalar_one_or_none()
+    if not s:
+        raise HTTPException(status_code=404, detail="NOT_FOUND")
+    mapping = await get_active_mapping(db, source_id)
+    try:
+        result = await asyncio.to_thread(
+            get_connector(s).preview,
+            s,
+            mapping=mapping,
+            limit=limit,
+            start_at=_parse_optional_dt(start_at),
+            end_at=_parse_optional_dt(end_at),
+        )
+    except ConnectorError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return ok({"source_id": source_id, **result})
 
 
 @router.post("/ingestion-jobs")
 async def create_ingestion_job(
     source_id: str = Query(...),
+    start_at: str | None = Query(default=None),
+    end_at: str | None = Query(default=None),
+    limit: int | None = Query(default=None, ge=1, le=100000),
     db: AsyncSession = Depends(get_db),
 ):
     source = (await db.execute(select(DataSource).where(DataSource.data_source_id == source_id))).scalar_one_or_none()
@@ -142,7 +187,14 @@ async def create_ingestion_job(
     await db.flush()
 
     try:
-        result = await run_ingestion(db, source_id, job_id)
+        result = await run_ingestion(
+            db,
+            source_id,
+            job_id,
+            start_at=_parse_optional_dt(start_at),
+            end_at=_parse_optional_dt(end_at),
+            limit=limit,
+        )
         message = f"데이터 {result['inserted_count']}건이 적재되었습니다."
         if result.get("failed_count", 0) > 0:
             message += f" (실패 {result['failed_count']}건)"
@@ -151,6 +203,7 @@ async def create_ingestion_job(
             "status": result["status"],
             "inserted_count": result["inserted_count"],
             "failed_count": result["failed_count"],
+            "source_type": result.get("source_type"),
             "result_summary": result["result_summary"],
         }, message=message)
     except IngestionError as exc:

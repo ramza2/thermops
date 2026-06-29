@@ -7,7 +7,6 @@ from decimal import Decimal, InvalidOperation
 from typing import Any
 
 from app.models.entities import DataMapping, DataSource
-from app.services.csv_source_service import is_csv_source, read_csv_rows
 
 HEAT_TARGET = "heat_demand_actual"
 WEATHER_TARGET = "weather_observation"
@@ -47,7 +46,9 @@ def apply_mapping(raw_rows: list[dict[str, str]], mapping: DataMapping) -> list[
             tgt = rule.get("target_column")
             if not src or not tgt:
                 continue
-            row[tgt] = raw.get(src, "").strip() if raw.get(src) is not None else None
+            row[tgt] = raw.get(src)
+            if row[tgt] is not None and isinstance(row[tgt], str):
+                row[tgt] = row[tgt].strip()
         mapped.append(row)
     return mapped
 
@@ -99,13 +100,16 @@ def validate_mapping_rules(mapping: DataMapping, source: DataSource | None = Non
         if rule.get("required_yn") and not rule.get("source_column"):
             errors.append(f"필수 컬럼 {rule.get('target_column')}의 source_column이 비어 있습니다.")
 
-    if source and is_csv_source(source.source_type):
+    if source:
         try:
-            raw_rows, _ = read_csv_rows(source.connection_info)
+            from app.services.connectors.registry import get_connector
+
+            connector = get_connector(source)
+            raw_rows, _ = connector.fetch_rows(source, mapping=mapping, limit=20)
             if not raw_rows:
-                warnings.append("CSV 파일에 데이터 행이 없습니다.")
+                warnings.append("소스에서 데이터 행이 없습니다.")
             else:
-                preview = apply_mapping(raw_rows[:20], mapping)
+                preview = raw_rows[:20]
                 date_col = "measured_at"
                 for i, row in enumerate(preview[:5], start=1):
                     if date_col in row and _parse_datetime(row[date_col]) is None:
@@ -118,7 +122,7 @@ def validate_mapping_rules(mapping: DataMapping, source: DataSource | None = Non
                             if val not in (None, "") and _parse_decimal(val) is None:
                                 errors.append(f"{i}행 {col} 숫자 변환 불가: {val}")
         except Exception as exc:
-            errors.append(f"CSV 읽기 실패: {exc}")
+            errors.append(f"소스 읽기 실패: {exc}")
 
     if table == HEAT_TARGET and "supply_temp" not in mapped_targets:
         warnings.append("선택 컬럼 supply_temp가 매핑되지 않았습니다.")
@@ -133,16 +137,27 @@ def validate_mapping_rules(mapping: DataMapping, source: DataSource | None = Non
     }
 
 
-def preview_mapping_data(source: DataSource, mapping: DataMapping, limit: int = 10) -> list[dict[str, Any]]:
-    if not is_csv_source(source.source_type):
-        raise ValueError(f"지원하지 않는 소스 유형입니다: {source.source_type}")
+def preview_mapping_data(
+    source: DataSource,
+    mapping: DataMapping,
+    limit: int = 10,
+    start_at: datetime | None = None,
+    end_at: datetime | None = None,
+) -> list[dict[str, Any]]:
+    from app.services.connectors.registry import get_connector
 
-    raw_rows, _ = read_csv_rows(source.connection_info)
-    mapped = apply_mapping(raw_rows, mapping)[:limit]
-
+    connector = get_connector(source)
+    result = connector.preview(
+        source,
+        mapping=mapping,
+        limit=limit,
+        start_at=start_at,
+        end_at=end_at,
+    )
+    rows = result.get("rows") or []
     table = _target_table_key(mapping)
-    result: list[dict[str, Any]] = []
-    for row in mapped:
+    output: list[dict[str, Any]] = []
+    for row in rows:
         out: dict[str, Any] = {}
         for k, v in row.items():
             if k == "measured_at":
@@ -155,8 +170,8 @@ def preview_mapping_data(source: DataSource, mapping: DataMapping, limit: int = 
                 out[k] = v
         if table == WEATHER_TARGET and not out.get("data_type"):
             out["data_type"] = "OBSERVATION"
-        result.append(out)
-    return result
+        output.append(out)
+    return output
 
 
 def normalize_row_for_insert(row: dict[str, Any], mapping: DataMapping) -> dict[str, Any] | None:

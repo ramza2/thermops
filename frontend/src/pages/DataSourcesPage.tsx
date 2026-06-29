@@ -32,17 +32,38 @@ interface ConnectionTestResult {
 
 const EMPTY_FORM = {
   source_name: "",
-  source_type: "DB",
+  source_type: "DB_POSTGRES",
   data_domain: "HEAT_DEMAND",
-  host: "",
-  database: "",
-  table: "",
+  host: "postgres",
+  port: "5432",
+  database: "thermops",
+  schema: "public",
+  table: "external_heat_demand_sample",
+  username: "thermops",
+  password: "thermops",
+  query: "",
+  timestamp_column: "measured_at",
+  base_url: "http://localhost:8000/api/v1",
+  endpoint: "/sample-external/heat-demand",
+  method: "GET",
+  item_path: "data.items",
+  auth_type: "NONE",
+  api_key_header: "",
+  api_key: "",
   file_path: "data/samples/heat_demand_sample.csv",
   active_yn: true,
 };
 
 function isCsvType(t: string) {
   return t === "CSV" || t === "FILE_CSV";
+}
+
+function isDbType(t: string) {
+  return t === "DB_POSTGRES" || t === "DB";
+}
+
+function isApiType(t: string) {
+  return t === "REST_API" || t === "API";
 }
 
 function formFromSource(ds: DataSource) {
@@ -52,8 +73,21 @@ function formFromSource(ds: DataSource) {
     source_type: ds.source_type,
     data_domain: ds.data_domain,
     host: ci.host || "",
+    port: String(ci.port || "5432"),
     database: ci.database || "",
+    schema: ci.schema || "public",
     table: ci.table || "",
+    username: ci.username || "",
+    password: ci.password || "",
+    query: ci.query || "",
+    timestamp_column: ci.timestamp_column || "measured_at",
+    base_url: ci.base_url || "",
+    endpoint: ci.endpoint || "",
+    method: ci.method || "GET",
+    item_path: ci.item_path || "items",
+    auth_type: ci.auth_type || "NONE",
+    api_key_header: ci.api_key_header || "",
+    api_key: ci.api_key || "",
     file_path: ci.file_path || "",
     active_yn: ds.active_yn,
   };
@@ -67,7 +101,31 @@ function buildConnectionInfo(form: typeof EMPTY_FORM) {
       delimiter: ",",
     };
   }
-  return { host: form.host, database: form.database, table: form.table };
+  if (isApiType(form.source_type)) {
+    return {
+      base_url: form.base_url,
+      endpoint: form.endpoint,
+      method: form.method || "GET",
+      headers: {},
+      query_params: { start_at: "{start_at}", end_at: "{end_at}" },
+      auth_type: form.auth_type || "NONE",
+      api_key_header: form.api_key_header || null,
+      api_key: form.api_key || null,
+      item_path: form.item_path || "data.items",
+      pagination: { type: "NONE" },
+    };
+  }
+  return {
+    host: form.host,
+    port: Number(form.port || 5432),
+    database: form.database,
+    schema: form.schema || "public",
+    table: form.table,
+    username: form.username,
+    password: form.password,
+    query: form.query || null,
+    timestamp_column: form.timestamp_column || "measured_at",
+  };
 }
 
 export default function DataSourcesPage() {
@@ -229,7 +287,12 @@ export default function DataSourcesPage() {
         <div>
           <label className="block text-xs text-slate-500 mb-1">유형</label>
           <SelectInput value={form.source_type} onChange={(v) => setForm({ ...form, source_type: v })}
-            options={[{ value: "DB", label: "DB" }, { value: "CSV", label: "CSV" }, { value: "API", label: "API" }]} />
+            options={[
+              { value: "DB_POSTGRES", label: "PostgreSQL" },
+              { value: "REST_API", label: "REST API" },
+              { value: "CSV", label: "CSV" },
+              { value: "FILE_CSV", label: "FILE CSV" },
+            ]} />
         </div>
         <div>
           <label className="block text-xs text-slate-500 mb-1">도메인</label>
@@ -247,11 +310,34 @@ export default function DataSourcesPage() {
           <label className="block text-xs text-slate-500 mb-1">CSV 파일 경로</label>
           <TextInput value={form.file_path} onChange={(v) => setForm({ ...form, file_path: v })} placeholder="data/samples/heat_demand_sample.csv" />
         </div>
-      ) : (
+      ) : isApiType(form.source_type) ? (
         <>
           <div>
-            <label className="block text-xs text-slate-500 mb-1">호스트</label>
-            <TextInput value={form.host} onChange={(v) => setForm({ ...form, host: v })} placeholder="10.0.0.10" />
+            <label className="block text-xs text-slate-500 mb-1">Base URL</label>
+            <TextInput value={form.base_url} onChange={(v) => setForm({ ...form, base_url: v })} placeholder="http://localhost:8000/api/v1" />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs text-slate-500 mb-1">Endpoint</label>
+              <TextInput value={form.endpoint} onChange={(v) => setForm({ ...form, endpoint: v })} placeholder="/sample-external/heat-demand" />
+            </div>
+            <div>
+              <label className="block text-xs text-slate-500 mb-1">Item Path</label>
+              <TextInput value={form.item_path} onChange={(v) => setForm({ ...form, item_path: v })} placeholder="data.items" />
+            </div>
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs text-slate-500 mb-1">호스트</label>
+              <TextInput value={form.host} onChange={(v) => setForm({ ...form, host: v })} placeholder="postgres" />
+            </div>
+            <div>
+              <label className="block text-xs text-slate-500 mb-1">포트</label>
+              <TextInput value={form.port} onChange={(v) => setForm({ ...form, port: v })} />
+            </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -259,8 +345,28 @@ export default function DataSourcesPage() {
               <TextInput value={form.database} onChange={(v) => setForm({ ...form, database: v })} />
             </div>
             <div>
+              <label className="block text-xs text-slate-500 mb-1">스키마</label>
+              <TextInput value={form.schema} onChange={(v) => setForm({ ...form, schema: v })} />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
               <label className="block text-xs text-slate-500 mb-1">테이블</label>
               <TextInput value={form.table} onChange={(v) => setForm({ ...form, table: v })} />
+            </div>
+            <div>
+              <label className="block text-xs text-slate-500 mb-1">시간 컬럼</label>
+              <TextInput value={form.timestamp_column} onChange={(v) => setForm({ ...form, timestamp_column: v })} />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs text-slate-500 mb-1">사용자</label>
+              <TextInput value={form.username} onChange={(v) => setForm({ ...form, username: v })} />
+            </div>
+            <div>
+              <label className="block text-xs text-slate-500 mb-1">비밀번호</label>
+              <TextInput value={form.password} onChange={(v) => setForm({ ...form, password: v })} />
             </div>
           </div>
         </>

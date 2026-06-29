@@ -1,5 +1,7 @@
 from uuid import uuid4
 
+import asyncio
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -86,7 +88,7 @@ async def update_mapping(mapping_id: str, body: MappingUpdate, db: AsyncSession 
 async def validate_mapping(mapping_id: str, db: AsyncSession = Depends(get_db)):
     m = await _get_mapping(db, mapping_id)
     source = await _get_source(db, m.source_id)
-    return ok(validate_mapping_rules(m, source))
+    return ok(await asyncio.to_thread(validate_mapping_rules, m, source))
 
 
 @router.post("/{mapping_id}/preview")
@@ -94,7 +96,7 @@ async def preview_mapping(mapping_id: str, db: AsyncSession = Depends(get_db)):
     m = await _get_mapping(db, mapping_id)
     source = await _get_source(db, m.source_id)
     try:
-        rows = preview_mapping_data(source, m, limit=10)
+        rows = await asyncio.to_thread(preview_mapping_data, source, m, 10)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return ok({

@@ -12,6 +12,7 @@ from app.api.v1 import (
     monitoring,
     pipeline,
     prediction,
+    sample_external,
     system,
     training,
 )
@@ -37,6 +38,7 @@ api_prefix = settings.api_prefix
 app.include_router(dashboard.router, prefix=api_prefix)
 app.include_router(common.router, prefix=api_prefix)
 app.include_router(data.router, prefix=api_prefix)
+app.include_router(sample_external.router, prefix=api_prefix)
 app.include_router(mapping.router, prefix=api_prefix)
 app.include_router(feature.router, prefix=api_prefix)
 app.include_router(training.router, prefix=api_prefix)

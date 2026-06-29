@@ -81,6 +81,36 @@ MIGRATIONS = [
         "ix_heat_prediction_model_time",
         "CREATE INDEX IF NOT EXISTS ix_heat_prediction_model_time ON tb_heat_demand_prediction(model_version_id, target_at DESC);",
     ),
+    (
+        "external connector sample tables",
+        """
+        CREATE TABLE IF NOT EXISTS external_heat_demand_sample (
+            site_id VARCHAR(50) NOT NULL,
+            measured_at TIMESTAMP NOT NULL,
+            heat_demand NUMERIC(18,6) NOT NULL,
+            supply_temp NUMERIC(18,6)
+        );
+        CREATE TABLE IF NOT EXISTS external_weather_sample (
+            weather_area_id VARCHAR(50) NOT NULL,
+            measured_at TIMESTAMP NOT NULL,
+            temperature NUMERIC(18,6),
+            humidity NUMERIC(18,6),
+            rainfall NUMERIC(18,6),
+            wind_speed NUMERIC(18,6),
+            data_type VARCHAR(20) DEFAULT 'OBSERVATION'
+        );
+        INSERT INTO external_heat_demand_sample (site_id, measured_at, heat_demand, supply_temp)
+        SELECT site_id, measured_at, heat_demand, supply_temp
+        FROM tb_heat_demand_actual
+        WHERE NOT EXISTS (SELECT 1 FROM external_heat_demand_sample LIMIT 1)
+        LIMIT 500;
+        INSERT INTO external_weather_sample (weather_area_id, measured_at, temperature, humidity, rainfall, wind_speed, data_type)
+        SELECT weather_area_id, measured_at, temperature, humidity, rainfall, wind_speed, data_type
+        FROM tb_weather_observation
+        WHERE NOT EXISTS (SELECT 1 FROM external_weather_sample LIMIT 1)
+        LIMIT 500;
+        """,
+    ),
 ]
 
 

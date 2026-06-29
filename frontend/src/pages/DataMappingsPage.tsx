@@ -54,6 +54,8 @@ export default function DataMappingsPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
+  const [discovering, setDiscovering] = useState(false);
+  const [discoveredFields, setDiscoveredFields] = useState<string[]>([]);
 
   const load = async (p = page) => {
     setLoading(true);
@@ -144,6 +146,40 @@ export default function DataMappingsPage() {
     }
   };
 
+  const handleDiscoverSchema = async () => {
+    if (!form.source_id) {
+      showToast("warning", "데이터 소스를 선택하세요.");
+      return;
+    }
+    setDiscovering(true);
+    try {
+      const res = await fetchApi<{ fields: { name: string }[]; columns?: { name: string }[] }>(
+        `/data-sources/${encodeURIComponent(form.source_id)}/discover-schema`,
+      );
+      const names = (res.fields || res.columns || []).map((f) => f.name).filter(Boolean);
+      setDiscoveredFields(names);
+      if (names.length) {
+        const existing = new Set(form.columns.map((c) => c.source_column).filter(Boolean));
+        const newCols = names
+          .filter((n) => !existing.has(n))
+          .map((n) => ({ source_column: n, target_column: "", required_yn: false }));
+        if (newCols.length) {
+          setForm({
+            ...form,
+            columns: [...form.columns.filter((c) => c.source_column || c.target_column), ...newCols],
+          });
+        }
+        showToast("success", `스키마 탐색 완료: ${names.length}개 필드`);
+      } else {
+        showToast("warning", "탐색된 필드가 없습니다.");
+      }
+    } catch {
+      showToast("error", "스키마 탐색에 실패했습니다.");
+    } finally {
+      setDiscovering(false);
+    }
+  };
+
   const handlePreview = async (row: Mapping) => {
     try {
       const res = await postApi<{ preview_rows: Record<string, unknown>[] }>(`/mappings/${row.mapping_id}/preview`);
@@ -226,7 +262,17 @@ export default function DataMappingsPage() {
             </div>
           </div>
           <div>
-            <label className="block text-xs text-slate-500 mb-2">컬럼 매핑</label>
+            <div className="flex items-center justify-between mb-2">
+              <label className="block text-xs text-slate-500">컬럼 매핑</label>
+              <Button variant="secondary" disabled={discovering || !form.source_id} onClick={handleDiscoverSchema}>
+                {discovering ? "탐색 중..." : "스키마 탐색"}
+              </Button>
+            </div>
+            {discoveredFields.length > 0 && (
+              <p className="text-xs text-slate-500 mb-2">
+                탐색된 필드: {discoveredFields.join(", ")}
+              </p>
+            )}
             {form.columns.map((col, idx) => (
               <div key={idx} className="grid grid-cols-2 gap-2 mb-2">
                 <TextInput
