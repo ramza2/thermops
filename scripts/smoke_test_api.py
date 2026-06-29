@@ -27,10 +27,14 @@ ENDPOINTS = [
 ]
 
 
+SLOW_ENDPOINTS = {"/api/v1/predictions", "/api/v1/pipeline-runs"}
+
+
 def check(path: str) -> tuple[bool, int | str]:
     url = f"{BASE_URL}{path}"
+    timeout = 60 if path in SLOW_ENDPOINTS else 10
     try:
-        with urllib.request.urlopen(url, timeout=10) as resp:
+        with urllib.request.urlopen(url, timeout=timeout) as resp:
             return resp.status == 200, resp.status
     except urllib.error.HTTPError as e:
         return False, e.code

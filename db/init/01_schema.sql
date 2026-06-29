@@ -338,7 +338,8 @@ CREATE TABLE IF NOT EXISTS tb_pipeline_run (
     run_status VARCHAR(20) NOT NULL,
     started_at TIMESTAMP NOT NULL,
     finished_at TIMESTAMP,
-    message TEXT
+    message TEXT,
+    result_summary JSONB
 );
 
 CREATE INDEX IF NOT EXISTS ix_pipeline_run ON tb_pipeline_run(pipeline_type, run_status, started_at DESC);

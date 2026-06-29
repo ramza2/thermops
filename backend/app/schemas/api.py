@@ -136,6 +136,13 @@ class PipelineTrigger(BaseModel):
     parameters: dict[str, Any] | None = None
 
 
+class PipelineRunStatusUpdate(BaseModel):
+    status: str
+    step_name: str | None = None
+    message: str | None = None
+    result_summary: dict[str, Any] | None = None
+
+
 # Drift
 class DriftCheckCreate(BaseModel):
     model_version_id: str | None = None

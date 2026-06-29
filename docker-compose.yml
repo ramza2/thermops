@@ -62,6 +62,9 @@ services:
       GIT_PYTHON_REFRESH: quiet
       CORS_ORIGINS: http://localhost:5173,http://localhost:3000
       THERMOPS_PROJECT_ROOT: /workspace
+      AIRFLOW_BASE_URL: http://airflow:8080
+      AIRFLOW_USERNAME: admin
+      AIRFLOW_PASSWORD: admin
     ports:
       - "8000:8000"
     volumes:
@@ -105,8 +108,11 @@ services:
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://thermops:thermops@postgres:5432/thermops_airflow
       AIRFLOW__CORE__LOAD_EXAMPLES: "false"
       AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "true"
+      AIRFLOW__API__AUTH_BACKENDS: airflow.api.auth.backend.basic_auth,airflow.api.auth.backend.session
       THERMOps_DB_URL: postgresql://thermops:thermops@postgres:5432/thermops
       MLFLOW_TRACKING_URI: http://mlflow:5000
+      THERMOPS_BACKEND_BASE_URL: http://backend:8000/api/v1
+      THERMOPS_BACKEND_TIMEOUT: "300"
     ports:
       - "8080:8080"
     volumes:
@@ -117,6 +123,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      backend:
+        condition: service_started
     command: ["bash", "/opt/airflow/entrypoint.sh"]
 
 volumes:

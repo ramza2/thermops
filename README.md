@@ -47,6 +47,81 @@ docker compose ps
 
 **첫 기동 시 참고:** Airflow 웹서버는 DB 마이그레이션 후 약 30~60초 후 `http://localhost:8080` 에 응답합니다. MLflow는 `psycopg2` 설치 후 기동됩니다.
 
+**기존 DB 볼륨 사용 시:** 스키마 변경(`tb_pipeline_run.result_summary` 등)을 반영하려면 아래를 실행합니다.
+
+```powershell
+python scripts/apply_dev_migrations.py
+```
+
+## P0 전체 실행 절차
+
+P0 MLOps 루프: **적재 → 품질 → Feature → 학습 → 예측 → 평가 → Airflow 오케스트레이션**
+
+### 1. Docker 전체 기동
+
+```powershell
+docker compose up -d --build
+python scripts/apply_dev_migrations.py   # 기존 볼륨 사용 시
+docker compose ps
+```
+
+### 2. 단계별 API 검증 (순서 권장)
+
+| 단계 | 스크립트 | 설명 |
+|------|----------|------|
+| P0-1 CSV 적재 | `python scripts/test_csv_ingestion.py` | 열수요·기상 CSV → DB |
+| P0-2 품질 점검 | `python scripts/test_data_quality.py` | 결측·중복·이상치 |
+| P0-3 Feature | `python scripts/test_feature_build.py` | Feature Dataset 생성 |
+| P0-4-1 학습 | `python scripts/test_model_training.py` | LightGBM + MLflow |
+| P0-5 예측 | `python scripts/test_batch_prediction.py` | 배치 예측 DB 저장 |
+| P0-6 평가 | `python scripts/test_prediction_evaluation.py` | 예측↔실적 매칭 |
+
+### 3. Airflow 개별 DAG / Full Pipeline
+
+```powershell
+# 짧은 DAG (품질 점검, 수 초~수십 초)
+python scripts/test_airflow_pipeline.py
+
+# 전체 파이프라인 E2E (학습 포함, 5~20분 소요 가능)
+python scripts/test_full_pipeline_airflow.py
+```
+
+Full Pipeline API 수동 실행:
+
+```powershell
+curl -X POST "http://localhost:8000/api/v1/pipelines/thermops_full_pipeline_dag/trigger" ^
+  -H "Content-Type: application/json" ^
+  -d "{\"business_date\":\"2026-06-20\",\"parameters\":{\"source_id\":\"DS-CSV-001\",\"feature_set_id\":\"FS-TPL-LAG-ROLL\",\"config_id\":\"TRC-TPL-LAG-ROLL\",\"model_name\":\"heat_demand_lightgbm\"}}"
+```
+
+### 4. P0 최종 검증 (전체 테스트)
+
+```powershell
+python scripts/test_system_config.py
+python scripts/test_performance_eval_type.py
+python scripts/test_prediction_trend.py
+python scripts/test_csv_ingestion.py
+python scripts/test_data_quality.py
+python scripts/test_feature_build.py
+python scripts/test_model_training.py
+python scripts/test_batch_prediction.py
+python scripts/test_prediction_evaluation.py
+python scripts/test_airflow_pipeline.py
+python scripts/test_full_pipeline_airflow.py
+python scripts/smoke_test_api.py
+cd frontend && npm run build
+```
+
+### 5. 주요 URL
+
+| 서비스 | URL |
+|--------|-----|
+| Frontend | http://localhost:5173 |
+| Backend Docs | http://localhost:8000/docs |
+| Airflow | http://localhost:8080 (admin / admin) |
+| MLflow | http://localhost:5000 |
+| MinIO Console | http://localhost:9001 (minioadmin / minioadmin) |
+
 ### API 스모크 테스트
 
 백엔드가 기동된 상태에서:
@@ -152,6 +227,39 @@ python scripts/test_prediction_trend.py
 curl "http://localhost:8000/api/v1/dashboard/prediction-trend?start_at=2026-06-01T00:00:00&end_at=2026-06-07T23:59:59"
 ```
 
+### Airflow DAG 연동 테스트 (P0-7)
+
+파이프라인 수동 실행 시 **Backend → Airflow REST trigger → DAG → Backend API** 흐름을 검증합니다.
+
+**Airflow UI:** http://localhost:8080 (admin / admin)
+
+기동 직후 DAG 목록 반영까지 **30~60초** 걸릴 수 있습니다. DAG가 보이지 않으면:
+
+```powershell
+docker compose restart airflow
+docker compose logs airflow --tail 50
+```
+
+파이프라인 수동 실행 (API):
+
+```powershell
+curl -X POST "http://localhost:8000/api/v1/pipelines/data_quality_dag/trigger" -H "Content-Type: application/json" -d "{\"business_date\":\"2026-06-20\"}"
+```
+
+통합 테스트 (짧은 DAG `data_quality_dag` 권장):
+
+```powershell
+python scripts/test_airflow_pipeline.py
+```
+
+전체 파이프라인 E2E (`thermops_full_pipeline_dag`, **5~20분** 소요 가능):
+
+```powershell
+python scripts/test_full_pipeline_airflow.py
+```
+
+환경 변수로 polling timeout 조정: `FULL_PIPELINE_POLL_TIMEOUT=1200` (초)
+
 ### CSV 적재 테스트 (P0-1)
 
 ```powershell
@@ -217,6 +325,7 @@ docker compose up -d --build frontend
 | Airflow `Exited (1)` — db init 오류 | `thermops_airflow` DB 마이그레이션 실패 | `docker compose up -d --build airflow` 재시도. 지속 시 `docker compose down -v` 후 재기동(DB 초기화) |
 | Airflow UI 접속 불가 (연결 거부) | 웹서버 기동 대기 중 | 1분 정도 대기 후 `http://localhost:8080` 재접속 |
 | 프론트 변경이 반영되지 않음 | Vite env는 빌드/기동 시점에 주입 | `docker compose up -d --build frontend` |
+| pipeline_run result_summary 오류 | 기존 DB 볼륨에 컬럼 없음 | `python scripts/apply_dev_migrations.py` |
 | `thermops_airflow` DB 없음 | postgres 볼륨이 init 스크립트 이전에 생성됨 | `docker compose down -v` 후 `docker compose up -d --build` |
 
 ```powershell

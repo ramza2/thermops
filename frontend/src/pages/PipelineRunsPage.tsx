@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { RefreshCw, Eye, Play } from "lucide-react";
 import { fetchApi, postApi, PagedData } from "@/api/client";
 import { Button } from "@/components/Button";
@@ -19,16 +19,30 @@ interface PipelineRun {
   pipeline_name: string;
   pipeline_type: string;
   run_status: string;
+  orchestrator?: string;
+  orchestrator_run_id: string | null;
   started_at: string;
   finished_at: string | null;
   duration_minutes: number | null;
   message: string | null;
+  result_summary?: Record<string, unknown> | null;
+  sync_warning?: string;
 }
 
 interface Pipeline {
   pipeline_id: string;
   name: string;
   type: string;
+  description?: string;
+  last_run_status?: string | null;
+  source?: string;
+}
+
+interface TriggerResponse {
+  pipeline_run_id: string;
+  orchestrator_run_id?: string | null;
+  dag_run_id?: string | null;
+  status: string;
 }
 
 export default function PipelineRunsPage() {
@@ -47,6 +61,7 @@ export default function PipelineRunsPage() {
   const [triggering, setTriggering] = useState(false);
   const [permissionDenied, setPermissionDenied] = useState(false);
   const [dateRange, setDateRange] = useState(defaultDateRange(14));
+  const [autoRefresh, setAutoRefresh] = useState(true);
 
   const filterByDate = (rows: PipelineRun[]) => {
     if (!dateRange.from && !dateRange.to) return rows;
@@ -70,12 +85,12 @@ export default function PipelineRunsPage() {
     };
   };
 
-  const load = async (p = page) => {
+  const load = useCallback(async (p = page) => {
     setLoading(true);
     setError("");
     try {
       const [runsRes, pipesRes] = await Promise.all([
-        fetchApi<PagedData<PipelineRun>>("/pipeline-runs", { page: 1, size: 200 }),
+        fetchApi<PagedData<PipelineRun>>("/pipeline-runs", { page: 1, size: 200, sync_airflow: true }),
         fetchApi<Pipeline[]>("/pipelines"),
       ]);
       setAllItems(runsRes.items);
@@ -88,9 +103,17 @@ export default function PipelineRunsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [dateRange, page]);
 
   useEffect(() => { load(page); }, []);
+
+  useEffect(() => {
+    if (!autoRefresh) return undefined;
+    const hasActive = allItems.some((r) => r.run_status === "QUEUED" || r.run_status === "RUNNING");
+    if (!hasActive) return undefined;
+    const timer = setInterval(() => load(page), 10000);
+    return () => clearInterval(timer);
+  }, [autoRefresh, allItems, load, page]);
 
   const applyFilter = (p = 1) => {
     const { pageItems, totalPages: tp } = paginate(allItems, p);
@@ -102,9 +125,10 @@ export default function PipelineRunsPage() {
   const handleRetry = async (row: PipelineRun) => {
     setRetrying(row.pipeline_run_id);
     try {
-      const res = await postApi<{ pipeline_run_id: string }>(`/pipeline-runs/${row.pipeline_run_id}/retry`);
-      showToast("success", `재시도가 요청되었습니다. (${res.pipeline_run_id})`);
-      load(page);
+      const res = await postApi<TriggerResponse>(`/pipeline-runs/${row.pipeline_run_id}/retry`);
+      showToast("success", `재시도 요청 (${res.pipeline_run_id})`);
+      load(1);
+      setPage(1);
     } catch {
       showToast("error", "재시도에 실패했습니다. 실패 상태인 작업만 재시도할 수 있습니다.");
     } finally {
@@ -114,7 +138,7 @@ export default function PipelineRunsPage() {
 
   const handleDetail = async (row: PipelineRun) => {
     try {
-      const res = await fetchApi<PipelineRun>(`/pipeline-runs/${row.pipeline_run_id}`);
+      const res = await fetchApi<PipelineRun>(`/pipeline-runs/${row.pipeline_run_id}`, { sync_airflow: true });
       setDetail(res);
     } catch {
       setDetail(row);
@@ -125,10 +149,11 @@ export default function PipelineRunsPage() {
     if (!triggerTarget) return;
     setTriggering(true);
     try {
-      await postApi(`/pipelines/${encodeURIComponent(triggerTarget.pipeline_id)}/trigger`, {
+      const res = await postApi<TriggerResponse>(`/pipelines/${encodeURIComponent(triggerTarget.pipeline_id)}/trigger`, {
         business_date: dateRange.to || new Date().toISOString().slice(0, 10),
       });
-      showToast("success", "파이프라인 실행이 요청되었습니다.");
+      const dagId = res.orchestrator_run_id || res.dag_run_id || res.pipeline_run_id;
+      showToast("success", `Airflow 실행 요청 (${dagId})`);
       setTriggerTarget(null);
       load(1);
       setPage(1);
@@ -159,10 +184,21 @@ export default function PipelineRunsPage() {
           { label: "운영 관리", path: "/ops/pipeline-runs" },
           { label: "파이프라인 실행 이력" },
         ]}
+        actions={
+          <Button variant="secondary" icon={<RefreshCw className="w-4 h-4" />} onClick={() => load(page)}>
+            새로고침
+          </Button>
+        }
       />
 
       <div className="bg-white rounded-lg border border-slate-200 p-4 mb-4 shadow-sm">
-        <h3 className="text-sm font-semibold text-slate-800 mb-3">파이프라인 목록</h3>
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-semibold text-slate-800">파이프라인 목록</h3>
+          <label className="text-xs text-slate-500 flex items-center gap-2">
+            <input type="checkbox" checked={autoRefresh} onChange={(e) => setAutoRefresh(e.target.checked)} />
+            실행 중 자동 새로고침 (10초)
+          </label>
+        </div>
         <div className="flex flex-wrap gap-2">
           {pipelines.map((p) => (
             <Button key={p.pipeline_id} variant="secondary" icon={<Play className="w-3 h-3" />}
@@ -177,6 +213,7 @@ export default function PipelineRunsPage() {
         fields={[
           {
             label: "실행 기간",
+            colSpan: 2,
             element: <DateRangePicker from={dateRange.from} to={dateRange.to} onChange={(from, to) => setDateRange({ from, to })} />,
           },
         ]}
@@ -191,6 +228,11 @@ export default function PipelineRunsPage() {
           { key: "pipeline_name", header: "파이프라인" },
           { key: "pipeline_type", header: "유형" },
           { key: "run_status", header: "상태", render: (r) => <StatusBadge status={r.run_status as string} /> },
+          {
+            key: "orchestrator_run_id",
+            header: "Airflow Run",
+            render: (r) => (r.orchestrator_run_id as string) || "-",
+          },
           { key: "started_at", header: "시작", render: (r) => new Date(r.started_at as string).toLocaleString("ko-KR") },
           { key: "duration_minutes", header: "소요(분)", render: (r) => r.duration_minutes != null ? String(r.duration_minutes) : "-" },
           {
@@ -220,12 +262,26 @@ export default function PipelineRunsPage() {
         {detail && (
           <dl className="grid grid-cols-2 gap-3 text-sm">
             <div><dt className="text-slate-500">Run ID</dt><dd className="font-medium">{detail.pipeline_run_id}</dd></div>
+            <div><dt className="text-slate-500">Airflow dag_run_id</dt><dd className="font-medium break-all">{detail.orchestrator_run_id || "-"}</dd></div>
             <div><dt className="text-slate-500">파이프라인</dt><dd className="font-medium">{detail.pipeline_name}</dd></div>
             <div><dt className="text-slate-500">유형</dt><dd>{detail.pipeline_type}</dd></div>
             <div><dt className="text-slate-500">상태</dt><dd><StatusBadge status={detail.run_status} /></dd></div>
             <div><dt className="text-slate-500">시작</dt><dd>{new Date(detail.started_at).toLocaleString("ko-KR")}</dd></div>
             <div><dt className="text-slate-500">종료</dt><dd>{detail.finished_at ? new Date(detail.finished_at).toLocaleString("ko-KR") : "-"}</dd></div>
             <div className="col-span-2"><dt className="text-slate-500">메시지</dt><dd className="mt-1 text-slate-700">{detail.message || "-"}</dd></div>
+            {detail.sync_warning && (
+              <div className="col-span-2"><dt className="text-slate-500">동기화 경고</dt><dd className="mt-1 text-amber-600 text-xs">{detail.sync_warning}</dd></div>
+            )}
+            {detail.result_summary && (
+              <div className="col-span-2">
+                <dt className="text-slate-500 mb-1">결과 요약</dt>
+                <dd>
+                  <pre className="text-xs bg-slate-50 border rounded p-3 overflow-auto max-h-64">
+                    {JSON.stringify(detail.result_summary, null, 2)}
+                  </pre>
+                </dd>
+              </div>
+            )}
           </dl>
         )}
       </Modal>
@@ -234,12 +290,15 @@ export default function PipelineRunsPage() {
         footer={<>
           <Button variant="secondary" onClick={() => setTriggerTarget(null)}>취소</Button>
           <Button icon={<Play className="w-4 h-4" />} onClick={handleTrigger} disabled={triggering}>
-            {triggering ? "실행 중..." : "실행"}
+            {triggering ? "실행 중..." : "Airflow 실행"}
           </Button>
         </>}>
         <p className="text-sm text-slate-600">
-          <strong>{triggerTarget?.name}</strong> 파이프라인을 수동 실행하시겠습니까?
+          <strong>{triggerTarget?.name}</strong> 파이프라인을 Airflow로 수동 실행하시겠습니까?
         </p>
+        {triggerTarget?.description && (
+          <p className="text-xs text-slate-400 mt-1">{triggerTarget.description}</p>
+        )}
         <p className="text-xs text-slate-400 mt-2">기준일: {dateRange.to || "오늘"}</p>
       </Modal>
 
