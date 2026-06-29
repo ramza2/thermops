@@ -341,6 +341,12 @@ CREATE TABLE IF NOT EXISTS tb_retraining_candidate (
     drift_report_id VARCHAR(80),
     metric_snapshot_json JSONB,
     source_type VARCHAR(20),
+    training_job_id VARCHAR(80),
+    new_model_version_id VARCHAR(80),
+    mlflow_run_id VARCHAR(80),
+    trained_at TIMESTAMP,
+    train_result_summary JSONB,
+    error_message TEXT,
     status VARCHAR(20) NOT NULL DEFAULT 'PENDING',
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP

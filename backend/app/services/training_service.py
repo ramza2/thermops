@@ -41,6 +41,7 @@ class TrainingJobParams:
     validation_end_at: date | None = None
     register_model_yn: bool = True
     triggered_by: str | None = None
+    model_name_override: str | None = None
 
 
 def _load_ml_modules():
@@ -283,7 +284,7 @@ async def run_training_job(db: AsyncSession, params: TrainingJobParams) -> dict[
         if not records:
             raise ValueError("학습 조건에 맞는 Feature Dataset 행이 없습니다.")
 
-        result, model_name, mlflow_run_id, artifact_uri, mlflow_warnings = await asyncio.to_thread(
+        result, default_model_name, mlflow_run_id, artifact_uri, mlflow_warnings = await asyncio.to_thread(
             _run_training_sync,
             records,
             feature_names,
@@ -295,6 +296,8 @@ async def run_training_job(db: AsyncSession, params: TrainingJobParams) -> dict[
         )
         warnings.extend(result.warnings)
         warnings.extend(mlflow_warnings)
+
+        model_name = params.model_name_override or default_model_name
 
         version_no = await _next_version_no(db, model_name)
         model_version_id = f"MV-{model_name}-{version_no}"[:80]

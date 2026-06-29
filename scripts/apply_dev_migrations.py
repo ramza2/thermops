@@ -56,6 +56,17 @@ MIGRATIONS = [
         UPDATE tb_retraining_candidate SET source_type = 'SEED' WHERE source_type IS NULL;
         """,
     ),
+    (
+        "tb_retraining_candidate P1-2 train columns",
+        """
+        ALTER TABLE tb_retraining_candidate ADD COLUMN IF NOT EXISTS training_job_id VARCHAR(80);
+        ALTER TABLE tb_retraining_candidate ADD COLUMN IF NOT EXISTS new_model_version_id VARCHAR(80);
+        ALTER TABLE tb_retraining_candidate ADD COLUMN IF NOT EXISTS mlflow_run_id VARCHAR(80);
+        ALTER TABLE tb_retraining_candidate ADD COLUMN IF NOT EXISTS trained_at TIMESTAMP;
+        ALTER TABLE tb_retraining_candidate ADD COLUMN IF NOT EXISTS train_result_summary JSONB;
+        ALTER TABLE tb_retraining_candidate ADD COLUMN IF NOT EXISTS error_message TEXT;
+        """,
+    ),
 ]
 
 

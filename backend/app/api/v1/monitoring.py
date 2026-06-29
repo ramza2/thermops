@@ -25,6 +25,7 @@ from app.services.drift_detection_service import (
     retraining_candidate_to_dict,
     run_drift_detection,
 )
+from app.services.retraining_candidate_service import train_retraining_candidate
 from app.services.prediction_evaluation_service import EVAL_TYPE_PREDICTION, EVAL_TYPE_TRAINING
 
 router = APIRouter(tags=["Monitoring"])
@@ -306,7 +307,6 @@ async def approve_retraining_candidate(candidate_id: str, db: AsyncSession = Dep
     row.status = "APPROVED"
     row.updated_at = utc_now()
     await db.commit()
-    # TODO(P1-2): 승인 후보 기반 training job 자동 생성
     return ok(retraining_candidate_to_dict(row), message="재학습 후보가 승인되었습니다.")
 
 
@@ -323,3 +323,24 @@ async def reject_retraining_candidate(candidate_id: str, db: AsyncSession = Depe
     row.updated_at = utc_now()
     await db.commit()
     return ok(retraining_candidate_to_dict(row), message="재학습 후보가 반려되었습니다.")
+
+
+@router.post("/retraining-candidates/{candidate_id}/train")
+async def train_retraining_candidate_endpoint(candidate_id: str, db: AsyncSession = Depends(get_db)):
+  # TODO(P1-3): APPROVED candidate → Airflow retraining_dag trigger, 완료 후 TRAINED 갱신
+    try:
+        result = await train_retraining_candidate(db, candidate_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except PermissionError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+    if result.get("status") != "SUCCESS":
+        raise HTTPException(
+            status_code=400,
+            detail=result.get("candidate", {}).get("error_message", "모델 학습 실패"),
+        )
+
+    return ok(result, message="재학습이 완료되었습니다.")

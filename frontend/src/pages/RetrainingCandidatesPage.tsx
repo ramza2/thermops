@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
-import { Check, X } from "lucide-react";
+import { Check, Eye, Play, X } from "lucide-react";
 import { fetchApi, postApi } from "@/api/client";
 import { Button } from "@/components/Button";
 import { DataTable } from "@/components/DataTable";
+import { Modal } from "@/components/Modal";
 import { StatusBadge } from "@/components/StatusBadge";
 import { LoadingState, ErrorState } from "@/components/Pagination";
 import { useToast } from "@/hooks/useToast";
@@ -14,6 +15,7 @@ type SourceFilter = "computed" | "all" | "seed";
 interface RetrainingCandidate {
   candidate_id: string;
   model_version_id: string | null;
+  new_model_version_id: string | null;
   feature_set_id: string | null;
   model_name: string;
   model_version: string;
@@ -25,6 +27,11 @@ interface RetrainingCandidate {
   status: string;
   source_type: string;
   drift_report_id: string | null;
+  training_job_id: string | null;
+  mlflow_run_id: string | null;
+  trained_at: string | null;
+  train_result_summary: Record<string, unknown> | null;
+  error_message: string | null;
   metric_snapshot_json: Record<string, unknown> | null;
   created_at: string;
 }
@@ -64,6 +71,7 @@ export default function RetrainingCandidatesPage() {
   const [error, setError] = useState("");
   const [acting, setActing] = useState<string | null>(null);
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>("computed");
+  const [detail, setDetail] = useState<RetrainingCandidate | null>(null);
 
   const load = useCallback(async (filter = sourceFilter) => {
     setLoading(true);
@@ -87,7 +95,7 @@ export default function RetrainingCandidatesPage() {
     setActing(candidateId);
     try {
       await postApi(`/retraining-candidates/${candidateId}/approve`, {});
-      showToast("success", "재학습 후보가 승인되었습니다. (실제 학습 실행은 후속 단계)");
+      showToast("success", "재학습 후보가 승인되었습니다.");
       load(sourceFilter);
     } catch {
       showToast("error", "승인 처리에 실패했습니다.");
@@ -109,7 +117,68 @@ export default function RetrainingCandidatesPage() {
     }
   };
 
+  const handleTrain = async (candidateId: string) => {
+    setActing(candidateId);
+    try {
+      const res = await postApi<{
+        candidate: RetrainingCandidate;
+        model_version: { model_version_id: string };
+      }>(`/retraining-candidates/${candidateId}/train`, {});
+      showToast(
+        "success",
+        `재학습 완료: ${res.model_version?.model_version_id || res.candidate?.new_model_version_id}`,
+      );
+      load(sourceFilter);
+    } catch {
+      showToast("error", "재학습 실행에 실패했습니다.");
+    } finally {
+      setActing(null);
+    }
+  };
+
   const showSeedNotice = sourceFilter !== "computed" && items.some((i) => i.source_type === "SEED");
+
+  const renderActions = (row: RetrainingCandidate) => {
+    if (!canEdit) return <span className="text-xs text-slate-400">권한 없음</span>;
+    if (row.source_type === "SEED") {
+      return <span className="text-xs text-slate-400">시드(학습 불가)</span>;
+    }
+    if (row.status === "PENDING" || row.status === "REVIEW") {
+      return (
+        <div className="flex gap-1 flex-wrap">
+          <Button variant="secondary" icon={<Check className="w-3 h-3" />} disabled={acting === row.candidate_id} onClick={(e) => { e.stopPropagation(); handleApprove(row.candidate_id); }}>승인</Button>
+          <Button variant="secondary" icon={<X className="w-3 h-3" />} disabled={acting === row.candidate_id} onClick={(e) => { e.stopPropagation(); handleReject(row.candidate_id); }}>반려</Button>
+        </div>
+      );
+    }
+    if (row.status === "APPROVED" && row.source_type === "COMPUTED") {
+      return (
+        <Button variant="secondary" icon={<Play className="w-3 h-3" />} disabled={acting === row.candidate_id} onClick={(e) => { e.stopPropagation(); handleTrain(row.candidate_id); }}>
+          재학습 실행
+        </Button>
+      );
+    }
+    if (row.status === "TRAINING") {
+      return <span className="text-xs text-blue-600">학습 진행 중</span>;
+    }
+    if (row.status === "TRAINED") {
+      return (
+        <div className="text-xs text-slate-600 space-y-0.5">
+          <div>{row.training_job_id}</div>
+          <div>{row.new_model_version_id}</div>
+          <Button variant="secondary" icon={<Eye className="w-3 h-3" />} onClick={(e) => { e.stopPropagation(); setDetail(row); }}>결과</Button>
+        </div>
+      );
+    }
+    if (row.status === "FAILED") {
+      return (
+        <div className="text-xs text-red-600 max-w-[200px] truncate" title={row.error_message || ""}>
+          {row.error_message || "학습 실패"}
+        </div>
+      );
+    }
+    return <span className="text-xs text-slate-500">{row.status}</span>;
+  };
 
   if (loading) return <LoadingState />;
   if (error) return <ErrorState message={error} onRetry={() => load()} />;
@@ -118,92 +187,48 @@ export default function RetrainingCandidatesPage() {
     <div>
       <PageHeader
         title="재학습 후보 관리"
-        description="Drift·성능 저하로 자동 생성된 재학습 후보를 검토하고 승인/반려합니다."
+        description="Drift·성능 저하로 자동 생성된 재학습 후보를 검토하고 승인 후 재학습을 실행합니다."
       />
 
       <div className="flex flex-wrap gap-2 mb-4">
-        <Button variant={sourceFilter === "computed" ? "primary" : "secondary"} onClick={() => setSourceFilter("computed")}>
-          자동 산출만
-        </Button>
-        <Button variant={sourceFilter === "all" ? "primary" : "secondary"} onClick={() => setSourceFilter("all")}>
-          전체
-        </Button>
-        <Button variant={sourceFilter === "seed" ? "primary" : "secondary"} onClick={() => setSourceFilter("seed")}>
-          Seed/Sample
-        </Button>
+        <Button variant={sourceFilter === "computed" ? "primary" : "secondary"} onClick={() => setSourceFilter("computed")}>자동 산출만</Button>
+        <Button variant={sourceFilter === "all" ? "primary" : "secondary"} onClick={() => setSourceFilter("all")}>전체</Button>
+        <Button variant={sourceFilter === "seed" ? "primary" : "secondary"} onClick={() => setSourceFilter("seed")}>Seed/Sample</Button>
       </div>
 
       {showSeedNotice && (
         <p className="mb-4 text-sm text-amber-700 bg-amber-50 border border-amber-100 rounded px-3 py-2">
-          샘플/시드 후보는 시연용이며 Drift 감지로 자동 산출된 운영 후보가 아닙니다.
+          샘플/시드 후보는 시연용이며 Drift 감지로 자동 산출된 운영 후보가 아닙니다. 재학습 실행은 불가합니다.
         </p>
       )}
 
       <DataTable
         columns={[
           { key: "candidate_id", header: "후보 ID" },
-          {
-            key: "source_type",
-            header: "구분",
-            render: (r) => <SourceTypeBadge sourceType={(r.source_type as string) || "SEED"} />,
-          },
-          {
-            key: "model_name",
-            header: "모델",
-            render: (r) => `${r.model_name} v${r.model_version}`,
-          },
+          { key: "source_type", header: "구분", render: (r) => <SourceTypeBadge sourceType={(r.source_type as string) || "SEED"} /> },
+          { key: "model_name", header: "모델", render: (r) => `${r.model_name} v${r.model_version}` },
           { key: "site_name", header: "지사" },
-          {
-            key: "reason_type",
-            header: "사유 유형",
-            render: (r) => REASON_LABELS[r.reason_type as string] || (r.reason_type as string),
-          },
-          {
-            key: "severity",
-            header: "심각도",
-            render: (r) => <StatusBadge status={(r.severity as string) || "MEDIUM"} />,
-          },
-          { key: "reason_summary", header: "사유" },
+          { key: "reason_type", header: "사유 유형", render: (r) => REASON_LABELS[r.reason_type as string] || (r.reason_type as string) },
+          { key: "severity", header: "심각도", render: (r) => <StatusBadge status={(r.severity as string) || "MEDIUM"} /> },
           { key: "status", header: "상태", render: (r) => <StatusBadge status={r.status as string} /> },
-          {
-            key: "created_at",
-            header: "등록일",
-            render: (r) => new Date(r.created_at as string).toLocaleDateString("ko-KR"),
-          },
-          {
-            key: "actions",
-            header: "작업",
-            render: (r) => {
-              const row = r as unknown as RetrainingCandidate;
-              if (!canEdit) return <span className="text-xs text-slate-400">권한 없음</span>;
-              if (row.status !== "PENDING" && row.status !== "REVIEW") {
-                return <span className="text-xs text-slate-500">{row.status}</span>;
-              }
-              return (
-                <div className="flex gap-1">
-                  <Button
-                    variant="secondary"
-                    icon={<Check className="w-3 h-3" />}
-                    disabled={acting === row.candidate_id}
-                    onClick={(e) => { e.stopPropagation(); handleApprove(row.candidate_id); }}
-                  >
-                    승인
-                  </Button>
-                  <Button
-                    variant="secondary"
-                    icon={<X className="w-3 h-3" />}
-                    disabled={acting === row.candidate_id}
-                    onClick={(e) => { e.stopPropagation(); handleReject(row.candidate_id); }}
-                  >
-                    반려
-                  </Button>
-                </div>
-              );
-            },
-          },
+          { key: "reason_summary", header: "사유" },
+          { key: "created_at", header: "등록일", render: (r) => new Date(r.created_at as string).toLocaleDateString("ko-KR") },
+          { key: "actions", header: "작업", render: (r) => renderActions(r as unknown as RetrainingCandidate) },
         ]}
         data={items as unknown as Record<string, unknown>[]}
       />
+
+      <Modal open={!!detail} title={`재학습 결과 — ${detail?.candidate_id ?? ""}`} onClose={() => setDetail(null)} footer={<Button variant="secondary" onClick={() => setDetail(null)}>닫기</Button>}>
+        {detail && (
+          <div className="space-y-3 text-sm">
+            <div className="flex gap-2"><StatusBadge status={detail.status} /><SourceTypeBadge sourceType={detail.source_type} /></div>
+            <p><strong>Training Job:</strong> {detail.training_job_id || "-"}</p>
+            <p><strong>신규 모델:</strong> {detail.new_model_version_id || "-"}</p>
+            <p><strong>MLflow Run:</strong> {detail.mlflow_run_id || "-"}</p>
+            <pre className="bg-slate-50 p-3 rounded text-xs overflow-auto max-h-48">{JSON.stringify(detail.train_result_summary, null, 2)}</pre>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }

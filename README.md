@@ -109,6 +109,7 @@ python scripts/test_prediction_evaluation.py
 python scripts/test_airflow_pipeline.py
 python scripts/test_full_pipeline_airflow.py
 python scripts/test_drift_retraining.py
+python scripts/test_retraining_candidate_train.py
 python scripts/smoke_test_api.py
 cd frontend && npm run build
 ```
@@ -250,7 +251,30 @@ curl -X POST "http://localhost:8000/api/v1/drift-checks" -H "Content-Type: appli
 | 예측 오차 Drift | current MAPE가 baseline 대비 1.2배 → WARNING, 1.5배 → CRITICAL |
 | Feature Drift | mean/std shift + KS-test, `drift_warning_threshold` 기준 |
 
-**재학습 후보:** WARNING/CRITICAL Drift 시 `tb_retraining_candidate`에 PENDING 후보 자동 생성. 승인/반려 API는 **상태만 변경**하며, 실제 재학습 Job 생성은 후속 단계입니다.
+**재학습 후보:** WARNING/CRITICAL Drift 시 `tb_retraining_candidate`에 PENDING 후보 자동 생성. 승인 후 `POST /retraining-candidates/{id}/train`으로 실제 학습 실행.
+
+**후보 상태 흐름 (P1-2):**
+
+```
+PENDING → APPROVED → TRAINING → TRAINED
+PENDING → REJECTED
+TRAINING → FAILED
+```
+
+- SEED 후보는 재학습 실행 불가 (`400 SEED candidate cannot be trained`)
+- 현재는 **동기 API 기반** 학습 (`run_training_job` 재사용). Airflow `retraining_dag`는 후속 확장(TODO)
+- 재학습으로 생성된 모델은 Model Registry(`/models`)에서 확인
+
+```powershell
+# 1) COMPUTED + PENDING 후보 ID 확인 (예: RTC-20260629-42F5)
+curl "http://localhost:8000/api/v1/retraining-candidates?computed_only=true&status=PENDING"
+
+# 2) 승인 후 재학습 실행 — {id} 자리에 위에서 확인한 실제 candidate_id 사용
+curl -X POST "http://localhost:8000/api/v1/retraining-candidates/RTC-20260629-42F5/approve"
+curl -X POST "http://localhost:8000/api/v1/retraining-candidates/RTC-20260629-42F5/train"
+
+python scripts/test_retraining_candidate_train.py
+```
 
 **source_type 구분 (P1-1 안정화)**
 
