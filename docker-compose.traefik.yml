@@ -1,0 +1,186 @@
+# THERMOps Traefik 배포용 Compose
+# DNS A레코드 1개(thermops.openlink.kr) + PathPrefix 라우팅
+# 개발용 docker-compose.yml 은 수정하지 않음
+
+name: ${COMPOSE_PROJECT_NAME:-thermops}
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: ${COMPOSE_PROJECT_NAME:-thermops}-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-thermops}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD required}
+      POSTGRES_DB: ${POSTGRES_DB:-thermops}
+    volumes:
+      - thermops_deploy_postgres_data:/var/lib/postgresql/data
+      # clean seed: demo 02_seed.sql 대신 02_seed_clean.sql 마운트
+      - ./db/init/00_airflow_db.sh:/docker-entrypoint-initdb.d/00_airflow_db.sh:ro
+      - ./db/init/01_schema.sql:/docker-entrypoint-initdb.d/01_schema.sql:ro
+      - ./db/init/02_seed_clean.sql:/docker-entrypoint-initdb.d/02_seed.sql:ro
+    networks:
+      - thermops_internal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-thermops} -d ${POSTGRES_DB:-thermops}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  minio:
+    image: minio/minio:latest
+    container_name: ${COMPOSE_PROJECT_NAME:-thermops}-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minio}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD required}
+    volumes:
+      - thermops_deploy_minio_data:/data
+    networks:
+      - thermops_internal
+    labels:
+      - traefik.enable=false
+    restart: unless-stopped
+
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:v2.14.3
+    container_name: ${COMPOSE_PROJECT_NAME:-thermops}-mlflow
+    entrypoint: ["/bin/bash", "/scripts/mlflow_entrypoint.sh"]
+    volumes:
+      - ./scripts/mlflow_entrypoint.sh:/scripts/mlflow_entrypoint.sh:ro
+    environment:
+      AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-minio}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD required}
+      MLFLOW_S3_ENDPOINT_URL: http://minio:9000
+      POSTGRES_USER: ${POSTGRES_USER:-thermops}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-thermops}
+    networks:
+      - thermops_internal
+    labels:
+      - traefik.enable=false
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_started
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: ${COMPOSE_PROJECT_NAME:-thermops}-backend
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-thermops}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-thermops}
+      MLFLOW_TRACKING_URI: ${MLFLOW_TRACKING_URI:-http://mlflow:5000}
+      MLFLOW_S3_ENDPOINT_URL: http://minio:9000
+      AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-minio}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD}
+      GIT_PYTHON_REFRESH: quiet
+      CORS_ORIGINS: ${BACKEND_CORS_ORIGINS:-https://thermops.openlink.kr}
+      THERMOPS_PROJECT_ROOT: /workspace
+      AIRFLOW_BASE_URL: ${AIRFLOW_BASE_URL:-http://airflow:8080}
+      AIRFLOW_USERNAME: ${AIRFLOW_USERNAME:-admin}
+      AIRFLOW_PASSWORD: ${AIRFLOW_PASSWORD:?AIRFLOW_PASSWORD required}
+    volumes:
+      - ./ml:/ml:ro
+      - ./configs:/configs:ro
+      - .:/workspace:ro
+    networks:
+      - traefik
+      - thermops_internal
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mlflow:
+        condition: service_started
+      minio:
+        condition: service_started
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=${TRAEFIK_NETWORK:-traefik}
+      # API — prefix strip 하지 않음 (/api/v1 그대로 backend 전달)
+      - traefik.http.routers.thermops-api.rule=Host(`${THERMOPS_HOST}`) && PathPrefix(`/api`)
+      - traefik.http.routers.thermops-api.entrypoints=websecure
+      - traefik.http.routers.thermops-api.tls=true
+      - traefik.http.routers.thermops-api.tls.certresolver=${TRAEFIK_CERT_RESOLVER:-letsencrypt}
+      - traefik.http.routers.thermops-api.priority=100
+      - traefik.http.services.thermops-api.loadbalancer.server.port=8000
+      # FastAPI docs (선택 공개)
+      - traefik.http.routers.thermops-docs.rule=Host(`${THERMOPS_HOST}`) && (PathPrefix(`/docs`) || PathPrefix(`/redoc`) || Path(`/openapi.json`))
+      - traefik.http.routers.thermops-docs.entrypoints=websecure
+      - traefik.http.routers.thermops-docs.tls=true
+      - traefik.http.routers.thermops-docs.tls.certresolver=${TRAEFIK_CERT_RESOLVER:-letsencrypt}
+      - traefik.http.routers.thermops-docs.priority=100
+      - traefik.http.routers.thermops-docs.service=thermops-api
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.prod
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-/api/v1}
+        VITE_USER_ROLE: ${VITE_USER_ROLE:-OPERATOR}
+    container_name: ${COMPOSE_PROJECT_NAME:-thermops}-frontend
+    networks:
+      - traefik
+      - thermops_internal
+    depends_on:
+      - backend
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=${TRAEFIK_NETWORK:-traefik}
+      - traefik.http.routers.thermops-web.rule=Host(`${THERMOPS_HOST}`)
+      - traefik.http.routers.thermops-web.entrypoints=websecure
+      - traefik.http.routers.thermops-web.tls=true
+      - traefik.http.routers.thermops-web.tls.certresolver=${TRAEFIK_CERT_RESOLVER:-letsencrypt}
+      - traefik.http.routers.thermops-web.priority=1
+      - traefik.http.services.thermops-web.loadbalancer.server.port=80
+    restart: unless-stopped
+
+  airflow:
+    build:
+      context: ./airflow
+      dockerfile: Dockerfile
+    container_name: ${COMPOSE_PROJECT_NAME:-thermops}-airflow
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER:-thermops}:${POSTGRES_PASSWORD}@postgres:5432/thermops_airflow
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "true"
+      AIRFLOW__API__AUTH_BACKENDS: airflow.api.auth.backend.basic_auth,airflow.api.auth.backend.session
+      THERMOps_DB_URL: postgresql://${POSTGRES_USER:-thermops}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-thermops}
+      MLFLOW_TRACKING_URI: ${MLFLOW_TRACKING_URI:-http://mlflow:5000}
+      THERMOPS_BACKEND_BASE_URL: http://backend:8000/api/v1
+      THERMOPS_BACKEND_TIMEOUT: "300"
+      AIRFLOW_USERNAME: ${AIRFLOW_USERNAME:-admin}
+      AIRFLOW_PASSWORD: ${AIRFLOW_PASSWORD:?AIRFLOW_PASSWORD required}
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags:ro
+      - ./ml:/opt/airflow/ml:ro
+      - ./configs:/opt/airflow/configs:ro
+      - ./scripts/airflow_entrypoint.sh:/opt/airflow/entrypoint.sh:ro
+    networks:
+      - thermops_internal
+    labels:
+      - traefik.enable=false
+    depends_on:
+      postgres:
+        condition: service_healthy
+      backend:
+        condition: service_started
+    command: ["bash", "/opt/airflow/entrypoint.sh"]
+    restart: unless-stopped
+
+networks:
+  traefik:
+    external: true
+    name: ${TRAEFIK_NETWORK:-traefik}
+  thermops_internal:
+    name: ${COMPOSE_PROJECT_NAME:-thermops}_internal
+
+volumes:
+  thermops_deploy_postgres_data:
+  thermops_deploy_minio_data:

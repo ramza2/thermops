@@ -1,0 +1,61 @@
+# Optional: Airflow / MLflow / MinIO 외부 공개 (CNAME 기반, A레코드 추가 없음)
+#
+# DNS 예 (A레코드 1개만 유지):
+#   thermops.openlink.kr          A     <서버 IP>
+#   airflow.thermops.openlink.kr  CNAME thermops.openlink.kr
+#   mlflow.thermops.openlink.kr   CNAME thermops.openlink.kr
+#   minio.thermops.openlink.kr    CNAME thermops.openlink.kr
+#
+# 또는: *.thermops.openlink.kr CNAME thermops.openlink.kr
+#
+# 사용:
+#   ENABLE_ADMIN_PUBLIC=true 로 .env.deploy 설정 후
+#   docker compose -f docker-compose.traefik.yml -f docker-compose.traefik.admin.yml \
+#     --env-file .env.deploy up -d
+#
+# 반드시 TRAEFIK_BASIC_AUTH_USERS (htpasswd) 설정 후 사용하세요.
+
+services:
+  mlflow:
+    labels:
+      - traefik.enable=${ENABLE_ADMIN_PUBLIC:-false}
+      - traefik.docker.network=${TRAEFIK_NETWORK:-traefik}
+      - traefik.http.routers.thermops-mlflow.rule=Host(`${MLFLOW_HOST}`)
+      - traefik.http.routers.thermops-mlflow.entrypoints=websecure
+      - traefik.http.routers.thermops-mlflow.tls=true
+      - traefik.http.routers.thermops-mlflow.tls.certresolver=${TRAEFIK_CERT_RESOLVER:-letsencrypt}
+      - traefik.http.services.thermops-mlflow.loadbalancer.server.port=5000
+      - traefik.http.routers.thermops-mlflow.middlewares=thermops-admin-auth@docker
+    networks:
+      - traefik
+      - thermops_internal
+
+  minio:
+    labels:
+      - traefik.enable=${ENABLE_ADMIN_PUBLIC:-false}
+      - traefik.docker.network=${TRAEFIK_NETWORK:-traefik}
+      - traefik.http.routers.thermops-minio.rule=Host(`${MINIO_HOST}`)
+      - traefik.http.routers.thermops-minio.entrypoints=websecure
+      - traefik.http.routers.thermops-minio.tls=true
+      - traefik.http.routers.thermops-minio.tls.certresolver=${TRAEFIK_CERT_RESOLVER:-letsencrypt}
+      - traefik.http.services.thermops-minio.loadbalancer.server.port=9001
+      - traefik.http.routers.thermops-minio.middlewares=thermops-admin-auth@docker
+    networks:
+      - traefik
+      - thermops_internal
+
+  airflow:
+    labels:
+      - traefik.enable=${ENABLE_ADMIN_PUBLIC:-false}
+      - traefik.docker.network=${TRAEFIK_NETWORK:-traefik}
+      - traefik.http.routers.thermops-airflow.rule=Host(`${AIRFLOW_HOST}`)
+      - traefik.http.routers.thermops-airflow.entrypoints=websecure
+      - traefik.http.routers.thermops-airflow.tls=true
+      - traefik.http.routers.thermops-airflow.tls.certresolver=${TRAEFIK_CERT_RESOLVER:-letsencrypt}
+      - traefik.http.services.thermops-airflow.loadbalancer.server.port=8080
+      - traefik.http.routers.thermops-airflow.middlewares=thermops-admin-auth@docker
+      # Basic Auth middleware 정의 (한 서비스에만 필요)
+      - traefik.http.middlewares.thermops-admin-auth.basicauth.users=${TRAEFIK_BASIC_AUTH_USERS:?TRAEFIK_BASIC_AUTH_USERS required for admin exposure}
+    networks:
+      - traefik
+      - thermops_internal

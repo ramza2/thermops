@@ -19,8 +19,11 @@ except ClientError:
     s3.create_bucket(Bucket="mlflow")
     print("Created MinIO bucket: mlflow")
 PY
+PG_USER="${POSTGRES_USER:-thermops}"
+PG_PASS="${POSTGRES_PASSWORD:-thermops}"
+PG_DB="${POSTGRES_DB:-thermops}"
 exec mlflow server \
   --host 0.0.0.0 \
   --port 5000 \
-  --backend-store-uri postgresql://thermops:thermops@postgres:5432/thermops \
+  --backend-store-uri "postgresql://${PG_USER}:${PG_PASS}@postgres:5432/${PG_DB}" \
   --default-artifact-root s3://mlflow/
