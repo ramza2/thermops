@@ -58,7 +58,8 @@ def run_ingestion(**context):
             params["limit"] = conf.get("limit")
         if conf.get("mapping_id"):
             params["mapping_id"] = conf.get("mapping_id")
-        if conf.get("data_domain"):
+        # data_domain은 열수요 소스에만 전달 (기상 소스에 HEAT_DEMAND를 넘기면 400)
+        if conf.get("data_domain") and sid == source_id:
             params["data_domain"] = conf.get("data_domain")
         return params
 
