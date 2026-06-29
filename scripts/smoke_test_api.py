@@ -19,7 +19,7 @@ ENDPOINTS = [
     "/api/v1/training-configs",
     "/api/v1/training-jobs",
     "/api/v1/models",
-    "/api/v1/predictions",
+    "/api/v1/predictions?page=1&limit=20",
     "/api/v1/pipeline-runs",
     "/api/v1/drift-reports",
     "/api/v1/retraining-candidates",

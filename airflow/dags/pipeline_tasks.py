@@ -279,3 +279,53 @@ def run_drift_detection(**context):
         raise RuntimeError("drift detection failed")
     _complete_step(context, pipeline_run_id, "drift_detection", "Drift 감지 완료", summary)
     return summary
+
+
+def validate_retraining_candidate(**context):
+    conf = extract_conf(context)
+    candidate_id = conf.get("candidate_id")
+    if not candidate_id:
+        raise RuntimeError("retraining_dag conf에 candidate_id가 필요합니다.")
+
+    result = call_backend_api("GET", f"/retraining-candidates/{candidate_id}")
+    source_type = result.get("source_type")
+    status = result.get("status")
+    if source_type != "COMPUTED":
+        raise RuntimeError(f"COMPUTED 후보만 재학습할 수 있습니다. (source_type={source_type})")
+    if status not in ("APPROVED", "TRAINING"):
+        raise RuntimeError(f"승인 또는 학습 중 상태만 실행 가능합니다. (status={status})")
+    return {
+        "candidate_id": candidate_id,
+        "status": status,
+        "source_type": source_type,
+    }
+
+
+def run_retraining(**context):
+    conf = extract_conf(context)
+    candidate_id = conf.get("candidate_id")
+    if not candidate_id:
+        raise RuntimeError("retraining_dag conf에 candidate_id가 필요합니다.")
+
+    result = call_backend_api("POST", f"/retraining-candidates/{candidate_id}/train-sync-internal", json_body={})
+    if result.get("status") != "SUCCESS":
+        raise RuntimeError(result.get("candidate", {}).get("error_message") or "retraining failed")
+    return result
+
+
+def finalize_retraining_candidate(**context):
+    conf = extract_conf(context)
+    candidate_id = conf.get("candidate_id")
+    if not candidate_id:
+        raise RuntimeError("retraining_dag conf에 candidate_id가 필요합니다.")
+
+    result = call_backend_api("GET", f"/retraining-candidates/{candidate_id}", params={"sync_airflow": "true"})
+    if result.get("status") != "TRAINED":
+        raise RuntimeError(f"재학습 후보가 TRAINED가 아닙니다. (status={result.get('status')})")
+    return {
+        "candidate_id": candidate_id,
+        "status": result.get("status"),
+        "training_job_id": result.get("training_job_id"),
+        "new_model_version_id": result.get("new_model_version_id"),
+        "mlflow_run_id": result.get("mlflow_run_id"),
+    }

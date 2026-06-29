@@ -299,6 +299,11 @@ export default function PipelineRunsPage() {
         {triggerTarget?.description && (
           <p className="text-xs text-slate-400 mt-1">{triggerTarget.description}</p>
         )}
+        {triggerTarget?.pipeline_id === "retraining_dag" && (
+          <p className="text-sm text-amber-700 bg-amber-50 border border-amber-100 rounded px-3 py-2 mt-3">
+            retraining_dag는 conf에 <code>candidate_id</code>가 필요합니다. 재학습 후보 관리 화면에서 승인 후 실행하는 것을 권장합니다.
+          </p>
+        )}
         <p className="text-xs text-slate-400 mt-2">기준일: {dateRange.to || "오늘"}</p>
       </Modal>
 

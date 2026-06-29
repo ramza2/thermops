@@ -168,8 +168,15 @@ def main() -> int:
             raise RuntimeError("tb_heat_demand_prediction has no rows for job")
 
         preds = api("GET", f"/predictions?model_version_id={model_version_id}&size=5")
-        if not preds.get("items"):
+        items = preds.get("items") if isinstance(preds, dict) else preds
+        if not items:
             raise RuntimeError("GET /predictions returned empty")
+        first = items[0]
+        for key in ("predicted_demand", "target_at", "site_id", "model_version_id"):
+            if key not in first:
+                raise RuntimeError(f"GET /predictions missing field: {key}")
+        if "actual_demand" not in first:
+            raise RuntimeError("GET /predictions missing actual_demand (nullable expected)")
 
         summary = api("GET", f"/predictions/summary?model_version_id={model_version_id}")
         if summary.get("count", 0) <= 0:

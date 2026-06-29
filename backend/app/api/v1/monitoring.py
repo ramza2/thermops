@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -25,7 +25,15 @@ from app.services.drift_detection_service import (
     retraining_candidate_to_dict,
     run_drift_detection,
 )
-from app.services.retraining_candidate_service import train_retraining_candidate
+from app.services.retraining_candidate_service import (
+    EXECUTION_MODE_AIRFLOW,
+    EXECUTION_MODE_SYNC,
+    get_retraining_candidate_detail,
+    mark_retraining_candidate_failed,
+    sync_retraining_candidate_from_airflow,
+    train_retraining_candidate_sync,
+    trigger_retraining_dag,
+)
 from app.services.prediction_evaluation_service import EVAL_TYPE_PREDICTION, EVAL_TYPE_TRAINING
 
 router = APIRouter(tags=["Monitoring"])
@@ -258,6 +266,7 @@ async def list_retraining_candidates(
     site_id: str | None = Query(default=None),
     computed_only: bool = Query(default=False),
     source_type: str | None = Query(default=None),
+    sync_airflow: bool = Query(default=False),
     db: AsyncSession = Depends(get_db),
 ):
     if source_type and source_type not in VALID_SOURCE_TYPES:
@@ -287,12 +296,32 @@ async def list_retraining_candidates(
         rows = [r for r in rows if resolve_retraining_candidate_source_type(r) == source_type]
 
     items = []
+    sync_warnings: list[str] = []
     for r in rows:
+        if sync_airflow and r.status == "TRAINING" and r.retraining_dag_run_id:
+            sync_warnings.extend(await sync_retraining_candidate_from_airflow(db, r))
+            await db.refresh(r)
         site = None
         if r.site_id:
             site = (await db.execute(select(Site).where(Site.site_id == r.site_id))).scalar_one_or_none()
-        items.append(retraining_candidate_to_dict(r, site.site_name if site else None))
+        item = retraining_candidate_to_dict(r, site.site_name if site else None)
+        items.append(item)
+    if sync_warnings and items:
+        items[0]["_list_sync_warnings"] = sync_warnings
     return ok(items)
+
+
+@router.get("/retraining-candidates/{candidate_id}")
+async def get_retraining_candidate(
+    candidate_id: str,
+    sync_airflow: bool = Query(default=False),
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        payload = await get_retraining_candidate_detail(db, candidate_id, sync_airflow=sync_airflow)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return ok(payload)
 
 
 @router.post("/retraining-candidates/{candidate_id}/approve")
@@ -326,10 +355,23 @@ async def reject_retraining_candidate(candidate_id: str, db: AsyncSession = Depe
 
 
 @router.post("/retraining-candidates/{candidate_id}/train")
-async def train_retraining_candidate_endpoint(candidate_id: str, db: AsyncSession = Depends(get_db)):
-  # TODO(P1-3): APPROVED candidate → Airflow retraining_dag trigger, 완료 후 TRAINED 갱신
+async def train_retraining_candidate_endpoint(
+    candidate_id: str,
+    execution_mode: str = Query(default=EXECUTION_MODE_AIRFLOW),
+    db: AsyncSession = Depends(get_db),
+):
+    mode = (execution_mode or EXECUTION_MODE_AIRFLOW).upper()
+    if mode not in (EXECUTION_MODE_SYNC, EXECUTION_MODE_AIRFLOW):
+        raise HTTPException(
+            status_code=400,
+            detail=f"execution_mode는 {EXECUTION_MODE_SYNC} 또는 {EXECUTION_MODE_AIRFLOW} 이어야 합니다.",
+        )
+
     try:
-        result = await train_retraining_candidate(db, candidate_id)
+        if mode == EXECUTION_MODE_AIRFLOW:
+            result = await trigger_retraining_dag(db, candidate_id)
+            return ok(result, message="재학습 DAG 실행이 요청되었습니다.")
+        result = await train_retraining_candidate_sync(db, candidate_id, internal=False)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except PermissionError as exc:
@@ -344,3 +386,60 @@ async def train_retraining_candidate_endpoint(candidate_id: str, db: AsyncSessio
         )
 
     return ok(result, message="재학습이 완료되었습니다.")
+
+
+@router.post("/retraining-candidates/{candidate_id}/train-sync-internal")
+async def train_retraining_candidate_internal_endpoint(candidate_id: str, db: AsyncSession = Depends(get_db)):
+    # TODO: 내부 API service token 인증 적용 (Airflow retraining_dag 전용)
+    try:
+        result = await train_retraining_candidate_sync(db, candidate_id, internal=True)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except PermissionError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+    if result.get("status") != "SUCCESS":
+        raise HTTPException(
+            status_code=400,
+            detail=result.get("candidate", {}).get("error_message", "모델 학습 실패"),
+        )
+    return ok(result, message="내부 재학습이 완료되었습니다.")
+
+
+@router.post("/retraining-candidates/{candidate_id}/sync")
+async def sync_retraining_candidate_endpoint(candidate_id: str, db: AsyncSession = Depends(get_db)):
+    row = (
+        await db.execute(select(RetrainingCandidate).where(RetrainingCandidate.candidate_id == candidate_id))
+    ).scalar_one_or_none()
+    if not row:
+        raise HTTPException(status_code=404, detail="재학습 후보를 찾을 수 없습니다.")
+    warnings = await sync_retraining_candidate_from_airflow(db, row)
+    await db.refresh(row)
+    payload = retraining_candidate_to_dict(row)
+    if warnings:
+        payload["sync_warnings"] = warnings
+    return ok(payload, message="재학습 후보 상태를 동기화했습니다.")
+
+
+@router.post("/retraining-candidates/{candidate_id}/mark-failed")
+async def mark_retraining_candidate_failed_endpoint(
+    candidate_id: str,
+    body: dict = Body(default_factory=dict),
+    db: AsyncSession = Depends(get_db),
+):
+    # TODO: 내부 API service token 인증 적용 (Airflow on_failure_callback 전용)
+    payload = body or {}
+    error_message = str(payload.get("error_message") or "Airflow task failed")
+    try:
+        result = await mark_retraining_candidate_failed(
+            db,
+            candidate_id,
+            error_message=error_message,
+            failed_step=payload.get("failed_step"),
+            traceback_summary=payload.get("traceback"),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return ok(result, message="재학습 후보를 FAILED로 갱신했습니다.")

@@ -259,8 +259,7 @@ CREATE TABLE IF NOT EXISTS tb_heat_demand_prediction (
     CONSTRAINT uk_heat_prediction UNIQUE(prediction_job_id, site_id, target_at)
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS uk_heat_pred_site_model_time
-    ON tb_heat_demand_prediction(site_id, target_at, model_version_id);
+CREATE INDEX IF NOT EXISTS ix_heat_prediction_model_time ON tb_heat_demand_prediction(model_version_id, target_at DESC);
 
 CREATE INDEX IF NOT EXISTS ix_heat_prediction_site_time ON tb_heat_demand_prediction(site_id, target_at DESC);
 
@@ -347,6 +346,11 @@ CREATE TABLE IF NOT EXISTS tb_retraining_candidate (
     trained_at TIMESTAMP,
     train_result_summary JSONB,
     error_message TEXT,
+    retraining_dag_run_id VARCHAR(120),
+    retraining_requested_at TIMESTAMP,
+    retraining_started_at TIMESTAMP,
+    retraining_finished_at TIMESTAMP,
+    execution_mode VARCHAR(20),
     status VARCHAR(20) NOT NULL DEFAULT 'PENDING',
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP

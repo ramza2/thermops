@@ -118,5 +118,39 @@ def on_pipeline_task_failure(context: dict) -> None:
         print(f"[pipeline_failure] status update failed: {notify_exc}")
 
 
+def on_retraining_task_failure(context: dict) -> None:
+    """retraining_dag task 실패 시 후보 FAILED 갱신."""
+    conf = extract_conf(context)
+    candidate_id = conf.get("candidate_id")
+    if not candidate_id:
+        print("[retraining_failure] candidate_id missing in conf")
+        return
+
+    ti = context.get("task_instance")
+    step_name = ti.task_id if ti else "unknown"
+    exc = context.get("exception")
+    error_message = str(exc) if exc else "task failed"
+    tb_text = traceback.format_exc(limit=8)[-2000:]
+
+    try:
+        call_backend_api(
+            "POST",
+            f"/retraining-candidates/{candidate_id}/mark-failed",
+            json_body={
+                "error_message": f"{step_name} failed: {error_message}",
+                "failed_step": step_name,
+                "traceback": tb_text,
+            },
+        )
+    except Exception as notify_exc:
+        print(f"[retraining_failure] mark-failed failed: {notify_exc}")
+
+
+RETRAINING_DEFAULT_ARGS = {
+    **DEFAULT_ARGS,
+    "on_failure_callback": on_retraining_task_failure,
+}
+
+
 # 모든 DAG task에 on_failure_callback 적용
 DEFAULT_ARGS["on_failure_callback"] = on_pipeline_task_failure

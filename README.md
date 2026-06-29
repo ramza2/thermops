@@ -110,6 +110,7 @@ python scripts/test_airflow_pipeline.py
 python scripts/test_full_pipeline_airflow.py
 python scripts/test_drift_retraining.py
 python scripts/test_retraining_candidate_train.py
+python scripts/test_retraining_airflow.py
 python scripts/smoke_test_api.py
 cd frontend && npm run build
 ```
@@ -251,9 +252,16 @@ curl -X POST "http://localhost:8000/api/v1/drift-checks" -H "Content-Type: appli
 | 예측 오차 Drift | current MAPE가 baseline 대비 1.2배 → WARNING, 1.5배 → CRITICAL |
 | Feature Drift | mean/std shift + KS-test, `drift_warning_threshold` 기준 |
 
-**재학습 후보:** WARNING/CRITICAL Drift 시 `tb_retraining_candidate`에 PENDING 후보 자동 생성. 승인 후 `POST /retraining-candidates/{id}/train`으로 실제 학습 실행.
+**재학습 후보:** WARNING/CRITICAL Drift 시 `tb_retraining_candidate`에 PENDING 후보 자동 생성. 승인 후 `POST /retraining-candidates/{id}/train`으로 재학습 실행.
 
-**후보 상태 흐름 (P1-2):**
+**실행 모드 (P1-2 안정화):**
+
+| mode | 설명 |
+|------|------|
+| `AIRFLOW` (기본) | `retraining_dag` 비동기 트리거. 즉시 `TRAINING` 반환 후 DAG 완료 시 `TRAINED`/`FAILED` |
+| `SYNC` | 기존 동기 API. 요청이 끝날 때까지 학습 완료 대기 (`?execution_mode=SYNC`) |
+
+**후보 상태 흐름:**
 
 ```
 PENDING → APPROVED → TRAINING → TRAINED
@@ -261,19 +269,25 @@ PENDING → REJECTED
 TRAINING → FAILED
 ```
 
-- SEED 후보는 재학습 실행 불가 (`400 SEED candidate cannot be trained`)
-- 현재는 **동기 API 기반** 학습 (`run_training_job` 재사용). Airflow `retraining_dag`는 후속 확장(TODO)
+- SEED / MANUAL 후보는 재학습 실행 불가 (`400`)
+- 운영 기본 흐름은 **AIRFLOW 비동기** (`retraining_dag`)
 - 재학습으로 생성된 모델은 Model Registry(`/models`)에서 확인
+- 내부 API: `POST /retraining-candidates/{id}/train-sync-internal` (Airflow DAG 전용, service token TODO)
 
 ```powershell
-# 1) COMPUTED + PENDING 후보 ID 확인 (예: RTC-20260629-42F5)
+# 1) COMPUTED + PENDING 후보 ID 확인
 curl "http://localhost:8000/api/v1/retraining-candidates?computed_only=true&status=PENDING"
 
-# 2) 승인 후 재학습 실행 — {id} 자리에 위에서 확인한 실제 candidate_id 사용
+# 2) 승인 후 Airflow 비동기 재학습 (기본)
 curl -X POST "http://localhost:8000/api/v1/retraining-candidates/RTC-20260629-42F5/approve"
 curl -X POST "http://localhost:8000/api/v1/retraining-candidates/RTC-20260629-42F5/train"
+# 또는 명시: ?execution_mode=AIRFLOW
+
+# 3) 동기 재학습 (테스트/디버그)
+curl -X POST "http://localhost:8000/api/v1/retraining-candidates/RTC-20260629-42F5/train?execution_mode=SYNC"
 
 python scripts/test_retraining_candidate_train.py
+python scripts/test_retraining_airflow.py
 ```
 
 **source_type 구분 (P1-1 안정화)**

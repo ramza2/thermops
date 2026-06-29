@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
-from sqlalchemy import and_, delete, func, select
+from sqlalchemy import and_, delete, func, select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
@@ -18,10 +18,12 @@ from app.core.time import utc_now
 from app.models.entities import (
     FeatureDataset,
     FeatureSet,
+    HeatDemandActual,
     HeatDemandPrediction,
     ModelExperiment,
     ModelVersion,
     PipelineRun,
+    PredictionActualMatch,
     PredictionJob,
 )
 from app.schemas.api import PredictionJobCreate
@@ -422,4 +424,185 @@ def _job_dict(j: PredictionJob) -> dict[str, Any]:
         "error_message": j.error_message,
         "predicted_count": summary.get("predicted_count"),
         "result_summary": summary,
+    }
+
+
+def _prediction_filters(
+    *,
+    site_id: str | None,
+    from_dt: datetime | None,
+    to_dt: datetime | None,
+    model_version_id: str | None,
+    model_name: str | None,
+) -> list:
+    filters = []
+    if site_id:
+        filters.append(HeatDemandPrediction.site_id == site_id)
+    if from_dt:
+        filters.append(HeatDemandPrediction.target_at >= from_dt)
+    if to_dt:
+        filters.append(HeatDemandPrediction.target_at <= to_dt)
+    if model_version_id:
+        filters.append(HeatDemandPrediction.model_version_id == model_version_id)
+    if model_name:
+        mv_ids = select(ModelVersion.model_version_id).where(ModelVersion.model_name == model_name)
+        filters.append(HeatDemandPrediction.model_version_id.in_(mv_ids))
+    return filters
+
+
+def _safe_float(value: Any) -> float | None:
+    if value is None:
+        return None
+    return float(value)
+
+
+async def list_predictions_paged(
+    db: AsyncSession,
+    *,
+    site_id: str | None,
+    from_dt: datetime | None,
+    to_dt: datetime | None,
+    model_name: str | None,
+    model_version_id: str | None,
+    page: int,
+    size: int,
+) -> tuple[list[dict[str, Any]], int]:
+    filters = _prediction_filters(
+        site_id=site_id,
+        from_dt=from_dt,
+        to_dt=to_dt,
+        model_version_id=model_version_id,
+        model_name=model_name,
+    )
+
+    count_q = select(func.count(HeatDemandPrediction.prediction_id))
+    if filters:
+        count_q = count_q.where(*filters)
+    total = int((await db.execute(count_q)).scalar_one() or 0)
+
+    rows_q = select(HeatDemandPrediction).order_by(HeatDemandPrediction.target_at.desc())
+    if filters:
+        rows_q = rows_q.where(*filters)
+    rows_q = rows_q.offset((page - 1) * size).limit(size)
+    rows = (await db.execute(rows_q)).scalars().all()
+    if not rows:
+        return [], total
+
+    mv_ids = {p.model_version_id for p in rows}
+    mvs = (
+        await db.execute(select(ModelVersion).where(ModelVersion.model_version_id.in_(mv_ids)))
+    ).scalars().all()
+    mv_map = {m.model_version_id: m for m in mvs}
+
+    pred_ids = [p.prediction_id for p in rows]
+    matches = (
+        await db.execute(select(PredictionActualMatch).where(PredictionActualMatch.prediction_id.in_(pred_ids)))
+    ).scalars().all()
+    match_map = {m.prediction_id: m for m in matches}
+
+    actual_keys = [(p.site_id, p.target_at) for p in rows if p.prediction_id not in match_map]
+    actual_map: dict[tuple[str, datetime], float] = {}
+    if actual_keys:
+        actual_rows = (
+            await db.execute(
+                select(HeatDemandActual).where(
+                    tuple_(HeatDemandActual.site_id, HeatDemandActual.measured_at).in_(actual_keys)
+                )
+            )
+        ).scalars().all()
+        for row in actual_rows:
+            actual_map[(row.site_id, row.measured_at)] = float(row.heat_demand)
+
+    items: list[dict[str, Any]] = []
+    for p in rows:
+        match = match_map.get(p.prediction_id)
+        pred_val = float(p.predicted_demand)
+        if match:
+            actual = _safe_float(match.actual_demand)
+            abs_err = _safe_float(match.abs_error)
+            ape = _safe_float(match.ape)
+            error = _safe_float(match.error)
+        else:
+            actual = actual_map.get((p.site_id, p.target_at))
+            abs_err = round(abs(pred_val - actual), 2) if actual is not None else None
+            ape = round(abs((actual - pred_val) / actual) * 100, 4) if actual and abs(actual) > 1e-8 else None
+            error = round(actual - pred_val, 2) if actual is not None else None
+
+        mv = mv_map.get(p.model_version_id)
+        items.append({
+            "site_id": p.site_id,
+            "target_at": p.target_at.isoformat(),
+            "predicted_demand": pred_val,
+            "actual_demand": actual,
+            "error": error,
+            "absolute_error": abs_err,
+            "ape": ape,
+            "model_name": mv.model_name if mv else None,
+            "model_version": mv.version_no if mv else None,
+            "model_version_id": p.model_version_id,
+            "feature_set_id": p.feature_set_id,
+        })
+
+    return items, total
+
+
+async def predictions_summary_stats(
+    db: AsyncSession,
+    *,
+    site_id: str | None,
+    from_dt: datetime | None,
+    to_dt: datetime | None,
+    model_version_id: str | None,
+) -> dict[str, Any]:
+    filters = _prediction_filters(
+        site_id=site_id,
+        from_dt=from_dt,
+        to_dt=to_dt,
+        model_version_id=model_version_id,
+        model_name=None,
+    )
+
+    agg_q = select(
+        func.count(HeatDemandPrediction.prediction_id),
+        func.avg(HeatDemandPrediction.predicted_demand),
+        func.min(HeatDemandPrediction.target_at),
+        func.max(HeatDemandPrediction.target_at),
+    )
+    if filters:
+        agg_q = agg_q.where(*filters)
+    total, avg_pred, period_from, period_to = (await db.execute(agg_q)).one()
+    total = int(total or 0)
+    avg_pred_f = float(avg_pred) if avg_pred is not None else 0.0
+
+    mv = None
+    if model_version_id:
+        mv = (
+            await db.execute(select(ModelVersion).where(ModelVersion.model_version_id == model_version_id))
+        ).scalar_one_or_none()
+    elif total:
+        latest_mv_id = (
+            await db.execute(
+                select(HeatDemandPrediction.model_version_id)
+                .where(*filters)
+                .order_by(HeatDemandPrediction.target_at.desc())
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+        if latest_mv_id:
+            mv = (
+                await db.execute(select(ModelVersion).where(ModelVersion.model_version_id == latest_mv_id))
+            ).scalar_one_or_none()
+
+    return {
+        "site_id": site_id or "ALL",
+        "count": total,
+        "avg_predicted_demand": round(avg_pred_f, 2) if total else 0,
+        "model_name": mv.model_name if mv else None,
+        "model_version": mv.version_no if mv else None,
+        "model_version_id": mv.model_version_id if mv else model_version_id,
+        "period": {
+            "from": period_from.date().isoformat() if period_from else None,
+            "to": period_to.date().isoformat() if period_to else None,
+        },
+        "horizon": "BATCH",
     }

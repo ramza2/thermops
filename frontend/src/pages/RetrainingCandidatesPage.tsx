@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Check, Eye, Play, X } from "lucide-react";
+import { Check, Eye, Play, RefreshCw, X } from "lucide-react";
 import { fetchApi, postApi } from "@/api/client";
 import { Button } from "@/components/Button";
 import { DataTable } from "@/components/DataTable";
@@ -29,6 +29,8 @@ interface RetrainingCandidate {
   drift_report_id: string | null;
   training_job_id: string | null;
   mlflow_run_id: string | null;
+  retraining_dag_run_id: string | null;
+  execution_mode: string | null;
   trained_at: string | null;
   train_result_summary: Record<string, unknown> | null;
   error_message: string | null;
@@ -73,13 +75,14 @@ export default function RetrainingCandidatesPage() {
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>("computed");
   const [detail, setDetail] = useState<RetrainingCandidate | null>(null);
 
-  const load = useCallback(async (filter = sourceFilter) => {
+  const load = useCallback(async (filter = sourceFilter, syncAirflow = false) => {
     setLoading(true);
     setError("");
     try {
       const params: Record<string, string | boolean> = {};
       if (filter === "computed") params.computed_only = true;
       else if (filter === "seed") params.source_type = "SEED";
+      if (syncAirflow) params.sync_airflow = true;
       const candidates = await fetchApi<RetrainingCandidate[]>("/retraining-candidates", params);
       setItems(candidates);
     } catch {
@@ -90,6 +93,15 @@ export default function RetrainingCandidatesPage() {
   }, [sourceFilter]);
 
   useEffect(() => { load(sourceFilter); }, [sourceFilter, load]);
+
+  const hasTraining = items.some((i) => i.status === "TRAINING");
+  useEffect(() => {
+    if (!hasTraining) return;
+    const timer = window.setInterval(() => {
+      load(sourceFilter, true);
+    }, 10000);
+    return () => window.clearInterval(timer);
+  }, [hasTraining, sourceFilter, load]);
 
   const handleApprove = async (candidateId: string) => {
     setActing(candidateId);
@@ -122,13 +134,12 @@ export default function RetrainingCandidatesPage() {
     try {
       const res = await postApi<{
         candidate: RetrainingCandidate;
-        model_version: { model_version_id: string };
-      }>(`/retraining-candidates/${candidateId}/train`, {});
-      showToast(
-        "success",
-        `재학습 완료: ${res.model_version?.model_version_id || res.candidate?.new_model_version_id}`,
-      );
-      load(sourceFilter);
+        retraining_dag_run_id?: string;
+        dag_run_id?: string;
+      }>(`/retraining-candidates/${candidateId}/train?execution_mode=AIRFLOW`, {});
+      const dagRunId = res.retraining_dag_run_id || res.dag_run_id || res.candidate?.retraining_dag_run_id;
+      showToast("success", `재학습 DAG 실행 요청 완료${dagRunId ? `: ${dagRunId}` : ""}`);
+      load(sourceFilter, true);
     } catch {
       showToast("error", "재학습 실행에 실패했습니다.");
     } finally {
@@ -159,7 +170,12 @@ export default function RetrainingCandidatesPage() {
       );
     }
     if (row.status === "TRAINING") {
-      return <span className="text-xs text-blue-600">학습 진행 중</span>;
+      return (
+        <div className="text-xs text-blue-600 space-y-0.5">
+          <div>학습 진행 중 ({row.execution_mode || "AIRFLOW"})</div>
+          {row.retraining_dag_run_id && <div className="text-slate-500 truncate max-w-[180px]" title={row.retraining_dag_run_id}>{row.retraining_dag_run_id}</div>}
+        </div>
+      );
     }
     if (row.status === "TRAINED") {
       return (
@@ -187,13 +203,14 @@ export default function RetrainingCandidatesPage() {
     <div>
       <PageHeader
         title="재학습 후보 관리"
-        description="Drift·성능 저하로 자동 생성된 재학습 후보를 검토하고 승인 후 재학습을 실행합니다."
+        description="Drift·성능 저하로 자동 생성된 재학습 후보를 검토하고 승인 후 Airflow 재학습 DAG를 실행합니다."
       />
 
-      <div className="flex flex-wrap gap-2 mb-4">
+      <div className="flex flex-wrap gap-2 mb-4 items-center">
         <Button variant={sourceFilter === "computed" ? "primary" : "secondary"} onClick={() => setSourceFilter("computed")}>자동 산출만</Button>
         <Button variant={sourceFilter === "all" ? "primary" : "secondary"} onClick={() => setSourceFilter("all")}>전체</Button>
         <Button variant={sourceFilter === "seed" ? "primary" : "secondary"} onClick={() => setSourceFilter("seed")}>Seed/Sample</Button>
+        <Button variant="secondary" icon={<RefreshCw className="w-3 h-3" />} onClick={() => load(sourceFilter, true)}>새로고침</Button>
       </div>
 
       {showSeedNotice && (
@@ -222,6 +239,8 @@ export default function RetrainingCandidatesPage() {
         {detail && (
           <div className="space-y-3 text-sm">
             <div className="flex gap-2"><StatusBadge status={detail.status} /><SourceTypeBadge sourceType={detail.source_type} /></div>
+            <p><strong>Execution Mode:</strong> {detail.execution_mode || "-"}</p>
+            <p><strong>DAG Run:</strong> {detail.retraining_dag_run_id || "-"}</p>
             <p><strong>Training Job:</strong> {detail.training_job_id || "-"}</p>
             <p><strong>신규 모델:</strong> {detail.new_model_version_id || "-"}</p>
             <p><strong>MLflow Run:</strong> {detail.mlflow_run_id || "-"}</p>

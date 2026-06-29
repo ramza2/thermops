@@ -113,7 +113,7 @@ def main() -> int:
         if row and row.get("source_type") != "COMPUTED":
             raise RuntimeError(f"expected COMPUTED source_type, got {row.get('source_type')}")
 
-        code = api_expect_fail("POST", f"/retraining-candidates/{candidate_id}/train")
+        code = api_expect_fail("POST", f"/retraining-candidates/{candidate_id}/train?execution_mode=SYNC")
         if code not in (400, 403, 409):
             print(f"  [guard] pending train blocked with HTTP {code}")
         print("  [guard] non-approved train blocked OK")
@@ -121,7 +121,7 @@ def main() -> int:
         api("POST", f"/retraining-candidates/{candidate_id}/approve", {})
         print("  [approve] OK")
 
-        train_result = api("POST", f"/retraining-candidates/{candidate_id}/train", {}, timeout=600)
+        train_result = api("POST", f"/retraining-candidates/{candidate_id}/train?execution_mode=SYNC", {}, timeout=600)
         candidate = train_result.get("candidate") or {}
         job_id = candidate.get("training_job_id") or train_result.get("training_job", {}).get("job_id")
         new_mv = candidate.get("new_model_version_id") or train_result.get("model_version", {}).get("model_version_id")
@@ -145,7 +145,7 @@ def main() -> int:
             raise RuntimeError("new model version not found in registry")
         print("  [registry] new model version OK")
 
-        code = api_expect_fail("POST", f"/retraining-candidates/{candidate_id}/train")
+        code = api_expect_fail("POST", f"/retraining-candidates/{candidate_id}/train?execution_mode=SYNC")
         if code not in (400, 409):
             raise RuntimeError(f"expected re-train block, got HTTP {code}")
         print("  [guard] re-train blocked OK")
@@ -154,7 +154,7 @@ def main() -> int:
         if isinstance(seed_rows, list) and seed_rows:
             seed_id = seed_rows[0]["candidate_id"]
             ensure_approved(seed_id)
-            code = api_expect_fail("POST", f"/retraining-candidates/{seed_id}/train")
+            code = api_expect_fail("POST", f"/retraining-candidates/{seed_id}/train?execution_mode=SYNC")
             if code != 400:
                 raise RuntimeError(f"SEED train should return 400, got {code}")
             print("  [guard] SEED train blocked OK")

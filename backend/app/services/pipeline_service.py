@@ -64,6 +64,13 @@ PIPELINE_DEFINITIONS: list[dict[str, Any]] = [
         "schedule": "0 9 * * *",
     },
     {
+        "pipeline_id": "retraining_dag",
+        "name": "retraining_dag",
+        "type": "TRAINING",
+        "description": "승인된 재학습 후보 기반 모델 재학습 (conf에 candidate_id 필수)",
+        "schedule": None,
+    },
+    {
         "pipeline_id": "thermops_full_pipeline_dag",
         "name": "thermops_full_pipeline_dag",
         "type": "INGESTION",
@@ -102,6 +109,9 @@ DEFAULT_CONF_BY_PIPELINE: dict[str, dict[str, Any]] = {
     "drift_detection_dag": {
         "feature_set_id": "FS-TPL-LAG-ROLL",
         "model_name": "heat_demand_lightgbm",
+    },
+    "retraining_dag": {
+        "candidate_id": None,
     },
     "thermops_full_pipeline_dag": {
         "source_id": "DS-CSV-001",
