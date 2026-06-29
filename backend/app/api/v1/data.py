@@ -20,6 +20,14 @@ from app.services.ingestion_service import IngestionError, fail_ingestion_job, g
 router = APIRouter(tags=["Data"])
 
 
+def _http_connector_error(exc: ConnectorError) -> HTTPException:
+    return HTTPException(status_code=400, detail=exc.to_dict())
+
+
+def _http_ingestion_error(exc: IngestionError) -> HTTPException:
+    return HTTPException(status_code=400, detail=exc.to_dict())
+
+
 def _source_to_dict(s: DataSource) -> dict:
     return {
         "source_id": s.data_source_id,
@@ -118,7 +126,9 @@ async def test_connection(source_id: str, db: AsyncSession = Depends(get_db)):
             "success": False,
             "message": "연결 테스트에 실패했습니다.",
             "latency_ms": 0,
-            "error_message": str(exc),
+            "error_message": exc.message,
+            "error_code": exc.error_code,
+            "error": exc.to_dict(),
             "sample_row_count": 0,
             "columns": [],
         })
@@ -133,7 +143,7 @@ async def discover_schema(source_id: str, db: AsyncSession = Depends(get_db)):
     try:
         result = await asyncio.to_thread(get_connector(s).discover_schema, s)
     except ConnectorError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        raise _http_connector_error(exc) from exc
     return ok({"source_id": source_id, **result})
 
 
@@ -159,21 +169,32 @@ async def preview_data_source(
             end_at=_parse_optional_dt(end_at),
         )
     except ConnectorError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        raise _http_connector_error(exc) from exc
     return ok({"source_id": source_id, **result})
 
 
 @router.post("/ingestion-jobs")
 async def create_ingestion_job(
     source_id: str = Query(...),
+    mapping_id: str | None = Query(default=None),
+    data_domain: str | None = Query(default=None),
     start_at: str | None = Query(default=None),
     end_at: str | None = Query(default=None),
     limit: int | None = Query(default=None, ge=1, le=100000),
+    load_mode: str = Query(default="UPSERT"),
     db: AsyncSession = Depends(get_db),
 ):
     source = (await db.execute(select(DataSource).where(DataSource.data_source_id == source_id))).scalar_one_or_none()
     if not source:
         raise HTTPException(status_code=404, detail="NOT_FOUND")
+    if data_domain and source.source_category and source.source_category != data_domain:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error_code": "INGESTION_FAILED",
+                "message": "data_domain이 데이터 소스와 일치하지 않습니다.",
+            },
+        )
 
     job_id = f"ING-{uuid4().hex[:8].upper()}"
     run = DataQualityRun(
@@ -191,24 +212,33 @@ async def create_ingestion_job(
             db,
             source_id,
             job_id,
+            mapping_id=mapping_id,
             start_at=_parse_optional_dt(start_at),
             end_at=_parse_optional_dt(end_at),
             limit=limit,
+            load_mode=load_mode,
         )
-        message = f"데이터 {result['inserted_count']}건이 적재되었습니다."
+        summary = result["result_summary"]
+        message = (
+            f"신규 {result['inserted_count']}건, 갱신 {result['updated_count']}건 적재되었습니다."
+        )
         if result.get("failed_count", 0) > 0:
             message += f" (실패 {result['failed_count']}건)"
         return ok({
             "job_id": job_id,
             "status": result["status"],
             "inserted_count": result["inserted_count"],
+            "updated_count": result["updated_count"],
             "failed_count": result["failed_count"],
+            "skipped_count": result["skipped_count"],
             "source_type": result.get("source_type"),
-            "result_summary": result["result_summary"],
+            "connector_type": result.get("connector_type"),
+            "load_mode": summary.get("load_mode"),
+            "result_summary": summary,
         }, message=message)
     except IngestionError as exc:
-        await fail_ingestion_job(db, job_id, str(exc))
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        await fail_ingestion_job(db, job_id, str(exc), error_detail=exc.to_dict())
+        raise _http_ingestion_error(exc) from exc
 
 
 @router.get("/ingestion-jobs/{job_id}")
@@ -224,7 +254,10 @@ async def get_ingestion_job(job_id: str, db: AsyncSession = Depends(get_db)):
         "finished_at": run.finished_at.isoformat() if run.finished_at else None,
         "result_summary": summary,
         "inserted_count": summary.get("inserted_count"),
+        "updated_count": summary.get("updated_count"),
         "failed_count": summary.get("failed_count"),
+        "skipped_count": summary.get("skipped_count"),
+        "connector_type": summary.get("connector_type"),
         "error_message": summary.get("error_message"),
     })
 

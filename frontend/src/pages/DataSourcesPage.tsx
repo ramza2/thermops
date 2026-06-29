@@ -143,6 +143,13 @@ export default function DataSourcesPage() {
   const [form, setForm] = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
   const [ingesting, setIngesting] = useState<string | null>(null);
+  const [ingestTarget, setIngestTarget] = useState<DataSource | null>(null);
+  const [ingestForm, setIngestForm] = useState({
+    start_at: "",
+    end_at: "",
+    limit: "1000",
+    load_mode: "UPSERT",
+  });
 
   const load = async (p = page) => {
     setLoading(true);
@@ -252,30 +259,53 @@ export default function DataSourcesPage() {
     }
   };
 
-  const handleIngest = async (row: DataSource) => {
-    setIngesting(row.source_id);
+  const openIngestModal = (row: DataSource) => {
+    setIngestTarget(row);
+    setIngestForm({ start_at: "", end_at: "", limit: "1000", load_mode: "UPSERT" });
+  };
+
+  const runIngest = async () => {
+    if (!ingestTarget) return;
+    setIngesting(ingestTarget.source_id);
+    const params = new URLSearchParams({ source_id: ingestTarget.source_id, load_mode: ingestForm.load_mode });
+    if (ingestForm.start_at.trim()) params.set("start_at", ingestForm.start_at.trim());
+    if (ingestForm.end_at.trim()) params.set("end_at", ingestForm.end_at.trim());
+    if (ingestForm.limit.trim()) params.set("limit", ingestForm.limit.trim());
     try {
       const res = await postApi<{
         job_id: string;
         status: string;
+        source_type?: string;
+        connector_type?: string;
         inserted_count?: number;
+        updated_count?: number;
         failed_count?: number;
-      }>(`/ingestion-jobs?source_id=${encodeURIComponent(row.source_id)}`);
-      const count = res.inserted_count ?? 0;
+        skipped_count?: number;
+      }>(`/ingestion-jobs?${params.toString()}`);
+      const inserted = res.inserted_count ?? 0;
+      const updated = res.updated_count ?? 0;
       const failed = res.failed_count ?? 0;
+      const skipped = res.skipped_count ?? 0;
       showToast(
         "success",
-        failed > 0
-          ? `적재 완료: ${count}건 (실패 ${failed}건) — ${res.job_id}`
-          : `적재 완료: ${count}건 — ${res.job_id}`,
+        `[${res.source_type ?? ingestTarget.source_type}] 신규 ${inserted} / 갱신 ${updated} / 실패 ${failed} / 건너뜀 ${skipped} — ${res.job_id}`,
       );
+      setIngestTarget(null);
       load();
-    } catch {
-      showToast("error", "적재 실행에 실패했습니다.");
+    } catch (err: unknown) {
+      const ax = err as { response?: { data?: { detail?: string | { message?: string; connector_type?: string; error_code?: string } } } };
+      const detail = ax.response?.data?.detail;
+      const msg = typeof detail === "string"
+        ? detail
+        : detail?.message || "적재 실행에 실패했습니다.";
+      const connector = typeof detail === "object" && detail?.connector_type ? ` [${detail.connector_type}]` : "";
+      showToast("error", `${msg}${connector}`);
     } finally {
       setIngesting(null);
     }
   };
+
+  const handleIngest = (row: DataSource) => openIngestModal(row);
 
   const sourceFormFields = (
     <div className="space-y-3">
@@ -495,6 +525,55 @@ export default function DataSourcesPage() {
               <dd className="text-slate-700">{testResult.message}</dd>
             </div>
           </dl>
+        )}
+      </Modal>
+
+      <Modal open={!!ingestTarget} title={`데이터 적재 — ${ingestTarget?.source_name ?? ""}`}
+        onClose={() => setIngestTarget(null)}
+        footer={<>
+          <Button variant="secondary" onClick={() => setIngestTarget(null)}>취소</Button>
+          <Button onClick={runIngest} disabled={!!ingesting}>
+            {ingesting ? "적재 중..." : "적재 실행"}
+          </Button>
+        </>}>
+        {ingestTarget && (
+          <div className="space-y-3 text-sm">
+            <p className="text-slate-500">
+              유형: <strong>{ingestTarget.source_type}</strong> · 도메인: {ingestTarget.data_domain}
+            </p>
+            {(isDbType(ingestTarget.source_type) || isApiType(ingestTarget.source_type)) && (
+              <p className="text-xs text-amber-700 bg-amber-50 p-2 rounded">
+                DB/API 소스는 start_at/end_at으로 기간 필터를 지정할 수 있습니다. 미입력 시 전체(또는 connector 기본) 범위로 조회합니다.
+              </p>
+            )}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs text-slate-500 mb-1">시작 시각 (start_at)</label>
+                <TextInput value={ingestForm.start_at} onChange={(v) => setIngestForm({ ...ingestForm, start_at: v })}
+                  placeholder="2026-05-22T00:00:00" />
+              </div>
+              <div>
+                <label className="block text-xs text-slate-500 mb-1">종료 시각 (end_at)</label>
+                <TextInput value={ingestForm.end_at} onChange={(v) => setIngestForm({ ...ingestForm, end_at: v })}
+                  placeholder="2026-05-23T23:00:00" />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs text-slate-500 mb-1">limit</label>
+                <TextInput value={ingestForm.limit} onChange={(v) => setIngestForm({ ...ingestForm, limit: v })} placeholder="1000" />
+              </div>
+              <div>
+                <label className="block text-xs text-slate-500 mb-1">load_mode</label>
+                <SelectInput value={ingestForm.load_mode} onChange={(v) => setIngestForm({ ...ingestForm, load_mode: v })}
+                  options={[
+                    { value: "UPSERT", label: "UPSERT (신규+갱신)" },
+                    { value: "INSERT_ONLY", label: "INSERT_ONLY (중복 건너뜀)" },
+                  ]} />
+              </div>
+            </div>
+            <p className="text-xs text-slate-400">start_at/end_at 미입력 시 connector 기본 동작으로 실행됩니다.</p>
+          </div>
         )}
       </Modal>
 

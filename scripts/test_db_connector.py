@@ -191,8 +191,28 @@ def main() -> int:
         ingest2 = api("POST", f"/ingestion-jobs?{urllib.parse.urlencode({'source_id': source_id, 'limit': 50})}")
         print(
             f"  [적재 2차 upsert] inserted={ingest2.get('inserted_count')} "
-            f"updated={ingest2.get('updated_count')} duplicate={ingest2.get('duplicate_count')}"
+            f"updated={ingest2.get('updated_count')} skipped={ingest2.get('skipped_count')}"
         )
+        if (ingest2.get("updated_count") or 0) < 1 and (ingest2.get("inserted_count") or 0) < 1:
+            print("  [WARN] 재적재 시 updated/inserted가 모두 0일 수 있음(이미 동일 데이터)")
+
+        filtered = api(
+            "POST",
+            f"/ingestion-jobs?{urllib.parse.urlencode({
+                'source_id': source_id,
+                'start_at': '2020-01-01T00:00:00',
+                'end_at': '2020-01-02T00:00:00',
+                'limit': 10,
+            })}",
+        )
+        print(f"  [기간 필터] inserted={filtered.get('inserted_count')} (기대: 0 또는 소량)")
+
+        limited = api(
+            "POST",
+            f"/ingestion-jobs?{urllib.parse.urlencode({'source_id': source_id, 'limit': 5})}",
+        )
+        summary = limited.get("result_summary") or {}
+        print(f"  [limit=5] source_row_count={summary.get('source_row_count')}")
 
         print("\nPASSED: DB_POSTGRES connector flow")
         return 0

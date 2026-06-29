@@ -163,9 +163,24 @@ def main() -> int:
 
         ingest = api("POST", f"/ingestion-jobs?{urllib.parse.urlencode({'source_id': source_id, 'limit': 30})}")
         print(
-            f"  [적재] inserted={ingest.get('inserted_count')} connector={ingest.get('connector_type')} "
-            f"source_type={ingest.get('source_type')}"
+            f"  [적재] inserted={ingest.get('inserted_count')} updated={ingest.get('updated_count')} "
+            f"connector={ingest.get('connector_type')}"
         )
+        ingest2 = api("POST", f"/ingestion-jobs?{urllib.parse.urlencode({'source_id': source_id, 'limit': 30})}")
+        print(
+            f"  [재적재] inserted={ingest2.get('inserted_count')} updated={ingest2.get('updated_count')}"
+        )
+
+        ranged = api(
+            "POST",
+            f"/ingestion-jobs?{urllib.parse.urlencode({
+                'source_id': source_id,
+                'start_at': '2026-01-01T00:00:00',
+                'end_at': '2026-12-31T23:59:59',
+                'limit': 10,
+            })}",
+        )
+        print(f"  [기간+limit] source_row_count={(ranged.get('result_summary') or {}).get('source_row_count')}")
         after = count_table(table)
         if after >= 0:
             print(f"  [DB] {table}: {before} → {after}")

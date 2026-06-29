@@ -11,7 +11,7 @@ from app.core.response import ok, paged
 from app.core.time import utc_now
 from app.models.entities import DataMapping, DataSource
 from app.schemas.api import MappingCreate, MappingUpdate
-from app.services.mapping_service import preview_mapping_data, validate_mapping_rules
+from app.services.mapping_service import MappingValidationError, preview_mapping_data, validate_mapping_rules
 
 router = APIRouter(prefix="/mappings", tags=["Mapping"])
 
@@ -97,6 +97,15 @@ async def preview_mapping(mapping_id: str, db: AsyncSession = Depends(get_db)):
     source = await _get_source(db, m.source_id)
     try:
         rows = await asyncio.to_thread(preview_mapping_data, source, m, 10)
+    except MappingValidationError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error_code": "MAPPING_VALIDATION_FAILED",
+                "message": str(exc),
+                "errors": exc.errors,
+            },
+        ) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return ok({

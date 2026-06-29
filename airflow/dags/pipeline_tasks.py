@@ -40,18 +40,26 @@ def mark_pipeline_running(**context):
 def run_ingestion(**context):
     conf = extract_conf(context)
     pipeline_run_id = conf.get("pipeline_run_id")
-    source_id = conf.get("source_id", "DS-CSV-001")
+    source_id = conf.get("source_id")
+    if not source_id:
+        raise ValueError("data_ingestion_dag conf에 source_id가 필요합니다.")
     weather_source_id = conf.get("weather_source_id")
 
     update_pipeline_status(pipeline_run_id, "RUNNING", "data_ingestion", "데이터 적재 시작")
     results = []
 
     def _ingest_params(sid: str) -> dict:
-        params: dict = {"source_id": sid}
+        params: dict = {"source_id": sid, "load_mode": conf.get("load_mode", "UPSERT")}
         if conf.get("start_at"):
             params["start_at"] = conf.get("start_at")
         if conf.get("end_at"):
             params["end_at"] = conf.get("end_at")
+        if conf.get("limit") is not None:
+            params["limit"] = conf.get("limit")
+        if conf.get("mapping_id"):
+            params["mapping_id"] = conf.get("mapping_id")
+        if conf.get("data_domain"):
+            params["data_domain"] = conf.get("data_domain")
         return params
 
     heat = call_backend_api("POST", "/ingestion-jobs", params=_ingest_params(source_id))
@@ -62,7 +70,9 @@ def run_ingestion(**context):
 
     summary = {
         "inserted_count": sum(r.get("inserted_count") or 0 for r in results),
+        "updated_count": sum(r.get("updated_count") or 0 for r in results),
         "failed_count": sum(r.get("failed_count") or 0 for r in results),
+        "skipped_count": sum(r.get("skipped_count") or 0 for r in results),
         "jobs": results,
     }
     _complete_step(context, pipeline_run_id, "data_ingestion", "데이터 적재 완료", summary)

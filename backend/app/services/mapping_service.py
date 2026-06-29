@@ -24,6 +24,14 @@ DATETIME_FORMATS = (
 )
 
 
+class MappingValidationError(ValueError):
+    """매핑 검증/미리보기 오류."""
+
+    def __init__(self, message: str, errors: list[str] | None = None) -> None:
+        self.errors = errors or [message]
+        super().__init__(message)
+
+
 def _target_columns(mapping: DataMapping) -> list[dict[str, Any]]:
     return mapping.columns or []
 
@@ -80,7 +88,8 @@ def _parse_decimal(value: Any) -> Decimal | None:
         return None
 
 
-def validate_mapping_rules(mapping: DataMapping, source: DataSource | None = None) -> dict[str, Any]:
+def validate_mapping_structure(mapping: DataMapping) -> dict[str, Any]:
+    """소스 접속 없이 매핑 규칙만 검증."""
     rules = _target_columns(mapping)
     errors: list[str] = []
     warnings: list[str] = []
@@ -100,20 +109,51 @@ def validate_mapping_rules(mapping: DataMapping, source: DataSource | None = Non
         if rule.get("required_yn") and not rule.get("source_column"):
             errors.append(f"필수 컬럼 {rule.get('target_column')}의 source_column이 비어 있습니다.")
 
+    if table == HEAT_TARGET and "supply_temp" not in mapped_targets:
+        warnings.append("선택 컬럼 supply_temp가 매핑되지 않았습니다.")
+    if table == WEATHER_TARGET and "data_type" not in mapped_targets:
+        warnings.append("data_type 미매핑 — 적재 시 'OBSERVATION' 기본값을 사용합니다.")
+    if table == WEATHER_TARGET and not mapped_targets.intersection(WEATHER_NUMERIC):
+        errors.append("기상 매핑에는 temperature/humidity/rainfall/wind_speed 중 최소 1개가 필요합니다.")
+
+    return {
+        "mapping_id": mapping.mapping_id,
+        "valid": len(errors) == 0,
+        "warnings": warnings,
+        "errors": errors,
+    }
+
+
+def validate_mapping_rules(mapping: DataMapping, source: DataSource | None = None) -> dict[str, Any]:
+    result = validate_mapping_structure(mapping)
+    errors = list(result["errors"])
+    warnings = list(result["warnings"])
+    rules = _target_columns(mapping)
+    table = _target_table_key(mapping)
+    mapped_targets = {r.get("target_column") for r in rules if r.get("target_column")}
+
     if source:
         try:
+            from app.services.connectors.base import ConnectorError
             from app.services.connectors.registry import get_connector
 
             connector = get_connector(source)
+            schema = connector.discover_schema(source)
+            source_fields = {f["name"] for f in schema.get("fields", []) if f.get("name")}
+            if source_fields:
+                for rule in rules:
+                    src = rule.get("source_column")
+                    if src and src not in source_fields:
+                        errors.append(f"원천 필드 '{src}'가 소스 스키마에 없습니다.")
+
             raw_rows, _ = connector.fetch_rows(source, mapping=mapping, limit=20)
             if not raw_rows:
                 warnings.append("소스에서 데이터 행이 없습니다.")
             else:
                 preview = raw_rows[:20]
-                date_col = "measured_at"
                 for i, row in enumerate(preview[:5], start=1):
-                    if date_col in row and _parse_datetime(row[date_col]) is None:
-                        errors.append(f"{i}행 measured_at 날짜 파싱 불가: {row.get(date_col)}")
+                    if "measured_at" in row and _parse_datetime(row["measured_at"]) is None:
+                        errors.append(f"{i}행 measured_at 날짜 파싱 불가: {row.get('measured_at')}")
                 numeric_cols = {"heat_demand"} if table == HEAT_TARGET else WEATHER_NUMERIC
                 for col in numeric_cols:
                     if col in mapped_targets:
@@ -121,13 +161,10 @@ def validate_mapping_rules(mapping: DataMapping, source: DataSource | None = Non
                             val = row.get(col)
                             if val not in (None, "") and _parse_decimal(val) is None:
                                 errors.append(f"{i}행 {col} 숫자 변환 불가: {val}")
+        except ConnectorError as exc:
+            errors.append(f"소스 읽기 실패: {exc.message}")
         except Exception as exc:
             errors.append(f"소스 읽기 실패: {exc}")
-
-    if table == HEAT_TARGET and "supply_temp" not in mapped_targets:
-        warnings.append("선택 컬럼 supply_temp가 매핑되지 않았습니다.")
-    if table == WEATHER_TARGET and "data_type" not in mapped_targets:
-        warnings.append("data_type 미매핑 — 적재 시 'OBSERVATION' 기본값을 사용합니다.")
 
     return {
         "mapping_id": mapping.mapping_id,
@@ -144,6 +181,13 @@ def preview_mapping_data(
     start_at: datetime | None = None,
     end_at: datetime | None = None,
 ) -> list[dict[str, Any]]:
+    validation = validate_mapping_rules(mapping, source)
+    if not validation["valid"]:
+        raise MappingValidationError(
+            validation["errors"][0] if validation["errors"] else "매핑 검증 실패",
+            errors=validation["errors"],
+        )
+
     from app.services.connectors.registry import get_connector
 
     connector = get_connector(source)

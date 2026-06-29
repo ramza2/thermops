@@ -6,24 +6,68 @@ import asyncio
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import select, tuple_
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.time import utc_now
 from app.models.entities import DataMapping, DataQualityRun, DataSource, HeatDemandActual, WeatherObservation
-from app.services.connectors.base import ConnectorError
+from app.services.connectors.base import ConnectorError, mask_sensitive
 from app.services.connectors.registry import get_connector, normalize_source_type
 from app.services.mapping_service import (
     HEAT_TARGET,
     WEATHER_TARGET,
     _target_table_key,
     normalize_row_for_insert,
+    validate_mapping_structure,
 )
+
+LOAD_MODES = {"UPSERT", "INSERT_ONLY"}
 
 
 class IngestionError(Exception):
-    pass
+    def __init__(
+        self,
+        message: str,
+        *,
+        error_code: str = "INGESTION_FAILED",
+        connector_type: str | None = None,
+        source_type: str | None = None,
+        detail: str | None = None,
+        recoverable: bool = True,
+    ) -> None:
+        self.message = mask_sensitive(message)
+        self.error_code = error_code
+        self.connector_type = connector_type
+        self.source_type = source_type
+        self.detail = mask_sensitive(detail) if detail else None
+        self.recoverable = recoverable
+        super().__init__(self.message)
+
+    def to_dict(self) -> dict[str, Any]:
+        out: dict[str, Any] = {
+            "error_code": self.error_code,
+            "message": self.message,
+            "recoverable": self.recoverable,
+        }
+        if self.connector_type:
+            out["connector_type"] = self.connector_type
+        if self.source_type:
+            out["source_type"] = self.source_type
+        if self.detail:
+            out["detail"] = self.detail
+        return out
+
+    @classmethod
+    def from_connector(cls, exc: ConnectorError) -> IngestionError:
+        return cls(
+            exc.message,
+            error_code=exc.error_code,
+            connector_type=exc.connector_type,
+            source_type=exc.source_type,
+            detail=exc.detail,
+            recoverable=exc.recoverable,
+        )
 
 
 async def get_active_mapping(db: AsyncSession, source_id: str) -> DataMapping | None:
@@ -35,30 +79,126 @@ async def get_active_mapping(db: AsyncSession, source_id: str) -> DataMapping | 
     return result.scalars().first()
 
 
+async def resolve_mapping(
+    db: AsyncSession,
+    source_id: str,
+    mapping_id: str | None = None,
+) -> DataMapping | None:
+    if mapping_id:
+        mapping = (
+            await db.execute(select(DataMapping).where(DataMapping.mapping_id == mapping_id))
+        ).scalar_one_or_none()
+        if not mapping:
+            raise IngestionError("지정한 매핑을 찾을 수 없습니다.", error_code="MAPPING_VALIDATION_FAILED")
+        if mapping.source_id != source_id:
+            raise IngestionError("매핑의 source_id가 데이터 소스와 일치하지 않습니다.", error_code="MAPPING_VALIDATION_FAILED")
+        return mapping
+    return await get_active_mapping(db, source_id)
+
+
+async def _load_existing_heat_keys(db: AsyncSession, keys: list[tuple[str, datetime]]) -> set[tuple[str, datetime]]:
+    if not keys:
+        return set()
+    existing: set[tuple[str, datetime]] = set()
+    chunk_size = 400
+    for i in range(0, len(keys), chunk_size):
+        chunk = keys[i : i + chunk_size]
+        rows = (
+            await db.execute(
+                select(HeatDemandActual.site_id, HeatDemandActual.measured_at).where(
+                    tuple_(HeatDemandActual.site_id, HeatDemandActual.measured_at).in_(chunk)
+                )
+            )
+        ).all()
+        existing.update((r[0], r[1]) for r in rows)
+    return existing
+
+
+async def _load_existing_weather_keys(
+    db: AsyncSession,
+    keys: list[tuple[str, datetime, str]],
+) -> set[tuple[str, datetime, str]]:
+    if not keys:
+        return set()
+    existing: set[tuple[str, datetime, str]] = set()
+    chunk_size = 400
+    for i in range(0, len(keys), chunk_size):
+        chunk = keys[i : i + chunk_size]
+        rows = (
+            await db.execute(
+                select(
+                    WeatherObservation.weather_area_id,
+                    WeatherObservation.measured_at,
+                    WeatherObservation.data_type,
+                ).where(
+                    tuple_(
+                        WeatherObservation.weather_area_id,
+                        WeatherObservation.measured_at,
+                        WeatherObservation.data_type,
+                    ).in_(chunk)
+                )
+            )
+        ).all()
+        existing.update((r[0], r[1], r[2]) for r in rows)
+    return existing
+
+
 async def run_ingestion(
     db: AsyncSession,
     source_id: str,
     job_id: str,
     *,
+    mapping_id: str | None = None,
     start_at: datetime | None = None,
     end_at: datetime | None = None,
     limit: int | None = None,
+    load_mode: str = "UPSERT",
 ) -> dict[str, Any]:
+    load_mode = (load_mode or "UPSERT").upper()
+    if load_mode not in LOAD_MODES:
+        raise IngestionError(
+            f"지원하지 않는 load_mode: {load_mode}",
+            error_code="INGESTION_FAILED",
+        )
+
     source = (
         await db.execute(select(DataSource).where(DataSource.data_source_id == source_id))
     ).scalar_one_or_none()
     if not source:
-        raise IngestionError("데이터 소스를 찾을 수 없습니다.")
+        raise IngestionError("데이터 소스를 찾을 수 없습니다.", error_code="INGESTION_FAILED")
     if source.active_yn != "Y":
-        raise IngestionError("비활성 데이터 소스입니다.")
+        raise IngestionError("비활성 데이터 소스입니다.", error_code="INGESTION_FAILED")
 
-    mapping = await get_active_mapping(db, source_id)
+    source_type = normalize_source_type(source.source_type)
+    connector_type = source_type
+
+    mapping = await resolve_mapping(db, source_id, mapping_id)
     if not mapping:
-        raise IngestionError("연결된 활성 매핑이 없습니다.")
+        raise IngestionError(
+            "연결된 활성 매핑이 없습니다.",
+            error_code="MAPPING_VALIDATION_FAILED",
+            source_type=source_type,
+            connector_type=connector_type,
+        )
+
+    validation = validate_mapping_structure(mapping)
+    if not validation["valid"]:
+        raise IngestionError(
+            "; ".join(validation["errors"][:3]),
+            error_code="MAPPING_VALIDATION_FAILED",
+            source_type=source_type,
+            connector_type=connector_type,
+            detail="; ".join(validation["errors"]),
+        )
 
     table = _target_table_key(mapping)
     if table not in (HEAT_TARGET, WEATHER_TARGET):
-        raise IngestionError(f"지원하지 않는 저장 대상: {mapping.target_table}")
+        raise IngestionError(
+            f"지원하지 않는 저장 대상: {mapping.target_table}",
+            error_code="INGESTION_FAILED",
+            source_type=source_type,
+            connector_type=connector_type,
+        )
 
     try:
         connector = get_connector(source)
@@ -71,18 +211,22 @@ async def run_ingestion(
             limit=limit,
         )
     except ConnectorError as exc:
-        raise IngestionError(str(exc)) from exc
+        raise IngestionError.from_connector(exc) from exc
+
+    warnings: list[str] = list(validation.get("warnings") or [])
+    if not mapped_rows:
+        warnings.append("소스에서 조회된 데이터가 없습니다.")
 
     inserted = 0
+    updated = 0
     failed = 0
     skipped = 0
     missing_optional = 0
     duplicate_keys: set[tuple] = set()
     duplicate_in_file = 0
-    warnings: list[str] = []
     now = utc_now()
-    source_type = normalize_source_type(source.source_type)
 
+    pending: list[tuple[Any, dict[str, Any]]] = []
     for raw_mapped in mapped_rows:
         normalized = normalize_row_for_insert(raw_mapped, mapping)
         if normalized is None:
@@ -91,17 +235,40 @@ async def run_ingestion(
 
         if table == HEAT_TARGET:
             key = (normalized["site_id"], normalized["measured_at"])
-            if key in duplicate_keys:
-                duplicate_in_file += 1
-                skipped += 1
-                continue
-            duplicate_keys.add(key)
+        else:
+            key = (
+                normalized["weather_area_id"],
+                normalized["measured_at"],
+                normalized["data_type"],
+            )
 
+        if key in duplicate_keys:
+            duplicate_in_file += 1
+            skipped += 1
+            continue
+        duplicate_keys.add(key)
+
+        if table == HEAT_TARGET:
             for col in ("supply_temp", "return_temp", "flow_rate"):
                 if col not in normalized:
                     missing_optional += 1
                     break
 
+        pending.append((key, normalized))
+
+    if table == HEAT_TARGET:
+        existing_keys = await _load_existing_heat_keys(db, [k for k, _ in pending])
+    else:
+        existing_keys = await _load_existing_weather_keys(db, [k for k, _ in pending])
+
+    for key, normalized in pending:
+        is_existing = key in existing_keys
+
+        if load_mode == "INSERT_ONLY" and is_existing:
+            skipped += 1
+            continue
+
+        if table == HEAT_TARGET:
             stmt = pg_insert(HeatDemandActual).values(
                 site_id=normalized["site_id"],
                 measured_at=normalized["measured_at"],
@@ -111,28 +278,20 @@ async def run_ingestion(
                 flow_rate=normalized.get("flow_rate"),
                 loaded_at=now,
             )
-            stmt = stmt.on_conflict_do_update(
-                constraint="uk_heat_actual",
-                set_={
-                    "heat_demand": stmt.excluded.heat_demand,
-                    "supply_temp": stmt.excluded.supply_temp,
-                    "return_temp": stmt.excluded.return_temp,
-                    "flow_rate": stmt.excluded.flow_rate,
-                    "loaded_at": stmt.excluded.loaded_at,
-                },
-            )
+            if load_mode == "INSERT_ONLY":
+                stmt = stmt.on_conflict_do_nothing(constraint="uk_heat_actual")
+            else:
+                stmt = stmt.on_conflict_do_update(
+                    constraint="uk_heat_actual",
+                    set_={
+                        "heat_demand": stmt.excluded.heat_demand,
+                        "supply_temp": stmt.excluded.supply_temp,
+                        "return_temp": stmt.excluded.return_temp,
+                        "flow_rate": stmt.excluded.flow_rate,
+                        "loaded_at": stmt.excluded.loaded_at,
+                    },
+                )
         else:
-            key = (
-                normalized["weather_area_id"],
-                normalized["measured_at"],
-                normalized["data_type"],
-            )
-            if key in duplicate_keys:
-                duplicate_in_file += 1
-                skipped += 1
-                continue
-            duplicate_keys.add(key)
-
             stmt = pg_insert(WeatherObservation).values(
                 weather_area_id=normalized["weather_area_id"],
                 measured_at=normalized["measured_at"],
@@ -144,40 +303,51 @@ async def run_ingestion(
                 apparent_temp=normalized.get("apparent_temp"),
                 loaded_at=now,
             )
-            stmt = stmt.on_conflict_do_update(
-                constraint="uk_weather_obs",
-                set_={
-                    "temperature": stmt.excluded.temperature,
-                    "humidity": stmt.excluded.humidity,
-                    "wind_speed": stmt.excluded.wind_speed,
-                    "rainfall": stmt.excluded.rainfall,
-                    "apparent_temp": stmt.excluded.apparent_temp,
-                    "loaded_at": stmt.excluded.loaded_at,
-                },
-            )
+            if load_mode == "INSERT_ONLY":
+                stmt = stmt.on_conflict_do_nothing(constraint="uk_weather_obs")
+            else:
+                stmt = stmt.on_conflict_do_update(
+                    constraint="uk_weather_obs",
+                    set_={
+                        "temperature": stmt.excluded.temperature,
+                        "humidity": stmt.excluded.humidity,
+                        "wind_speed": stmt.excluded.wind_speed,
+                        "rainfall": stmt.excluded.rainfall,
+                        "apparent_temp": stmt.excluded.apparent_temp,
+                        "loaded_at": stmt.excluded.loaded_at,
+                    },
+                )
 
         await db.execute(stmt)
-        inserted += 1
+        if is_existing:
+            updated += 1
+        else:
+            inserted += 1
+            existing_keys.add(key)
 
     source.last_loaded_at = now
 
-    run = (
-        await db.execute(select(DataQualityRun).where(DataQualityRun.run_id == job_id))
-    ).scalar_one_or_none()
+    total_success = inserted + updated
     summary = {
         "inserted_count": inserted,
-        "updated_count": inserted,
+        "updated_count": updated,
         "failed_count": failed,
         "skipped_count": skipped,
         "duplicate_count": duplicate_in_file,
+        "total_success_count": total_success,
         "missing_optional_count": missing_optional,
         "source_row_count": len(mapped_rows),
         "target_table": mapping.target_table,
         "source_type": source_type,
-        "connector_type": source_type,
+        "connector_type": connector_type,
+        "load_mode": load_mode,
         "warnings": warnings,
     }
-    status = "SUCCESS" if inserted > 0 or len(mapped_rows) == 0 else "FAILED"
+    status = "SUCCESS" if total_success > 0 or len(mapped_rows) == 0 else "FAILED"
+
+    run = (
+        await db.execute(select(DataQualityRun).where(DataQualityRun.run_id == job_id))
+    ).scalar_one_or_none()
     if run:
         run.run_status = status
         run.finished_at = now
@@ -189,17 +359,29 @@ async def run_ingestion(
         "job_id": job_id,
         "status": status,
         "inserted_count": inserted,
+        "updated_count": updated,
         "failed_count": failed,
+        "skipped_count": skipped,
         "result_summary": summary,
         "source_type": source_type,
+        "connector_type": connector_type,
     }
 
 
-async def fail_ingestion_job(db: AsyncSession, job_id: str, error_message: str) -> None:
+async def fail_ingestion_job(
+    db: AsyncSession,
+    job_id: str,
+    error_message: str,
+    *,
+    error_detail: dict[str, Any] | None = None,
+) -> None:
     run = (
         await db.execute(select(DataQualityRun).where(DataQualityRun.run_id == job_id))
     ).scalar_one_or_none()
     if run:
         run.run_status = "FAILED"
         run.finished_at = utc_now()
-        run.result_summary = {"error_message": error_message}
+        summary: dict[str, Any] = {"error_message": mask_sensitive(error_message)}
+        if error_detail:
+            summary["error"] = error_detail
+        run.result_summary = summary

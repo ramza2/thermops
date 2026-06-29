@@ -26,7 +26,11 @@ def get_connector(source: DataSource) -> BaseConnector:
     key = (source.source_type or "").upper()
     connector = _BY_TYPE.get(key)
     if not connector:
-        raise ConnectorError(f"지원하지 않는 source_type: {source.source_type}")
+        raise ConnectorError(
+            f"지원하지 않는 source_type: {source.source_type}",
+            error_code="CONNECTOR_NOT_FOUND",
+            source_type=source.source_type,
+        )
     return connector
 
 
