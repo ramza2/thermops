@@ -20,6 +20,7 @@ from app.services.prediction_service import (
     predictions_summary_stats,
     run_prediction_job,
 )
+from app.services.feature_dataset_service import PredictionPeriodError
 
 router = APIRouter(tags=["Prediction"])
 
@@ -30,6 +31,8 @@ async def create_prediction_job(body: PredictionJobCreate, db: AsyncSession = De
         params = params_from_schema(body)
         result = await run_prediction_job(db, params)
     except PredictionModelError as exc:
+        raise HTTPException(status_code=400, detail=exc.to_dict()) from exc
+    except PredictionPeriodError as exc:
         raise HTTPException(status_code=400, detail=exc.to_dict()) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

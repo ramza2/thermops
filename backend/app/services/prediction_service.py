@@ -27,6 +27,7 @@ from app.models.entities import (
     PredictionJob,
 )
 from app.schemas.api import PredictionJobCreate
+from app.services.feature_dataset_service import latest_dataset_version_id, validate_prediction_period
 
 
 class PredictionModelError(ValueError):
@@ -86,19 +87,6 @@ async def _get_feature_set(db: AsyncSession, feature_set_id: str) -> FeatureSet:
     if not fs:
         raise ValueError(f"Feature Set을 찾을 수 없습니다: {feature_set_id}")
     return fs
-
-
-async def _latest_dataset_version_id(db: AsyncSession, feature_set_id: str) -> str | None:
-    row = (
-        await db.execute(
-            select(FeatureDataset.dataset_version_id)
-            .where(FeatureDataset.feature_json["feature_set_id"].astext == feature_set_id)
-            .group_by(FeatureDataset.dataset_version_id)
-            .order_by(func.max(FeatureDataset.created_at).desc())
-            .limit(1)
-        )
-    ).scalar_one_or_none()
-    return row
 
 
 async def _load_feature_records(
@@ -391,6 +379,16 @@ def params_from_schema(body: PredictionJobCreate) -> PredictionJobParams:
 
 
 async def run_prediction_job(db: AsyncSession, params: PredictionJobParams) -> dict[str, Any]:
+    if not params.start_at or not params.end_at:
+        raise ValueError("start_at와 end_at가 필요합니다.")
+    await validate_prediction_period(
+        db,
+        params.feature_set_id,
+        params.start_at,
+        params.end_at,
+        params.site_ids,
+    )
+
     started = utc_now()
     job_id = f"PRJ-{started.strftime('%Y%m%d')}-{uuid4().hex[:6].upper()}"
     run_id = f"LOCAL-RUN-{uuid4().hex[:6].upper()}"
@@ -430,7 +428,7 @@ async def run_prediction_job(db: AsyncSession, params: PredictionJobParams) -> d
         fs = await _get_feature_set(db, params.feature_set_id)
         feature_names: list[str] = fs.features or []
 
-        dataset_version_id = await _latest_dataset_version_id(db, params.feature_set_id)
+        dataset_version_id = await latest_dataset_version_id(db, params.feature_set_id)
         if not dataset_version_id:
             raise ValueError(
                 f"Feature Set {params.feature_set_id}에 대한 Feature Dataset이 없습니다."

@@ -329,9 +329,9 @@ flowchart LR
 | **주요 입력값** | Feature Set, 모델 버전(빈 값=자동), 지사(선택), 예측 기간 시작/종료(`datetime-local`), 예측 구간(`BATCH`/`D_PLUS_1`/`D_PLUS_3`/`D_PLUS_7`) |
 | **주요 버튼** | **예측 실행** → 확인 모달 **실행** |
 | **버튼 클릭 시 동작** | `POST /prediction-jobs` (`overwrite_yn: true`) → 완료 토스트(건수·모델) → `/predictions/results` 이동 |
-| **호출 API** | `GET /sites`, `GET /feature-sets`, `GET /models`, `GET /models/{name}/versions`, `POST /prediction-jobs` |
+| **호출 API** | `GET /sites`, `GET /feature-sets`, `GET /feature-sets/{id}/dataset-range`, `GET /models`, `GET /models/{name}/versions`, `POST /prediction-jobs` |
 | **결과 확인 위치** | 완료 토스트, 예측 결과 화면 |
-| **주의할 점** | Feature Set과 모델 Feature Set 불일치 시 400 (`MODEL_FEATURE_SET_MISMATCH`). 기간 필수 입력 |
+| **주의할 점** | Feature Set과 모델 Feature Set 불일치 시 400 (`MODEL_FEATURE_SET_MISMATCH`). **예측 기간은 Feature Dataset 생성 범위 안**이어야 함. Feature Set 선택 시 사용 가능 기간 표시·최신 24시간 자동 설정. 범위 밖이면 실행 전 경고·400 (`PREDICTION_PERIOD_OUT_OF_FEATURE_RANGE`). Dataset 없으면 400 (`NO_FEATURE_DATASET`) |
 | **선행 작업** | Feature 생성, Champion/Candidate 모델 등록 |
 | **후속 작업** | 예측 결과 조회, 오차 분석 |
 
@@ -495,7 +495,7 @@ flowchart LR
 | 4 | `/models/training-configs` | `TRC-TPL-LAG-ROLL` **학습 실행** | 또는 기존 학습 결과 활용 |
 | 5 | `/models/training-jobs` | 상태 `SUCCESS`·MAPE 확인 | |
 | 6 | `/models/registry` | 필요 시 **Champion 지정** | `heat_demand_lightgbm` |
-| 7 | `/predictions/jobs` | Feature Set `FS-TPL-LAG-ROLL`, 기간 입력 후 **예측 실행** | 모델 자동 선택 가능 |
+| 7 | `/predictions/jobs` | Feature Set `FS-TPL-LAG-ROLL` 선택 → **사용 가능 기간** 확인 후 **예측 실행** (기본: 최신 24시간 자동 설정) | 모델 자동 선택 가능 |
 | 8 | `/predictions/results` | 기간·지사 필터 **조회** | 예측값 확인 |
 | 9 | (선택) `/ops/pipeline-runs` | `thermops_full_pipeline_dag` 수동 실행 | 일괄 검증용 |
 

@@ -16,6 +16,7 @@ from app.services.feature_build_service import (
     preview_features,
     run_feature_build,
 )
+from app.services.feature_dataset_service import get_feature_dataset_range
 
 router = APIRouter(tags=["Feature"])
 
@@ -137,6 +138,15 @@ async def get_feature_set(feature_set_id: str, db: AsyncSession = Depends(get_db
         "apply_site_scope": fs.apply_site_scope,
         "description": fs.description,
     })
+
+
+@router.get("/feature-sets/{feature_set_id}/dataset-range")
+async def get_feature_set_dataset_range(feature_set_id: str, db: AsyncSession = Depends(get_db)):
+    try:
+        result = await get_feature_dataset_range(db, feature_set_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return ok(result)
 
 
 @router.delete("/feature-sets/{feature_set_id}")
