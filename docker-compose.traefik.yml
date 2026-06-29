@@ -72,7 +72,10 @@ services:
       dockerfile: Dockerfile
     container_name: ${COMPOSE_PROJECT_NAME:-thermops}-backend
     environment:
-      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-thermops}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-thermops}
+      POSTGRES_HOST: postgres
+      POSTGRES_USER: ${POSTGRES_USER:-thermops}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-thermops}
       MLFLOW_TRACKING_URI: ${MLFLOW_TRACKING_URI:-http://mlflow:5000}
       MLFLOW_S3_ENDPOINT_URL: http://minio:9000
       AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-minio}
@@ -147,11 +150,12 @@ services:
     container_name: ${COMPOSE_PROJECT_NAME:-thermops}-airflow
     environment:
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
-      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER:-thermops}:${POSTGRES_PASSWORD}@postgres:5432/thermops_airflow
       AIRFLOW__CORE__LOAD_EXAMPLES: "false"
       AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "true"
       AIRFLOW__API__AUTH_BACKENDS: airflow.api.auth.backend.basic_auth,airflow.api.auth.backend.session
-      THERMOps_DB_URL: postgresql://${POSTGRES_USER:-thermops}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-thermops}
+      POSTGRES_USER: ${POSTGRES_USER:-thermops}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-thermops}
       MLFLOW_TRACKING_URI: ${MLFLOW_TRACKING_URI:-http://mlflow:5000}
       THERMOPS_BACKEND_BASE_URL: http://backend:8000/api/v1
       THERMOPS_BACKEND_TIMEOUT: "300"

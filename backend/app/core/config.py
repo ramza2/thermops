@@ -1,11 +1,21 @@
 from functools import lru_cache
 from pathlib import Path
+from urllib.parse import quote_plus
 
-from pydantic_settings import BaseSettings
+from pydantic import Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    database_url: str = "postgresql+asyncpg://thermops:thermops@localhost:5432/thermops"
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+
+    # DATABASE_URL 직접 지정 시 우선. 미지정 시 POSTGRES_* 로 조합(URL 인코딩 적용).
+    database_url: str | None = Field(default=None, validation_alias="DATABASE_URL")
+    postgres_host: str = Field(default="postgres", validation_alias="POSTGRES_HOST")
+    postgres_port: int = Field(default=5432, validation_alias="POSTGRES_PORT")
+    postgres_user: str = Field(default="thermops", validation_alias="POSTGRES_USER")
+    postgres_password: str = Field(default="thermops", validation_alias="POSTGRES_PASSWORD")
+    postgres_db: str = Field(default="thermops", validation_alias="POSTGRES_DB")
     mlflow_tracking_uri: str = "http://localhost:5000"
     cors_origins: str = "http://localhost:5173"
     api_prefix: str = "/api/v1"
@@ -19,15 +29,22 @@ class Settings(BaseSettings):
         return [o.strip() for o in self.cors_origins.split(",")]
 
     @property
+    def sqlalchemy_database_url(self) -> str:
+        if self.database_url:
+            return self.database_url
+        user = quote_plus(self.postgres_user)
+        password = quote_plus(self.postgres_password)
+        return (
+            f"postgresql+asyncpg://{user}:{password}"
+            f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
+        )
+
+    @property
     def project_root(self) -> Path:
         if self.thermops_project_root:
             return Path(self.thermops_project_root)
         # backend/app/core/config.py -> repo root
         return Path(__file__).resolve().parents[3]
-
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
 
 
 @lru_cache

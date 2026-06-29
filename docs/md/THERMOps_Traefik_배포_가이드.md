@@ -315,6 +315,34 @@ docker compose -f docker-compose.traefik.yml -f docker-compose.traefik.admin.yml
 - backend에 `/workspace` 마운트 확인 (`THERMOPS_PROJECT_ROOT=/workspace`)
 - `data/samples/heat_demand_sample.csv` 파일 존재 확인
 
+### 12.7 API 500 / `Name or service not known` (DB 연결)
+
+증상: UI는 뜨지만 대시보드·목록 API가 500, backend 로그에 `socket.gaierror: Name or service not known`.
+
+원인: `POSTGRES_PASSWORD`에 `@` 등이 포함되면 compose가 조합한 `DATABASE_URL`이 깨집니다.
+
+```text
+# 잘못된 예 (비밀번호 Open1234!@)
+postgresql+asyncpg://thermops:Open1234!@@postgres:5432/thermops
+                                      ↑ 호스트가 postgres가 아님
+```
+
+확인:
+
+```bash
+docker compose -f docker-compose.traefik.yml --env-file .env.deploy exec backend printenv DATABASE_URL
+docker compose -f docker-compose.traefik.yml --env-file .env.deploy exec backend getent hosts postgres
+```
+
+조치 (최신 compose/backend 사용 시 특수문자 비밀번호도 지원):
+
+```bash
+git pull
+docker compose -f docker-compose.traefik.yml --env-file .env.deploy up -d --build backend airflow mlflow
+```
+
+구버전이거나 급한 경우: 비밀번호에서 `@` 제거 후 `down -v`로 DB volume 재생성.
+
 ---
 
 ## 13. 배포·초기화 명령 요약
