@@ -25,6 +25,29 @@ from app.models.entities import (
 )
 from app.services.prediction_evaluation_service import EVAL_TYPE_PREDICTION
 
+SOURCE_TYPE_COMPUTED = "COMPUTED"
+SOURCE_TYPE_SEED = "SEED"
+SOURCE_TYPE_MANUAL = "MANUAL"
+
+VALID_SOURCE_TYPES = {SOURCE_TYPE_COMPUTED, SOURCE_TYPE_SEED, SOURCE_TYPE_MANUAL}
+
+
+def resolve_drift_report_source_type(report: DriftReport) -> str:
+    if report.source_type:
+        return report.source_type
+    if (report.drift_score_json or {}).get("computed"):
+        return SOURCE_TYPE_COMPUTED
+    return SOURCE_TYPE_SEED
+
+
+def resolve_retraining_candidate_source_type(row: RetrainingCandidate) -> str:
+    if row.source_type:
+        return row.source_type
+    if row.drift_report_id and row.model_version_id:
+        return SOURCE_TYPE_COMPUTED
+    return SOURCE_TYPE_SEED
+
+
 FEATURE_KEYS = (
     "temperature",
     "humidity",
@@ -531,6 +554,7 @@ async def create_drift_report(
         drift_score=drift_score,
         drift_score_json=payload,
         recommendation=recommendation,
+        source_type=SOURCE_TYPE_COMPUTED,
         created_at=utc_now(),
     )
     db.add(report)
@@ -635,6 +659,7 @@ async def create_retraining_candidate_if_needed(
         existing.reason = summary
         existing.severity = severity
         existing.risk_level = "HIGH" if severity == "CRITICAL" else "MEDIUM"
+        existing.source_type = SOURCE_TYPE_COMPUTED
         existing.updated_at = utc_now()
         await db.flush()
         return existing
@@ -655,6 +680,7 @@ async def create_retraining_candidate_if_needed(
         status="PENDING",
         drift_report_id=drift_report.drift_report_id,
         metric_snapshot_json=snapshot,
+        source_type=SOURCE_TYPE_COMPUTED,
         created_at=utc_now(),
     )
     db.add(candidate)
@@ -741,7 +767,8 @@ async def run_drift_detection(db: AsyncSession, params: DriftCheckParams) -> dic
 
 def drift_report_to_dict(report: DriftReport, site_name: str | None = None) -> dict[str, Any]:
     payload = report.drift_score_json or {}
-    computed = payload.get("computed", False)
+    source_type = resolve_drift_report_source_type(report)
+    computed = source_type == SOURCE_TYPE_COMPUTED
     feature_drift = payload.get("feature_drift") or (
         {k: v for k, v in payload.items() if isinstance(v, (int, float))} if not computed else {}
     )
@@ -768,12 +795,16 @@ def drift_report_to_dict(report: DriftReport, site_name: str | None = None) -> d
         "metric_summary_json": metric_summary,
         "feature_drift_json": feature_drift,
         "recommendation": report.recommendation or payload.get("recommendation"),
+        "source_type": source_type,
         "computed": computed,
+        "computed_yn": computed,
         "created_at": report.created_at.isoformat(),
     }
 
 
 def retraining_candidate_to_dict(row: RetrainingCandidate, site_name: str | None = None) -> dict[str, Any]:
+    source_type = resolve_retraining_candidate_source_type(row)
+    computed = source_type == SOURCE_TYPE_COMPUTED
     return {
         "candidate_id": row.candidate_id,
         "model_version_id": row.model_version_id,
@@ -790,6 +821,9 @@ def retraining_candidate_to_dict(row: RetrainingCandidate, site_name: str | None
         "status": row.status,
         "drift_report_id": row.drift_report_id,
         "metric_snapshot_json": row.metric_snapshot_json,
+        "source_type": source_type,
+        "computed": computed,
+        "computed_yn": computed,
         "created_at": row.created_at.isoformat(),
         "updated_at": row.updated_at.isoformat() if row.updated_at else None,
     }

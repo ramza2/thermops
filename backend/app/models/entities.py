@@ -302,6 +302,7 @@ class DriftReport(Base):
     drift_score: Mapped[float | None] = mapped_column(Numeric(10, 6))
     drift_score_json: Mapped[dict | None] = mapped_column(JSONB)
     recommendation: Mapped[str | None] = mapped_column(Text)
+    source_type: Mapped[str | None] = mapped_column(String(20))
     report_uri: Mapped[str | None] = mapped_column(String(500))
     created_at: Mapped[datetime] = mapped_column(DateTime)
 
@@ -321,6 +322,7 @@ class RetrainingCandidate(Base):
     risk_level: Mapped[str | None] = mapped_column(String(20))
     drift_report_id: Mapped[str | None] = mapped_column(String(80))
     metric_snapshot_json: Mapped[dict | None] = mapped_column(JSONB)
+    source_type: Mapped[str | None] = mapped_column(String(20))
     status: Mapped[str] = mapped_column(String(20))
     created_at: Mapped[datetime] = mapped_column(DateTime)
     updated_at: Mapped[datetime | None] = mapped_column(DateTime)

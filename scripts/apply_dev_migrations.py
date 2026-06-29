@@ -43,6 +43,19 @@ MIGRATIONS = [
         ALTER TABLE tb_retraining_candidate ADD COLUMN IF NOT EXISTS drift_report_id VARCHAR(80);
         """,
     ),
+    (
+        "source_type columns (P1-1 stabilization)",
+        """
+        ALTER TABLE tb_drift_report ADD COLUMN IF NOT EXISTS source_type VARCHAR(20);
+        ALTER TABLE tb_retraining_candidate ADD COLUMN IF NOT EXISTS source_type VARCHAR(20);
+        UPDATE tb_drift_report SET source_type = 'COMPUTED'
+          WHERE source_type IS NULL AND COALESCE(drift_score_json->>'computed', 'false') = 'true';
+        UPDATE tb_drift_report SET source_type = 'SEED' WHERE source_type IS NULL;
+        UPDATE tb_retraining_candidate SET source_type = 'COMPUTED'
+          WHERE source_type IS NULL AND drift_report_id IS NOT NULL AND model_version_id IS NOT NULL;
+        UPDATE tb_retraining_candidate SET source_type = 'SEED' WHERE source_type IS NULL;
+        """,
+    ),
 ]
 
 

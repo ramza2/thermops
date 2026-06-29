@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Check, X } from "lucide-react";
 import { fetchApi, postApi } from "@/api/client";
 import { Button } from "@/components/Button";
@@ -8,6 +8,8 @@ import { LoadingState, ErrorState } from "@/components/Pagination";
 import { useToast } from "@/hooks/useToast";
 import { PageHeader } from "@/layouts/MainLayout";
 import { useRole } from "@/hooks/useRole";
+
+type SourceFilter = "computed" | "all" | "seed";
 
 interface RetrainingCandidate {
   candidate_id: string;
@@ -21,6 +23,7 @@ interface RetrainingCandidate {
   severity: string;
   reason_summary: string;
   status: string;
+  source_type: string;
   drift_report_id: string | null;
   metric_snapshot_json: Record<string, unknown> | null;
   created_at: string;
@@ -33,6 +36,26 @@ const REASON_LABELS: Record<string, string> = {
   MANUAL: "수동",
 };
 
+const SOURCE_LABELS: Record<string, string> = {
+  COMPUTED: "자동 산출",
+  SEED: "샘플/시드",
+  MANUAL: "수동",
+};
+
+function SourceTypeBadge({ sourceType }: { sourceType: string }) {
+  const className =
+    sourceType === "COMPUTED"
+      ? "bg-emerald-100 text-emerald-700"
+      : sourceType === "SEED"
+        ? "bg-slate-100 text-slate-500"
+        : "bg-blue-100 text-blue-700";
+  return (
+    <span className={`inline-flex px-2 py-0.5 rounded text-xs font-medium ${className}`}>
+      {SOURCE_LABELS[sourceType] || sourceType}
+    </span>
+  );
+}
+
 export default function RetrainingCandidatesPage() {
   const { showToast } = useToast();
   const { canEdit } = useRole();
@@ -40,28 +63,32 @@ export default function RetrainingCandidatesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [acting, setActing] = useState<string | null>(null);
+  const [sourceFilter, setSourceFilter] = useState<SourceFilter>("computed");
 
-  const load = async () => {
+  const load = useCallback(async (filter = sourceFilter) => {
     setLoading(true);
     setError("");
     try {
-      const candidates = await fetchApi<RetrainingCandidate[]>("/retraining-candidates");
+      const params: Record<string, string | boolean> = {};
+      if (filter === "computed") params.computed_only = true;
+      else if (filter === "seed") params.source_type = "SEED";
+      const candidates = await fetchApi<RetrainingCandidate[]>("/retraining-candidates", params);
       setItems(candidates);
     } catch {
       setError("재학습 후보 목록을 불러오지 못했습니다.");
     } finally {
       setLoading(false);
     }
-  };
+  }, [sourceFilter]);
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(sourceFilter); }, [sourceFilter, load]);
 
   const handleApprove = async (candidateId: string) => {
     setActing(candidateId);
     try {
       await postApi(`/retraining-candidates/${candidateId}/approve`, {});
       showToast("success", "재학습 후보가 승인되었습니다. (실제 학습 실행은 후속 단계)");
-      load();
+      load(sourceFilter);
     } catch {
       showToast("error", "승인 처리에 실패했습니다.");
     } finally {
@@ -74,7 +101,7 @@ export default function RetrainingCandidatesPage() {
     try {
       await postApi(`/retraining-candidates/${candidateId}/reject`, {});
       showToast("success", "재학습 후보가 반려되었습니다.");
-      load();
+      load(sourceFilter);
     } catch {
       showToast("error", "반려 처리에 실패했습니다.");
     } finally {
@@ -82,8 +109,10 @@ export default function RetrainingCandidatesPage() {
     }
   };
 
+  const showSeedNotice = sourceFilter !== "computed" && items.some((i) => i.source_type === "SEED");
+
   if (loading) return <LoadingState />;
-  if (error) return <ErrorState message={error} onRetry={load} />;
+  if (error) return <ErrorState message={error} onRetry={() => load()} />;
 
   return (
     <div>
@@ -92,9 +121,32 @@ export default function RetrainingCandidatesPage() {
         description="Drift·성능 저하로 자동 생성된 재학습 후보를 검토하고 승인/반려합니다."
       />
 
+      <div className="flex flex-wrap gap-2 mb-4">
+        <Button variant={sourceFilter === "computed" ? "primary" : "secondary"} onClick={() => setSourceFilter("computed")}>
+          자동 산출만
+        </Button>
+        <Button variant={sourceFilter === "all" ? "primary" : "secondary"} onClick={() => setSourceFilter("all")}>
+          전체
+        </Button>
+        <Button variant={sourceFilter === "seed" ? "primary" : "secondary"} onClick={() => setSourceFilter("seed")}>
+          Seed/Sample
+        </Button>
+      </div>
+
+      {showSeedNotice && (
+        <p className="mb-4 text-sm text-amber-700 bg-amber-50 border border-amber-100 rounded px-3 py-2">
+          샘플/시드 후보는 시연용이며 Drift 감지로 자동 산출된 운영 후보가 아닙니다.
+        </p>
+      )}
+
       <DataTable
         columns={[
           { key: "candidate_id", header: "후보 ID" },
+          {
+            key: "source_type",
+            header: "구분",
+            render: (r) => <SourceTypeBadge sourceType={(r.source_type as string) || "SEED"} />,
+          },
           {
             key: "model_name",
             header: "모델",

@@ -7,6 +7,7 @@ import json
 import os
 import sys
 import urllib.error
+import urllib.parse
 import urllib.request
 
 API_BASE = os.environ.get("THERMOOPS_API_BASE", "http://localhost:8000/api/v1")
@@ -29,6 +30,13 @@ def api(method: str, path: str, body: dict | None = None, timeout: int = 120) ->
     if not payload.get("success"):
         raise RuntimeError(f"API failed {path}: {payload}")
     return payload["data"]
+
+
+def api_get(path: str, params: dict | None = None, timeout: int = 120) -> dict:
+    if params:
+        query = urllib.parse.urlencode({k: str(v).lower() if isinstance(v, bool) else v for k, v in params.items()})
+        path = f"{path}?{query}"
+    return api("GET", path, timeout=timeout)
 
 
 def set_config(key: str, value: str) -> None:
@@ -62,19 +70,27 @@ def main() -> int:
             raise RuntimeError(f"drift_report_id missing: {result}")
         print(f"  [drift-check] report_id={report_id} overall={result.get('overall_drift_status')}")
 
+        detail = api("GET", f"/drift-reports/{report_id}")
+        if detail.get("source_type") != "COMPUTED":
+            raise RuntimeError(f"drift report source_type expected COMPUTED, got {detail.get('source_type')}")
+        print("  [source] drift_report source_type=COMPUTED")
+
         if not result.get("metric_summary"):
             raise RuntimeError("metric_summary missing in drift-check response")
 
-        reports_page = api("GET", "/drift-reports?page=1&size=50")
+        reports_page = api_get("/drift-reports", {"page": 1, "size": 50, "computed_only": True})
         found = any(r.get("drift_report_id") == report_id for r in reports_page.get("items", []))
         if not found:
-            raise RuntimeError("drift report not found in list")
-        print("  [drift-reports] list OK")
+            raise RuntimeError("drift report not found in computed_only list")
+        for row in reports_page.get("items", []):
+            if row.get("source_type") != "COMPUTED":
+                raise RuntimeError(f"computed_only list contains non-COMPUTED: {row.get('drift_report_id')}")
+        print("  [drift-reports] computed_only list OK")
 
-        detail = api("GET", f"/drift-reports/{report_id}")
-        if not detail.get("metric_summary_json") and not detail.get("drift_score_json"):
-            raise RuntimeError("drift report detail missing summary")
-        print("  [drift-reports] detail OK")
+        seed_rows = api_get("/drift-reports", {"page": 1, "size": 50, "source_type": "SEED"}).get("items", [])
+        if seed_rows and any(r.get("source_type") != "SEED" for r in seed_rows):
+            raise RuntimeError("source_type=SEED filter returned unexpected rows")
+        print(f"  [drift-reports] seed filter OK (count={len(seed_rows)})")
 
         candidate_id = result.get("retraining_candidate_id")
         if not candidate_id:
@@ -84,29 +100,32 @@ def main() -> int:
             forced = api("POST", "/drift-checks", {**body, "force_candidate": True})
             candidate_id = forced.get("retraining_candidate_id")
             if not candidate_id and forced.get("created_retraining_candidates", 0) < 1:
-                candidates_before = api("GET", "/retraining-candidates")
+                candidates_before = api_get("/retraining-candidates", {"computed_only": True})
                 pending = [c for c in candidates_before if c.get("status") in ("PENDING", "REVIEW")]
                 if pending:
                     candidate_id = pending[0]["candidate_id"]
             if not candidate_id:
                 raise RuntimeError("retraining candidate was not created even with force_candidate")
 
-        candidates = api("GET", "/retraining-candidates")
-        match = next((c for c in candidates if c["candidate_id"] == candidate_id), None)
+        computed_candidates = api_get("/retraining-candidates", {"computed_only": True})
+        match = next((c for c in computed_candidates if c["candidate_id"] == candidate_id), None)
         if not match:
-            raise RuntimeError(f"candidate {candidate_id} not in list")
-        print(f"  [candidates] found {candidate_id} status={match.get('status')}")
+            raise RuntimeError(f"candidate {candidate_id} not in computed_only list")
+        if match.get("source_type") != "COMPUTED":
+            raise RuntimeError(f"candidate source_type expected COMPUTED, got {match.get('source_type')}")
+        print(f"  [candidates] computed_only found {candidate_id} source_type=COMPUTED")
 
         if match.get("status") in ("PENDING", "REVIEW"):
             approved = api("POST", f"/retraining-candidates/{candidate_id}/approve", {})
             if approved.get("status") != "APPROVED":
                 raise RuntimeError(f"approve failed: {approved}")
+            if approved.get("source_type") != "COMPUTED":
+                raise RuntimeError("approve response missing COMPUTED source_type")
             print("  [approve] OK")
 
-            rejected_id = candidate_id
-            api("POST", f"/retraining-candidates/{rejected_id}/reject", {})
-            rej = api("GET", "/retraining-candidates")
-            rej_row = next(c for c in rej if c["candidate_id"] == rejected_id)
+            api("POST", f"/retraining-candidates/{candidate_id}/reject", {})
+            rej = api_get("/retraining-candidates", {"computed_only": True})
+            rej_row = next(c for c in rej if c["candidate_id"] == candidate_id)
             if rej_row.get("status") != "REJECTED":
                 raise RuntimeError("reject failed")
             print("  [reject] OK")

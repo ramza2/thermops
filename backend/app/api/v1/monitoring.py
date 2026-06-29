@@ -17,7 +17,11 @@ from app.models.entities import (
 from app.schemas.api import DriftCheckCreate
 from app.services.drift_detection_service import (
     DriftCheckParams,
+    SOURCE_TYPE_COMPUTED,
+    VALID_SOURCE_TYPES,
     drift_report_to_dict,
+    resolve_drift_report_source_type,
+    resolve_retraining_candidate_source_type,
     retraining_candidate_to_dict,
     run_drift_detection,
 )
@@ -192,8 +196,15 @@ async def list_drift_reports(
     start_at: datetime | None = Query(default=None),
     end_at: datetime | None = Query(default=None),
     computed_only: bool = Query(default=False),
+    source_type: str | None = Query(default=None),
     db: AsyncSession = Depends(get_db),
 ):
+    if source_type and source_type not in VALID_SOURCE_TYPES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"source_type은 {sorted(VALID_SOURCE_TYPES)} 중 하나여야 합니다.",
+        )
+
     q = select(DriftReport).order_by(DriftReport.created_at.desc())
     if model_version_id:
         q = q.where(DriftReport.model_version_id == model_version_id)
@@ -208,7 +219,9 @@ async def list_drift_reports(
 
     rows = list((await db.execute(q)).scalars().all())
     if computed_only:
-        rows = [r for r in rows if (r.drift_score_json or {}).get("computed")]
+        rows = [r for r in rows if resolve_drift_report_source_type(r) == SOURCE_TYPE_COMPUTED]
+    elif source_type:
+        rows = [r for r in rows if resolve_drift_report_source_type(r) == source_type]
 
     items = []
     for r in rows:
@@ -242,8 +255,16 @@ async def list_retraining_candidates(
     severity: str | None = Query(default=None),
     model_version_id: str | None = Query(default=None),
     site_id: str | None = Query(default=None),
+    computed_only: bool = Query(default=False),
+    source_type: str | None = Query(default=None),
     db: AsyncSession = Depends(get_db),
 ):
+    if source_type and source_type not in VALID_SOURCE_TYPES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"source_type은 {sorted(VALID_SOURCE_TYPES)} 중 하나여야 합니다.",
+        )
+
     q = select(RetrainingCandidate).order_by(RetrainingCandidate.created_at.desc())
     if status:
         q = q.where(RetrainingCandidate.status == status)
@@ -259,6 +280,10 @@ async def list_retraining_candidates(
     if site_id:
         q = q.where(RetrainingCandidate.site_id == site_id)
     rows = (await db.execute(q)).scalars().all()
+    if computed_only:
+        rows = [r for r in rows if resolve_retraining_candidate_source_type(r) == SOURCE_TYPE_COMPUTED]
+    elif source_type:
+        rows = [r for r in rows if resolve_retraining_candidate_source_type(r) == source_type]
 
     items = []
     for r in rows:

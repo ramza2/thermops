@@ -321,6 +321,7 @@ CREATE TABLE IF NOT EXISTS tb_drift_report (
     drift_score NUMERIC(10,6),
     drift_score_json JSONB,
     recommendation TEXT,
+    source_type VARCHAR(20),
     report_uri VARCHAR(500),
     created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
@@ -339,6 +340,7 @@ CREATE TABLE IF NOT EXISTS tb_retraining_candidate (
     risk_level VARCHAR(20),
     drift_report_id VARCHAR(80),
     metric_snapshot_json JSONB,
+    source_type VARCHAR(20),
     status VARCHAR(20) NOT NULL DEFAULT 'PENDING',
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP

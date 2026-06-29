@@ -252,6 +252,26 @@ curl -X POST "http://localhost:8000/api/v1/drift-checks" -H "Content-Type: appli
 
 **재학습 후보:** WARNING/CRITICAL Drift 시 `tb_retraining_candidate`에 PENDING 후보 자동 생성. 승인/반려 API는 **상태만 변경**하며, 실제 재학습 Job 생성은 후속 단계입니다.
 
+**source_type 구분 (P1-1 안정화)**
+
+| source_type | 의미 |
+|-------------|------|
+| `COMPUTED` | `POST /drift-checks` 또는 Drift 파이프라인으로 **실제 계산**된 리포트/후보 |
+| `SEED` | `db/init/02_seed.sql` 시드·시연용 샘플 데이터 |
+| `MANUAL` | 향후 수동 등록 후보 (예약) |
+
+화면 기본 조회는 `computed_only=true` (계산 결과만). 시드 데이터는 운영 Drift 결과가 아닙니다.
+
+```powershell
+# 계산된 Drift 리포트만
+curl "http://localhost:8000/api/v1/drift-reports?computed_only=true"
+
+# 자동 산출 재학습 후보만
+curl "http://localhost:8000/api/v1/retraining-candidates?computed_only=true"
+```
+
+대시보드 `retraining_candidate_count`는 **COMPUTED + PENDING/REVIEW** 후보만 집계합니다.
+
 기존 DB 볼륨 사용 시 P1-1 컬럼 반영:
 
 ```powershell

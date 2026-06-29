@@ -17,6 +17,7 @@ from app.models.entities import (
     Site,
     TrainingJob,
 )
+from app.services.drift_detection_service import SOURCE_TYPE_COMPUTED
 from app.services.prediction_evaluation_service import EVAL_TYPE_PREDICTION, get_prediction_performance_avg_mape
 from app.services.prediction_trend_service import TrendParams, get_prediction_trend
 
@@ -35,7 +36,8 @@ async def dashboard_overview(db: AsyncSession = Depends(get_db)):
 
     retrain_count = (await db.execute(
         select(func.count()).select_from(RetrainingCandidate).where(
-            RetrainingCandidate.status.in_(("PENDING", "REVIEW"))
+            RetrainingCandidate.status.in_(("PENDING", "REVIEW")),
+            RetrainingCandidate.source_type == SOURCE_TYPE_COMPUTED,
         )
     )).scalar() or 0
 

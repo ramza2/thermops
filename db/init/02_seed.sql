@@ -146,16 +146,16 @@ INSERT INTO tb_model_performance_metric (site_id, model_version_id, eval_start_a
 ON CONFLICT DO NOTHING;
 
 -- Drift reports
-INSERT INTO tb_drift_report (drift_report_id, dataset_version_id, model_version_id, base_period, current_period, drift_status, drift_score_json) VALUES
-('DRIFT-20260624-001', 'DSV-20260601-TRAIN', 'MV-heat_demand_lgbm-12', '2024-01 ~ 2026-03', '2026-06-01 ~ 2026-06-23', 'WARNING', '{"temperature":0.412,"lag_24h_demand":0.287,"humidity":0.198}'),
-('DRIFT-20260623-001', 'DSV-20260601-TRAIN', 'MV-heat_demand_lgbm-12', '2024-01 ~ 2026-03', '2026-05-01 ~ 2026-05-31', 'NORMAL', '{"temperature":0.156,"lag_24h_demand":0.112}')
+INSERT INTO tb_drift_report (drift_report_id, dataset_version_id, model_version_id, base_period, current_period, drift_status, drift_score_json, source_type) VALUES
+('DRIFT-20260624-001', 'DSV-20260601-TRAIN', 'MV-heat_demand_lgbm-12', '2024-01 ~ 2026-03', '2026-06-01 ~ 2026-06-23', 'WARNING', '{"temperature":0.412,"lag_24h_demand":0.287,"humidity":0.198}', 'SEED'),
+('DRIFT-20260623-001', 'DSV-20260601-TRAIN', 'MV-heat_demand_lgbm-12', '2024-01 ~ 2026-03', '2026-05-01 ~ 2026-05-31', 'NORMAL', '{"temperature":0.156,"lag_24h_demand":0.112}', 'SEED')
 ON CONFLICT DO NOTHING;
 
 -- Retraining candidates
-INSERT INTO tb_retraining_candidate (candidate_id, reason, model_name, model_version, site_id, risk_level, status) VALUES
-('RTC-001', 'MAPE 임계치 초과 (6.2%)', 'heat_demand_lgbm', '12', 'SITE-002', 'HIGH', 'REVIEW'),
-('RTC-002', '드리프트 감지 (temperature)', 'heat_demand_lgbm', '12', NULL, 'MEDIUM', 'REVIEW'),
-('RTC-003', 'MAPE 임계치 초과 (6.8%)', 'heat_demand_xgb', '07', 'SITE-004', 'HIGH', 'REQUESTED')
+INSERT INTO tb_retraining_candidate (candidate_id, reason, model_name, model_version, site_id, risk_level, status, source_type) VALUES
+('RTC-001', 'MAPE 임계치 초과 (6.2%)', 'heat_demand_lgbm', '12', 'SITE-002', 'HIGH', 'REVIEW', 'SEED'),
+('RTC-002', '드리프트 감지 (temperature)', 'heat_demand_lgbm', '12', NULL, 'MEDIUM', 'REVIEW', 'SEED'),
+('RTC-003', 'MAPE 임계치 초과 (6.8%)', 'heat_demand_xgb', '07', 'SITE-004', 'HIGH', 'REQUESTED', 'SEED')
 ON CONFLICT DO NOTHING;
 
 -- Data quality runs
