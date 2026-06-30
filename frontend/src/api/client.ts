@@ -24,8 +24,27 @@ export async function fetchApi<T>(path: string, params?: Record<string, unknown>
   return data.data;
 }
 
+export function extractApiErrorMessage(err: unknown, fallback = "요청에 실패했습니다."): string {
+  const raw = (err as { response?: { data?: { detail?: unknown; message?: string } } })?.response?.data;
+  if (typeof raw?.detail === "string") return raw.detail;
+  if (raw?.detail && typeof raw.detail === "object") {
+    const detail = raw.detail as { message?: string; errors?: string[] };
+    if (detail.errors?.length) return detail.errors[0];
+    if (detail.message) return detail.message;
+  }
+  if (typeof raw?.message === "string" && raw.message) return raw.message;
+  if (err instanceof Error && err.message) return err.message;
+  return fallback;
+}
+
 export async function postApi<T>(path: string, body?: unknown): Promise<T> {
-  const { data } = await api.post<ApiResponse<T>>(path, body);
+  const { data } = await api.post<ApiResponse<T>>(path, body ?? {});
+  if (!data.success) {
+    throw new Error(data.message || "요청에 실패했습니다.");
+  }
+  if (data.data === undefined || data.data === null) {
+    throw new Error(data.message || "응답 데이터가 없습니다.");
+  }
   return data.data;
 }
 

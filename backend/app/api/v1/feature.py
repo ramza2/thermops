@@ -211,6 +211,8 @@ async def create_feature_build_job(
     )
     try:
         result = await run_feature_build(db, params)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 

@@ -210,7 +210,7 @@ async def preview_features(
 
 
 def _dataset_version_id(feature_set_id: str) -> str:
-    stamp = utc_now().strftime("%Y%m%d%H%M%S")
+    stamp = utc_now().strftime("%Y%m%d%H%M%S%f")
     return f"DSV-{feature_set_id}-{stamp}"[:80]
 
 

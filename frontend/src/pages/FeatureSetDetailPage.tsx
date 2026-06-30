@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, Eye, Play, Plus, Save, Trash2 } from "lucide-react";
-import { deleteApi, fetchApi, postApi, putApi, PagedData } from "@/api/client";
+import { deleteApi, extractApiErrorMessage, fetchApi, postApi, putApi, PagedData } from "@/api/client";
 import { Button } from "@/components/Button";
 import { DataTable } from "@/components/DataTable";
 import { Modal } from "@/components/Modal";
@@ -166,6 +166,7 @@ export default function FeatureSetDetailPage() {
     try {
       const res = await postApi<FeatureBuildResult>(
         `/feature-build-jobs?${new URLSearchParams({ feature_set_id: id })}`,
+        {},
       );
       const lineageError = res.lineage_error ?? res.result_summary?.lineage_error;
       setBuildResult({
@@ -176,8 +177,8 @@ export default function FeatureSetDetailPage() {
       });
       const lineageMsg = res.lineage_count != null ? ` · Lineage ${res.lineage_count}건` : "";
       showToast("success", `Feature ${res.inserted_count}건 생성 완료 (${res.job_id})${lineageMsg}`);
-    } catch {
-      showToast("error", "Feature 생성에 실패했습니다.");
+    } catch (err) {
+      showToast("error", extractApiErrorMessage(err, "Feature 생성에 실패했습니다."));
     } finally {
       setBuildLoading(false);
     }
