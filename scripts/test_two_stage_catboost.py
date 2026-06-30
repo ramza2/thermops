@@ -130,16 +130,11 @@ def ensure_minio_bucket() -> None:
 
 
 def prediction_period(feature_set_id: str) -> tuple[str, str]:
-    start = psql_scalar(
-        f"SELECT MIN(feature_at)::text FROM tb_feature_dataset WHERE feature_json->>'feature_set_id' = '{feature_set_id}'"
-    )
-    end = psql_scalar(
-        f"SELECT MAX(feature_at)::text FROM tb_feature_dataset WHERE feature_json->>'feature_set_id' = '{feature_set_id}'"
-    )
-    if start and end:
-        return start, end
+    data = api("GET", f"/feature-sets/{feature_set_id}/dataset-range")
+    if data.get("exists") and data.get("min_target_at") and data.get("max_target_at"):
+        return data["min_target_at"], data["max_target_at"]
     now = datetime.now(timezone.utc)
-    return (now - timedelta(days=7)).replace(tzinfo=None).isoformat(), now.replace(tzinfo=None).isoformat()
+    return (now - timedelta(days=7)).isoformat(), now.isoformat()
 
 
 def run_prediction(model_version_id: str, feature_set_id: str) -> None:
