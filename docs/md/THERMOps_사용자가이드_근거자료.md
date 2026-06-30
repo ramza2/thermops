@@ -171,7 +171,9 @@ flowchart LR
 | **결과 확인 위치** | 목록(컬럼 수·상태), 검증 토스트, 미리보기 모달, Column Role 검증·Recipe 준비도 패널 |
 | **주의할 점** | **자동 추론은 제안**이며 저장해야 확정됨. Column Role은 **현재 Feature Build/학습/예측에 직접 영향 없음** (향후 Recipe Builder 전제). TIME_KEY는 1개만 허용 |
 | **선행 작업** | 데이터 소스 등록 |
-| **후속 작업** | 적재 실행, 품질 점검 |
+| **후속 작업** | 적재 실행, 품질 점검, Recipe 템플릿 확인(R2) |
+
+**R2 Recipe Template Catalog**: 매핑 수정 화면에서 Column Role 저장 후 **사용 가능한 Recipe 템플릿** 카드로 LAG/ROLLING 등 사용 가능 여부를 확인합니다. `POST /feature-recipes/validate`는 draft 검증만 수행하며 저장·Preview·실행은 하지 않습니다.
 
 ---
 

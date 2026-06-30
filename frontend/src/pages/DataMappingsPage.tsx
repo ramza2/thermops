@@ -8,6 +8,7 @@ import {
   saveColumnRoles,
   validateColumnRoles,
 } from "@/api/featureColumnRoles";
+import { getFeatureRecipeTemplates } from "@/api/featureRecipeTemplates";
 import { Button } from "@/components/Button";
 import { DataTable } from "@/components/DataTable";
 import { Modal } from "@/components/Modal";
@@ -22,12 +23,22 @@ import type {
   FeatureColumnRoleSummary,
   FeatureColumnRoleValidation,
 } from "@/types/featureColumnRoles";
+import type { RecipeTemplate, RecipeTemplateListResponse } from "@/types/featureRecipeTemplates";
 import {
   COLUMN_ROLE_HELP,
   COLUMN_ROLE_INFERENCE_NOTE,
   roleBadgeClass,
   roleLabel,
 } from "@/utils/featureColumnRoleFormat";
+import {
+  formatRequiredRoles,
+  RECIPE_BUILDER_FUTURE_NOTE,
+  RECIPE_TEMPLATE_SECTION_TITLE,
+  templateAvailabilityClass,
+  templateCategoryLabel,
+  templateStatusClass,
+  templateStatusLabel,
+} from "@/utils/featureRecipeTemplateFormat";
 
 interface MappingColumn {
   source_column: string;
@@ -80,6 +91,97 @@ function RoleCoverageCard({ summary }: { summary: FeatureColumnRoleSummary | nul
           </li>
         ))}
       </ul>
+    </div>
+  );
+}
+
+function RecipeTemplatesSection({
+  catalog,
+  loading,
+  error,
+  expandedType,
+  onToggle,
+}: {
+  catalog: RecipeTemplateListResponse | null;
+  loading: boolean;
+  error: string;
+  expandedType: string | null;
+  onToggle: (type: string) => void;
+}) {
+  if (loading) {
+    return <p className="text-xs text-slate-400">Recipe 템플릿 불러오는 중...</p>;
+  }
+  if (error) {
+    return <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded p-2">{error}</p>;
+  }
+  if (!catalog?.items?.length) return null;
+
+  const available = catalog.items.filter((t) => t.available);
+  const unavailable = catalog.items.filter((t) => t.available === false);
+
+  return (
+    <div className="text-xs border border-slate-200 rounded-lg p-3 bg-white space-y-3">
+      <div className="font-semibold text-slate-800">{RECIPE_TEMPLATE_SECTION_TITLE}</div>
+      <p className="text-slate-500">{RECIPE_BUILDER_FUTURE_NOTE}</p>
+      <p className="text-slate-600">
+        LAG/ROLLING은 ENTITY_KEY, TIME_KEY, NUMERIC_INPUT 역할이 필요합니다.
+        {" "}
+        사용 가능 {catalog.summary.available_count ?? available.length} / {catalog.summary.total_count}
+      </p>
+      <div className="space-y-2">
+        {available.map((tpl) => (
+          <RecipeTemplateRow key={tpl.recipe_type} tpl={tpl} expanded={expandedType === tpl.recipe_type} onToggle={onToggle} />
+        ))}
+        {unavailable.map((tpl) => (
+          <RecipeTemplateRow key={tpl.recipe_type} tpl={tpl} expanded={expandedType === tpl.recipe_type} onToggle={onToggle} unavailable />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function RecipeTemplateRow({
+  tpl,
+  expanded,
+  onToggle,
+  unavailable,
+}: {
+  tpl: RecipeTemplate;
+  expanded: boolean;
+  onToggle: (type: string) => void;
+  unavailable?: boolean;
+}) {
+  const avail = tpl.availability;
+  return (
+    <div className={`border rounded p-2 ${unavailable ? "border-amber-200 bg-amber-50/50" : "border-slate-200"}`}>
+      <button type="button" className="w-full text-left" onClick={() => onToggle(tpl.recipe_type)}>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="font-medium text-slate-800">{tpl.display_name}</span>
+          <span className={`text-[10px] px-1 py-0.5 rounded border ${templateStatusClass(tpl.status)}`}>
+            {templateStatusLabel(tpl.status)}
+          </span>
+          <span className="text-[10px] text-slate-500">{templateCategoryLabel(tpl.category)}</span>
+          <span className={`text-[10px] ${templateAvailabilityClass(tpl.available)}`}>
+            {tpl.available ? "사용 가능" : "사용 불가"}
+          </span>
+        </div>
+        {!tpl.available && avail?.warnings?.[0] && (
+          <p className="text-amber-700 mt-1">{avail.warnings[0]}</p>
+        )}
+        {avail?.missing_roles?.length ? (
+          <p className="text-amber-700 mt-1">부족 역할: {avail.missing_roles.join(", ")}</p>
+        ) : null}
+      </button>
+      {expanded && (
+        <div className="mt-2 pt-2 border-t border-slate-200 text-slate-600 space-y-1">
+          <p>{tpl.description}</p>
+          <p>필수 역할: {formatRequiredRoles(tpl)}</p>
+          <p>출력명 규칙: <code className="text-[10px]">{tpl.output_name_rule}</code></p>
+          {tpl.param_schema && Object.keys(tpl.param_schema).length > 0 && (
+            <p>주요 파라미터: {Object.keys(tpl.param_schema).join(", ")}</p>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -140,6 +242,12 @@ export default function DataMappingsPage() {
   const [roleSaving, setRoleSaving] = useState(false);
   const [roleInferring, setRoleInferring] = useState(false);
 
+  const [templateCatalog, setTemplateCatalog] = useState<RecipeTemplateListResponse | null>(null);
+  const [templateLoading, setTemplateLoading] = useState(false);
+  const [templateError, setTemplateError] = useState("");
+  const [expandedTemplateType, setExpandedTemplateType] = useState<string | null>(null);
+  const [templateSectionOpen, setTemplateSectionOpen] = useState(true);
+
   const roleOptions = useMemo(
     () => [
       ROLE_EMPTY_OPTION,
@@ -166,6 +274,9 @@ export default function DataMappingsPage() {
     setColumnRoles([]);
     setRoleSummary(null);
     setRoleValidation(null);
+    setTemplateCatalog(null);
+    setTemplateError("");
+    setExpandedTemplateType(null);
   };
 
   const syncRolesFromColumns = useCallback((cols: MappingColumn[]) => {
@@ -185,6 +296,23 @@ export default function DataMappingsPage() {
     });
   }, []);
 
+  const loadRecipeTemplates = useCallback(async (mappingId: string) => {
+    setTemplateLoading(true);
+    setTemplateError("");
+    try {
+      const res = await getFeatureRecipeTemplates({
+        mapping_id: mappingId,
+        include_availability: true,
+      });
+      setTemplateCatalog(res);
+    } catch {
+      setTemplateCatalog(null);
+      setTemplateError("Recipe 템플릿 목록을 불러오지 못했습니다.");
+    } finally {
+      setTemplateLoading(false);
+    }
+  }, []);
+
   const loadRolesForMapping = useCallback(async (mappingId: string, cols: MappingColumn[]) => {
     setRoleLoading(true);
     try {
@@ -196,12 +324,13 @@ export default function DataMappingsPage() {
       }
       setRoleSummary(res.summary);
       setRoleValidation(res.validation);
+      void loadRecipeTemplates(mappingId);
     } catch {
       syncRolesFromColumns(cols);
     } finally {
       setRoleLoading(false);
     }
-  }, [syncRolesFromColumns]);
+  }, [syncRolesFromColumns, loadRecipeTemplates]);
 
   useEffect(() => {
     load(page);
@@ -362,6 +491,7 @@ export default function DataMappingsPage() {
       setColumnRoles(res.items);
       setRoleSummary(res.summary);
       setRoleValidation(res.validation);
+      if (editingId) void loadRecipeTemplates(editingId);
       if (res.validation.blocking) {
         showToast("error", res.validation.errors[0] || "저장 후 검증 오류가 있습니다.");
       } else {
@@ -481,8 +611,13 @@ export default function DataMappingsPage() {
         actions={<Button icon={<Plus className="w-4 h-4" />} onClick={openCreate}>신규 매핑</Button>}
       />
 
-      <div className="mb-4 text-xs text-slate-600 bg-blue-50 border border-blue-200 rounded-lg p-3">
-        {COLUMN_ROLE_HELP}
+      <div className="mb-4 text-xs text-slate-600 bg-blue-50 border border-blue-200 rounded-lg p-3 space-y-1">
+        <p>{COLUMN_ROLE_HELP}</p>
+        <p>
+          매핑 수정 화면에서 {RECIPE_TEMPLATE_SECTION_TITLE}을 확인할 수 있습니다.
+          {" "}
+          {RECIPE_BUILDER_FUTURE_NOTE}
+        </p>
       </div>
 
       <DataTable
@@ -652,6 +787,25 @@ export default function DataMappingsPage() {
                 {roleLoading && <p className="text-xs text-slate-400">컬럼 역할 불러오는 중...</p>}
                 <RoleCoverageCard summary={roleSummary} />
                 <ValidationPanel validation={roleValidation} />
+                <div className="border-t border-slate-100 pt-3">
+                  <button
+                    type="button"
+                    className="flex items-center justify-between w-full text-sm font-semibold text-slate-800 mb-2"
+                    onClick={() => setTemplateSectionOpen((v) => !v)}
+                  >
+                    {RECIPE_TEMPLATE_SECTION_TITLE}
+                    <span className="text-xs text-slate-500">{templateSectionOpen ? "접기" : "펼치기"}</span>
+                  </button>
+                  {templateSectionOpen && (
+                    <RecipeTemplatesSection
+                      catalog={templateCatalog}
+                      loading={templateLoading}
+                      error={templateError}
+                      expandedType={expandedTemplateType}
+                      onToggle={(type) => setExpandedTemplateType((prev) => (prev === type ? null : type))}
+                    />
+                  )}
+                </div>
               </div>
             )}
           </div>

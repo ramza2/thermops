@@ -37,6 +37,8 @@ for (const path of PATHS) {
   if (path === "/data/mappings") {
     await page.getByText("Column Role").first().waitFor({ state: "visible", timeout: 30000 });
     await page.getByText("컬럼 역할").first().waitFor({ state: "visible", timeout: 30000 });
+    await page.getByText("사용 가능한 Recipe 템플릿").first().waitFor({ state: "visible", timeout: 30000 });
+    await page.getByText("Recipe Builder는 후속 단계").first().waitFor({ state: "visible", timeout: 30000 });
   }
   if (path === "/feature-sets/FS-TPL-LAG-ROLL") {
     await page.waitForTimeout(2000);

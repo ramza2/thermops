@@ -121,6 +121,18 @@ class FeatureColumnRoleBulkUpdateRequest(BaseModel):
     roles: list[FeatureColumnRoleItemInput]
 
 
+class FeatureRecipeValidateRequest(BaseModel):
+    mapping_id: str | None = None
+    recipe_type: str
+    source_columns: list[str]
+    entity_keys: list[str] | None = None
+    time_key: str | None = None
+    target_column: str | None = None
+    params: dict[str, Any] | None = None
+    output_feature_name: str | None = None
+    cardinality: int | None = None
+
+
 class TrainingConfigCreate(BaseModel):
     config_name: str
     feature_set_id: str

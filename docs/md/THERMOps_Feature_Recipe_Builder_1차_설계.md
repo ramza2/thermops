@@ -726,3 +726,47 @@ python scripts/apply_dev_migrations.py
 python scripts/test_feature_column_roles.py
 ```
 
+---
+
+## 부록 D. Phase R2 구현 완료 (Recipe Template Catalog + Validate)
+
+> **구현 완료**: Template Catalog 메타데이터·availability·Recipe draft validate (저장/실행/Preview 없음)
+
+### 구현 방식
+
+- **코드 상수** (`feature_recipe_template_service.py`) — DB migration 없음
+- `tb_feature_recipe` 저장 테이블 미사용
+
+### 지원 recipe_type
+
+`RAW_COLUMN`, `DATE_PART`, `LAG`, `ROLLING_MEAN`, `ROLLING_SUM`, `DIFF`, `RATIO`, `BINNING`, `FILL_NULL`, `CATEGORY_ENCODING` (EXPERIMENTAL)
+
+### API
+
+| 메서드 | 경로 |
+|--------|------|
+| GET | `/api/v1/feature-recipe-templates` |
+| GET | `/api/v1/feature-recipe-templates/{recipe_type}` |
+| POST | `/api/v1/feature-recipes/validate` |
+
+### UI
+
+- `/data/mappings` — 매핑 수정 시 **사용 가능한 Recipe 템플릿** 카드 (availability 표시)
+
+### 정책
+
+- Validate API는 **저장·실행·Preview·Recipe ID 발급 없음**
+- DSL 자동 실행은 여전히 미지원
+
+### 테스트
+
+```bash
+python scripts/test_feature_recipe_templates.py
+```
+
+### 후속 단계
+
+- R3: RAW/DATE Preview
+- R4: LAG/ROLLING Preview
+- R5: Recipe 저장 + Builder UI
+
