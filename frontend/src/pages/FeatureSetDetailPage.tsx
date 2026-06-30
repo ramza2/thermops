@@ -9,6 +9,8 @@ import { SelectInput, TextInput } from "@/components/SearchPanel";
 import { LoadingState, ErrorState } from "@/components/Pagination";
 import { useToast } from "@/hooks/useToast";
 import { PageHeader } from "@/layouts/MainLayout";
+import { FeatureLineageSection } from "@/components/FeatureLineageSection";
+import type { FeatureBuildResult } from "@/types/featureRegistry";
 import {
   FeatureSet,
   parseFeatureSetDescription,
@@ -50,14 +52,7 @@ export default function FeatureSetDetailPage() {
   const [buildLoading, setBuildLoading] = useState(false);
   const [previewRows, setPreviewRows] = useState<Record<string, unknown>[]>([]);
   const [previewWarnings, setPreviewWarnings] = useState<string[]>([]);
-  const [buildResult, setBuildResult] = useState<{
-    job_id: string;
-    inserted_count: number;
-    checked_start_at?: string;
-    checked_end_at?: string;
-    feature_names?: string[];
-    warnings?: string[];
-  } | null>(null);
+  const [buildResult, setBuildResult] = useState<FeatureBuildResult | null>(null);
   const [allFeatures, setAllFeatures] = useState<FeatureItem[]>([]);
   const [selectedToAdd, setSelectedToAdd] = useState<string[]>([]);
 
@@ -169,16 +164,18 @@ export default function FeatureSetDetailPage() {
     if (!id) return;
     setBuildLoading(true);
     try {
-      const res = await postApi<{
-        job_id: string;
-        inserted_count: number;
-        checked_start_at?: string;
-        checked_end_at?: string;
-        feature_names?: string[];
-        warnings?: string[];
-      }>(`/feature-build-jobs?${new URLSearchParams({ feature_set_id: id })}`);
-      setBuildResult(res);
-      showToast("success", `Feature ${res.inserted_count}건 생성 완료 (${res.job_id})`);
+      const res = await postApi<FeatureBuildResult>(
+        `/feature-build-jobs?${new URLSearchParams({ feature_set_id: id })}`,
+      );
+      const lineageError = res.lineage_error ?? res.result_summary?.lineage_error;
+      setBuildResult({
+        ...res,
+        lineage_error: lineageError,
+        lineage_count: res.lineage_count ?? res.result_summary?.lineage_count,
+        dataset_version_id: res.dataset_version_id ?? res.result_summary?.dataset_version_id,
+      });
+      const lineageMsg = res.lineage_count != null ? ` · Lineage ${res.lineage_count}건` : "";
+      showToast("success", `Feature ${res.inserted_count}건 생성 완료 (${res.job_id})${lineageMsg}`);
     } catch {
       showToast("error", "Feature 생성에 실패했습니다.");
     } finally {
@@ -272,18 +269,35 @@ export default function FeatureSetDetailPage() {
       </div>
 
       {buildResult && (
-        <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4 mb-6 text-sm">
+        <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4 mb-6 text-sm space-y-1">
           <p className="font-semibold text-emerald-800">최근 Feature 생성 결과</p>
-          <p className="mt-1 text-emerald-700">
-            {buildResult.inserted_count.toLocaleString()}건 · {buildResult.job_id}
+          <p className="text-emerald-700">
+            {buildResult.inserted_count.toLocaleString()}건 ·{" "}
+            <span className="font-mono">{buildResult.job_id}</span>
+          </p>
+          {(buildResult.dataset_version_id ?? buildResult.result_summary?.dataset_version_id) && (
+            <p className="text-emerald-600 text-xs">
+              Dataset Version:{" "}
+              <span className="font-mono">
+                {buildResult.dataset_version_id ?? buildResult.result_summary?.dataset_version_id}
+              </span>
+            </p>
+          )}
+          <p className="text-emerald-600 text-xs">
+            Lineage:{" "}
+            {(buildResult.lineage_count ?? buildResult.result_summary?.lineage_count ?? 0).toLocaleString()}건 저장
+            {(buildResult.lineage_count ?? buildResult.result_summary?.lineage_count ?? 0) === 0
+              && (buildResult.lineage_error ?? buildResult.result_summary?.lineage_error) && (
+                <span className="text-amber-700 ml-2">(저장 실패 — 아래 Lineage 섹션 참고)</span>
+            )}
           </p>
           {buildResult.checked_start_at && (
-            <p className="text-emerald-600 text-xs mt-1">
+            <p className="text-emerald-600 text-xs">
               기간: {buildResult.checked_start_at} ~ {buildResult.checked_end_at}
             </p>
           )}
           {buildResult.warnings && buildResult.warnings.length > 0 && (
-            <p className="text-amber-700 text-xs mt-1">경고 {buildResult.warnings.length}건</p>
+            <p className="text-amber-700 text-xs">경고 {buildResult.warnings.length}건</p>
           )}
         </div>
       )}
@@ -309,6 +323,8 @@ export default function FeatureSetDetailPage() {
           data={form.features.map((name) => ({ name }))}
         />
       </div>
+
+      {id && <FeatureLineageSection featureSetId={id} buildResult={buildResult} />}
 
       <Modal
         open={addFeatureOpen}

@@ -4,7 +4,9 @@ const BASE = "http://localhost:5173";
 const PATHS = [
   "/dashboard",
   "/data/sources",
+  "/features",
   "/feature-sets",
+  "/feature-sets/FS-TPL-LAG-ROLL",
   "/models/training-jobs",
   "/predictions/jobs",
   "/predictions/results",

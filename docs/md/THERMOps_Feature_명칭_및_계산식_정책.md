@@ -127,6 +127,15 @@ tb_feature (메타 등록)
 
 테스트·스크립트는 `THERMOOPS_API_BASE=http://localhost:8000/api/v1` (또는 Traefik 공개 URL + `/api/v1`) 기준.
 
+### UI
+
+| 화면 | 경로 | 내용 |
+|------|------|------|
+| Feature 목록 | `/features` | Registry 요약 컬럼, **상세** 모달에서 Registry 메타(입력 테이블·Lookback·누수 방지) |
+| Feature Set 상세 | `/feature-sets/:id` | **Feature Lineage** 섹션 — dataset_version_id 또는 Build Job 기준 조회 |
+
+Lineage가 없으면 Feature Set 상세에서 **Feature 생성**을 먼저 실행해야 한다.
+
 ## 11. 검증
 
 - `python scripts/test_feature_metadata_consistency.py`

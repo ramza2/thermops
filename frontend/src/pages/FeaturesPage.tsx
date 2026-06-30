@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
-import { Plus, Trash2 } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Eye, Plus, Trash2 } from "lucide-react";
 import { deleteApi, fetchApi, postApi, PagedData } from "@/api/client";
+import { getFeatureRegistry } from "@/api/featureRegistry";
 import { Button } from "@/components/Button";
 import { DataTable } from "@/components/DataTable";
 import { Modal } from "@/components/Modal";
@@ -9,6 +10,9 @@ import { Pagination, LoadingState, ErrorState } from "@/components/Pagination";
 import { SelectInput, TextInput } from "@/components/SearchPanel";
 import { useToast } from "@/hooks/useToast";
 import { PageHeader } from "@/layouts/MainLayout";
+import { CalcMemoText, FeatureRegistryPanel } from "@/components/FeatureRegistryPanel";
+import type { FeatureRegistryItem } from "@/types/featureRegistry";
+import { formatRegistrySummary } from "@/utils/featureRegistryFormat";
 
 interface Feature {
   feature_id: string;
@@ -30,16 +34,6 @@ const REGISTER_INFO = `Feature 등록은 카탈로그 등록 단계입니다.
 모델 학습/예측에 사용하려면 Feature Set에 포함하고 Feature 생성 작업을 실행해야 합니다.
 신규 파생 Feature는 현재 계산 로직이 코드에 구현되어 있어야 값이 생성됩니다.`;
 
-function CalcMemoCell({ expression }: { expression: string | null }) {
-  if (!expression) return <>-</>;
-  return (
-    <span className="inline-flex flex-wrap items-center gap-1.5">
-      <span className="font-mono text-xs">{expression}</span>
-      <span className="inline-flex px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-500">설명용</span>
-    </span>
-  );
-}
-
 export default function FeaturesPage() {
   const { showToast } = useToast();
   const [items, setItems] = useState<Feature[]>([]);
@@ -48,9 +42,26 @@ export default function FeaturesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
+  const [detailTarget, setDetailTarget] = useState<Feature | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Feature | null>(null);
   const [form, setForm] = useState(EMPTY);
   const [saving, setSaving] = useState(false);
+  const [registryMap, setRegistryMap] = useState<Record<string, FeatureRegistryItem>>({});
+  const [registryWarning, setRegistryWarning] = useState("");
+
+  const loadRegistry = async () => {
+    try {
+      const res = await getFeatureRegistry();
+      const map: Record<string, FeatureRegistryItem> = {};
+      for (const f of res.features || []) {
+        map[f.feature_name] = f;
+      }
+      setRegistryMap(map);
+      setRegistryWarning("");
+    } catch {
+      setRegistryWarning("Feature Registry 정보를 불러오지 못했습니다. 카탈로그 목록만 표시됩니다.");
+    }
+  };
 
   const load = async (p = page) => {
     setLoading(true);
@@ -66,7 +77,15 @@ export default function FeaturesPage() {
     }
   };
 
-  useEffect(() => { load(page); }, [page]);
+  useEffect(() => {
+    load(page);
+    loadRegistry();
+  }, [page]);
+
+  const detailRegistry = useMemo(
+    () => (detailTarget ? registryMap[detailTarget.feature_name] : undefined),
+    [detailTarget, registryMap],
+  );
 
   const handleCreate = async () => {
     if (!form.feature_name.trim()) {
@@ -121,6 +140,12 @@ export default function FeaturesPage() {
         {REGISTER_INFO}
       </div>
 
+      {registryWarning && (
+        <div className="mb-4 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-3">
+          {registryWarning}
+        </div>
+      )}
+
       <DataTable
         loading={loading}
         columns={[
@@ -131,18 +156,87 @@ export default function FeaturesPage() {
           {
             key: "calc_expression",
             header: "계산식 메모",
-            render: (r) => <CalcMemoCell expression={r.calc_expression as string | null} />,
+            render: (r) => <CalcMemoText expression={r.calc_expression as string | null} />,
+          },
+          {
+            key: "registry",
+            header: "Registry",
+            render: (r) => {
+              const name = String(r.feature_name);
+              const reg = registryMap[name];
+              if (!reg && registryWarning) return <span className="text-xs text-slate-400">-</span>;
+              return (
+                <span className={`text-xs ${reg ? "text-slate-600" : "text-amber-700"}`}>
+                  {formatRegistrySummary(reg)}
+                </span>
+              );
+            },
           },
           { key: "status", header: "상태", render: (r) => <StatusBadge status={r.status as string} /> },
           {
-            key: "actions", header: "작업", render: (r) => (
-              <Button variant="danger" icon={<Trash2 className="w-3 h-3" />} onClick={(e) => { e.stopPropagation(); setDeleteTarget(r as unknown as Feature); }}>삭제</Button>
+            key: "actions",
+            header: "작업",
+            render: (r) => (
+              <div className="flex gap-1">
+                <Button
+                  variant="ghost"
+                  icon={<Eye className="w-3 h-3" />}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setDetailTarget(r as unknown as Feature);
+                  }}
+                >
+                  상세
+                </Button>
+                <Button
+                  variant="danger"
+                  icon={<Trash2 className="w-3 h-3" />}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setDeleteTarget(r as unknown as Feature);
+                  }}
+                >
+                  삭제
+                </Button>
+              </div>
             ),
           },
         ]}
         data={items as unknown as Record<string, unknown>[]}
       />
       <Pagination page={page} totalPages={totalPages} onChange={setPage} />
+
+      <Modal
+        open={!!detailTarget}
+        title={`Feature 상세 — ${detailTarget?.feature_name ?? ""}`}
+        onClose={() => setDetailTarget(null)}
+        size="lg"
+        footer={<Button variant="secondary" onClick={() => setDetailTarget(null)}>닫기</Button>}
+      >
+        {detailTarget && (
+          <div className="space-y-4">
+            <dl className="grid grid-cols-2 gap-2 text-sm">
+              <dt className="text-slate-500 text-xs">ID</dt>
+              <dd className="font-mono text-xs">{detailTarget.feature_id}</dd>
+              <dt className="text-slate-500 text-xs">상태</dt>
+              <dd><StatusBadge status={detailTarget.status} /></dd>
+              <dt className="text-slate-500 text-xs">카탈로그 설명</dt>
+              <dd>{detailTarget.description || "-"}</dd>
+            </dl>
+            <div>
+              <h4 className="text-sm font-semibold text-slate-800 mb-2">Registry 정보</h4>
+              <FeatureRegistryPanel
+                registry={detailRegistry}
+                catalogCalcExpression={detailTarget.calc_expression}
+              />
+            </div>
+            <p className="text-[11px] text-slate-500">
+              calc_expression은 설명용 메타데이터이며 자동 계산되지 않습니다. 실제 값 생성은 Feature Set 포함 후
+              Feature 생성 작업이 필요합니다.
+            </p>
+          </div>
+        )}
+      </Modal>
 
       <Modal open={createOpen} title="Feature 등록" onClose={() => setCreateOpen(false)}
         footer={<>

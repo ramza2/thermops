@@ -275,8 +275,15 @@ curl -X POST "http://localhost:8000/api/v1/feature-build-jobs?feature_set_id=FS-
 - 공식 Feature명: `demand_lag_24h`, `demand_lag_168h`, `demand_ma_24h`, `demand_ma_168h`, `temperature_diff_24h`, `heating_degree_days`, `cooling_degree_days`.
 - 상세: [`docs/md/THERMOps_Feature_명칭_및_계산식_정책.md`](docs/md/THERMOps_Feature_명칭_및_계산식_정책.md)
 
+**Feature Registry·Lineage UI**
+
+- `/features`: Registry 요약 컬럼, **상세** 모달에서 입력 테이블·Lookback·누수 방지 등 확인
+- `/feature-sets/:id`: **Feature Lineage** 섹션 — 최신 `dataset_version_id` 또는 Build Job 기준 조회
+- Lineage 없음 → Feature Set 상세에서 **Feature 생성** 먼저 실행
+
 ```powershell
 python scripts/test_feature_metadata_consistency.py
+python scripts/test_feature_lineage.py
 ```
 
 ### 모델 학습 테스트 (P0-4-1)

@@ -201,11 +201,11 @@ flowchart LR
 |------|------|
 | **화면 목적** | 모델 학습에 사용할 Feature **메타데이터(카탈로그)** 정의·관리 |
 | **주요 입력값** | Feature명, 그룹, 유형(`NUMERIC`/`CATEGORICAL`/`DATETIME`), **계산식 메모**, 설명 |
-| **주요 버튼** | **신규 Feature**, **삭제** |
-| **버튼 클릭 시 동작** | 등록 모달 저장 → 목록 1페이지 갱신. 삭제 확인 모달 |
-| **호출 API** | `GET /features`, `POST /features`, `DELETE /features/{id}` |
-| **결과 확인 위치** | Feature 목록 테이블 |
-| **주의할 점** | **등록만으로 Feature 값이 생성되거나 학습에 반영되지 않음.** `calc_expression`은 설명용이며 `LAG(...)` 등은 자동 실행되지 않음. Feature Set 포함 + Feature 생성 + 학습 설정 연결이 필요. 공식 명칭은 `docs/md/THERMOps_Feature_명칭_및_계산식_정책.md` 참고. 수정 UI 없음(삭제 후 재등록). |
+| **주요 버튼** | **신규 Feature**, **상세**, **삭제** |
+| **버튼 클릭 시 동작** | 등록 모달 저장 → 목록 1페이지 갱신. **상세** → Registry 정보 모달. 삭제 확인 모달 |
+| **호출 API** | `GET /features`, `POST /features`, `DELETE /features/{id}`, `GET /feature-registry` |
+| **결과 확인 위치** | Feature 목록 테이블, Registry 컬럼·상세 모달 |
+| **주의할 점** | **등록만으로 Feature 값이 생성되거나 학습에 반영되지 않음.** `calc_expression`은 설명용이며 `LAG(...)` 등은 자동 실행되지 않음. Registry에 없는 Feature는 **Registry 미등록**으로 표시. Feature Set 포함 + Feature 생성 + 학습 설정 연결이 필요. 공식 명칭은 `docs/md/THERMOps_Feature_명칭_및_계산식_정책.md` 참고. 수정 UI 없음(삭제 후 재등록). |
 | **선행 작업** | (값 생성 시) 데이터 적재 |
 | **후속 작업** | Feature Set 구성 → Feature 생성 |
 
@@ -238,10 +238,10 @@ flowchart LR
 | **화면 목적** | Feature Set 기본 정보·전처리 옵션·포함 Feature 편집, 미리보기·Feature 생성 실행 |
 | **주요 입력값** | Feature Set 명, 대상 도메인, 설명, 적용 대상, 결측 처리(`PREV`/`MEAN`/`ZERO`/`DROP`), 정규화 체크, 추가할 Feature(체크박스) |
 | **주요 버튼** | **목록**, **Feature 미리보기**, **Feature 생성**, **삭제**, **저장**, **Feature 추가** |
-| **버튼 클릭 시 동작** | 미리보기→샘플 행 모달. Feature 생성→`feature-build-jobs` 호출, 상단 녹색 결과 박스 표시. 저장→메타 갱신 |
-| **호출 API** | `GET /feature-sets/{id}`, `PUT /feature-sets/{id}`, `DELETE /feature-sets/{id}`, `GET /features`, `POST /feature-sets/{id}/preview`, `POST /feature-build-jobs?feature_set_id={id}` |
-| **결과 확인 위치** | 포함 Feature 테이블, 미리보기 모달, 최근 Feature 생성 결과 박스 |
-| **주의할 점** | Feature 생성 전 데이터 적재·품질 점검 권장. 전처리 메타는 description 내 `---META---` JSON으로 저장 |
+| **버튼 클릭 시 동작** | 미리보기→샘플 행 모달. Feature 생성→`feature-build-jobs` 호출, 상단 녹색 결과 박스(dataset_version_id·lineage_count) 표시. 저장→메타 갱신 |
+| **호출 API** | `GET /feature-sets/{id}`, `PUT /feature-sets/{id}`, `DELETE /feature-sets/{id}`, `GET /features`, `POST /feature-sets/{id}/preview`, `POST /feature-build-jobs?feature_set_id={id}`, `GET /feature-sets/{id}/dataset-range`, `GET /feature-lineage`, `GET /feature-build-jobs/{job_id}/lineage` |
+| **결과 확인 위치** | 포함 Feature 테이블, 미리보기 모달, 최근 Feature 생성 결과 박스, **Feature Lineage** 섹션(테이블·JSON 보기) |
+| **주의할 점** | Feature 생성 전 데이터 적재·품질 점검 권장. Lineage 없으면 Feature 생성 먼저 실행. `lineage_error` 시 데이터는 생성되었으나 Lineage만 실패(warning). Lineage는 조회 전용. 전처리 메타는 description 내 `---META---` JSON으로 저장 |
 | **선행 작업** | Feature Set 생성, 원천 데이터 적재 |
 | **후속 작업** | 모델 학습 설정(`feature_set_id` 연결) |
 
