@@ -225,3 +225,16 @@ def join_weather(df: pd.DataFrame, weather_df: pd.DataFrame) -> pd.DataFrame:
         on="weather_at",
         how="left",
     )
+
+
+def _validate_feature_registry_link() -> None:
+    """계산 컬럼 목록과 Registry 메타데이터 정합성 (계산 로직은 변경하지 않음)."""
+    try:
+        from feature_registry import assert_covers_computed_features
+
+        assert_covers_computed_features(ALL_COMPUTED_FEATURES)
+    except ImportError:
+        pass
+
+
+_validate_feature_registry_link()

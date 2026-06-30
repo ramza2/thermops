@@ -34,6 +34,7 @@ RESULT_TABLES: list[str] = [
     "tb_training_job",
     "tb_model_version",
     "tb_model_experiment",
+    "tb_feature_lineage",
     "tb_feature_dataset",
     "tb_dataset_version",
     "tb_data_quality_run",

@@ -112,6 +112,36 @@ MIGRATIONS = [
         """,
     ),
     (
+        "tb_feature_lineage",
+        """
+        CREATE TABLE IF NOT EXISTS tb_feature_lineage (
+            lineage_id BIGSERIAL PRIMARY KEY,
+            dataset_version_id VARCHAR(80) NOT NULL REFERENCES tb_dataset_version(dataset_version_id),
+            feature_build_job_id VARCHAR(80),
+            feature_set_id VARCHAR(50) NOT NULL,
+            feature_name VARCHAR(100) NOT NULL,
+            registry_version VARCHAR(20) NOT NULL DEFAULT '1.0',
+            calc_method VARCHAR(20) NOT NULL DEFAULT 'CODE',
+            calc_expression TEXT,
+            source_tables JSONB,
+            source_columns JSONB,
+            partition_keys JSONB,
+            time_key VARCHAR(50),
+            lookback_hours INTEGER,
+            requires_shift BOOLEAN,
+            leakage_safe BOOLEAN,
+            build_start_at TIMESTAMP,
+            build_end_at TIMESTAMP,
+            site_filter VARCHAR(50),
+            lineage_json JSONB,
+            created_at TIMESTAMP NOT NULL DEFAULT NOW()
+        );
+        CREATE INDEX IF NOT EXISTS ix_feature_lineage_dsv ON tb_feature_lineage(dataset_version_id);
+        CREATE INDEX IF NOT EXISTS ix_feature_lineage_job ON tb_feature_lineage(feature_build_job_id);
+        CREATE UNIQUE INDEX IF NOT EXISTS ux_feature_lineage_dsv_feature ON tb_feature_lineage(dataset_version_id, feature_name);
+        """,
+    ),
+    (
         "P1-4 CatBoost training configs",
         """
         INSERT INTO tb_training_config (config_id, config_name, feature_set_id, algorithm, train_period_months, validation_period_months, hyperparams) VALUES

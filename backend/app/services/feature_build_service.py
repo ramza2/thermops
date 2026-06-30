@@ -26,6 +26,7 @@ from app.models.entities import (
     SiteWeatherMapping,
     WeatherObservation,
 )
+from app.services.feature_lineage_service import save_feature_lineage
 
 MIN_HISTORY_HOURS = 168
 
@@ -290,6 +291,20 @@ async def run_feature_build(db: AsyncSession, params: FeatureBuildParams) -> dic
             inserted += 1
 
         dv.record_count = inserted
+
+        site_ids = sorted(str(s) for s in df["site_id"].unique())
+        lineage_count = await save_feature_lineage(
+            db,
+            dataset_version_id=dataset_version_id,
+            job_id=job_id,
+            feature_set_id=params.feature_set_id,
+            site_filter=params.site_id,
+            feature_names=feature_names,
+            build_start_at=start_ts.to_pydatetime() if hasattr(start_ts, "to_pydatetime") else start_ts,
+            build_end_at=end_ts.to_pydatetime() if hasattr(end_ts, "to_pydatetime") else end_ts,
+            site_ids=site_ids,
+        )
+
         finished = utc_now()
 
         result_summary = {
@@ -297,6 +312,7 @@ async def run_feature_build(db: AsyncSession, params: FeatureBuildParams) -> dic
             "feature_set_id": params.feature_set_id,
             "target_table": "tb_feature_dataset",
             "inserted_count": inserted,
+            "lineage_count": lineage_count,
             "site_count": site_count,
             "checked_start_at": start_ts.isoformat() if hasattr(start_ts, "isoformat") else str(start_ts),
             "checked_end_at": end_ts.isoformat() if hasattr(end_ts, "isoformat") else str(end_ts),
@@ -313,6 +329,7 @@ async def run_feature_build(db: AsyncSession, params: FeatureBuildParams) -> dic
             "job_id": job_id,
             "status": run.run_status,
             "inserted_count": inserted,
+            "lineage_count": lineage_count,
             "dataset_version_id": dataset_version_id,
             "site_count": site_count,
             "checked_start_at": result_summary["checked_start_at"],

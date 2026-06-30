@@ -17,6 +17,8 @@ from app.services.feature_build_service import (
     run_feature_build,
 )
 from app.services.feature_dataset_service import get_feature_dataset_range
+from app.services.feature_lineage_service import get_lineage_by_dataset_version, get_lineage_by_job_id
+from app.services.feature_registry_service import get_registry_spec, list_registry_specs
 
 router = APIRouter(tags=["Feature"])
 
@@ -226,3 +228,45 @@ async def get_feature_build_job_endpoint(job_id: str, db: AsyncSession = Depends
     if not result:
         raise HTTPException(status_code=404, detail="NOT_FOUND")
     return ok(result)
+
+
+@router.get("/feature-registry")
+async def list_feature_registry():
+    return ok(list_registry_specs())
+
+
+@router.get("/feature-registry/{feature_name}")
+async def get_feature_registry_item(feature_name: str):
+    spec = get_registry_spec(feature_name)
+    if not spec:
+        raise HTTPException(status_code=404, detail="NOT_FOUND")
+    return ok(spec)
+
+
+@router.get("/feature-lineage")
+async def get_feature_lineage(
+    dataset_version_id: str = Query(...),
+    db: AsyncSession = Depends(get_db),
+):
+    rows = await get_lineage_by_dataset_version(db, dataset_version_id)
+    return ok({
+        "dataset_version_id": dataset_version_id,
+        "lineage_count": len(rows),
+        "items": rows,
+    })
+
+
+@router.get("/feature-build-jobs/{job_id}/lineage")
+async def get_feature_build_job_lineage(job_id: str, db: AsyncSession = Depends(get_db)):
+    rows = await get_lineage_by_job_id(db, job_id)
+    if not rows:
+        job = await get_feature_build_job(db, job_id)
+        if not job:
+            raise HTTPException(status_code=404, detail="NOT_FOUND")
+        return ok({"job_id": job_id, "lineage_count": 0, "items": []})
+    return ok({
+        "job_id": job_id,
+        "dataset_version_id": rows[0].get("dataset_version_id"),
+        "lineage_count": len(rows),
+        "items": rows,
+    })

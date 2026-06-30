@@ -1,7 +1,7 @@
 from datetime import date, datetime
 from typing import Any
 
-from sqlalchemy import BigInteger, Date, DateTime, Integer, Numeric, String, Text
+from sqlalchemy import BigInteger, Boolean, Date, DateTime, Integer, Numeric, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -71,6 +71,30 @@ class FeatureDataset(Base):
     lag_168h_demand: Mapped[float | None] = mapped_column(Numeric(18, 6))
     rolling_24h_avg: Mapped[float | None] = mapped_column(Numeric(18, 6))
     feature_json: Mapped[dict | None] = mapped_column(JSONB)
+    created_at: Mapped[datetime] = mapped_column(DateTime)
+
+
+class FeatureLineage(Base):
+    __tablename__ = "tb_feature_lineage"
+    lineage_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    dataset_version_id: Mapped[str] = mapped_column(String(80))
+    feature_build_job_id: Mapped[str | None] = mapped_column(String(80))
+    feature_set_id: Mapped[str] = mapped_column(String(50))
+    feature_name: Mapped[str] = mapped_column(String(100))
+    registry_version: Mapped[str] = mapped_column(String(20), default="1.0")
+    calc_method: Mapped[str] = mapped_column(String(20), default="CODE")
+    calc_expression: Mapped[str | None] = mapped_column(Text)
+    source_tables: Mapped[list | None] = mapped_column(JSONB)
+    source_columns: Mapped[list | None] = mapped_column(JSONB)
+    partition_keys: Mapped[list | None] = mapped_column(JSONB)
+    time_key: Mapped[str | None] = mapped_column(String(50))
+    lookback_hours: Mapped[int | None] = mapped_column(Integer)
+    requires_shift: Mapped[bool | None] = mapped_column(Boolean)
+    leakage_safe: Mapped[bool | None] = mapped_column(Boolean)
+    build_start_at: Mapped[datetime | None] = mapped_column(DateTime)
+    build_end_at: Mapped[datetime | None] = mapped_column(DateTime)
+    site_filter: Mapped[str | None] = mapped_column(String(50))
+    lineage_json: Mapped[dict | None] = mapped_column(JSONB)
     created_at: Mapped[datetime] = mapped_column(DateTime)
 
 
