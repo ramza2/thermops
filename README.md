@@ -173,7 +173,7 @@ python scripts/smoke_test_api.py
 ```powershell
 python scripts/run_regression_tests.py --group quick      # API·적재·품질 (약 1~3분)
 python scripts/run_regression_tests.py --group connector  # DB/API Connector
-python scripts/run_regression_tests.py --group model      # Feature·학습·예측·Dataset range·기간 검증·평가 (8개)
+python scripts/run_regression_tests.py --group model      # Feature·학습·예측·메타데이터 정합성·Dataset range·기간 검증·평가 (9개)
 python scripts/run_regression_tests.py --group retraining # Drift·재학습
 python scripts/run_regression_tests.py --group airflow    # Airflow DAG
 python scripts/run_regression_tests.py --group frontend   # npm build + check-pages
@@ -181,7 +181,7 @@ python scripts/run_regression_tests.py --group full       # 전체 (20~60분+)
 python scripts/run_regression_tests.py --all              # full과 동일
 ```
 
-**`model` 그룹 (8개):** Feature 생성 → LightGBM/CatBoost/2-Stage 학습 → **Feature Dataset range API** (`test_feature_dataset_range.py`) → **예측 기간 검증** (`test_prediction_period_validation.py`) → 배치 예측 → 예측-실적 평가. 배치 예측·기간 검증 관련 변경 후 권장:
+**`model` 그룹 (9개):** Feature 생성 → **Feature 메타데이터·명칭 정합성** (`test_feature_metadata_consistency.py`) → LightGBM/CatBoost/2-Stage 학습 → Feature Dataset range API → 예측 기간 검증 → 배치 예측 → 예측-실적 평가. 배치 예측·기간 검증 관련 변경 후 권장:
 
 ```powershell
 python scripts/run_regression_tests.py --group model --timeout-scale 2
@@ -265,6 +265,18 @@ Feature Set 미리보기·생성 API:
 ```powershell
 curl -X POST "http://localhost:8000/api/v1/feature-sets/FS-TPL-LAG-ROLL/preview"
 curl -X POST "http://localhost:8000/api/v1/feature-build-jobs?feature_set_id=FS-TPL-LAG-ROLL"
+```
+
+**Feature 메타데이터·명칭 정책**
+
+- Feature 등록(`/features`)은 **카탈로그**이다. 등록만으로 값이 생성되거나 학습에 반영되지 않는다.
+- `calc_expression`(계산식 메모)은 **설명용**이며 `LAG(...)`, `MA(...)` 등은 현재 **실행되지 않는다**.
+- 학습/예측에 쓰이려면: (1) Feature Set 포함 → (2) Feature 생성 → (3) 학습 설정의 `feature_set_id` 일치.
+- 공식 Feature명: `demand_lag_24h`, `demand_lag_168h`, `demand_ma_24h`, `demand_ma_168h`, `temperature_diff_24h`, `heating_degree_days`, `cooling_degree_days`.
+- 상세: [`docs/md/THERMOps_Feature_명칭_및_계산식_정책.md`](docs/md/THERMOps_Feature_명칭_및_계산식_정책.md)
+
+```powershell
+python scripts/test_feature_metadata_consistency.py
 ```
 
 ### 모델 학습 테스트 (P0-4-1)

@@ -22,6 +22,24 @@ interface Feature {
 
 const EMPTY = { feature_name: "", feature_group: "", feature_type: "NUMERIC", calc_expression: "", description: "" };
 
+const CALC_MEMO_HELP = `현재 계산식은 설명용 메타데이터입니다.
+LAG(heat_demand, 24)와 같이 입력해도 자동 계산되지는 않습니다.
+실제 계산에 사용하려면 Feature Set 포함과 별도 계산 로직 구현이 필요합니다.`;
+
+const REGISTER_INFO = `Feature 등록은 카탈로그 등록 단계입니다.
+모델 학습/예측에 사용하려면 Feature Set에 포함하고 Feature 생성 작업을 실행해야 합니다.
+신규 파생 Feature는 현재 계산 로직이 코드에 구현되어 있어야 값이 생성됩니다.`;
+
+function CalcMemoCell({ expression }: { expression: string | null }) {
+  if (!expression) return <>-</>;
+  return (
+    <span className="inline-flex flex-wrap items-center gap-1.5">
+      <span className="font-mono text-xs">{expression}</span>
+      <span className="inline-flex px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-500">설명용</span>
+    </span>
+  );
+}
+
 export default function FeaturesPage() {
   const { showToast } = useToast();
   const [items, setItems] = useState<Feature[]>([]);
@@ -95,9 +113,13 @@ export default function FeaturesPage() {
     <div>
       <PageHeader
         title="Feature 목록"
-        description="모델 학습에 사용되는 Feature를 정의하고 관리합니다."
+        description="모델 학습에 사용되는 Feature 메타데이터(카탈로그)를 정의합니다. 등록만으로는 값이 생성되지 않습니다."
         actions={<Button icon={<Plus className="w-4 h-4" />} onClick={() => setCreateOpen(true)}>신규 Feature</Button>}
       />
+
+      <div className="mb-4 text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded-lg p-3 whitespace-pre-line">
+        {REGISTER_INFO}
+      </div>
 
       <DataTable
         loading={loading}
@@ -106,7 +128,11 @@ export default function FeaturesPage() {
           { key: "feature_name", header: "Feature명" },
           { key: "feature_group", header: "그룹", render: (r) => String(r.feature_group || "-") },
           { key: "feature_type", header: "유형" },
-          { key: "calc_expression", header: "계산식", render: (r) => String(r.calc_expression || "-") },
+          {
+            key: "calc_expression",
+            header: "계산식 메모",
+            render: (r) => <CalcMemoCell expression={r.calc_expression as string | null} />,
+          },
           { key: "status", header: "상태", render: (r) => <StatusBadge status={r.status as string} /> },
           {
             key: "actions", header: "작업", render: (r) => (
@@ -126,12 +152,13 @@ export default function FeaturesPage() {
         <div className="space-y-3">
           <div>
             <label className="block text-xs text-slate-500 mb-1">Feature명</label>
-            <TextInput value={form.feature_name} onChange={(v) => setForm({ ...form, feature_name: v })} placeholder="lag_24h_demand" />
+            <TextInput value={form.feature_name} onChange={(v) => setForm({ ...form, feature_name: v })} placeholder="demand_lag_24h" />
+            <p className="text-[11px] text-slate-400 mt-1">공식 명칭은 docs/md/THERMOps_Feature_명칭_및_계산식_정책.md 참고</p>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs text-slate-500 mb-1">그룹</label>
-              <TextInput value={form.feature_group} onChange={(v) => setForm({ ...form, feature_group: v })} placeholder="lag" />
+              <TextInput value={form.feature_group} onChange={(v) => setForm({ ...form, feature_group: v })} placeholder="열수요 이력" />
             </div>
             <div>
               <label className="block text-xs text-slate-500 mb-1">유형</label>
@@ -140,12 +167,16 @@ export default function FeaturesPage() {
             </div>
           </div>
           <div>
-            <label className="block text-xs text-slate-500 mb-1">계산식</label>
-            <TextInput value={form.calc_expression} onChange={(v) => setForm({ ...form, calc_expression: v })} placeholder="LAG(heat_demand, 24)" />
+            <label className="block text-xs text-slate-500 mb-1">계산식 메모</label>
+            <TextInput value={form.calc_expression} onChange={(v) => setForm({ ...form, calc_expression: v })} placeholder="예: 24시간 전 열수요" />
+            <p className="text-[11px] text-slate-500 mt-1 whitespace-pre-line">{CALC_MEMO_HELP}</p>
           </div>
           <div>
             <label className="block text-xs text-slate-500 mb-1">설명</label>
             <TextInput value={form.description} onChange={(v) => setForm({ ...form, description: v })} />
+          </div>
+          <div className="text-xs text-slate-600 bg-amber-50 border border-amber-100 rounded p-3 whitespace-pre-line">
+            {REGISTER_INFO}
           </div>
         </div>
       </Modal>

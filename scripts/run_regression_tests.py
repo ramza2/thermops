@@ -131,6 +131,12 @@ def _build_registry() -> list[TestCase]:
             timeout_seconds=180,
         ),
         _python_test(
+            "test_feature_metadata_consistency.py",
+            groups=["model", "full"],
+            description="Feature 메타데이터·명칭 정합성",
+            timeout_seconds=180,
+        ),
+        _python_test(
             "test_model_training.py",
             groups=["model", "full"],
             description="LightGBM 학습",

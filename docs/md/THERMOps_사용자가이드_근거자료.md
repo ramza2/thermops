@@ -199,15 +199,15 @@ flowchart LR
 
 | 항목 | 내용 |
 |------|------|
-| **화면 목적** | 모델 학습에 사용할 Feature 메타데이터 정의·관리 |
-| **주요 입력값** | Feature명, 그룹, 유형(`NUMERIC`/`CATEGORICAL`/`DATETIME`), 계산식, 설명 |
+| **화면 목적** | 모델 학습에 사용할 Feature **메타데이터(카탈로그)** 정의·관리 |
+| **주요 입력값** | Feature명, 그룹, 유형(`NUMERIC`/`CATEGORICAL`/`DATETIME`), **계산식 메모**, 설명 |
 | **주요 버튼** | **신규 Feature**, **삭제** |
 | **버튼 클릭 시 동작** | 등록 모달 저장 → 목록 1페이지 갱신. 삭제 확인 모달 |
 | **호출 API** | `GET /features`, `POST /features`, `DELETE /features/{id}` |
 | **결과 확인 위치** | Feature 목록 테이블 |
-| **주의할 점** | 수정 UI 없음(삭제 후 재등록). 시드에 템플릿 Feature 다수 존재 |
-| **선행 작업** | 데이터 적재(실제 Feature 값 생성 시) |
-| **후속 작업** | Feature Set 구성 |
+| **주의할 점** | **등록만으로 Feature 값이 생성되거나 학습에 반영되지 않음.** `calc_expression`은 설명용이며 `LAG(...)` 등은 자동 실행되지 않음. Feature Set 포함 + Feature 생성 + 학습 설정 연결이 필요. 공식 명칭은 `docs/md/THERMOps_Feature_명칭_및_계산식_정책.md` 참고. 수정 UI 없음(삭제 후 재등록). |
+| **선행 작업** | (값 생성 시) 데이터 적재 |
+| **후속 작업** | Feature Set 구성 → Feature 생성 |
 
 ---
 
@@ -556,7 +556,7 @@ flowchart LR
 | 용어 | 설명 (Word 가이드용 초안) |
 |------|---------------------------|
 | **MLOps** | Machine Learning Operations. 모델 개발·배포·모니터링·재학습을 운영 프로세스로 통합하는 방법론. THERMOps는 열수요 예측에 특화된 MLOps 플랫폼이다. |
-| **Feature** | 모델 입력으로 사용하는 개별 변수(예: 24시간 전 열수요, 기온). THERMOps에서는 메타데이터(이름·유형·계산식)로 등록한다. |
+| **Feature** | 모델 입력 변수. `/features`에서는 **카탈로그(메타데이터)** 로 등록하며, 실제 값은 Feature Set + Feature 생성으로 `tb_feature_dataset`에 저장된다. `calc_expression`은 설명용 메모이다. |
 | **Feature Set** | 학습·예측에 함께 사용하는 Feature 묶음. 결측 처리·정규화 옵션을 포함할 수 있다. |
 | **Model Registry** | 학습된 모델 버전을 등록·관리하는 저장소. THERMOps는 MLflow Model Registry와 연동한다. |
 | **MLflow** | 실험 추적·모델 아티팩트·버전 관리 오픈소스. 학습 Run ID·메트릭·모델 URI가 UI에 표시된다. |

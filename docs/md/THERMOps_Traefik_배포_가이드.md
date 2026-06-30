@@ -374,12 +374,15 @@ export THERMOOPS_API_BASE=https://thermops.openlink.kr/api/v1
 
 python scripts/test_feature_dataset_range.py
 python scripts/test_prediction_period_validation.py
+python scripts/test_feature_metadata_consistency.py
 python scripts/test_batch_prediction.py
 python scripts/run_regression_tests.py --group model --timeout-scale 2
 python scripts/run_regression_tests.py --group quick
 ```
 
 `/predictions/jobs` UI: Feature Set별 Dataset 기간 표시, 최신 24시간 자동 설정, 범위 이탈 시 실행 차단.
+
+`/features` UI: `calc_expression`은 **계산식 메모**(설명용). 등록만으로 학습에 반영되지 않음. 명칭 정책은 `docs/md/THERMOps_Feature_명칭_및_계산식_정책.md`.
 
 ---
 
@@ -390,6 +393,7 @@ python scripts/run_regression_tests.py --group quick
 | `docker-compose.traefik.yml` | Traefik 배포 스택 (기본) |
 | `docker-compose.traefik.admin.yml` | Optional CNAME admin exposure |
 | `.env.deploy.example` | 환경 변수 템플릿 |
+| `docs/md/THERMOps_Feature_명칭_및_계산식_정책.md` | Feature 공식 명칭·calc_expression·레거시 alias |
 | `db/init/02_seed_clean.sql` | Clean 마스터/템플릿 seed |
 | `db/init/02_seed.sql` | Demo seed (개발·시연용, traefik init 미사용) |
 | `scripts/reset_clean_deploy.py` | 결과 테이블 TRUNCATE |
