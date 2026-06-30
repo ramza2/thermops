@@ -9,7 +9,7 @@ from app.core.database import get_db
 from app.core.response import ok, paged
 from app.core.time import utc_now
 from app.models.entities import Feature, FeatureSet
-from app.schemas.api import FeatureCreate, FeatureQualityRunCreate, FeatureSetCreate
+from app.schemas.api import FeatureCreate, FeatureQualityRunCreate, FeatureSetCreate, FeatureSetLegacyReplaceRequest
 from app.services.feature_build_service import (
     FeatureBuildParams,
     get_feature_build_job,
@@ -35,6 +35,7 @@ from app.services.feature_registration_service import (
     classify_feature_name,
     is_computable,
     is_tpl_feature_set,
+    replace_legacy_features_in_feature_set,
     validate_feature_name,
 )
 
@@ -232,6 +233,25 @@ async def update_feature_set(feature_set_id: str, body: FeatureSetCreate, db: As
     fs.apply_site_scope = body.apply_site_scope
     fs.description = body.description
     return ok({"feature_set_id": feature_set_id}, message="Feature Set이 수정되었습니다.")
+
+
+@router.post("/feature-sets/{feature_set_id}/replace-legacy-features")
+async def replace_legacy_features_api(
+    feature_set_id: str,
+    body: FeatureSetLegacyReplaceRequest | None = None,
+    db: AsyncSession = Depends(get_db),
+):
+    dry_run = True if body is None else body.dry_run
+    try:
+        result = await replace_legacy_features_in_feature_set(
+            db, feature_set_id, dry_run=dry_run
+        )
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    msg = result.get("message", "Legacy Feature 대체 계획을 반환했습니다.")
+    return ok(result, message=msg)
 
 
 @router.post("/feature-sets/{feature_set_id}/preview")

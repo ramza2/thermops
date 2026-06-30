@@ -300,3 +300,102 @@ def summarize_registration_counts(feature_metas: list[dict[str, Any]]) -> dict[s
         "non_computable_feature_count": non_computable,
         "registry_missing_feature_count": registry_missing,
     }
+
+
+def compute_legacy_replacement_plan(features: list[str]) -> dict[str, Any]:
+    """Legacy alias를 공식명으로 대체하는 계획을 계산한다 (DB 변경 없음)."""
+    original_features = list(features)
+    replaced_features: list[str] = []
+    replacements: list[dict[str, str]] = []
+    removed_duplicates: list[str] = []
+    warnings: list[str] = []
+    seen: set[str] = set()
+
+    for name in original_features:
+        if name in LEGACY_ALIASES:
+            to_name = LEGACY_ALIASES[name]
+            if not is_computable(to_name):
+                raise ValueError(
+                    f"Legacy alias '{name}'의 공식명 '{to_name}'은 계산 가능하지 않습니다."
+                )
+            replacements.append({"from": name, "to": to_name, "reason": "LEGACY_ALIAS"})
+            target = to_name
+        else:
+            target = name
+
+        if target in seen:
+            if name in LEGACY_ALIASES:
+                removed_duplicates.append(name)
+                warnings.append(
+                    f"{name}를 {target}로 대체하면서 기존 {target}와 중복되어 1개를 제거했습니다."
+                )
+            continue
+        seen.add(target)
+        replaced_features.append(target)
+
+    remaining_legacy = [f for f in replaced_features if f in LEGACY_ALIASES]
+    remaining_non_computable = [f for f in replaced_features if not is_computable(f)]
+    replacement_count = len(replacements)
+    changed = replacement_count > 0 or original_features != replaced_features
+
+    if replacement_count == 0:
+        message = "대체할 Legacy Feature가 없습니다."
+    else:
+        message = f"{replacement_count}개 Legacy Feature를 공식명으로 대체할 수 있습니다."
+
+    return {
+        "changed": changed,
+        "original_features": original_features,
+        "replaced_features": replaced_features,
+        "replacements": replacements,
+        "removed_duplicates": removed_duplicates,
+        "remaining_legacy_features": remaining_legacy,
+        "remaining_non_computable_features": remaining_non_computable,
+        "warnings": warnings,
+        "replacement_count": replacement_count,
+        "duplicate_removed_count": len(removed_duplicates),
+        "remaining_legacy_count": len(remaining_legacy),
+        "message": message,
+    }
+
+
+async def replace_legacy_features_in_feature_set(
+    db: AsyncSession,
+    feature_set_id: str,
+    *,
+    dry_run: bool = True,
+) -> dict[str, Any]:
+    """Feature Set features 목록에서 Legacy alias를 공식명으로 대체한다."""
+    from app.models.entities import FeatureSet
+
+    fs = (
+        await db.execute(select(FeatureSet).where(FeatureSet.feature_set_id == feature_set_id))
+    ).scalar_one_or_none()
+    if not fs:
+        raise LookupError(f"Feature Set을 찾을 수 없습니다: {feature_set_id}")
+
+    plan = compute_legacy_replacement_plan(list(fs.features or []))
+    plan["feature_set_id"] = feature_set_id
+    plan["dry_run"] = dry_run
+
+    if plan["remaining_legacy_features"]:
+        raise ValueError(
+            "대체 후에도 Legacy Feature가 남아 있습니다: "
+            + ", ".join(plan["remaining_legacy_features"])
+        )
+    if is_tpl_feature_set(feature_set_id) and plan["remaining_non_computable_features"]:
+        raise ValueError(
+            "공식 TPL Feature Set에는 계산 가능한 Feature만 남을 수 있습니다: "
+            + ", ".join(plan["remaining_non_computable_features"][:5])
+        )
+
+    if not dry_run and plan["changed"]:
+        fs.features = plan["replaced_features"]
+        plan["applied"] = True
+        plan["message"] = (
+            f"Legacy Feature {plan['replacement_count']}개를 공식명으로 대체했습니다."
+        )
+    else:
+        plan["applied"] = False
+
+    return plan

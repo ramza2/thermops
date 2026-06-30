@@ -78,6 +78,12 @@ export const LEGACY_ALIAS_WARNING_MSG = (name: string, recommended: string) =>
 export const FEATURE_QUALITY_REGISTRATION_HINT =
   "Catalog-only 또는 Legacy Feature가 Feature Set에 포함되면 Feature Build에서 값이 생성되지 않거나 Feature Quality에서 missing key로 표시될 수 있습니다.";
 
+export const LEGACY_REPLACE_HINT =
+  "이 Feature Set에는 레거시 Feature명이 포함되어 있습니다. 신규 Feature Set과 학습/예측에는 공식 Feature명을 사용하는 것이 권장됩니다.";
+
+export const LEGACY_REPLACE_AFTER_HINT =
+  "공식명으로 대체한 뒤에는 Feature 생성과 Feature 품질 검증을 다시 실행하는 것이 좋습니다.";
+
 export type FeatureListFilter = "all" | "computable" | "catalog_only" | "legacy";
 
 export function matchesFeatureListFilter(

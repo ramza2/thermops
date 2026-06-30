@@ -10,6 +10,7 @@ import type { FeatureQualityFeatureResult, FeatureQualityRun } from "@/types/fea
 import type { FeatureRegistrationStatus } from "@/types/featureRegistration";
 import {
   FEATURE_QUALITY_REGISTRATION_HINT,
+  LEGACY_REPLACE_AFTER_HINT,
   registrationStatusClass,
   registrationStatusLabelExtended,
 } from "@/utils/featureRegistrationFormat";
@@ -25,9 +26,14 @@ import { formatDateTimeShort } from "@/utils/featureRegistryFormat";
 interface FeatureQualitySectionProps {
   featureSetId: string;
   datasetVersionId?: string | null;
+  hasLegacyFeatures?: boolean;
 }
 
-export function FeatureQualitySection({ featureSetId, datasetVersionId: propDsv }: FeatureQualitySectionProps) {
+export function FeatureQualitySection({
+  featureSetId,
+  datasetVersionId: propDsv,
+  hasLegacyFeatures = false,
+}: FeatureQualitySectionProps) {
   const [datasetVersionId, setDatasetVersionId] = useState(propDsv || "");
   const [runs, setRuns] = useState<FeatureQualityRun[]>([]);
   const [selectedRunId, setSelectedRunId] = useState("");
@@ -154,6 +160,9 @@ export function FeatureQualitySection({ featureSetId, datasetVersionId: propDsv 
             원천 데이터 품질 점검과는 별도로, Feature 값의 누락·범위·이상치·분포를 확인합니다.
           </p>
           <p className="text-xs text-amber-700 mt-2 max-w-2xl">{FEATURE_QUALITY_REGISTRATION_HINT}</p>
+          {hasLegacyFeatures && (
+            <p className="text-xs text-orange-700 mt-1 max-w-2xl">{LEGACY_REPLACE_AFTER_HINT}</p>
+          )}
         </div>
         <div className="flex gap-2">
           <Button

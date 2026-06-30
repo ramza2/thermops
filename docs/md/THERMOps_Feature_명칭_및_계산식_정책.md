@@ -99,6 +99,20 @@ Feature Set에 포함되었으나 `build_feature_frame()` 결과에 없는 Featu
 - 공식 TPL(`FS-TPL-*`)은 전 Feature가 계산 가능하므로 `SUCCESS` 유지
 - 카탈로그 전용 Feature 포함 시 `WARNING` 가능 (계산 가능 Feature만 `feature_json` 저장)
 
+### 5.4 Legacy alias 공식명 일괄 대체
+
+Legacy alias 자동 대체 기능은 기존 Feature Set에 남아 있는 과거 명칭을 공식 Feature명으로 정리하기 위한 기능입니다. 계산 로직을 새로 만들거나 `calc_expression`을 실행하는 기능은 아닙니다.
+
+| API | 설명 |
+|-----|------|
+| `POST /api/v1/feature-sets/{id}/replace-legacy-features` | body: `{ "dry_run": true }` (기본) — 계획만 반환; `dry_run: false` 시 DB 반영 |
+
+- 매핑 기준: `LEGACY_ALIASES` (`hdd`→`heating_degree_days`, `rolling_24h_avg`→`demand_ma_24h` 등)
+- 대체 후 **중복 제거**, 순서 유지
+- **Catalog-only는 대체 대상 아님**
+- 공식 TPL도 Legacy **제거 목적**의 대체는 허용 (dry-run → 확인 후 적용)
+- 적용 후 **Feature Build·Feature Quality 재실행 권장**
+
 ## 6. 저장 구조
 
 | 저장소 | 키/컬럼 | 설명 |
@@ -152,6 +166,7 @@ Feature Set에 포함되었으나 `build_feature_frame()` 결과에 없는 Featu
 | GET | `/api/v1/feature-registry` |
 | GET | `/api/v1/feature-registry/{feature_name}` |
 | GET | `/api/v1/features/validate-name?feature_name=...` |
+| POST | `/api/v1/feature-sets/{id}/replace-legacy-features` |
 | GET | `/api/v1/feature-lineage?dataset_version_id=...` |
 | GET | `/api/v1/feature-build-jobs?feature_set_id=...&limit=10` |
 | GET | `/api/v1/feature-build-jobs/{job_id}` |

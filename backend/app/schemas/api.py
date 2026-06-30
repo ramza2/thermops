@@ -84,7 +84,9 @@ class FeatureSetCreate(BaseModel):
     description: str | None = None
 
 
-# Training
+class FeatureSetLegacyReplaceRequest(BaseModel):
+    dry_run: bool = True
+
 class TrainingConfigCreate(BaseModel):
     config_name: str
     feature_set_id: str

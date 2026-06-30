@@ -286,6 +286,7 @@ curl -X POST "http://localhost:8000/api/v1/feature-build-jobs?feature_set_id=FS-
 **Feature 품질 검증** (`check_type=FEATURE_QUALITY`)
 
 - Feature별 **registration_status**(계산 가능/카탈로그 전용/레거시) 표시
+- **Legacy alias 일괄 공식명 대체** (`POST /feature-sets/{id}/replace-legacy-features`, dry-run 후 적용)
 - Build `result_summary`의 missing/catalog_only 정보를 `build_coverage`로 참조
 
 - 대상: `tb_feature_dataset.feature_json` (원천 데이터 품질 점검과 별도)
@@ -299,6 +300,7 @@ python scripts/test_feature_lineage.py
 python scripts/test_feature_build_jobs.py
 python scripts/test_feature_quality.py
 python scripts/test_feature_registration_validation.py
+python scripts/test_feature_set_legacy_replace.py
 ```
 
 ### 모델 학습 테스트 (P0-4-1)

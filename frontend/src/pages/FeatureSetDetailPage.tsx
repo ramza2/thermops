@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, Eye, Play, Plus, Save, Trash2 } from "lucide-react";
 import { deleteApi, extractApiErrorMessage, fetchApi, postApi, putApi, PagedData } from "@/api/client";
-import { validateFeatureName } from "@/api/featureRegistration";
+import { validateFeatureName, replaceLegacyFeatures } from "@/api/featureRegistration";
 import { Button } from "@/components/Button";
 import { DataTable } from "@/components/DataTable";
 import { Modal } from "@/components/Modal";
@@ -13,11 +13,13 @@ import { PageHeader } from "@/layouts/MainLayout";
 import { FeatureLineageSection } from "@/components/FeatureLineageSection";
 import { FeatureQualitySection } from "@/components/FeatureQualitySection";
 import type { FeatureBuildResult } from "@/types/featureRegistry";
-import type { FeatureNameValidation } from "@/types/featureRegistration";
+import type { FeatureNameValidation, FeatureSetLegacyReplaceResult } from "@/types/featureRegistration";
 import {
   CATALOG_ONLY_WARNING_MSG,
   FEATURE_QUALITY_REGISTRATION_HINT,
   LEGACY_ALIAS_WARNING_MSG,
+  LEGACY_REPLACE_AFTER_HINT,
+  LEGACY_REPLACE_HINT,
   TPL_FEATURE_BLOCK_MSG,
   matchesFeatureListFilter,
   registrationStatusClass,
@@ -85,6 +87,10 @@ export default function FeatureSetDetailPage() {
   const [addWarnings, setAddWarnings] = useState<string[]>([]);
   const [featureFilter, setFeatureFilter] = useState<FeatureListFilter>("all");
   const [featureSearch, setFeatureSearch] = useState("");
+  const [replaceModalOpen, setReplaceModalOpen] = useState(false);
+  const [replacePlan, setReplacePlan] = useState<FeatureSetLegacyReplaceResult | null>(null);
+  const [replaceLoading, setReplaceLoading] = useState(false);
+  const [replaceApplying, setReplaceApplying] = useState(false);
 
   const isTplSet = Boolean(id?.startsWith("FS-TPL-"));
 
@@ -161,6 +167,56 @@ export default function FeatureSetDetailPage() {
       );
     });
   }, [allFeatures, featureFilter, featureSearch]);
+
+  const legacyFeaturesInSet = useMemo(
+    () => form.features.filter((name) => featureStatusMap[name]?.status === "LEGACY_ALIAS"),
+    [form.features, featureStatusMap],
+  );
+
+  const hasLegacyInSet = legacyFeaturesInSet.length > 0;
+  const buildHasLegacy = (buildResult?.result_summary?.legacy_alias_features?.length ?? 0) > 0;
+
+  const openReplaceLegacyModal = async () => {
+    if (!id) return;
+    setReplaceLoading(true);
+    try {
+      const plan = await replaceLegacyFeatures(id, true);
+      if (!plan.changed || plan.replacement_count === 0) {
+        showToast("info", plan.message || "대체할 Legacy Feature가 없습니다.");
+        return;
+      }
+      setReplacePlan(plan);
+      setReplaceModalOpen(true);
+    } catch (err) {
+      showToast("error", extractApiErrorMessage(err, "Legacy Feature 대체 계획 조회에 실패했습니다."));
+    } finally {
+      setReplaceLoading(false);
+    }
+  };
+
+  const handleApplyLegacyReplace = async () => {
+    if (!id) return;
+    const confirmMsg = isTplSet
+      ? `공식 TPL Feature Set의 features 목록을 공식명 기준으로 업데이트합니다.\n${LEGACY_REPLACE_AFTER_HINT}\n\n계속하시겠습니까?`
+      : `Feature Set의 features 목록을 공식명 기준으로 업데이트합니다.\n${LEGACY_REPLACE_AFTER_HINT}\n\n계속하시겠습니까?`;
+    if (!window.confirm(confirmMsg)) return;
+
+    setReplaceApplying(true);
+    try {
+      const result = await replaceLegacyFeatures(id, false);
+      setReplaceModalOpen(false);
+      setReplacePlan(null);
+      await load();
+      showToast(
+        "success",
+        `Legacy Feature ${result.replacement_count}개를 공식명으로 대체했습니다. Feature 생성을 다시 실행하세요.`,
+      );
+    } catch (err) {
+      showToast("error", extractApiErrorMessage(err, "Legacy Feature 대체 적용에 실패했습니다."));
+    } finally {
+      setReplaceApplying(false);
+    }
+  };
 
   const isAddCheckboxDisabled = (f: FeatureItem) => {
     if (form.features.includes(f.feature_name)) return true;
@@ -446,7 +502,31 @@ export default function FeatureSetDetailPage() {
                 <span> · 레거시: {buildResult.result_summary?.legacy_alias_features?.join(", ")}</span>
               )}
               <p className="mt-1 text-amber-700">{FEATURE_QUALITY_REGISTRATION_HINT}</p>
+              {hasLegacyInSet && (
+                <div className="mt-2">
+                  <Button variant="secondary" onClick={() => void openReplaceLegacyModal()} disabled={replaceLoading}>
+                    {replaceLoading ? "확인 중..." : "공식명으로 대체"}
+                  </Button>
+                </div>
+              )}
             </div>
+          )}
+        </div>
+      )}
+
+      {(hasLegacyInSet || buildHasLegacy) && (
+        <div className="mb-6 text-xs text-orange-800 bg-orange-50 border border-orange-200 rounded-lg p-3 flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <p className="font-medium text-orange-900">레거시 Feature명 감지</p>
+            <p className="mt-1">{LEGACY_REPLACE_HINT}</p>
+            {legacyFeaturesInSet.length > 0 && (
+              <p className="mt-1 font-mono text-[11px]">{legacyFeaturesInSet.join(", ")}</p>
+            )}
+          </div>
+          {hasLegacyInSet && (
+            <Button onClick={() => void openReplaceLegacyModal()} disabled={replaceLoading}>
+              {replaceLoading ? "확인 중..." : "공식명으로 대체"}
+            </Button>
           )}
         </div>
       )}
@@ -490,6 +570,7 @@ export default function FeatureSetDetailPage() {
       {id && (
         <FeatureQualitySection
           featureSetId={id}
+          hasLegacyFeatures={hasLegacyInSet}
           datasetVersionId={
             buildResult?.dataset_version_id ?? buildResult?.result_summary?.dataset_version_id ?? null
           }
@@ -556,6 +637,9 @@ export default function FeatureSetDetailPage() {
                 {f.feature_name}
               </span>
               <FeatureRegistrationBadge registration={f.registration} />
+              {f.registration?.status === "LEGACY_ALIAS" && f.registration.recommended_name && (
+                <span className="text-xs text-orange-700">공식명: {f.registration.recommended_name}</span>
+              )}
               <span className="text-slate-400 text-xs">{f.feature_group || "-"}</span>
             </label>
           ))}
@@ -585,6 +669,55 @@ export default function FeatureSetDetailPage() {
           }))}
           data={previewRows}
         />
+      </Modal>
+
+      <Modal
+        open={replaceModalOpen}
+        title="Legacy Feature 공식명 대체"
+        onClose={() => setReplaceModalOpen(false)}
+        size="lg"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setReplaceModalOpen(false)}>취소</Button>
+            <Button onClick={() => void handleApplyLegacyReplace()} disabled={replaceApplying}>
+              {replaceApplying ? "적용 중..." : "대체 적용"}
+            </Button>
+          </>
+        }
+      >
+        {replacePlan && (
+          <div className="space-y-3 text-sm">
+            <p className="text-slate-600">{replacePlan.message}</p>
+            {replacePlan.replacements.length > 0 && (
+              <div>
+                <p className="text-xs font-semibold text-slate-700 mb-1">대체 예정</p>
+                <ul className="text-xs space-y-1">
+                  {replacePlan.replacements.map((r) => (
+                    <li key={r.from} className="font-mono">
+                      {r.from} → {r.to}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {replacePlan.removed_duplicates.length > 0 && (
+              <div className="text-xs text-amber-800 bg-amber-50 border border-amber-100 rounded p-2">
+                <p className="font-medium">중복 제거 예정</p>
+                <p>{replacePlan.removed_duplicates.join(", ")}</p>
+              </div>
+            )}
+            {replacePlan.warnings.length > 0 && (
+              <div className="text-xs text-amber-800 bg-amber-50 border border-amber-100 rounded p-2">
+                {replacePlan.warnings.map((w) => <p key={w}>{w}</p>)}
+              </div>
+            )}
+            <div className="text-xs text-slate-500 bg-slate-50 border border-slate-100 rounded p-2">
+              <p className="font-medium text-slate-700">적용 후 결과 (미리보기)</p>
+              <p className="font-mono mt-1 break-all">{replacePlan.replaced_features.join(", ")}</p>
+            </div>
+            <p className="text-xs text-slate-600">{LEGACY_REPLACE_AFTER_HINT}</p>
+          </div>
+        )}
       </Modal>
 
       <Modal
