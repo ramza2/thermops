@@ -1,24 +1,29 @@
 import { useCallback, useEffect, useState } from "react";
 import { ChevronDown, ChevronRight, RefreshCw } from "lucide-react";
 import { getFeatureBuildJobLineage, getFeatureLineageByDatasetVersion } from "@/api/featureRegistry";
+import { getFeatureBuildJobs, pickDefaultBuildJob } from "@/api/featureBuildJobs";
 import { fetchApi } from "@/api/client";
 import { Button } from "@/components/Button";
 import { DataTable } from "@/components/DataTable";
 import { SelectInput } from "@/components/SearchPanel";
-import type { FeatureBuildResult, FeatureLineageItem } from "@/types/featureRegistry";
+import { StatusBadge } from "@/components/StatusBadge";
+import type {
+  FeatureBuildJobSummary,
+  FeatureBuildResult,
+  FeatureLineageItem,
+} from "@/types/featureRegistry";
 import type { FeatureDatasetRange } from "@/utils/predictionPeriod";
+import { CalcMemoText } from "@/components/FeatureRegistryPanel";
 import {
-  CalcMemoText,
-} from "@/components/FeatureRegistryPanel";
-import {
+  formatBuildJobOptionLabel,
+  formatBuildJobStatusLabel,
   formatCalcMethod,
   formatDateTimeShort,
   formatLeakageSafe,
+  formatLineageCountLabel,
   formatList,
   formatLookbackHours,
 } from "@/utils/featureRegistryFormat";
-
-type LineageSource = "dataset" | "job";
 
 interface FeatureLineageSectionProps {
   featureSetId: string;
@@ -26,19 +31,36 @@ interface FeatureLineageSectionProps {
 }
 
 export function FeatureLineageSection({ featureSetId, buildResult }: FeatureLineageSectionProps) {
+  const [buildJobs, setBuildJobs] = useState<FeatureBuildJobSummary[]>([]);
+  const [buildJobsError, setBuildJobsError] = useState("");
+  const [buildJobsLoading, setBuildJobsLoading] = useState(false);
+  const [selectedJobId, setSelectedJobId] = useState<string>("");
   const [datasetRange, setDatasetRange] = useState<FeatureDatasetRange | null>(null);
-  const [source, setSource] = useState<LineageSource>("dataset");
   const [datasetVersionId, setDatasetVersionId] = useState("");
-  const [jobId, setJobId] = useState("");
+  const [manualJobId, setManualJobId] = useState("");
+  const [advancedOpen, setAdvancedOpen] = useState(false);
   const [items, setItems] = useState<FeatureLineageItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState("");
   const [expandedId, setExpandedId] = useState<number | null>(null);
 
-  const lineageError =
-    buildResult?.lineage_error
-    ?? buildResult?.result_summary?.lineage_error
-    ?? null;
+  const selectedJob = buildJobs.find((j) => j.job_id === selectedJobId) ?? null;
+
+  const loadBuildJobs = useCallback(async () => {
+    setBuildJobsLoading(true);
+    setBuildJobsError("");
+    try {
+      const res = await getFeatureBuildJobs({ feature_set_id: featureSetId, limit: 10, offset: 0 });
+      setBuildJobs(res.items || []);
+      return res.items || [];
+    } catch {
+      setBuildJobsError("Feature Build Job 이력을 불러오지 못했습니다. 고급 조회를 사용하세요.");
+      setBuildJobs([]);
+      return [];
+    } finally {
+      setBuildJobsLoading(false);
+    }
+  }, [featureSetId]);
 
   const loadDatasetRange = useCallback(async () => {
     try {
@@ -46,9 +68,6 @@ export function FeatureLineageSection({ featureSetId, buildResult }: FeatureLine
         `/feature-sets/${encodeURIComponent(featureSetId)}/dataset-range`,
       );
       setDatasetRange(range);
-      if (range.dataset_version_id) {
-        setDatasetVersionId(range.dataset_version_id);
-      }
       return range;
     } catch {
       setDatasetRange(null);
@@ -56,20 +75,35 @@ export function FeatureLineageSection({ featureSetId, buildResult }: FeatureLine
     }
   }, [featureSetId]);
 
-  const loadLineage = useCallback(async (src: LineageSource, dsv: string, jid: string) => {
+  const loadLineageByJob = useCallback(async (jobId: string) => {
+    if (!jobId) {
+      setItems([]);
+      return;
+    }
     setLoading(true);
     setLoadError("");
     try {
-      if (src === "job" && jid) {
-        const res = await getFeatureBuildJobLineage(jid);
-        setItems(res.items || []);
-        if (res.dataset_version_id) setDatasetVersionId(res.dataset_version_id);
-      } else if (dsv) {
-        const res = await getFeatureLineageByDatasetVersion(dsv);
-        setItems(res.items || []);
-      } else {
-        setItems([]);
-      }
+      const res = await getFeatureBuildJobLineage(jobId);
+      setItems(res.items || []);
+      if (res.dataset_version_id) setDatasetVersionId(res.dataset_version_id);
+    } catch {
+      setLoadError("Lineage를 불러오지 못했습니다.");
+      setItems([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const loadLineageByDataset = useCallback(async (dsv: string) => {
+    if (!dsv) {
+      setItems([]);
+      return;
+    }
+    setLoading(true);
+    setLoadError("");
+    try {
+      const res = await getFeatureLineageByDatasetVersion(dsv);
+      setItems(res.items || []);
     } catch {
       setLoadError("Lineage를 불러오지 못했습니다.");
       setItems([]);
@@ -82,40 +116,66 @@ export function FeatureLineageSection({ featureSetId, buildResult }: FeatureLine
     if (!featureSetId) return;
 
     const init = async () => {
-      const range = await loadDatasetRange();
+      const [jobs, range] = await Promise.all([loadBuildJobs(), loadDatasetRange()]);
 
       if (buildResult?.job_id) {
-        setJobId(buildResult.job_id);
-        if (buildResult.dataset_version_id) {
-          setDatasetVersionId(buildResult.dataset_version_id);
-        }
-        setSource("job");
-        await loadLineage("job", buildResult.dataset_version_id || "", buildResult.job_id);
+        setSelectedJobId(buildResult.job_id);
+        if (buildResult.dataset_version_id) setDatasetVersionId(buildResult.dataset_version_id);
+        await loadLineageByJob(buildResult.job_id);
+        return;
+      }
+
+      const defaultJob = pickDefaultBuildJob(jobs);
+      if (defaultJob) {
+        setSelectedJobId(defaultJob.job_id);
+        if (defaultJob.dataset_version_id) setDatasetVersionId(defaultJob.dataset_version_id);
+        await loadLineageByJob(defaultJob.job_id);
         return;
       }
 
       if (range?.dataset_version_id) {
         setDatasetVersionId(range.dataset_version_id);
-        setSource("dataset");
-        await loadLineage("dataset", range.dataset_version_id, "");
+        await loadLineageByDataset(range.dataset_version_id);
       }
     };
 
     init();
-  }, [featureSetId, buildResult?.job_id, buildResult?.dataset_version_id, loadDatasetRange, loadLineage]);
+  }, [
+    featureSetId,
+    buildResult?.job_id,
+    buildResult?.dataset_version_id,
+    loadBuildJobs,
+    loadDatasetRange,
+    loadLineageByJob,
+    loadLineageByDataset,
+  ]);
 
-  const handleSourceChange = (next: string) => {
-    const src = next as LineageSource;
-    setSource(src);
-    loadLineage(src, datasetVersionId, jobId);
+  const handleSelectJob = async (jobId: string) => {
+    setSelectedJobId(jobId);
+    const job = buildJobs.find((j) => j.job_id === jobId);
+    if (job?.dataset_version_id) setDatasetVersionId(job.dataset_version_id);
+    await loadLineageByJob(jobId);
   };
 
-  const handleRefresh = () => {
-    loadLineage(source, datasetVersionId, jobId);
+  const handleRefresh = async () => {
+    const jobs = await loadBuildJobs();
+    if (selectedJobId) {
+      await loadLineageByJob(selectedJobId);
+      return;
+    }
+    const defaultJob = pickDefaultBuildJob(jobs);
+    if (defaultJob) {
+      setSelectedJobId(defaultJob.job_id);
+      await loadLineageByJob(defaultJob.job_id);
+    } else if (datasetVersionId) {
+      await loadLineageByDataset(datasetVersionId);
+    }
   };
 
-  const hasDataset = Boolean(datasetRange?.exists && datasetRange.dataset_version_id);
-  const hasJob = Boolean(jobId);
+  const lineageError = selectedJob?.lineage_error
+    ?? buildResult?.lineage_error
+    ?? buildResult?.result_summary?.lineage_error
+    ?? null;
 
   return (
     <div className="bg-white rounded-lg border border-slate-200 p-4 mt-6">
@@ -124,71 +184,145 @@ export function FeatureLineageSection({ featureSetId, buildResult }: FeatureLine
           <h3 className="text-sm font-semibold text-slate-800">Feature Lineage</h3>
           <p className="text-xs text-slate-500 mt-1 max-w-2xl">
             Feature 생성 결과(dataset_version_id) 기준으로 각 Feature가 어떤 원천 데이터와 계산 방식으로
-            만들어졌는지 보여줍니다. 조회 전용 감사/추적 정보이며 편집할 수 없습니다.
+            만들어졌는지 보여줍니다. 최근 Feature Build 이력에서 Job을 선택해 Lineage를 조회할 수 있습니다.
           </p>
         </div>
         <Button
           variant="secondary"
           icon={<RefreshCw className="w-3.5 h-3.5" />}
           onClick={handleRefresh}
-          disabled={loading}
+          disabled={loading || buildJobsLoading}
         >
           새로고침
         </Button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4 text-sm">
-        <div>
-          <label className="block text-xs text-slate-500 mb-1">조회 기준</label>
-          <SelectInput
-            value={source}
-            onChange={handleSourceChange}
-            options={[
-              { value: "dataset", label: "Dataset Version (dataset_version_id)" },
-              { value: "job", label: "Feature Build Job (job_id)" },
-            ]}
-          />
-        </div>
-        <div>
-          <label className="block text-xs text-slate-500 mb-1">Dataset Version ID</label>
-          <input
-            className="w-full border border-slate-200 rounded px-2 py-1.5 text-xs font-mono"
-            value={datasetVersionId}
-            onChange={(e) => setDatasetVersionId(e.target.value)}
-            onBlur={() => source === "dataset" && datasetVersionId && loadLineage("dataset", datasetVersionId, "")}
-            placeholder={hasDataset ? datasetRange?.dataset_version_id || "" : "DSV-..."}
-          />
-        </div>
-        <div>
-          <label className="block text-xs text-slate-500 mb-1">Build Job ID</label>
-          <input
-            className="w-full border border-slate-200 rounded px-2 py-1.5 text-xs font-mono"
-            value={jobId}
-            onChange={(e) => setJobId(e.target.value)}
-            onBlur={() => source === "job" && jobId && loadLineage("job", datasetVersionId, jobId)}
-            placeholder={hasJob ? jobId : "FBJ-..."}
-          />
-        </div>
+      <div className="mb-4">
+        <h4 className="text-xs font-semibold text-slate-700 mb-2">최근 Feature Build 이력</h4>
+        {buildJobsError && (
+          <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded p-2 mb-2">
+            {buildJobsError}
+          </div>
+        )}
+        {buildJobsLoading && buildJobs.length === 0 && (
+          <p className="text-xs text-slate-400">Build Job 이력 로딩 중...</p>
+        )}
+        {!buildJobsLoading && buildJobs.length === 0 && !buildJobsError && (
+          <p className="text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded p-3">
+            아직 Feature Build 이력이 없습니다. 상단 <strong>Feature 생성</strong>을 실행하세요.
+          </p>
+        )}
+        {buildJobs.length > 0 && (
+          <div className="space-y-2 mb-3">
+            <label className="block text-xs text-slate-500">Lineage 조회 대상</label>
+            <SelectInput
+              value={selectedJobId}
+              onChange={handleSelectJob}
+              options={buildJobs.map((j) => ({
+                value: j.job_id,
+                label: formatBuildJobOptionLabel(j),
+              }))}
+            />
+          </div>
+        )}
+        {buildJobs.length > 0 && (
+          <div className="grid gap-2 sm:grid-cols-2">
+            {buildJobs.slice(0, 4).map((job) => {
+              const selected = job.job_id === selectedJobId;
+              const statusClass =
+                job.status === "FAILED"
+                  ? "border-red-200 bg-red-50"
+                  : job.status === "WARNING"
+                    ? "border-amber-200 bg-amber-50"
+                    : job.status === "RUNNING"
+                      ? "border-blue-200 bg-blue-50"
+                      : selected
+                        ? "border-emerald-300 bg-emerald-50"
+                        : "border-slate-200 bg-slate-50";
+              return (
+                <button
+                  key={job.job_id}
+                  type="button"
+                  onClick={() => handleSelectJob(job.job_id)}
+                  className={`text-left rounded-lg border p-3 text-xs transition-colors ${statusClass} ${
+                    selected ? "ring-1 ring-emerald-400" : "hover:border-slate-300"
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-2 mb-1">
+                    <span className="font-medium text-slate-800">{formatDateTimeShort(job.started_at)}</span>
+                    <StatusBadge status={job.status} />
+                  </div>
+                  <p className="text-slate-600">
+                    {formatBuildJobStatusLabel(job.status)}
+                    {selected && <span className="ml-2 text-emerald-700 font-medium">· 선택됨</span>}
+                  </p>
+                  <p className="font-mono text-[10px] text-slate-500 mt-1 truncate">
+                    {job.dataset_version_id || "Dataset Version 없음"}
+                  </p>
+                  <p className="mt-1 text-slate-600">
+                    Rows: {(job.row_count ?? job.inserted_count ?? 0).toLocaleString()}
+                    {" · "}
+                    {formatLineageCountLabel(job.lineage_count, job.lineage_error)}
+                  </p>
+                  {job.lineage_error && (
+                    <p className="text-amber-800 mt-1">Lineage 저장 오류 있음</p>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
 
-      {buildResult && (
-        <div className="mb-3 text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded p-2 space-y-0.5">
-          <p>
-            <span className="text-slate-500">최근 Build:</span>{" "}
-            <span className="font-mono">{buildResult.job_id}</span>
-            {buildResult.dataset_version_id && (
-              <>
-                {" · "}
-                <span className="font-mono">{buildResult.dataset_version_id}</span>
-              </>
-            )}
-          </p>
-          <p>
-            <span className="text-slate-500">Lineage:</span>{" "}
-            {(buildResult.lineage_count ?? buildResult.result_summary?.lineage_count ?? 0).toLocaleString()}건 저장
-          </p>
-        </div>
-      )}
+      <div className="mb-4 border border-slate-200 rounded-lg">
+        <button
+          type="button"
+          className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-slate-600 hover:bg-slate-50"
+          onClick={() => setAdvancedOpen((v) => !v)}
+        >
+          {advancedOpen ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+          고급 조회 (Dataset Version / Build Job ID 직접 입력)
+        </button>
+        {advancedOpen && (
+          <div className="px-3 pb-3 grid grid-cols-1 md:grid-cols-2 gap-3 border-t border-slate-100 pt-3">
+            <div>
+              <label className="block text-xs text-slate-500 mb-1">Dataset Version ID</label>
+              <input
+                className="w-full border border-slate-200 rounded px-2 py-1.5 text-xs font-mono"
+                value={datasetVersionId}
+                onChange={(e) => setDatasetVersionId(e.target.value)}
+                placeholder={datasetRange?.dataset_version_id || "DSV-..."}
+              />
+              <Button
+                variant="ghost"
+                className="mt-1 text-xs"
+                onClick={() => loadLineageByDataset(datasetVersionId)}
+              >
+                Dataset 기준 조회
+              </Button>
+            </div>
+            <div>
+              <label className="block text-xs text-slate-500 mb-1">Build Job ID</label>
+              <input
+                className="w-full border border-slate-200 rounded px-2 py-1.5 text-xs font-mono"
+                value={manualJobId}
+                onChange={(e) => setManualJobId(e.target.value)}
+                placeholder="FBJ-..."
+              />
+              <Button
+                variant="ghost"
+                className="mt-1 text-xs"
+                onClick={() => {
+                  setSelectedJobId(manualJobId);
+                  loadLineageByJob(manualJobId);
+                }}
+              >
+                Job 기준 조회
+              </Button>
+            </div>
+          </div>
+        )}
+      </div>
 
       {lineageError && (
         <div className="mb-3 text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded p-3">
@@ -206,15 +340,11 @@ export function FeatureLineageSection({ featureSetId, buildResult }: FeatureLine
 
       {!loading && !loadError && items.length === 0 && (
         <div className="text-sm text-slate-500 bg-slate-50 border border-slate-200 rounded p-4">
-          <p className="font-medium text-slate-700">아직 이 Feature Set의 Lineage가 없습니다.</p>
+          <p className="font-medium text-slate-700">선택한 Build Job에 Lineage가 없습니다.</p>
           <p className="text-xs mt-2">
-            상단의 <strong>Feature 생성</strong> 작업을 실행하면 dataset_version_id 기준으로 Lineage가 저장됩니다.
+            Feature 생성을 실행하거나 다른 Build Job을 선택하세요. FAILED·RUNNING 상태에서는 Lineage가 없을 수
+            있습니다.
           </p>
-          {!hasDataset && (
-            <p className="text-xs mt-1 text-slate-400">
-              현재 저장된 Feature Dataset이 없습니다. Feature 생성 후 다시 조회하세요.
-            </p>
-          )}
         </div>
       )}
 
@@ -310,7 +440,8 @@ export function FeatureLineageSection({ featureSetId, buildResult }: FeatureLine
           <p className="text-xs font-medium text-slate-600 mb-2">Lineage JSON (lineage_id={expandedId})</p>
           <pre className="text-[11px] font-mono overflow-x-auto whitespace-pre-wrap break-all text-slate-700">
             {JSON.stringify(
-              items.find((i) => i.lineage_id === expandedId)?.lineage_json ?? items.find((i) => i.lineage_id === expandedId),
+              items.find((i) => i.lineage_id === expandedId)?.lineage_json
+                ?? items.find((i) => i.lineage_id === expandedId),
               null,
               2,
             )}

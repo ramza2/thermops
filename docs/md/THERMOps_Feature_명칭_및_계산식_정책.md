@@ -123,21 +123,30 @@ tb_feature (메타 등록)
 | GET | `/api/v1/feature-registry` |
 | GET | `/api/v1/feature-registry/{feature_name}` |
 | GET | `/api/v1/feature-lineage?dataset_version_id=...` |
+| GET | `/api/v1/feature-build-jobs?feature_set_id=...&limit=10` |
+| GET | `/api/v1/feature-build-jobs/{job_id}` |
 | GET | `/api/v1/feature-build-jobs/{job_id}/lineage` |
 
 테스트·스크립트는 `THERMOOPS_API_BASE=http://localhost:8000/api/v1` (또는 Traefik 공개 URL + `/api/v1`) 기준.
+
+### Feature Build Job 이력
+
+- 저장소: `tb_data_quality_run` (`check_type=FEATURE_BUILD`, `source_id`=feature_set_id)
+- 상태: `SUCCESS`(정상), `WARNING`(lineage_error 가능), `FAILED`, `RUNNING`
+- `lineage_count` / `lineage_error`는 `result_summary`에서 조회
 
 ### UI
 
 | 화면 | 경로 | 내용 |
 |------|------|------|
-| Feature 목록 | `/features` | Registry 요약 컬럼, **상세** 모달에서 Registry 메타(입력 테이블·Lookback·누수 방지) |
-| Feature Set 상세 | `/feature-sets/:id` | **Feature Lineage** 섹션 — dataset_version_id 또는 Build Job 기준 조회 |
+| Feature 목록 | `/features` | Registry 요약 컬럼, **상세** 모달에서 Registry 메타 |
+| Feature Set 상세 | `/feature-sets/:id` | **최근 Feature Build 이력** 선택 + **Feature Lineage** 섹션 |
 
-Lineage가 없으면 Feature Set 상세에서 **Feature 생성**을 먼저 실행해야 한다.
+Lineage 조회 우선순위: 최근 Build Job 목록 → Feature 생성 직후 job → dataset-range fallback → 고급 수동 입력.
 
 ## 11. 검증
 
 - `python scripts/test_feature_metadata_consistency.py`
 - `python scripts/test_feature_lineage.py`
+- `python scripts/test_feature_build_jobs.py`
 - 회귀: `python scripts/run_regression_tests.py --group model`

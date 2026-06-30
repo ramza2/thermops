@@ -77,3 +77,38 @@ export interface FeatureBuildResult {
     warnings?: string[];
   };
 }
+
+export interface FeatureBuildJobSummary {
+  job_id: string;
+  run_id: string;
+  feature_set_id: string | null;
+  status: string;
+  started_at: string | null;
+  ended_at: string | null;
+  finished_at?: string | null;
+  duration_seconds?: number | null;
+  dataset_version_id: string | null;
+  row_count?: number | null;
+  inserted_count?: number | null;
+  lineage_count?: number | null;
+  lineage_error?: string | null;
+  message?: string | null;
+  error_message?: string | null;
+  warnings?: string[];
+  result_summary?: Record<string, unknown>;
+}
+
+export interface FeatureBuildJobListResponse {
+  items: FeatureBuildJobSummary[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export interface FeatureBuildJobListParams {
+  feature_set_id?: string;
+  status?: string;
+  limit?: number;
+  offset?: number;
+  include_summary?: boolean;
+}

@@ -28,6 +28,13 @@ for (const path of PATHS) {
   await page.waitForTimeout(1500);
   const h1 = await page.locator("h1").first().innerText().catch(() => "");
   console.log(`OK ${path} -> ${h1.slice(0, 30)}`);
+  if (path === "/feature-sets/FS-TPL-LAG-ROLL") {
+    const lineage = await page.getByText("Feature Lineage").count();
+    const buildHistory = await page.getByText("최근 Feature Build 이력").count();
+    if (!lineage || !buildHistory) {
+      errors.push(`${path}: Feature Lineage / Build history section missing`);
+    }
+  }
 }
 
 if (errors.length) {

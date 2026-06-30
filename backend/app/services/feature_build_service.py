@@ -11,7 +11,7 @@ from typing import Any
 from uuid import uuid4
 
 import pandas as pd
-from sqlalchemy import and_, delete, select
+from sqlalchemy import and_, delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
@@ -381,16 +381,103 @@ async def get_feature_build_job(db: AsyncSession, job_id: str) -> dict[str, Any]
     ).scalar_one_or_none()
     if not run:
         return None
-    summary = run.result_summary or {}
-    return {
+    return _run_to_job_summary(run, include_summary=True)
+
+
+def _parse_result_summary(raw: Any) -> dict[str, Any]:
+    if raw is None:
+        return {}
+    if isinstance(raw, dict):
+        return raw
+    if isinstance(raw, str):
+        try:
+            import json
+
+            parsed = json.loads(raw)
+            return parsed if isinstance(parsed, dict) else {}
+        except (json.JSONDecodeError, TypeError):
+            return {}
+    return {}
+
+
+def _build_job_message(status: str, summary: dict[str, Any]) -> str:
+    if status == "SUCCESS":
+        return "Feature build completed"
+    if status == "WARNING":
+        return "Feature build completed with warnings"
+    if status == "FAILED":
+        return str(summary.get("error_message") or "Feature build failed")
+    if status == "RUNNING":
+        return "Feature build in progress"
+    return f"Feature build status: {status}"
+
+
+def _run_to_job_summary(run: DataQualityRun, *, include_summary: bool = True) -> dict[str, Any]:
+    summary = _parse_result_summary(run.result_summary)
+    feature_set_id = summary.get("feature_set_id") or run.source_id
+    started = run.started_at
+    finished = run.finished_at
+    duration_seconds: float | None = None
+    if started and finished:
+        duration_seconds = (finished - started).total_seconds()
+
+    item: dict[str, Any] = {
         "job_id": run.run_id,
+        "run_id": run.run_id,
+        "feature_set_id": feature_set_id,
         "status": run.run_status,
-        "started_at": run.started_at.isoformat(),
-        "finished_at": run.finished_at.isoformat() if run.finished_at else None,
-        "inserted_count": summary.get("inserted_count"),
+        "started_at": started.isoformat() if started else None,
+        "ended_at": finished.isoformat() if finished else None,
+        "finished_at": finished.isoformat() if finished else None,
+        "duration_seconds": duration_seconds,
         "dataset_version_id": summary.get("dataset_version_id"),
-        "feature_names": summary.get("feature_names", []),
-        "warnings": summary.get("warnings", []),
-        "result_summary": summary,
+        "row_count": summary.get("inserted_count"),
+        "inserted_count": summary.get("inserted_count"),
+        "lineage_count": summary.get("lineage_count"),
+        "lineage_error": summary.get("lineage_error"),
+        "message": _build_job_message(run.run_status, summary),
         "error_message": summary.get("error_message"),
+        "warnings": summary.get("warnings", []),
+        "feature_names": summary.get("feature_names", []),
+    }
+    if include_summary:
+        item["result_summary"] = summary
+    return item
+
+
+async def list_feature_build_jobs(
+    db: AsyncSession,
+    *,
+    feature_set_id: str | None = None,
+    status: str | None = None,
+    limit: int = 20,
+    offset: int = 0,
+    include_summary: bool = True,
+) -> dict[str, Any]:
+    """FEATURE_BUILD 이력 목록 (tb_data_quality_run)."""
+    clauses = [DataQualityRun.check_type == "FEATURE_BUILD"]
+    if feature_set_id:
+        clauses.append(DataQualityRun.source_id == feature_set_id)
+    if status:
+        clauses.append(DataQualityRun.run_status == status)
+
+    where = and_(*clauses)
+    total = int((await db.execute(select(func.count()).select_from(DataQualityRun).where(where))).scalar_one() or 0)
+
+    rows = (
+        await db.execute(
+            select(DataQualityRun)
+            .where(where)
+            .order_by(DataQualityRun.started_at.desc())
+            .limit(limit)
+            .offset(offset)
+        )
+    ).scalars().all()
+
+    items = [_run_to_job_summary(r, include_summary=include_summary) for r in rows]
+    return {
+        "items": items,
+        "total": total,
+        "limit": limit,
+        "offset": offset,
     }

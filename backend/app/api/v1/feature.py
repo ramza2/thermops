@@ -13,6 +13,7 @@ from app.schemas.api import FeatureCreate, FeatureSetCreate
 from app.services.feature_build_service import (
     FeatureBuildParams,
     get_feature_build_job,
+    list_feature_build_jobs,
     preview_features,
     run_feature_build,
 )
@@ -220,6 +221,26 @@ async def create_feature_build_job(
     if result.get("warnings"):
         msg += f" (경고 {len(result['warnings'])}건)"
     return ok(result, message=msg)
+
+
+@router.get("/feature-build-jobs")
+async def list_feature_build_jobs_endpoint(
+    feature_set_id: str | None = Query(default=None),
+    status: str | None = Query(default=None),
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    include_summary: bool = Query(default=True),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await list_feature_build_jobs(
+        db,
+        feature_set_id=feature_set_id,
+        status=status,
+        limit=limit,
+        offset=offset,
+        include_summary=include_summary,
+    )
+    return ok(result)
 
 
 @router.get("/feature-build-jobs/{job_id}")

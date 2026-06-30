@@ -143,6 +143,12 @@ def _build_registry() -> list[TestCase]:
             timeout_seconds=180,
         ),
         _python_test(
+            "test_feature_build_jobs.py",
+            groups=["model", "full"],
+            description="Feature Build Job 이력 API",
+            timeout_seconds=180,
+        ),
+        _python_test(
             "test_model_training.py",
             groups=["model", "full"],
             description="LightGBM 학습",

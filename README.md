@@ -278,12 +278,13 @@ curl -X POST "http://localhost:8000/api/v1/feature-build-jobs?feature_set_id=FS-
 **Feature Registry·Lineage UI**
 
 - `/features`: Registry 요약 컬럼, **상세** 모달에서 입력 테이블·Lookback·누수 방지 등 확인
-- `/feature-sets/:id`: **Feature Lineage** 섹션 — 최신 `dataset_version_id` 또는 Build Job 기준 조회
+- `/feature-sets/:id`: **최근 Feature Build 이력** 선택 + **Feature Lineage** 섹션
 - Lineage 없음 → Feature Set 상세에서 **Feature 생성** 먼저 실행
 
 ```powershell
 python scripts/test_feature_metadata_consistency.py
 python scripts/test_feature_lineage.py
+python scripts/test_feature_build_jobs.py
 ```
 
 ### 모델 학습 테스트 (P0-4-1)

@@ -41,3 +41,45 @@ export function formatDateTimeShort(iso: string | null | undefined): string {
   const normalized = iso.replace("T", " ").slice(0, 16);
   return normalized;
 }
+
+export function formatBuildJobStatusLabel(status: string): string {
+  switch (status) {
+    case "SUCCESS":
+      return "정상";
+    case "WARNING":
+      return "주의";
+    case "FAILED":
+      return "실패";
+    case "RUNNING":
+      return "진행 중";
+    default:
+      return status;
+  }
+}
+
+export function formatLineageCountLabel(
+  lineageCount: number | null | undefined,
+  lineageError?: string | null,
+): string {
+  if (lineageCount != null && lineageCount > 0) return `Lineage ${lineageCount}건`;
+  if (lineageCount === 0 && lineageError) return "Lineage 저장 실패";
+  if (lineageCount === 0) return "Lineage 없음";
+  return "Lineage 미확인";
+}
+
+export function formatBuildJobOptionLabel(job: {
+  started_at?: string | null;
+  status: string;
+  dataset_version_id?: string | null;
+  lineage_count?: number | null;
+  lineage_error?: string | null;
+}): string {
+  const when = formatDateTimeShort(job.started_at);
+  const dsv = job.dataset_version_id
+    ? job.dataset_version_id.length > 28
+      ? `${job.dataset_version_id.slice(0, 28)}…`
+      : job.dataset_version_id
+    : "Dataset Version 없음";
+  const lineage = formatLineageCountLabel(job.lineage_count, job.lineage_error);
+  return `${when} / ${job.status} / ${dsv} / ${lineage}`;
+}
