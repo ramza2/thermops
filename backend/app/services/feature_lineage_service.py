@@ -7,11 +7,21 @@ from datetime import datetime
 from typing import Any
 
 from sqlalchemy import delete, select
+from sqlalchemy.exc import ProgrammingError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.core.time import utc_now
 from app.models.entities import FeatureLineage
+
+
+class LineageTableMissingError(RuntimeError):
+    """tb_feature_lineage 미적용 DB."""
+
+
+def _is_missing_lineage_table(exc: BaseException) -> bool:
+    msg = str(exc).lower()
+    return "tb_feature_lineage" in msg and "does not exist" in msg
 
 
 def _load_ml_registry():
@@ -132,24 +142,38 @@ def _lineage_row_to_dict(row: FeatureLineage) -> dict[str, Any]:
 
 
 async def get_lineage_by_dataset_version(db: AsyncSession, dataset_version_id: str) -> list[dict[str, Any]]:
-    rows = (
-        await db.execute(
-            select(FeatureLineage)
-            .where(FeatureLineage.dataset_version_id == dataset_version_id)
-            .order_by(FeatureLineage.feature_name)
-        )
-    ).scalars().all()
+    try:
+        rows = (
+            await db.execute(
+                select(FeatureLineage)
+                .where(FeatureLineage.dataset_version_id == dataset_version_id)
+                .order_by(FeatureLineage.feature_name)
+            )
+        ).scalars().all()
+    except ProgrammingError as exc:
+        if _is_missing_lineage_table(exc):
+            raise LineageTableMissingError(
+                "tb_feature_lineage 테이블이 없습니다. 호스트에서 python scripts/apply_dev_migrations.py 를 실행하세요."
+            ) from exc
+        raise
     return [_lineage_row_to_dict(r) for r in rows]
 
 
 async def get_lineage_by_job_id(db: AsyncSession, job_id: str) -> list[dict[str, Any]]:
-    rows = (
-        await db.execute(
-            select(FeatureLineage)
-            .where(FeatureLineage.feature_build_job_id == job_id)
-            .order_by(FeatureLineage.feature_name)
-        )
-    ).scalars().all()
+    try:
+        rows = (
+            await db.execute(
+                select(FeatureLineage)
+                .where(FeatureLineage.feature_build_job_id == job_id)
+                .order_by(FeatureLineage.feature_name)
+            )
+        ).scalars().all()
+    except ProgrammingError as exc:
+        if _is_missing_lineage_table(exc):
+            raise LineageTableMissingError(
+                "tb_feature_lineage 테이블이 없습니다. 호스트에서 python scripts/apply_dev_migrations.py 를 실행하세요."
+            ) from exc
+        raise
     return [_lineage_row_to_dict(r) for r in rows]
 
 

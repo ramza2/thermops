@@ -296,17 +296,18 @@ async def run_feature_build(db: AsyncSession, params: FeatureBuildParams) -> dic
         lineage_count = 0
         lineage_error: str | None = None
         try:
-            lineage_count = await save_feature_lineage(
-                db,
-                dataset_version_id=dataset_version_id,
-                job_id=job_id,
-                feature_set_id=params.feature_set_id,
-                site_filter=params.site_id,
-                feature_names=feature_names,
-                build_start_at=start_ts.to_pydatetime() if hasattr(start_ts, "to_pydatetime") else start_ts,
-                build_end_at=end_ts.to_pydatetime() if hasattr(end_ts, "to_pydatetime") else end_ts,
-                site_ids=site_ids,
-            )
+            async with db.begin_nested():
+                lineage_count = await save_feature_lineage(
+                    db,
+                    dataset_version_id=dataset_version_id,
+                    job_id=job_id,
+                    feature_set_id=params.feature_set_id,
+                    site_filter=params.site_id,
+                    feature_names=feature_names,
+                    build_start_at=start_ts.to_pydatetime() if hasattr(start_ts, "to_pydatetime") else start_ts,
+                    build_end_at=end_ts.to_pydatetime() if hasattr(end_ts, "to_pydatetime") else end_ts,
+                    site_ids=site_ids,
+                )
         except Exception as lineage_exc:
             lineage_error = str(lineage_exc)
             warnings.append(f"Lineage 저장 실패 (Feature 데이터는 생성됨): {lineage_error}")

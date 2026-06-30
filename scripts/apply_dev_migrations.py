@@ -153,10 +153,16 @@ MIGRATIONS = [
 ]
 
 
+def _postgres_container() -> str:
+    project = os.environ.get("COMPOSE_PROJECT_NAME", "thermops")
+    return os.environ.get("THERMOOPS_POSTGRES_CONTAINER", f"{project}-postgres")
+
+
 def run_sql(sql: str) -> None:
     if os.environ.get("THERMOOPS_USE_DOCKER", "1") == "1":
+        container = _postgres_container()
         subprocess.run(
-            ["docker", "exec", "-i", "thermops-postgres", "psql", "-U", "thermops", "-d", "thermops", "-c", sql],
+            ["docker", "exec", "-i", container, "psql", "-U", "thermops", "-d", "thermops", "-c", sql],
             check=True,
             capture_output=True,
             text=True,

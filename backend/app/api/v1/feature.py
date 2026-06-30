@@ -18,7 +18,11 @@ from app.services.feature_build_service import (
     run_feature_build,
 )
 from app.services.feature_dataset_service import get_feature_dataset_range
-from app.services.feature_lineage_service import get_lineage_by_dataset_version, get_lineage_by_job_id
+from app.services.feature_lineage_service import (
+    LineageTableMissingError,
+    get_lineage_by_dataset_version,
+    get_lineage_by_job_id,
+)
 from app.services.feature_registry_service import get_registry_spec, list_registry_specs
 
 router = APIRouter(tags=["Feature"])
@@ -271,7 +275,16 @@ async def get_feature_lineage(
     dataset_version_id: str = Query(...),
     db: AsyncSession = Depends(get_db),
 ):
-    rows = await get_lineage_by_dataset_version(db, dataset_version_id)
+    try:
+        rows = await get_lineage_by_dataset_version(db, dataset_version_id)
+    except LineageTableMissingError as exc:
+        await db.rollback()
+        return ok({
+            "dataset_version_id": dataset_version_id,
+            "lineage_count": 0,
+            "items": [],
+            "migration_warning": str(exc),
+        })
     return ok({
         "dataset_version_id": dataset_version_id,
         "lineage_count": len(rows),
@@ -281,7 +294,19 @@ async def get_feature_lineage(
 
 @router.get("/feature-build-jobs/{job_id}/lineage")
 async def get_feature_build_job_lineage(job_id: str, db: AsyncSession = Depends(get_db)):
-    rows = await get_lineage_by_job_id(db, job_id)
+    try:
+        rows = await get_lineage_by_job_id(db, job_id)
+    except LineageTableMissingError as exc:
+        await db.rollback()
+        job = await get_feature_build_job(db, job_id)
+        if not job:
+            raise HTTPException(status_code=404, detail="NOT_FOUND") from exc
+        return ok({
+            "job_id": job_id,
+            "lineage_count": 0,
+            "items": [],
+            "migration_warning": str(exc),
+        })
     if not rows:
         job = await get_feature_build_job(db, job_id)
         if not job:
