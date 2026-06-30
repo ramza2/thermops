@@ -276,6 +276,8 @@ curl -X POST "http://localhost:8000/api/v1/feature-build-jobs?feature_set_id=FS-
 - 학습/예측에 쓰이려면: (1) 메타 등록 → (2) `ml/features.py` + Registry → (3) Feature Set 포함 → (4) Feature 생성 → (5) 품질 검증 → (6) 학습 설정.
 - 공식 Feature명: `demand_lag_24h`, `demand_lag_168h`, `demand_ma_24h`, `demand_ma_168h`, `temperature_diff_24h`, `heating_degree_days`, `cooling_degree_days`.
 - 상세: [`docs/md/THERMOps_Feature_명칭_및_계산식_정책.md`](docs/md/THERMOps_Feature_명칭_및_계산식_정책.md)
+- **향후**: 범용 Feature Recipe Builder 1차 설계 — [`docs/md/THERMOps_Feature_Recipe_Builder_1차_설계.md`](docs/md/THERMOps_Feature_Recipe_Builder_1차_설계.md) (현재는 CODE Registry + Catalog/Quality/Lineage; DSL 자동 실행 미지원)
+- **R1 Column Role**: `/data/mappings`에서 컬럼 역할 지정 — [`docs/md/THERMOps_Feature_Recipe_Builder_1차_설계.md`](docs/md/THERMOps_Feature_Recipe_Builder_1차_설계.md) 부록 C
 
 **Feature Registry·Lineage UI**
 

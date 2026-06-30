@@ -1,0 +1,728 @@
+# THERMOps Feature Recipe Builder 1차 설계
+
+> **문서 유형**: 기획·설계·영향 분석 (구현 없음)  
+> **작성 기준**: `master` @ Feature Legacy 일괄 대체 완료 시점  
+> **범위**: 범용 MLOps 확장을 위한 Feature Recipe Builder 1차 설계
+
+---
+
+## 1. 배경과 문제점
+
+### 1.1 배경
+
+THERMOps는 열수요 예측(Heat Demand Forecasting) 시연을 위해 구축된 MLOps 스타터이다. Feature 영역에는 이미 다음이 갖춰져 있다.
+
+| 영역 | 현재 상태 |
+|------|-----------|
+| Feature Catalog | `tb_feature` — 메타데이터 등록 |
+| Feature Registry | `ml/feature_registry.py` — CODE 기반 계산 메타 |
+| Feature Lineage | `tb_feature_lineage` — Build 시 Registry 스펙 저장 |
+| Feature Build | `ml/features.py` → `tb_feature_dataset.feature_json` |
+| Feature Quality | `feature_json` 기반 null/범위/이상치 검증 |
+| 등록 검증 | Registry/Catalog/Legacy 분류 API·UI |
+| Legacy 대체 | Feature Set 내 alias → 공식명 일괄 치환 |
+
+그러나 **Feature 생성 방식**은 여전히 열수요 도메인에 고정되어 있다.
+
+- 계산 로직: `build_feature_frame(heat_df, weather_df, calendar_df, site_weather_map)` 단일 함수
+- Entity/Time/Target: `site_id`, `measured_at`, `heat_demand` 하드코딩
+- 신규 Feature: Python 코드 + Registry 수동 추가 → Catalog 등록 → Feature Set 수동 편집
+- `calc_expression`: 설명용 텍스트이며 UI에서도 직접 입력 — **실행·검증·미리보기와 연결되지 않음**
+
+### 1.2 문제점
+
+1. **도메인 결합**: Feature명·소스 테이블·파티션 키가 열수요 전용이다.
+2. **텍스트 의존 UI**: Feature명·계산식 메모·그룹을 사용자가 직접 타이핑한다.
+3. **Recipe 부재**: “어떤 컬럼에 어떤 연산을 적용했는지”를 구조화해 저장·재현·버전관리할 수 없다.
+4. **범용 Preview 불가**: 현재 Preview는 기존 CODE Feature Set에 한정되며, 사용자 정의 파생 Feature 시험 불가.
+5. **컬럼 역할 미관리**: `tb_data_mapping.columns`는 `source_column`↔`target_column`만 있고 ENTITY_KEY/TIME_KEY 등 역할이 없다.
+
+### 1.3 1차 설계 목표
+
+- **구현하지 않고** 설계·영향 분석·로드맵만 수립한다.
+- 사용자가 **계산식 문자열을 입력하지 않고**, 컬럼 선택 + 연산 템플릿 + 파라미터 + 미리보기로 Feature를 정의한다.
+- 기존 열수요 Feature는 **폐기하지 않고** Domain Template Pack으로 분리하는 방향을 검토한다.
+- DSL 파서·드래그드롭 Canvas·Recipe Engine **구현은 하지 않는다**.
+
+---
+
+## 2. 현재 Feature 구조 진단
+
+### 2.1 현재 흐름 요약
+
+```
+[데이터 적재] tb_heat_demand_actual / tb_weather_observation / tb_calendar
+       ↓
+[Feature Catalog] tb_feature (메타, calc_expression=설명용)
+       ↓
+[Feature Set] tb_feature_set.features[] (feature_name 문자열 목록)
+       ↓
+[Feature Build] ml/features.py build_feature_frame() — CODE 전용
+       ↓
+[tb_feature_dataset] feature_json { feature_name: value, ... }
+       ↓
+[Lineage] tb_feature_lineage (Registry FeatureSpec 복사)
+       ↓
+[Quality] feature_json 검증 (열수요 RANGE_RULES)
+       ↓
+[Training] tb_training_config.feature_set_id → 학습/예측
+```
+
+### 2.2 범용성 진단표
+
+| 영역 | 현재 구조 | 범용화 문제점 | 개선 방향 | 영향 범위 | 우선순위 |
+|------|-----------|---------------|-----------|-----------|----------|
+| Feature명 | `demand_lag_24h`, `heating_degree_days` 등 도메인 의미 내장 | 다른 도메인(매출·설비)에 그대로 쓰기 어려움 | Recipe 기반 자동 명명 규칙 + Domain Pack prefix | Catalog, Registry, UI, 학습 feature_json key | P0 |
+| 계산 로직 | `ml/features.py`에 열수요·기상·달력 결합 하드코딩 | 테이블·컬럼명 변경 시 코드 수정 필수 | CODE Pack(유지) + TEMPLATE Recipe Engine(신규) 이원화 | ml/, feature_build_service | P0 |
+| Entity Key | `site_id` 고정 (`groupby`, `partition_keys`) | 범용 entity(고객·설비·매장) 미지원 | Column Role `ENTITY_KEY` + Recipe `entity_keys[]` | mapping, recipe, engine | P1 |
+| Time Key | `measured_at` 고정 | 비정형 시계열·일 단위 데이터 미대응 | Column Role `TIME_KEY` + granularity 메타 | mapping, recipe, engine | P1 |
+| Target Column | `heat_demand` / `target_heat_demand` | 타겟 개념이 스키마·Quality에 박혀 있음 | Column Role `TARGET` + Training Config 연계 | entities, quality, training | P1 |
+| 데이터소스 매핑 | `tb_data_mapping.columns`: source↔target만 | 컬럼 역할·타입·granularity 없음 | `tb_feature_column_role` 또는 mapping JSON 확장 | mapping_service, ingestion UI | P1 |
+| Recipe 저장 | 없음 (`tb_feature`에 recipe 필드 없음) | 사용자 정의 파생 Feature 재현 불가 | `tb_feature_recipe` 신규 (1:N feature_name) | DB, API, UI | P2 |
+| Preview/Dry-run | Feature Set 단위, `build_feature_frame` 결과 10행 | Recipe 단위·파라미터 변경 시험 불가 | `POST /feature-recipes/preview` (비저장) | API, UI, engine | P2 |
+| Quality/Lineage | Registry CODE 스펙·열수요 RANGE_RULES | Recipe Feature 메타·범위 규칙 미연동 | `calc_method=TEMPLATE`, `lineage_json.recipe_params` | quality_service, lineage_service | P3 |
+| 신규 Feature UI | Feature명·calc_expression 텍스트 입력 | 오타·비표준 명칭·실행 불가 식 입력 | Recipe Builder 마법사 (선택식) | FeaturesPage, 신규 페이지 | P2 |
+| Feature Set 연결 | `features: string[]` 수동 추가 | Recipe→Feature명 자동 등록 없음 | publish 시 Catalog+Set 연동 API | feature API, UI | P3 |
+| Training 연결 | `tb_training_config.feature_set_id` | Recipe 변경과 학습 영향 추적 없음 | feature_config_hash + recipe version | training_service | P4 |
+| Domain Template | `FS-TPL-*`, `target_domain=HEAT_DEMAND` | 다른 도메인 템플릿 없음 | `tb_domain_feature_pack` + seed 분리 | seed, UI | P4 |
+
+### 2.3 열수요 도메인에 고정된 부분
+
+| 위치 | 고정 내용 |
+|------|-----------|
+| `ml/features.py` | `heat_demand`, `site_id`, `measured_at`, weather join, calendar join, HDD/CDD 기준온도 |
+| `ml/feature_registry.py` | `_HEAT_TABLE`, `_WEATHER_TABLE`, `partition_keys=["site_id"]`, `time_key="measured_at"` |
+| `feature_build_service.py` | `_fetch_heat`, `_fetch_weather`, `_fetch_calendar`, `MIN_HISTORY_HOURS=168` |
+| `feature_quality_service.py` | `RANGE_RULES` 열수요·기상 전용, `heat_demand` 범위 |
+| `tb_feature_dataset` | `target_heat_demand`, `site_id`, 레거시 lag 컬럼 |
+| `FEATURE_SET_TEMPLATES` | 전부 `target_domain: HEAT_DEMAND` |
+| `mapping_service.py` | `HEAT_TARGET` / `WEATHER_TARGET` 이원 표준 스키마 |
+
+### 2.4 범용화 가능한 부분
+
+| 위치 | 재사용 가능 요소 |
+|------|------------------|
+| `FeatureSpec` | `partition_keys`, `time_key`, `lookback_hours`, `requires_shift`, `leakage_safe` — Recipe 메타로 확장 가능 |
+| `tb_feature_lineage` | `calc_method`, `source_tables`, `lineage_json` — TEMPLATE 연동 여지 |
+| `feature_registration_service` | COMPUTABLE/CATALOG_ONLY/LEGACY 분류 → `calc_mode` 추가 확장 |
+| `DataQualityRun` | FEATURE_BUILD / FEATURE_QUALITY job 패턴 — Recipe Preview Run에 재사용 |
+| `feature_json` | key-value 저장 — Recipe 출력도 동일 키로 저장 가능 |
+| Preview API 패턴 | `POST /feature-sets/{id}/preview` — Recipe Preview API 설계 참고 |
+| UI 패턴 | 등록 유형 뱃지, 검증 패널, dry-run 모달 — Recipe Builder에 재사용 |
+
+### 2.5 사용자 텍스트 입력 지점 (현재)
+
+| 화면 | 텍스트 입력 항목 | Recipe Builder 대체 방향 |
+|------|------------------|--------------------------|
+| FeaturesPage — 등록 | `feature_name`, `feature_group`, `calc_expression`, `description` | Recipe publish 시 자동 생성; 그룹·설명은 템플릿 기본값 |
+| FeatureSetDetailPage | `feature_set_name`, `text`(설명), `featureSearch`, Feature 수동 체크 | Set 메타만 텍스트; Feature는 Recipe에서 추가 |
+| FeatureSetDetailPage — 생성 | `site_id`, `start_at`, `end_at` (Preview/Build) | 드롭다운·날짜 피커 유지 (선택식) |
+| Data Mapping UI | `source_column`, `target_column` | 컬럼 역할 드롭다운 추가; target은 표준 스키마 선택 |
+
+---
+
+## 3. 범용 Feature Recipe 개념
+
+### 3.1 정의
+
+**Feature Recipe**는 사용자가 UI 마법사에서 선택한 입력 컬럼·연산 유형·파라미터·출력 Feature명을 **안전한 JSON**으로 구조화한 계산 정의이다.
+
+- 임의 문자열 계산식(DSL)이 **아니다**.
+- Backend는 **지원 operation 화이트리스트**만 검증·(향후) 실행한다.
+- Lineage·Quality·Feature Set·Catalog와 연결 가능해야 한다.
+
+### 3.2 calc_mode 분류 (Feature 전체)
+
+| calc_mode | 설명 | 저장 위치 | Build 시 처리 |
+|-----------|------|-----------|---------------|
+| `CODE` | `ml/features.py` + Registry | Registry + (선택) Catalog | `build_feature_frame()` |
+| `TEMPLATE` | Recipe JSON 기반 | `tb_feature_recipe` | Recipe Engine (향후) |
+| `RAW` | 원본 컬럼 pass-through | Recipe 또는 Catalog | RAW_COLUMN 템플릿 |
+| `CATALOG_ONLY` | 메타만 있고 계산 없음 | `tb_feature` | warning, key 미생성 |
+
+### 3.3 Recipe 기본 필드 (후보)
+
+```json
+{
+  "recipe_id": "RCP-20250624-ABC123",
+  "feature_name": "sales_lag_7d",
+  "display_name": "7일 전 매출",
+  "description": "매장별 7 step lag",
+  "domain": "SALES_FORECAST",
+  "task_type": "REGRESSION",
+  "calc_mode": "TEMPLATE",
+  "recipe_type": "LAG",
+  "source_dataset_id": "DS-001",
+  "source_table": "tb_sales_actual",
+  "source_column": "sales_amount",
+  "source_columns": ["sales_amount"],
+  "entity_keys": ["store_id"],
+  "time_key": "transaction_date",
+  "target_column": "sales_amount",
+  "params": {
+    "offset_steps": 7,
+    "granularity": "1d",
+    "include_current_row": false,
+    "sort_order": "asc"
+  },
+  "output_data_type": "NUMERIC",
+  "unit": "KRW",
+  "null_handling": "PASS",
+  "leakage_policy": "SHIFT_REQUIRED",
+  "preview_enabled": true,
+  "status": "DRAFT",
+  "owner": "user@example.com",
+  "version": 1,
+  "created_at": "2026-06-24T00:00:00Z",
+  "updated_at": "2026-06-24T00:00:00Z"
+}
+```
+
+### 3.4 저장 구조 검토
+
+| 방안 | 장점 | 단점 | 1차 권장 |
+|------|------|------|----------|
+| A. `tb_feature`에 `recipe_json` 컬럼 확장 | Catalog·Recipe 일원화 | migration 필요; Catalog-only와 혼재 | Phase R5 이후 검토 |
+| B. **`tb_feature_recipe` 별도 테이블** | 관심사 분리, 버전·상태 관리 용이 | feature_name 동기화 필요 | **1차 권장** |
+| C. Feature Set `features`에 recipe_id embed | migration 최소 | Set만으로 Recipe 재사용 어려움 | 비권장 |
+
+**권장 관계**
+
+```
+tb_feature_recipe (1) ──publish──> tb_feature (0..1)  [feature_name UNIQUE]
+tb_feature_recipe (N) ──used by──> tb_feature_set.features[]  [feature_name 문자열]
+tb_feature (Catalog)  ←──registry── ml/feature_registry.py (CODE only)
+```
+
+- `feature_name`은 Recipe publish 시 확정; 동일 이름 중복 불가.
+- `recipe_id`는 내부 식별자; `feature_name`은 학습·예측·feature_json key.
+- CODE Registry Feature는 `recipe_id` 없음 (`calc_method=CODE`).
+- 버전: `tb_feature_recipe_version`에 스냅샷; publish 시 version 증가.
+
+### 3.5 Registry와 Recipe 공존
+
+| 유형 | calc_method | 관리 주체 | UI 표시 |
+|------|-------------|-----------|---------|
+| CODE (Heat Pack) | CODE | `ml/feature_registry.py` | Registry Panel, 읽기 전용 |
+| TEMPLATE (사용자 Recipe) | TEMPLATE | `tb_feature_recipe` | Recipe Builder, 편집 가능 |
+| CATALOG_ONLY | — | `tb_feature` | Catalog 등록, 경고 |
+
+`FeatureSpec` 확장 후보 (코드 변경은 Phase R6+):
+
+- `calc_method: CODE | TEMPLATE`
+- `recipe_id: str | None`
+- `recipe_type: str | None`
+
+---
+
+## 4. Column Role 설계
+
+### 4.1 컬럼 역할 enum
+
+| Role | 설명 | 필수 개수 |
+|------|------|-----------|
+| `ENTITY_KEY` | 시계열 그룹 키 (site, store, equipment) | ≥1 (LAG/ROLLING 시) |
+| `TIME_KEY` | 시간 축 | 1 (시계열 템플릿 시) |
+| `TARGET` | 예측 대상 (학습 라벨) | 0~1 |
+| `NUMERIC_INPUT` | 수치형 입력 | 템플릿별 |
+| `CATEGORICAL_INPUT` | 범주형 입력 | Encoding 시 |
+| `BOOLEAN_INPUT` | 불리언 | 선택 |
+| `JOIN_KEY` | 테이블 조인 키 | 다중 소스 시 |
+| `EXCLUDE` | Feature 제외 | — |
+| `ID` | 식별자(학습 미사용) | — |
+| `TEXT` | 자유 텍스트(1차 미지원) | — |
+| `LOCATION` | 위치(geo) | 향후 |
+| `DATETIME` | TIME_KEY 보조·파생 원본 | DATE_PART 시 |
+| `MEASURE` | 측정값(=NUMERIC_INPUT alias) | — |
+
+### 4.2 매핑 단계 역할 지정
+
+**현재** `tb_data_mapping.columns` 구조:
+
+```json
+{ "source_column": "SITE_CD", "target_column": "site_id", "required_yn": true }
+```
+
+**확장 후보** (migration 또는 JSON 확장):
+
+```json
+{
+  "source_column": "SITE_CD",
+  "target_column": "site_id",
+  "data_type": "STRING",
+  "column_role": "ENTITY_KEY",
+  "required_yn": true
+}
+```
+
+- 데이터소스·매핑 UI에서 컬럼별 **역할 드롭다운** 제공.
+- `target_table`별 **권장 역할 프리셋** (heat_demand_actual → site_id=ENTITY_KEY, measured_at=TIME_KEY, heat_demand=TARGET).
+
+### 4.3 Recipe Builder에서 역할 기반 템플릿 제한
+
+| 조건 | 비활성화 템플릿 |
+|------|------------------|
+| TIME_KEY 없음 | LAG, ROLLING_*, DIFF, DATE_PART(시계열) |
+| ENTITY_KEY 없음 | LAG, ROLLING_*, DIFF (단일 시계열 제외 옵션은 고급) |
+| NUMERIC_INPUT 없음 | ROLLING_*, RATIO, BINNING, DIFF |
+| CATEGORICAL_INPUT 없음 | CATEGORY_ENCODING |
+| TARGET 없음 | (경고만) 학습 연결 시 TARGET 필요 안내 |
+
+### 4.4 자동 추론 규칙 (1차)
+
+| 신호 | 추론 역할 |
+|------|-----------|
+| 컬럼명 `*_at`, `*_date`, `timestamp` + datetime 타입 | TIME_KEY 후보 |
+| 컬럼명 `*_id`, `site_id`, `store_id` + cardinality 높음 | ENTITY_KEY 후보 |
+| `heat_demand`, `sales`, `amount` + numeric | TARGET 또는 NUMERIC_INPUT |
+| cardinality < 50 + string | CATEGORICAL_INPUT 후보 |
+| boolean / 0·1 | BOOLEAN_INPUT |
+
+자동 추론은 **제안**만; 사용자 확인 후 확정.
+
+### 4.5 Validation
+
+- TIME_KEY 2개 이상 지정 → 오류
+- ENTITY_KEY + TIME_KEY 동일 컬럼 → 오류
+- LAG 템플릿 + `include_current_row=true` + TARGET 동일 컬럼 → leakage 경고
+- ROLLING + `include_current_row=true` + TARGET → leakage 경고 (강등 또는 차단)
+
+---
+
+## 5. Recipe Template 1차 범위
+
+### 5.1 템플릿 상세표
+
+| recipe_type | 설명 | 필요 컬럼 역할 | 필요 파라미터 | 출력 Feature명 자동 생성 규칙 | 누수 위험 | 1차 난이도 | 1차 포함 | 비고 |
+|-------------|------|----------------|---------------|------------------------------|-----------|------------|----------|------|
+| RAW_COLUMN | 원본 컬럼을 Feature로 사용 | NUMERIC_INPUT 또는 CATEGORICAL_INPUT | `source_column` | `{column}` 또는 `{table}_{column}` | 낮음 | 낮음 | **포함** | Phase R3 |
+| DATE_PART | timestamp에서 hour/dow/month/is_weekend 등 | TIME_KEY 또는 DATETIME | `parts[]`: hour, day_of_week, month, is_weekend | `{time_key}_{part}` | 낮음 | 낮음 | **포함** | Phase R3 |
+| LAG | entity+time 기준 n step 이전 값 | ENTITY_KEY, TIME_KEY, NUMERIC_INPUT | `offset_steps`, `granularity`, `include_current_row=false`, `sort_order` | `{col}_lag_{n}{unit}` | **높음** (shift 누락 시) | 중간 | **포함** | Phase R4; `requires_shift=true` |
+| ROLLING_MEAN | 최근 n step 평균 | ENTITY_KEY, TIME_KEY, NUMERIC_INPUT | `window_steps`, `min_periods`, `include_current_row` | `{col}_ma_{n}{unit}` | **중~높음** (현재 행 포함 시) | 중간 | **포함** | Phase R4 |
+| ROLLING_SUM | 최근 n step 합계 | 동일 | `window_steps`, `min_periods`, `include_current_row` | `{col}_sum_{n}{unit}` | 중~높음 | 중간 | **포함** | Phase R4 |
+| DIFF | 현재값 − n step 이전값 | ENTITY_KEY, TIME_KEY, NUMERIC_INPUT | `offset_steps`, `granularity` | `{col}_diff_{n}{unit}` | 중간 | 중간 | **포함** | Phase R4 |
+| RATIO | column_a / column_b | NUMERIC_INPUT ×2 | `numerator`, `denominator`, `epsilon` | `{a}_over_{b}` | 낮음 | 낮음 | **포함** | Phase R5; div0 처리 |
+| BINNING | numeric 구간화 | NUMERIC_INPUT | `bins[]` 또는 `n_bins`, `strategy` | `{col}_bin` | 낮음 | 중간 | **포함** | Phase R5 |
+| FILL_NULL | 결측 처리 변환 | 임의 입력 컬럼 | `strategy`: PREV/MEAN/ZERO/DROP | `{col}_filled` | 낮음 | 낮음 | **포함** | Phase R5 |
+| CATEGORY_ENCODING | 범주형 인코딩 | CATEGORICAL_INPUT | `method`: ONE_HOT/LABEL/ORDINAL | `{col}_{method}` | 낮음 | 중간 | **후보** | cardinality 제한 필요 |
+
+### 5.2 LAG / ROLLING / DIFF 공통 시계열 개념
+
+| 개념 | 설명 | Recipe params |
+|------|------|---------------|
+| `entity_keys` | groupby 키 배열 | `["site_id"]` |
+| `time_key` | 정렬·shift 기준 시각 컬럼 | `"measured_at"` |
+| `sort_order` | `asc` (과거→현재) | 필수 |
+| `offset_steps` / `window_steps` | **row step** 수 (granularity와 곱해 실제 시간 환산) | 24, 168 등 |
+| `granularity` | `1h`, `1d`, `1w` — step↔시간 변환 | `1h` |
+| `include_current_row` | rolling window에 현재 행 포함 | default `false` (TARGET 시) |
+| `shift` 적용 | LAG/DIFF는 항상 shift; ROLLING은 window 정의에 따름 | `requires_shift` 메타 |
+| 시간 단위 vs row step | 데이터가 균등 간격이 아니면 **row step ≠ 시간** 경고 | Preview에서 gap 검사 |
+| leakage 방지 | TARGET 동일 컬럼 + include_current → 경고/차단 | `leakage_policy` |
+
+열수요 CODE 매핑 예:
+
+- `demand_lag_24h` = LAG(heat_demand, offset=24, granularity=1h, entity=site_id)
+- `demand_ma_24h` = ROLLING_MEAN(heat_demand, window=24, include_current=true) → `leakage_safe=false`
+
+---
+
+## 6. Feature Recipe Builder UI 흐름
+
+### 6.1 진입점 (향후)
+
+- `/features` → 「Recipe로 Feature 만들기」
+- `/feature-sets/:id` → 「Recipe Feature 추가」
+- Domain Pack 갤러리 → Pack Feature 복제
+
+### 6.2 마법사 단계표
+
+| 단계 | 사용자 입력 방식 | 선택지 | 자동 추천/생성 | validation | 다음 단계 조건 | 화면 안내 문구 |
+|------|------------------|--------|----------------|------------|----------------|----------------|
+| 1. 생성 방식 | 카드 클릭 | 원본 컬럼 / 시계열 / 집계 / 비율·수식 / 날짜·시간 / 범주형 | Domain Pack 추천 배너 | — | 1개 선택 | 「계산식을 직접 입력하지 않습니다. 템플릿을 선택하세요.」 |
+| 2. 데이터 소스 | 드롭다운 | 등록된 DataSource + target_table | 최근 사용·활성 매핑 | 매핑 없으면 매핑 UI 링크 | source+table 확정 | 「Feature를 만들 데이터가 적재된 테이블을 선택하세요.」 |
+| 3. 입력 컬럼 | 검색 가능 드롭다운 | 역할별 필터된 컬럼 목록 | 매핑 기반 목록 | 템플릿별 최소 컬럼 수 | 필수 컬럼 선택 완료 | 「원천 컬럼을 선택하세요. 역할이 맞지 않으면 매핑을 수정하세요.」 |
+| 4. 컬럼 역할 확인 | 읽기+수정(드롭다운) | ENTITY_KEY, TIME_KEY, … | 자동 추론 제안 | TIME_KEY 1개, ENTITY≥1 | 역할 validation 통과 | 「시계열 Feature는 시간 축과 그룹 키가 필요합니다.」 |
+| 5. 연산 템플릿 | 카드/라디오 | recipe_type 목록 (역할로 필터) | 1단계 선택과 연동 | 비활성 템플릿 grey-out | 1개 선택 | 「지원되는 연산만 선택할 수 있습니다.」 |
+| 6. 파라미터 | 슬라이더·숫자·토글·프리셋 버튼 | offset 24/168, window, bins… | 열수요 프리셋(24h/168h) | 범위·정수·leakage 규칙 | 필수 param 입력 | 「24시간 = 24 step (1시간 간격 데이터 기준)」 |
+| 7. 출력 Feature명 | 읽기 우선 텍스트 (수정 가능) | 자동 생성명 | `{col}_lag_{n}h` 규칙 | validate-name API 실시간 | COMPUTABLE/DUPLICATE 아님 | 「이름은 자동 생성됩니다. 필요 시만 수정하세요.」 |
+| 8. 미리보기 | 기간·site 드롭다운 + 실행 버튼 | 최근 100행 / 기간 선택 | dataset-range API | Preview 성공 또는 경고 확인 | 사용자 「다음」 클릭 | 「저장 전 샘플 결과를 확인하세요. DB에 저장되지 않습니다.」 |
+| 9. Registry/Catalog 등록 | 체크박스 (기본 on) | Catalog 등록, 설명 편집 | display_name, description | publish validation | — | 「Catalog에 등록되어 Feature Set에서 선택할 수 있습니다.」 |
+| 10. Feature Set 추가 | 드롭다운 + 체크 | 현재 Set / 다른 Set | 현재 Set pre-select | TPL Set은 COMPUTABLE만 | 선택적 | 「바로 이 Feature Set에 추가할 수 있습니다.」 |
+| 11. Build 안내 | 안내 패널 | 「Feature 생성 실행」링크 | — | — | 선택적 스킵 | 「값을 저장하려면 Feature 생성 작업을 실행하세요.」 |
+| 12. Quality 안내 | 안내 패널 | 「품질 검증 실행」링크 | — | — | 종료 | 「학습 전 Feature 품질 검증을 권장합니다.」 |
+
+### 6.3 UI 원칙
+
+- 텍스트 직접 입력 최소화 (Feature명·설명만 예외적 수정)
+- `calc_expression` 입력 필드 **없음** — 대신 `recipe_type` + `params` 요약 표시
+- 고급 옵션(leakage override, custom granularity)은 접기 영역
+- 잘못된 조합은 선택 불가 또는 경고 배너
+
+---
+
+## 7. Preview / Dry-run 설계
+
+### 7.1 목적
+
+Recipe publish **전** 샘플 결과를 확인한다. `tb_feature_dataset`에 **저장하지 않는다**.
+
+### 7.2 Preview 요청 (후보)
+
+`POST /api/v1/feature-recipes/preview`
+
+```json
+{
+  "recipe": { "...": "Recipe JSON (DRAFT 가능)" },
+  "sample_size": 100,
+  "site_id": "SITE-001",
+  "start_at": "2025-01-01T00:00:00",
+  "end_at": "2025-01-07T00:00:00",
+  "entity_keys": ["site_id"],
+  "time_key": "measured_at"
+}
+```
+
+### 7.3 Preview 응답 (후보)
+
+```json
+{
+  "feature_name": "demand_lag_24h",
+  "preview_rows": [ { "site_id": "...", "measured_at": "...", "demand_lag_24h": 123.4 } ],
+  "stats": {
+    "row_count": 100,
+    "null_ratio": 0.02,
+    "invalid_ratio": 0.0,
+    "outlier_count": 1
+  },
+  "leakage_warnings": ["TARGET(heat_demand)에 include_current_row=true 시 누수 위험"],
+  "feature_json_key_preview": "demand_lag_24h",
+  "lineage_preview": {
+    "calc_method": "TEMPLATE",
+    "recipe_type": "LAG",
+    "source_columns": ["heat_demand"],
+    "params": { "offset_steps": 24 }
+  },
+  "quality_preview": {
+    "estimated_status": "WARNING",
+    "null_ratio": 0.02
+  },
+  "warnings": ["site SITE-002: 이력 120h — lag 168 일부 결측"],
+  "errors": []
+}
+```
+
+### 7.4 구현 원칙
+
+| 항목 | 정책 |
+|------|------|
+| 저장 | Preview 결과 DB 미저장; `tb_feature_recipe_preview_run`에 선택적 이력 |
+| 샘플링 | 기본 100행; 대용량은 entity·기간 필터 + `LIMIT` |
+| 데이터 소스 | 적재된 표준 테이블에서 pandas 로드 (Recipe Engine) |
+| 실패 | 사용자 친화 메시지 (컬럼 없음, 역할 누락, step>이력) |
+| CODE Feature | 기존 `preview_features` 유지; Recipe Preview는 TEMPLATE 전용 |
+
+### 7.5 Validate API
+
+`POST /api/v1/feature-recipes/validate` — DB·실행 없이 스키마·역할·이름·leakage만 검증.
+
+---
+
+## 8. Recipe Engine 설계
+
+### 8.1 이원화 아키텍처
+
+```
+Feature Build 요청
+       │
+       ├─ feature_name ∈ CODE Registry (ALL_COMPUTED_FEATURES)
+       │       └─ build_feature_frame()  [기존 유지, 수정 금지 1차]
+       │
+       ├─ feature_name ∈ TEMPLATE Recipe (tb_feature_recipe)
+       │       └─ feature_recipe_engine.apply(recipe, base_df)
+       │
+       ├─ CATALOG_ONLY → warning, key skip
+       │
+       └─ LEGACY_ALIAS → 공식명 대체 유도 (기존 로직)
+```
+
+### 8.2 모듈 구조 (향후)
+
+```
+ml/
+  features.py                    # CODE Heat Pack (유지)
+  feature_registry.py            # CODE specs (유지)
+  feature_recipe_engine.py       # 신규: orchestrator
+  feature_templates/
+    raw_column.py
+    datetime_features.py
+    lag.py
+    rolling.py
+    diff.py
+    ratio.py
+    binning.py
+    encoding.py
+```
+
+### 8.3 Recipe Engine 책임
+
+| 책임 | 설명 |
+|------|------|
+| Load base frame | entity_keys, time_key, 소스 테이블에서 DataFrame 구성 |
+| Apply template | recipe_type별 함수 디스패치 |
+| Output column | `feature_name` 컬럼 1개 생성 |
+| Merge to build | Feature Build 시 CODE 결과 DF에 left join 또는 column append |
+| feature_json | `{ feature_name: value }` — 기존과 동일 key |
+
+### 8.4 Lineage 연동
+
+`save_feature_lineage` 확장:
+
+- `calc_method = "TEMPLATE"`
+- `calc_expression` = human-readable 요약 (자동 생성, 예: `LAG(heat_demand, 24, entity=site_id)`)
+- `lineage_json.recipe_id`, `recipe_version`, `recipe_params`
+
+### 8.5 Quality 연동
+
+- Recipe publish 시 `output_data_type`, 선택적 `range_rule` 저장
+- TEMPLATE Feature는 Registry `RANGE_RULES` 대신 recipe 메타 또는 domain pack defaults
+- missing key는 기존과 동일 검사
+
+### 8.6 Template Registry
+
+| 방안 | 설명 |
+|------|------|
+| 코드 상수 | `ml/feature_templates/__init__.py`에 recipe_type 목록 — 1차 권장 |
+| DB `tb_feature_recipe_template` | UI에서 템플릿 설명·아이콘 관리 — Phase R2 |
+
+---
+
+## 9. Domain Template Pack 분리
+
+### 9.1 구조
+
+```
+Core (범용)
+  ├── Recipe Engine
+  ├── Column Role
+  ├── RAW / DATE_PART / LAG / ROLLING / …
+  └── Preview / Validate API
+
+Domain Pack: Heat Demand Forecasting
+  ├── CODE: ml/features.py + feature_registry.py (현행)
+  ├── FS-TPL-* 템플릿
+  ├── RANGE_RULES (quality)
+  └── HDD/CDD/comfort_distance 등 도메인 전용 템플릿 (향후 TEMPLATE화)
+
+Domain Pack: Sales Forecasting (예시)
+  └── store_id, sales_amount, promotion_flag …
+
+Domain Pack: Equipment Anomaly (예시)
+  └── equipment_id, sensor_reading, …
+```
+
+### 9.2 Feature 분류
+
+| 분류 | Feature 예 | 위치 |
+|------|-----------|------|
+| **Core TEMPLATE** | RAW_COLUMN, DATE_PART(hour/dow), LAG, ROLLING | Recipe Engine |
+| **Heat CODE** | demand_lag_24h, heating_degree_days, comfort_distance | ml/features.py |
+| **Heat-adjacent CODE** | temperature, humidity (기상 join) | ml/features.py |
+| **Universal time CODE** | hour, month, is_weekend | Core로 이전 가능 (TEMPLATE DATE_PART로 대체 가능) |
+
+### 9.3 Domain Pack metadata (후보)
+
+```json
+{
+  "pack_id": "DP-HEAT-DEMAND",
+  "pack_name": "Heat Demand Forecasting",
+  "domain": "HEAT_DEMAND",
+  "default_entity_key": "site_id",
+  "default_time_key": "measured_at",
+  "default_target": "heat_demand",
+  "source_tables": ["tb_heat_demand_actual", "tb_weather_observation", "tb_calendar"],
+  "feature_set_templates": ["FS-TPL-MINIMAL", "..."],
+  "code_registry_module": "ml.feature_registry",
+  "range_rules_ref": "heat_demand_quality"
+}
+```
+
+### 9.4 seed 분리 전략
+
+| 단계 | 작업 |
+|------|------|
+| 현재 | 단일 seed에 Heat Feature·Set·Config |
+| Phase R8 | `db/init/domain_packs/heat_demand.sql` 분리 |
+| clean 배포 | Core + Heat Pack 기본 포함; Sales는 optional seed |
+
+### 9.5 UI 도메인 선택
+
+- Feature Set 생성 시 `target_domain` 드롭다운 → Pack 필터
+- Recipe Builder 1단계에서 Pack 선택 시 프리셋·컬럼 역할 자동 채움
+
+---
+
+## 10. DB/API 설계 초안
+
+### 10.1 DB 테이블
+
+| 테이블 | 목적 | 주요 컬럼 | 기존 관계 | migration | 1차 포함 |
+|--------|------|-----------|-----------|-----------|----------|
+| `tb_feature_recipe` | Recipe 정의 저장 | recipe_id PK, feature_name UNIQUE, recipe_type, calc_mode, source_table, entity_keys JSONB, time_key, params JSONB, status, version, owner | → tb_feature (publish) | **필요** | R5 |
+| `tb_feature_recipe_version` | Recipe 버전 스냅샷 | version_id, recipe_id, version_no, recipe_snapshot JSONB, published_at | recipe_id FK | 필요 | R5 |
+| `tb_feature_recipe_template` | 템플릿 카탈로그(메타) | template_id, recipe_type, display_name, param_schema JSONB, required_roles JSONB | — | 선택 | R2 |
+| `tb_feature_recipe_preview_run` | Preview 이력(선택) | run_id, recipe_id, sample_size, result_summary JSONB | recipe_id FK | 선택 | R3 |
+| `tb_feature_column_role` | 테이블별 컬럼 역할 | role_id, source_table, column_name, column_role, data_type | mapping 보완 | 필요 | R1 |
+| `tb_domain_feature_pack` | Domain Pack 메타 | pack_id, domain, metadata JSONB | feature_set.target_domain | 선택 | R8 |
+
+**`tb_feature` 확장 (대안, R5 검토)**
+
+- `recipe_id` FK nullable
+- `calc_mode` VARCHAR(20)
+
+### 10.2 API
+
+| API | 목적 | request | response | validation | 우선순위 | 1차 포함 |
+|-----|------|---------|----------|------------|----------|----------|
+| GET `/feature-recipe-templates` | 템플릿 목록·param 스키마 | — | `{ items: TemplateMeta[] }` | — | P1 | R2 |
+| POST `/feature-recipes/validate` | Recipe JSON 검증 | `{ recipe }` | `{ valid, errors, warnings }` | 역할·params·이름 | P1 | R2 |
+| POST `/feature-recipes/preview` | 샘플 Preview | `{ recipe, sample_size, ... }` | PreviewResponse | 동일 + 데이터 존재 | P1 | R3 |
+| POST `/feature-recipes` | Recipe 저장 (DRAFT) | RecipeCreate | `{ recipe_id }` | validate | P2 | R5 |
+| GET `/feature-recipes` | 목록 | filter status, domain | paged items | — | P2 | R5 |
+| GET `/feature-recipes/{id}` | 상세 | — | Recipe | — | P2 | R5 |
+| PUT `/feature-recipes/{id}` | 수정 | RecipeUpdate | ok | DRAFT only | P2 | R5 |
+| POST `/feature-recipes/{id}/publish` | Catalog+버전 확정 | — | feature_name, version | 이름 중복·preview 권장 | P2 | R5 |
+| POST `/feature-sets/{id}/add-recipe-feature` | Set에 feature_name 추가 | `{ recipe_id \| feature_name }` | updated features[] | TPL/Legacy 규칙 | P2 | R5 |
+| GET `/feature-column-roles` | 테이블 컬럼 역할 조회 | `source_table` | roles[] | — | P1 | R1 |
+| PUT `/feature-column-roles` | 역할 저장 | `{ table, roles[] }` | ok | 역할 규칙 | P1 | R1 |
+
+---
+
+## 11. 단계별 구현 로드맵
+
+| Phase | 목표 | 주요 작업 | 수정 파일 예상 | DB migration | 테스트 | 위험도 | 산출물 | 난이도 |
+|-------|------|-----------|----------------|--------------|--------|--------|--------|--------|
+| **R0** | 설계 확정 | 본 문서, 와이어프레임, 정책 링크 | docs/ | 없음 | — | 낮음 | 설계서 | 낮음 |
+| **R1** | Column Role | role API, mapping UI 확장, 추론 heuristic | mapping_service, entities, ingestion UI | **있음** (role 테이블 또는 JSON) | role validation test | 중 | Role API·UI | 중 |
+| **R2** | Template Catalog | template 메타 API, validate API | feature_recipe_service, api/v1 | 선택 | validate test | 낮음 | Template 목록 API | 낮음 |
+| **R3** | RAW/DATE Preview | recipe_engine scaffold, preview API | ml/feature_recipe_engine.py, api | preview_run 선택 | preview test | 중 | Preview API | 중 |
+| **R4** | LAG/ROLLING Preview | 시계열 템플릿 + leakage 검사 | feature_templates/*, engine | 없음 | lag/rolling test | **높음** | 시계열 Preview | 높음 |
+| **R5** | Recipe 저장·Set 연결 | tb_feature_recipe, publish, add to set | entities, feature API, UI 마법사 | **있음** | recipe CRUD test | 중 | Recipe Builder v1 | 높음 |
+| **R6** | Recipe Build | build 시 TEMPLATE 실행·feature_json | feature_build_service, engine | 없음 | build integration | **높음** | E2E Build | 높음 |
+| **R7** | Quality/Lineage | TEMPLATE lineage, quality rules | lineage/quality service | lineage_json 확장 | quality+lineage test | 중 | 통합 검증 | 중 |
+| **R8** | Domain Pack | pack 메타, seed 분리, UI 갤러리 | seed, ml/registry 구조 | pack 테이블 | pack load test | 중 | Pack 분리 | 중 |
+| **R9** | Drag&Drop Canvas | 노드 기반 UI (선택) | frontend 신규 | 없음 | UI test | 높음 | Canvas prototype | 매우 높음 |
+| **R10** | 제한적 DSL | 안전 subset parser (선택) | ml/dsl/ | 없음 | dsl test | **매우 높음** | DSL spec | 매우 높음 |
+
+---
+
+## 12. 구현 우선순위
+
+| 순위 | 항목 | 이유 |
+|------|------|------|
+| 1 | Column Role (R1) | Recipe·Preview·Engine 공통 전제 |
+| 2 | Template Catalog + Validate (R2) | UI·API 계약 조기 고정 |
+| 3 | RAW/DATE Preview (R3) | 낮은 위험으로 Preview 패턴 검증 |
+| 4 | LAG/ROLLING Preview (R4) | 핵심 가치·누수 검증 |
+| 5 | Recipe 저장 + Builder UI (R5) | 사용자 가시 성과 |
+| 6 | Recipe Build (R6) | 학습 연결 전 필수 |
+| 7 | Quality/Lineage (R7) | 운영 신뢰 |
+| 8 | Domain Pack (R8) | 열수요 분리·범용화 |
+| 9 | Canvas / DSL (R9–R10) | 장기 |
+
+---
+
+## 13. 리스크와 대응
+
+| 리스크 | 영향 | 대응 |
+|--------|------|------|
+| row step ≠ 실제 시간 간격 | LAG/ROLLING 오류 | Preview gap 검사; granularity 메타; UI 경고 |
+| CODE·TEMPLATE 결과 불일치 | 동일 feature_name 충돌 | CODE 우선 정책; 이름 네임스페이스 (pack prefix) |
+| tb_feature_dataset 스키마 열수요 고정 | 범용 entity 저장 | 1차: feature_json만 사용; 물리 컬럼 확장은 별도 Phase |
+| migration 부담 | 배포 복잡도 | Role·Recipe 테이블만 최소 migration; 나머지 JSONB |
+| 누수 | 모델 신뢰도 붕괴 | include_current 기본 false; TARGET 동일 시 차단 |
+| 성능 | Preview/Build 느림 | 샘플링·entity 필터·비동기 job (Build는 기존 패턴) |
+
+---
+
+## 14. 이번 단계에서 하지 않는 것
+
+- 기능 코드 구현 (Backend/Frontend/ML)
+- DB migration
+- DSL 파서 구현
+- `calc_expression` 실행 연결
+- Recipe Engine 구현
+- `ml/features.py` 리팩토링
+- Feature Build 로직 수정
+- 테스트 코드 수정
+- Traefik / design/figma 수정
+
+---
+
+## 부록 A. 영향 받는 영역 맵
+
+| 영역 | 현재 파일 | Recipe Builder 영향 |
+|------|-----------|---------------------|
+| ML | `ml/features.py`, `ml/feature_registry.py` | Engine 추가; CODE 유지 |
+| Backend Service | `feature_build_service.py`, `feature_registration_service.py`, `feature_quality_service.py`, `feature_lineage_service.py` | Build 분기, Quality 규칙, Lineage TEMPLATE |
+| Backend API | `api/v1/feature.py` | recipe 엔드포인트 추가 |
+| Backend Model | `entities.py` | 신규 테이블 |
+| Mapping | `mapping_service.py` | column role |
+| Frontend | `FeaturesPage`, `FeatureSetDetailPage`, 신규 `FeatureRecipeBuilderPage` | 마법사 UI |
+| Docs | 정책 문서, README | 링크·calc_mode 정책 |
+| Training | `training_service.py`, `tb_training_config` | feature_set_id 연결 유지; recipe version 추적은 후속 |
+
+## 부록 B. Training Config 연결 (현재)
+
+```
+tb_training_config.feature_set_id
+  → tb_feature_set.features[] (feature_name 목록)
+  → Feature Build → tb_feature_dataset.feature_json
+  → training_service: feature_json keys를 학습 행렬로 사용
+  → prediction: 동일 feature_set_id
+```
+
+Recipe 도입 후에도 **학습은 feature_name 목록 기준**을 유지한다. Recipe 변경 시 `feature_config_hash` 변경 → 재학습 권장.
+
+---
+
+*문서 끝*
+
+---
+
+## 부록 C. Phase R1 구현 완료 (Column Role 관리)
+
+> **구현 완료**: Column Role 저장·조회·자동 추론·검증·Data Mapping UI
+
+### DB
+
+- 테이블: `tb_feature_column_role`
+- migration: `scripts/apply_dev_migrations.py` (기존 볼륨) + `db/init/01_schema.sql` (clean deploy)
+- seed: `02_seed_clean.sql` — `MAP-CSV-001`, `MAP-CSV-002` 기본 역할
+
+### API
+
+| 메서드 | 경로 |
+|--------|------|
+| GET | `/api/v1/feature-column-role-codes` |
+| GET | `/api/v1/feature-column-roles?mapping_id=...&include_inferred=true` |
+| POST | `/api/v1/feature-column-roles/infer` |
+| POST | `/api/v1/feature-column-roles/validate` |
+| PUT | `/api/v1/feature-column-roles` |
+
+### UI
+
+- `/data/mappings` — 매핑 수정 모달에 컬럼 역할 드롭다운, 추천 역할 적용, 역할 검증, 컬럼 역할 저장, Recipe 준비도
+
+### 정책
+
+- 자동 추론은 **제안**이며 사용자가 저장해야 확정된다.
+- Column Role은 **현재 Feature Build/학습/예측에 직접 영향 없음** (Recipe Builder 전제).
+
+### 테스트
+
+```bash
+python scripts/apply_dev_migrations.py
+python scripts/test_feature_column_roles.py
+```
+

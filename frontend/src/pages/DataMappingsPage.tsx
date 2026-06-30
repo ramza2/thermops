@@ -1,6 +1,13 @@
-import { useEffect, useState } from "react";
-import { CheckCircle, Eye, Plus, Pencil } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { CheckCircle, Eye, Plus, Pencil, Sparkles, Save } from "lucide-react";
 import { fetchApi, postApi, putApi, PagedData } from "@/api/client";
+import {
+  getColumnRoleCodes,
+  getColumnRoles,
+  inferColumnRoles,
+  saveColumnRoles,
+  validateColumnRoles,
+} from "@/api/featureColumnRoles";
 import { Button } from "@/components/Button";
 import { DataTable } from "@/components/DataTable";
 import { Modal } from "@/components/Modal";
@@ -9,11 +16,24 @@ import { Pagination, LoadingState, ErrorState } from "@/components/Pagination";
 import { SelectInput, TextInput } from "@/components/SearchPanel";
 import { useToast } from "@/hooks/useToast";
 import { PageHeader } from "@/layouts/MainLayout";
+import type {
+  ColumnRoleCode,
+  FeatureColumnRole,
+  FeatureColumnRoleSummary,
+  FeatureColumnRoleValidation,
+} from "@/types/featureColumnRoles";
+import {
+  COLUMN_ROLE_HELP,
+  COLUMN_ROLE_INFERENCE_NOTE,
+  roleBadgeClass,
+  roleLabel,
+} from "@/utils/featureColumnRoleFormat";
 
 interface MappingColumn {
   source_column: string;
   target_column: string;
   required_yn?: boolean;
+  data_type?: string;
 }
 
 interface Mapping {
@@ -39,6 +59,60 @@ const EMPTY_FORM = {
   ] as MappingColumn[],
 };
 
+const ROLE_EMPTY_OPTION = { value: "", label: "미지정" };
+
+function RoleCoverageCard({ summary }: { summary: FeatureColumnRoleSummary | null }) {
+  if (!summary) return null;
+  const readiness = summary.recipe_readiness;
+  return (
+    <div className="text-xs border border-slate-200 rounded-lg p-3 bg-slate-50 space-y-2">
+      <div className="font-semibold text-slate-800">Recipe 준비도</div>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        <div>개체 키: <strong>{summary.entity_key_count}</strong></div>
+        <div>시간 키: <strong>{summary.time_key_count}</strong></div>
+        <div>예측 대상: <strong>{summary.target_count}</strong></div>
+        <div>Feature 후보: <strong>{summary.feature_candidate_count}</strong></div>
+      </div>
+      <ul className="space-y-1 text-slate-600">
+        {Object.entries(readiness).map(([key, item]) => (
+          <li key={key} className={item.ready ? "text-emerald-700" : "text-amber-700"}>
+            {item.ready ? "✓" : "○"} {item.message}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function ValidationPanel({ validation }: { validation: FeatureColumnRoleValidation | null }) {
+  if (!validation) return null;
+  const hasAny =
+    validation.errors.length > 0
+    || validation.warnings.length > 0
+    || (validation.infos?.length ?? 0) > 0;
+  if (!hasAny) {
+    return (
+      <div className="text-xs text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg p-3">
+        검증 결과: 문제 없음
+      </div>
+    );
+  }
+  return (
+    <div className="text-xs border border-slate-200 rounded-lg p-3 space-y-2">
+      <div className="font-semibold text-slate-800">검증 결과</div>
+      {validation.errors.map((e) => (
+        <p key={e} className="text-red-700">• {e}</p>
+      ))}
+      {validation.warnings.map((w) => (
+        <p key={w} className="text-amber-700">• {w}</p>
+      ))}
+      {(validation.infos ?? []).map((i) => (
+        <p key={i} className="text-slate-600">• {i}</p>
+      ))}
+    </div>
+  );
+}
+
 export default function DataMappingsPage() {
   const { showToast } = useToast();
   const [items, setItems] = useState<Mapping[]>([]);
@@ -57,6 +131,23 @@ export default function DataMappingsPage() {
   const [discovering, setDiscovering] = useState(false);
   const [discoveredFields, setDiscoveredFields] = useState<string[]>([]);
 
+  const [roleCodes, setRoleCodes] = useState<ColumnRoleCode[]>([]);
+  const [columnRoles, setColumnRoles] = useState<FeatureColumnRole[]>([]);
+  const [roleSummary, setRoleSummary] = useState<FeatureColumnRoleSummary | null>(null);
+  const [roleValidation, setRoleValidation] = useState<FeatureColumnRoleValidation | null>(null);
+  const [roleSectionOpen, setRoleSectionOpen] = useState(true);
+  const [roleLoading, setRoleLoading] = useState(false);
+  const [roleSaving, setRoleSaving] = useState(false);
+  const [roleInferring, setRoleInferring] = useState(false);
+
+  const roleOptions = useMemo(
+    () => [
+      ROLE_EMPTY_OPTION,
+      ...roleCodes.map((c) => ({ value: c.code, label: c.label })),
+    ],
+    [roleCodes],
+  );
+
   const load = async (p = page) => {
     setLoading(true);
     setError("");
@@ -71,12 +162,64 @@ export default function DataMappingsPage() {
     }
   };
 
+  const resetRoleState = () => {
+    setColumnRoles([]);
+    setRoleSummary(null);
+    setRoleValidation(null);
+  };
+
+  const syncRolesFromColumns = useCallback((cols: MappingColumn[]) => {
+    setColumnRoles((prev) => {
+      const prevMap = new Map(prev.map((r) => [r.source_column, r]));
+      return cols
+        .filter((c) => c.source_column)
+        .map((c) => {
+          const existing = prevMap.get(c.source_column);
+          return existing ?? {
+            source_column: c.source_column,
+            target_column: c.target_column,
+            column_role: null,
+            saved: false,
+          };
+        });
+    });
+  }, []);
+
+  const loadRolesForMapping = useCallback(async (mappingId: string, cols: MappingColumn[]) => {
+    setRoleLoading(true);
+    try {
+      const res = await getColumnRoles({ mapping_id: mappingId, include_inferred: true });
+      if (res.items.length) {
+        setColumnRoles(res.items);
+      } else {
+        syncRolesFromColumns(cols);
+      }
+      setRoleSummary(res.summary);
+      setRoleValidation(res.validation);
+    } catch {
+      syncRolesFromColumns(cols);
+    } finally {
+      setRoleLoading(false);
+    }
+  }, [syncRolesFromColumns]);
+
   useEffect(() => {
     load(page);
     fetchApi<PagedData<DataSource>>("/data-sources", { page: 1, size: 100 })
       .then((res) => setSources(res.items))
       .catch(() => {});
+    getColumnRoleCodes()
+      .then((res) => setRoleCodes(res.items || []))
+      .catch(() => {});
   }, [page]);
+
+  useEffect(() => {
+    if (!formOpen || !editingId) return;
+    const validCols = form.columns.filter((c) => c.source_column);
+    if (validCols.length) {
+      void loadRolesForMapping(editingId, validCols);
+    }
+  }, [formOpen, editingId, form.columns, loadRolesForMapping]);
 
   const openCreate = () => {
     setEditingId(null);
@@ -84,6 +227,7 @@ export default function DataMappingsPage() {
       ...EMPTY_FORM,
       source_id: sources[0]?.source_id || "",
     });
+    resetRoleState();
     setFormOpen(true);
   };
 
@@ -95,6 +239,7 @@ export default function DataMappingsPage() {
       target_table: row.target_table,
       columns: row.columns.length ? row.columns : EMPTY_FORM.columns,
     });
+    resetRoleState();
     setFormOpen(true);
   };
 
@@ -102,6 +247,132 @@ export default function DataMappingsPage() {
     const cols = [...form.columns];
     cols[idx] = { ...cols[idx], [field]: value };
     setForm({ ...form, columns: cols });
+    if (field === "source_column" || field === "target_column") {
+      syncRolesFromColumns(cols.filter((c) => c.source_column));
+    }
+  };
+
+  const updateColumnRole = (sourceColumn: string, role: string) => {
+    setColumnRoles((prev) => {
+      const idx = prev.findIndex((r) => r.source_column === sourceColumn);
+      if (idx >= 0) {
+        const next = [...prev];
+        next[idx] = { ...next[idx], column_role: role || null, saved: false };
+        return next;
+      }
+      const col = form.columns.find((c) => c.source_column === sourceColumn);
+      return [
+        ...prev,
+        {
+          source_column: sourceColumn,
+          target_column: col?.target_column,
+          column_role: role || null,
+          saved: false,
+        },
+      ];
+    });
+  };
+
+  const getRoleForColumn = (sourceColumn: string): FeatureColumnRole | undefined =>
+    columnRoles.find((r) => r.source_column === sourceColumn);
+
+  const buildRolePayload = () =>
+    columnRoles
+      .filter((r) => r.source_column && r.column_role)
+      .map((r) => ({
+        source_column: r.source_column,
+        target_column: r.target_column,
+        data_type: r.data_type,
+        column_role: r.column_role as string,
+        description: r.description,
+      }));
+
+  const handleApplyInferred = async () => {
+    const cols = form.columns.filter((c) => c.source_column);
+    if (!cols.length) {
+      showToast("warning", "매핑 컬럼을 먼저 입력하세요.");
+      return;
+    }
+    setRoleInferring(true);
+    try {
+      const res = await inferColumnRoles({
+        mapping_id: editingId ?? undefined,
+        target_table: form.target_table,
+        columns: cols.map((c) => ({
+          source_column: c.source_column,
+          target_column: c.target_column,
+        })),
+      });
+      setColumnRoles(
+        res.items.map((item) => ({
+          ...item,
+          column_role: item.inferred_role ?? item.column_role,
+          saved: false,
+        })),
+      );
+      setRoleSummary(res.summary);
+      setRoleValidation(res.validation);
+      showToast("success", "추천 역할을 적용했습니다. 저장 전 검증 결과를 확인하세요.");
+    } catch {
+      showToast("error", "역할 추론에 실패했습니다.");
+    } finally {
+      setRoleInferring(false);
+    }
+  };
+
+  const handleValidateRoles = async () => {
+    const roles = buildRolePayload();
+    if (!roles.length) {
+      showToast("warning", "지정된 컬럼 역할이 없습니다.");
+      return;
+    }
+    try {
+      const res = await validateColumnRoles({
+        mapping_id: editingId ?? undefined,
+        roles,
+        mapping_columns: form.columns.filter((c) => c.source_column),
+      });
+      setRoleValidation(res.validation);
+      setRoleSummary(res.summary);
+      if (res.validation.blocking) {
+        showToast("error", res.validation.errors[0] || "검증에 실패했습니다.");
+      } else if (res.validation.warnings.length) {
+        showToast("warning", `검증 통과 (경고 ${res.validation.warnings.length}건)`);
+      } else {
+        showToast("success", "컬럼 역할 검증에 성공했습니다.");
+      }
+    } catch {
+      showToast("error", "역할 검증 요청에 실패했습니다.");
+    }
+  };
+
+  const handleSaveRoles = async () => {
+    if (!editingId) {
+      showToast("warning", "매핑을 먼저 저장한 뒤 컬럼 역할을 저장할 수 있습니다.");
+      return;
+    }
+    const roles = buildRolePayload();
+    if (!roles.length) {
+      showToast("warning", "저장할 컬럼 역할이 없습니다.");
+      return;
+    }
+    setRoleSaving(true);
+    try {
+      const res = await saveColumnRoles({ mapping_id: editingId, roles });
+      setColumnRoles(res.items);
+      setRoleSummary(res.summary);
+      setRoleValidation(res.validation);
+      if (res.validation.blocking) {
+        showToast("error", res.validation.errors[0] || "저장 후 검증 오류가 있습니다.");
+      } else {
+        showToast("success", `컬럼 역할 ${res.saved_count}건이 저장되었습니다.`);
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "컬럼 역할 저장에 실패했습니다.";
+      showToast("error", msg);
+    } finally {
+      setRoleSaving(false);
+    }
   };
 
   const handleSave = async () => {
@@ -121,10 +392,10 @@ export default function DataMappingsPage() {
         await putApi(`/mappings/${editingId}`, payload);
         showToast("success", "매핑이 수정되었습니다.");
       } else {
-        await postApi("/mappings", payload);
-        showToast("success", "매핑이 등록되었습니다.");
+        const created = await postApi<{ mapping_id: string }>("/mappings", payload);
+        setEditingId(created.mapping_id);
+        showToast("success", "매핑이 등록되었습니다. 이제 컬럼 역할을 지정할 수 있습니다.");
       }
-      setFormOpen(false);
       load();
     } catch {
       showToast("error", "저장에 실패했습니다.");
@@ -153,21 +424,29 @@ export default function DataMappingsPage() {
     }
     setDiscovering(true);
     try {
-      const res = await fetchApi<{ fields: { name: string }[]; columns?: { name: string }[] }>(
+      const res = await fetchApi<{ fields: { name: string; type?: string }[]; columns?: { name: string }[] }>(
         `/data-sources/${encodeURIComponent(form.source_id)}/discover-schema`,
       );
-      const names = (res.fields || res.columns || []).map((f) => f.name).filter(Boolean);
+      const fields = res.fields || res.columns || [];
+      const names = fields.map((f) => f.name).filter(Boolean);
       setDiscoveredFields(names);
       if (names.length) {
         const existing = new Set(form.columns.map((c) => c.source_column).filter(Boolean));
         const newCols = names
           .filter((n) => !existing.has(n))
-          .map((n) => ({ source_column: n, target_column: "", required_yn: false }));
-        if (newCols.length) {
-          setForm({
-            ...form,
-            columns: [...form.columns.filter((c) => c.source_column || c.target_column), ...newCols],
+          .map((n) => {
+            const field = fields.find((f) => f.name === n);
+            return {
+              source_column: n,
+              target_column: "",
+              required_yn: false,
+              data_type: field && "type" in field ? field.type : undefined,
+            };
           });
+        if (newCols.length) {
+          const merged = [...form.columns.filter((c) => c.source_column || c.target_column), ...newCols];
+          setForm({ ...form, columns: merged });
+          syncRolesFromColumns(merged.filter((c) => c.source_column));
         }
         showToast("success", `스키마 탐색 완료: ${names.length}개 필드`);
       } else {
@@ -198,9 +477,13 @@ export default function DataMappingsPage() {
     <div>
       <PageHeader
         title="데이터 매핑 설정"
-        description="원천 컬럼과 표준 스키마 간 매핑 규칙을 관리합니다."
+        description="원천 컬럼과 표준 스키마 간 매핑 규칙 및 Column Role을 관리합니다."
         actions={<Button icon={<Plus className="w-4 h-4" />} onClick={openCreate}>신규 매핑</Button>}
       />
+
+      <div className="mb-4 text-xs text-slate-600 bg-blue-50 border border-blue-200 rounded-lg p-3">
+        {COLUMN_ROLE_HELP}
+      </div>
 
       <DataTable
         loading={loading}
@@ -238,7 +521,7 @@ export default function DataMappingsPage() {
         footer={
           <>
             <Button variant="secondary" onClick={() => setFormOpen(false)}>취소</Button>
-            <Button onClick={handleSave} disabled={saving}>{saving ? "저장 중..." : "저장"}</Button>
+            <Button onClick={handleSave} disabled={saving}>{saving ? "저장 중..." : "매핑 저장"}</Button>
           </>
         }
       >
@@ -273,26 +556,104 @@ export default function DataMappingsPage() {
                 탐색된 필드: {discoveredFields.join(", ")}
               </p>
             )}
-            {form.columns.map((col, idx) => (
-              <div key={idx} className="grid grid-cols-2 gap-2 mb-2">
-                <TextInput
-                  value={col.source_column}
-                  onChange={(v) => updateColumn(idx, "source_column", v)}
-                  placeholder="원천 컬럼"
-                />
-                <TextInput
-                  value={col.target_column}
-                  onChange={(v) => updateColumn(idx, "target_column", v)}
-                  placeholder="표준 컬럼"
-                />
-              </div>
-            ))}
+            <div className="grid grid-cols-[1fr_1fr_140px] gap-2 mb-1 text-[11px] text-slate-500 px-1">
+              <span>원천 컬럼</span>
+              <span>표준 컬럼</span>
+              <span>컬럼 역할</span>
+            </div>
+            {form.columns.map((col, idx) => {
+              const roleRow = getRoleForColumn(col.source_column);
+              const role = roleRow?.column_role;
+              const inferred = roleRow?.inferred_role;
+              const showSuggest = !role && inferred;
+              return (
+                <div key={idx} className="grid grid-cols-[1fr_1fr_140px] gap-2 mb-2 items-start">
+                  <TextInput
+                    value={col.source_column}
+                    onChange={(v) => updateColumn(idx, "source_column", v)}
+                    placeholder="원천 컬럼"
+                  />
+                  <TextInput
+                    value={col.target_column}
+                    onChange={(v) => updateColumn(idx, "target_column", v)}
+                    placeholder="표준 컬럼"
+                  />
+                  <div className="space-y-1">
+                    <SelectInput
+                      value={role || ""}
+                      onChange={(v) => {
+                        if (col.source_column) updateColumnRole(col.source_column, v);
+                      }}
+                      options={roleOptions}
+                    />
+                    {role && (
+                      <span className={`inline-flex text-[10px] px-1 py-0.5 rounded border ${roleBadgeClass(role)}`}>
+                        {roleRow?.saved ? "저장됨" : "미저장"}
+                      </span>
+                    )}
+                    {showSuggest && (
+                      <span className="block text-[10px] text-amber-700">
+                        추천: {roleLabel(inferred, roleCodes)}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
             <Button
               variant="ghost"
-              onClick={() => setForm({ ...form, columns: [...form.columns, { source_column: "", target_column: "", required_yn: false }] })}
+              onClick={() => setForm({
+                ...form,
+                columns: [...form.columns, { source_column: "", target_column: "", required_yn: false }],
+              })}
             >
               + 컬럼 행 추가
             </Button>
+          </div>
+
+          <div className="border-t border-slate-200 pt-3">
+            <button
+              type="button"
+              className="flex items-center justify-between w-full text-sm font-semibold text-slate-800 mb-2"
+              onClick={() => setRoleSectionOpen((v) => !v)}
+            >
+              Column Role
+              <span className="text-xs text-slate-500">{roleSectionOpen ? "접기" : "펼치기"}</span>
+            </button>
+            {roleSectionOpen && (
+              <div className="space-y-3">
+                <p className="text-[11px] text-slate-500">{COLUMN_ROLE_INFERENCE_NOTE}</p>
+                {!editingId && (
+                  <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded p-2">
+                    매핑을 먼저 저장하면 컬럼 역할을 DB에 저장할 수 있습니다.
+                  </p>
+                )}
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    variant="secondary"
+                    icon={<Sparkles className="w-3 h-3" />}
+                    disabled={roleInferring}
+                    onClick={handleApplyInferred}
+                  >
+                    {roleInferring ? "추론 중..." : "추천 역할 적용"}
+                  </Button>
+                  <Button variant="secondary" icon={<CheckCircle className="w-3 h-3" />} onClick={handleValidateRoles}>
+                    역할 검증
+                  </Button>
+                  <Button
+                    variant="primary"
+                    icon={<Save className="w-3 h-3" />}
+                    disabled={roleSaving || !editingId}
+                    onClick={handleSaveRoles}
+                  >
+                    {roleSaving ? "저장 중..." : "컬럼 역할 저장"}
+                  </Button>
+                </div>
+                {roleLoading && <p className="text-xs text-slate-400">컬럼 역할 불러오는 중...</p>}
+                <RoleCoverageCard summary={roleSummary} />
+                <ValidationPanel validation={roleValidation} />
+              </div>
+            )}
           </div>
         </div>
       </Modal>

@@ -150,6 +150,71 @@ MIGRATIONS = [
         ON CONFLICT DO NOTHING;
         """,
     ),
+    (
+        "tb_feature_column_role",
+        """
+        CREATE TABLE IF NOT EXISTS tb_feature_column_role (
+            role_id VARCHAR(50) PRIMARY KEY,
+            mapping_id VARCHAR(50) REFERENCES tb_data_mapping(mapping_id),
+            data_source_id VARCHAR(50) REFERENCES tb_data_source(data_source_id),
+            source_table VARCHAR(100),
+            target_table VARCHAR(100),
+            source_column VARCHAR(100) NOT NULL,
+            target_column VARCHAR(100),
+            data_type VARCHAR(50),
+            column_role VARCHAR(50) NOT NULL,
+            inferred_role VARCHAR(50),
+            inference_confidence NUMERIC(5,2),
+            role_source VARCHAR(20) NOT NULL DEFAULT 'MANUAL',
+            description TEXT,
+            active_yn CHAR(1) NOT NULL DEFAULT 'Y',
+            created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMP
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS ux_feature_column_role_mapping_source
+            ON tb_feature_column_role(mapping_id, source_column)
+            WHERE mapping_id IS NOT NULL AND active_yn = 'Y';
+        CREATE INDEX IF NOT EXISTS ix_feature_column_role_mapping
+            ON tb_feature_column_role(mapping_id)
+            WHERE active_yn = 'Y';
+        CREATE INDEX IF NOT EXISTS ix_feature_column_role_target_table
+            ON tb_feature_column_role(target_table)
+            WHERE active_yn = 'Y';
+        """,
+    ),
+    (
+        "tb_feature_column_role seed (clean demo mappings)",
+        """
+        INSERT INTO tb_feature_column_role (
+            role_id, mapping_id, data_source_id, target_table,
+            source_column, target_column, data_type, column_role,
+            inferred_role, inference_confidence, role_source, active_yn
+        ) VALUES
+        ('FCR-CSV001-SITE', 'MAP-CSV-001', 'DS-CSV-001', 'heat_demand_actual',
+         'site_id', 'site_id', 'STRING', 'ENTITY_KEY', 'ENTITY_KEY', 95.00, 'SEED', 'Y'),
+        ('FCR-CSV001-TIME', 'MAP-CSV-001', 'DS-CSV-001', 'heat_demand_actual',
+         'measured_at', 'measured_at', 'DATETIME', 'TIME_KEY', 'TIME_KEY', 95.00, 'SEED', 'Y'),
+        ('FCR-CSV001-TGT', 'MAP-CSV-001', 'DS-CSV-001', 'heat_demand_actual',
+         'heat_demand', 'heat_demand', 'NUMERIC', 'TARGET', 'TARGET', 90.00, 'SEED', 'Y'),
+        ('FCR-CSV001-SUP', 'MAP-CSV-001', 'DS-CSV-001', 'heat_demand_actual',
+         'supply_temp', 'supply_temp', 'NUMERIC', 'NUMERIC_INPUT', 'NUMERIC_INPUT', 80.00, 'SEED', 'Y'),
+        ('FCR-CSV002-AREA', 'MAP-CSV-002', 'DS-CSV-002', 'weather_observation',
+         'weather_area_id', 'weather_area_id', 'STRING', 'ENTITY_KEY', 'ENTITY_KEY', 95.00, 'SEED', 'Y'),
+        ('FCR-CSV002-TIME', 'MAP-CSV-002', 'DS-CSV-002', 'weather_observation',
+         'measured_at', 'measured_at', 'DATETIME', 'TIME_KEY', 'TIME_KEY', 95.00, 'SEED', 'Y'),
+        ('FCR-CSV002-TEMP', 'MAP-CSV-002', 'DS-CSV-002', 'weather_observation',
+         'temperature', 'temperature', 'NUMERIC', 'NUMERIC_INPUT', 'NUMERIC_INPUT', 85.00, 'SEED', 'Y'),
+        ('FCR-CSV002-HUM', 'MAP-CSV-002', 'DS-CSV-002', 'weather_observation',
+         'humidity', 'humidity', 'NUMERIC', 'NUMERIC_INPUT', 'NUMERIC_INPUT', 85.00, 'SEED', 'Y'),
+        ('FCR-CSV002-RAIN', 'MAP-CSV-002', 'DS-CSV-002', 'weather_observation',
+         'rainfall', 'rainfall', 'NUMERIC', 'NUMERIC_INPUT', 'NUMERIC_INPUT', 85.00, 'SEED', 'Y'),
+        ('FCR-CSV002-WIND', 'MAP-CSV-002', 'DS-CSV-002', 'weather_observation',
+         'wind_speed', 'wind_speed', 'NUMERIC', 'NUMERIC_INPUT', 'NUMERIC_INPUT', 85.00, 'SEED', 'Y'),
+        ('FCR-CSV002-DTYPE', 'MAP-CSV-002', 'DS-CSV-002', 'weather_observation',
+         'data_type', 'data_type', 'STRING', 'CATEGORICAL_INPUT', 'CATEGORICAL_INPUT', 75.00, 'SEED', 'Y')
+        ON CONFLICT (role_id) DO NOTHING;
+        """,
+    ),
 ]
 
 

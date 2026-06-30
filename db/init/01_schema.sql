@@ -70,6 +70,37 @@ CREATE TABLE IF NOT EXISTS tb_data_mapping (
     updated_at TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS tb_feature_column_role (
+    role_id VARCHAR(50) PRIMARY KEY,
+    mapping_id VARCHAR(50) REFERENCES tb_data_mapping(mapping_id),
+    data_source_id VARCHAR(50) REFERENCES tb_data_source(data_source_id),
+    source_table VARCHAR(100),
+    target_table VARCHAR(100),
+    source_column VARCHAR(100) NOT NULL,
+    target_column VARCHAR(100),
+    data_type VARCHAR(50),
+    column_role VARCHAR(50) NOT NULL,
+    inferred_role VARCHAR(50),
+    inference_confidence NUMERIC(5,2),
+    role_source VARCHAR(20) NOT NULL DEFAULT 'MANUAL',
+    description TEXT,
+    active_yn CHAR(1) NOT NULL DEFAULT 'Y',
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS ux_feature_column_role_mapping_source
+    ON tb_feature_column_role(mapping_id, source_column)
+    WHERE mapping_id IS NOT NULL AND active_yn = 'Y';
+
+CREATE INDEX IF NOT EXISTS ix_feature_column_role_mapping
+    ON tb_feature_column_role(mapping_id)
+    WHERE active_yn = 'Y';
+
+CREATE INDEX IF NOT EXISTS ix_feature_column_role_target_table
+    ON tb_feature_column_role(target_table)
+    WHERE active_yn = 'Y';
+
 CREATE TABLE IF NOT EXISTS tb_data_quality_run (
     run_id VARCHAR(80) PRIMARY KEY,
     source_id VARCHAR(50),

@@ -163,13 +163,13 @@ flowchart LR
 
 | 항목 | 내용 |
 |------|------|
-| **화면 목적** | 원천 컬럼과 표준 스키마(대상 테이블) 간 매핑 규칙 관리 |
-| **주요 입력값** | 데이터 소스, 매핑명, 대상 테이블(기본 `heat_demand_actual`), 컬럼 매핑(원천→표준) |
-| **주요 버튼** | **신규 매핑**, **수정**, **검증**, **미리보기**, 모달 내 **스키마 탐색**, **+ 컬럼 행 추가**, **저장** |
-| **버튼 클릭 시 동작** | 스키마 탐색→소스 필드 목록 조회 후 매핑 행 자동 추가. 검증→유효성 결과 토스트. 미리보기→변환 결과 테이블 모달 |
-| **호출 API** | `GET /mappings`, `GET /data-sources`(소스 선택용), `POST/PUT /mappings`, `POST /mappings/{id}/validate`, `POST /mappings/{id}/preview`, `GET /data-sources/{id}/discover-schema` |
-| **결과 확인 위치** | 목록(컬럼 수·상태), 검증 토스트, 미리보기 모달 |
-| **주의할 점** | 매핑 저장 시 source/target 모두 채워진 행만 전송. 스키마 탐색은 데이터 소스 연결 가능 상태여야 함 |
+| **화면 목적** | 원천 컬럼과 표준 스키마(대상 테이블) 간 매핑 규칙 및 **Column Role(컬럼 역할)** 관리 |
+| **주요 입력값** | 데이터 소스, 매핑명, 대상 테이블(기본 `heat_demand_actual`), 컬럼 매핑(원천→표준), 컬럼 역할(드롭다운) |
+| **주요 버튼** | **신규 매핑**, **수정**, **검증**, **미리보기**, 모달 내 **스키마 탐색**, **추천 역할 적용**, **역할 검증**, **컬럼 역할 저장**, **매핑 저장** |
+| **버튼 클릭 시 동작** | 스키마 탐색→소스 필드 목록 조회 후 매핑 행 자동 추가. 추천 역할 적용→자동 추론 결과를 화면에 반영(저장 전). 컬럼 역할 저장→`PUT /feature-column-roles`. Recipe 준비도 카드 표시 |
+| **호출 API** | `GET /mappings`, `GET /feature-column-role-codes`, `GET /feature-column-roles`, `POST /feature-column-roles/infer`, `POST /feature-column-roles/validate`, `PUT /feature-column-roles`, `POST/PUT /mappings`, `POST /mappings/{id}/validate`, `POST /mappings/{id}/preview`, `GET /data-sources/{id}/discover-schema` |
+| **결과 확인 위치** | 목록(컬럼 수·상태), 검증 토스트, 미리보기 모달, Column Role 검증·Recipe 준비도 패널 |
+| **주의할 점** | **자동 추론은 제안**이며 저장해야 확정됨. Column Role은 **현재 Feature Build/학습/예측에 직접 영향 없음** (향후 Recipe Builder 전제). TIME_KEY는 1개만 허용 |
 | **선행 작업** | 데이터 소스 등록 |
 | **후속 작업** | 적재 실행, 품질 점검 |
 

@@ -87,6 +87,40 @@ class FeatureSetCreate(BaseModel):
 class FeatureSetLegacyReplaceRequest(BaseModel):
     dry_run: bool = True
 
+
+class FeatureColumnRoleColumnInput(BaseModel):
+    source_column: str
+    target_column: str | None = None
+    data_type: str | None = None
+    cardinality: int | None = None
+
+
+class FeatureColumnRoleItemInput(BaseModel):
+    source_column: str
+    target_column: str | None = None
+    data_type: str | None = None
+    column_role: str
+    description: str | None = None
+
+
+class FeatureColumnRoleInferRequest(BaseModel):
+    mapping_id: str | None = None
+    columns: list[FeatureColumnRoleColumnInput]
+    target_table: str | None = None
+    source_table: str | None = None
+
+
+class FeatureColumnRoleValidateRequest(BaseModel):
+    mapping_id: str | None = None
+    roles: list[FeatureColumnRoleItemInput]
+    mapping_columns: list[FeatureColumnRoleColumnInput] | None = None
+
+
+class FeatureColumnRoleBulkUpdateRequest(BaseModel):
+    mapping_id: str
+    roles: list[FeatureColumnRoleItemInput]
+
+
 class TrainingConfigCreate(BaseModel):
     config_name: str
     feature_set_id: str

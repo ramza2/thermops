@@ -7,6 +7,7 @@ from app.api.v1 import (
     dashboard,
     data,
     feature,
+    feature_column_role,
     mapping,
     model,
     monitoring,
@@ -41,6 +42,7 @@ app.include_router(data.router, prefix=api_prefix)
 app.include_router(sample_external.router, prefix=api_prefix)
 app.include_router(mapping.router, prefix=api_prefix)
 app.include_router(feature.router, prefix=api_prefix)
+app.include_router(feature_column_role.router, prefix=api_prefix)
 app.include_router(training.router, prefix=api_prefix)
 app.include_router(model.router, prefix=api_prefix)
 app.include_router(prediction.router, prefix=api_prefix)

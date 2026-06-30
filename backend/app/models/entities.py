@@ -124,6 +124,26 @@ class DataMapping(Base):
     updated_at: Mapped[datetime | None] = mapped_column(DateTime)
 
 
+class FeatureColumnRole(Base):
+    __tablename__ = "tb_feature_column_role"
+    role_id: Mapped[str] = mapped_column(String(50), primary_key=True)
+    mapping_id: Mapped[str | None] = mapped_column(String(50))
+    data_source_id: Mapped[str | None] = mapped_column(String(50))
+    source_table: Mapped[str | None] = mapped_column(String(100))
+    target_table: Mapped[str | None] = mapped_column(String(100))
+    source_column: Mapped[str] = mapped_column(String(100))
+    target_column: Mapped[str | None] = mapped_column(String(100))
+    data_type: Mapped[str | None] = mapped_column(String(50))
+    column_role: Mapped[str] = mapped_column(String(50))
+    inferred_role: Mapped[str | None] = mapped_column(String(50))
+    inference_confidence: Mapped[float | None] = mapped_column(Numeric(5, 2))
+    role_source: Mapped[str] = mapped_column(String(20), default="MANUAL")
+    description: Mapped[str | None] = mapped_column(Text)
+    active_yn: Mapped[str] = mapped_column(String(1), default="Y")
+    created_at: Mapped[datetime] = mapped_column(DateTime)
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime)
+
+
 class DataQualityRun(Base):
     __tablename__ = "tb_data_quality_run"
     run_id: Mapped[str] = mapped_column(String(80), primary_key=True)

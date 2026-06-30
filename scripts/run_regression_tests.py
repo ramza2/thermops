@@ -167,6 +167,12 @@ def _build_registry() -> list[TestCase]:
             timeout_seconds=240,
         ),
         _python_test(
+            "test_feature_column_roles.py",
+            groups=["model", "full"],
+            description="Feature Column Role 관리 (R1)",
+            timeout_seconds=120,
+        ),
+        _python_test(
             "test_model_training.py",
             groups=["model", "full"],
             description="LightGBM 학습",

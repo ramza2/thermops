@@ -82,6 +82,8 @@ tb_feature (메타 등록)
 
 현재 단계에서는 **코드 기반 Registry 방식만** 지원합니다. `LAG(...)`, `MA(...)` 등 DSL 파서/실행 엔진은 없습니다.
 
+**향후 확장**: 범용 Feature Recipe Builder(컬럼 선택 + 연산 템플릿 + 미리보기) 1차 설계는 [`THERMOps_Feature_Recipe_Builder_1차_설계.md`](THERMOps_Feature_Recipe_Builder_1차_설계.md)를 참고한다. 현재는 CODE Registry + Catalog/Quality/Lineage 구조이며, DSL 자동 실행은 여전히 미지원이다.
+
 ### 5.2 Feature명 검증 API
 
 | 메서드 | 경로 | 설명 |

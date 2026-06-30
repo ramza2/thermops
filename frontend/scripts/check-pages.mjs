@@ -4,6 +4,7 @@ const BASE = "http://127.0.0.1:5173";
 const PATHS = [
   "/dashboard",
   "/data/sources",
+  "/data/mappings",
   "/features",
   "/feature-sets",
   "/feature-sets/FS-TPL-LAG-ROLL",
@@ -32,6 +33,10 @@ for (const path of PATHS) {
     await page.getByText("신규 Feature 사용 절차").first().waitFor({ state: "visible", timeout: 60000 });
     await page.locator("th", { hasText: "등록 유형" }).first().waitFor({ state: "visible", timeout: 30000 });
     await page.locator("th", { hasText: "계산식 메모" }).first().waitFor({ state: "visible", timeout: 30000 });
+  }
+  if (path === "/data/mappings") {
+    await page.getByText("Column Role").first().waitFor({ state: "visible", timeout: 30000 });
+    await page.getByText("컬럼 역할").first().waitFor({ state: "visible", timeout: 30000 });
   }
   if (path === "/feature-sets/FS-TPL-LAG-ROLL") {
     await page.waitForTimeout(2000);
