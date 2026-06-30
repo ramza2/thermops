@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, Eye, Play, Plus, Save, Trash2 } from "lucide-react";
 import { deleteApi, extractApiErrorMessage, fetchApi, postApi, putApi, PagedData } from "@/api/client";
+import { validateFeatureName } from "@/api/featureRegistration";
 import { Button } from "@/components/Button";
 import { DataTable } from "@/components/DataTable";
 import { Modal } from "@/components/Modal";
@@ -12,6 +13,11 @@ import { PageHeader } from "@/layouts/MainLayout";
 import { FeatureLineageSection } from "@/components/FeatureLineageSection";
 import { FeatureQualitySection } from "@/components/FeatureQualitySection";
 import type { FeatureBuildResult } from "@/types/featureRegistry";
+import type { FeatureNameValidation } from "@/types/featureRegistration";
+import {
+  registrationStatusClass,
+  registrationStatusLabel,
+} from "@/utils/featureRegistrationFormat";
 import {
   FeatureSet,
   parseFeatureSetDescription,
@@ -23,6 +29,19 @@ interface FeatureItem {
   feature_name: string;
   feature_group: string | null;
   status: string;
+  registration?: FeatureNameValidation;
+}
+
+function FeatureRegistrationBadge({ registration }: { registration?: FeatureNameValidation }) {
+  if (!registration) return <span className="text-xs text-slate-400">-</span>;
+  return (
+    <span
+      className={`inline-flex text-[11px] px-1.5 py-0.5 rounded border ${registrationStatusClass(registration.status)}`}
+      title={registration.message}
+    >
+      {registrationStatusLabel(registration.status)}
+    </span>
+  );
 }
 
 const SCOPE_OPTIONS = [
@@ -56,6 +75,10 @@ export default function FeatureSetDetailPage() {
   const [buildResult, setBuildResult] = useState<FeatureBuildResult | null>(null);
   const [allFeatures, setAllFeatures] = useState<FeatureItem[]>([]);
   const [selectedToAdd, setSelectedToAdd] = useState<string[]>([]);
+  const [featureStatusMap, setFeatureStatusMap] = useState<Record<string, FeatureNameValidation>>({});
+  const [addWarnings, setAddWarnings] = useState<string[]>([]);
+
+  const isTplSet = Boolean(id?.startsWith("FS-TPL-"));
 
   const [form, setForm] = useState({
     feature_set_name: "",
@@ -92,6 +115,33 @@ export default function FeatureSetDetailPage() {
 
   useEffect(() => { load(); }, [id]);
 
+  useEffect(() => {
+    if (!form.features.length) {
+      setFeatureStatusMap({});
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      const entries = await Promise.all(
+        form.features.map(async (name) => {
+          try {
+            const v = await validateFeatureName(name);
+            return [name, v] as const;
+          } catch {
+            return [name, null] as const;
+          }
+        }),
+      );
+      if (cancelled) return;
+      const map: Record<string, FeatureNameValidation> = {};
+      for (const [name, v] of entries) {
+        if (v) map[name] = v;
+      }
+      setFeatureStatusMap(map);
+    })();
+    return () => { cancelled = true; };
+  }, [form.features]);
+
   const openAddFeature = async () => {
     try {
       const res = await fetchApi<PagedData<FeatureItem>>("/features", { page: 1, size: 100 });
@@ -104,11 +154,43 @@ export default function FeatureSetDetailPage() {
   };
 
   const handleAddFeatures = () => {
+    if (isTplSet) {
+      const blocked = selectedToAdd.filter((name) => {
+        const reg = allFeatures.find((f) => f.feature_name === name)?.registration;
+        return !reg?.computable;
+      });
+      if (blocked.length) {
+        showToast(
+          "warning",
+          `공식 TPL Feature Set에는 계산 가능한 Feature만 추가할 수 있습니다: ${blocked.join(", ")}`,
+        );
+        return;
+      }
+    }
     const merged = Array.from(new Set([...form.features, ...selectedToAdd]));
     setForm({ ...form, features: merged });
     setAddFeatureOpen(false);
+    setAddWarnings([]);
     showToast("success", "Feature가 추가되었습니다.");
   };
+
+  useEffect(() => {
+    if (!addFeatureOpen || !selectedToAdd.length) {
+      setAddWarnings([]);
+      return;
+    }
+    const warnings: string[] = [];
+    for (const name of selectedToAdd) {
+      const reg = allFeatures.find((f) => f.feature_name === name)?.registration;
+      if (!reg) continue;
+      if (reg.status === "LEGACY_ALIAS") {
+        warnings.push(`${name}: 레거시 별칭 — ${reg.recommended_name || "공식명"} 사용을 권장합니다.`);
+      } else if (reg.status === "CATALOG_ONLY") {
+        warnings.push(`${name}: 카탈로그 전용 — Feature 생성 시 값이 생성되지 않을 수 있습니다.`);
+      }
+    }
+    setAddWarnings(warnings);
+  }, [addFeatureOpen, selectedToAdd, allFeatures]);
 
   const handleRemoveFeature = (name: string) => {
     setForm({ ...form, features: form.features.filter((f) => f !== name) });
@@ -315,6 +397,13 @@ export default function FeatureSetDetailPage() {
           columns={[
             { key: "name", header: "Feature명" },
             {
+              key: "registration",
+              header: "등록 유형",
+              render: (r) => (
+                <FeatureRegistrationBadge registration={featureStatusMap[String(r.name)]} />
+              ),
+            },
+            {
               key: "actions",
               header: "작업",
               render: (r) => (
@@ -350,6 +439,11 @@ export default function FeatureSetDetailPage() {
         }
       >
         <div className="max-h-64 overflow-y-auto space-y-2">
+          {addWarnings.length > 0 && (
+            <div className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded p-2 mb-2">
+              {addWarnings.map((w) => <div key={w}>{w}</div>)}
+            </div>
+          )}
           {allFeatures.map((f) => (
             <label key={f.feature_id} className="flex items-center gap-2 text-sm py-1 border-b border-slate-100">
               <input
@@ -362,6 +456,7 @@ export default function FeatureSetDetailPage() {
                 }}
               />
               <span className="font-medium">{f.feature_name}</span>
+              <FeatureRegistrationBadge registration={f.registration} />
               <span className="text-slate-400 text-xs">{f.feature_group || "-"}</span>
             </label>
           ))}

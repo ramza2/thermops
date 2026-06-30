@@ -30,6 +30,7 @@ from app.services.feature_quality_service import (
     list_feature_quality_runs,
     run_feature_quality_check,
 )
+from app.services.feature_registration_service import classify_feature_name, validate_feature_name
 
 router = APIRouter(tags=["Feature"])
 
@@ -63,7 +64,26 @@ async def list_features(
         for r in rows
     ]
     start = (page - 1) * size
-    return paged(items[start:start + size], page, size, len(items))
+    page_items = items[start:start + size]
+    enriched = []
+    for f in page_items:
+        enriched.append({
+            **f,
+            "registration": classify_feature_name(f["feature_name"], catalog_registered=True),
+        })
+    return paged(enriched, page, size, len(items))
+
+
+@router.get("/features/validate-name")
+async def validate_feature_name_api(
+    feature_name: str = Query(..., min_length=1),
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        result = await validate_feature_name(db, feature_name)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return ok(result)
 
 
 @router.post("/features")

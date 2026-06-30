@@ -269,16 +269,18 @@ curl -X POST "http://localhost:8000/api/v1/feature-build-jobs?feature_set_id=FS-
 
 **Feature 메타데이터·명칭 정책**
 
-- Feature 등록(`/features`)은 **카탈로그**이다. 등록만으로 값이 생성되거나 학습에 반영되지 않는다.
-- `calc_expression`(계산식 메모)은 **설명용**이며 `LAG(...)`, `MA(...)` 등은 현재 **실행되지 않는다**.
-- 학습/예측에 쓰이려면: (1) Feature Set 포함 → (2) Feature 생성 → (3) 학습 설정의 `feature_set_id` 일치.
+- Feature 등록(`/features`)은 **카탈로그(1단계)** 이다. 등록만으로 값이 생성되거나 학습에 반영되지 않는다.
+- **Registry 등록 Feature**(유형 A)만 Feature 생성 시 값이 만들어진다. **Catalog-only**(유형 B)는 경고와 함께 등록 가능하나 계산 로직 추가 전까지 사용 불가.
+- **레거시 별칭**(유형 C: `hdd`, `rolling_24h_avg` 등)은 공식명으로 대체한다. 검증 API: `GET /features/validate-name`.
+- `calc_expression`(계산식 메모)은 **설명용**이며 `LAG(...)`, `MA(...)` 등은 현재 **실행되지 않는다** (코드 기반 Registry만 지원).
+- 학습/예측에 쓰이려면: (1) 메타 등록 → (2) `ml/features.py` + Registry → (3) Feature Set 포함 → (4) Feature 생성 → (5) 품질 검증 → (6) 학습 설정.
 - 공식 Feature명: `demand_lag_24h`, `demand_lag_168h`, `demand_ma_24h`, `demand_ma_168h`, `temperature_diff_24h`, `heating_degree_days`, `cooling_degree_days`.
 - 상세: [`docs/md/THERMOps_Feature_명칭_및_계산식_정책.md`](docs/md/THERMOps_Feature_명칭_및_계산식_정책.md)
 
 **Feature Registry·Lineage UI**
 
-- `/features`: Registry 요약 컬럼, **상세** 모달에서 입력 테이블·Lookback·누수 방지 등 확인
-- `/feature-sets/:id`: **최근 Feature Build 이력** 선택 + **Feature Lineage** + **Feature 품질 검증** 섹션
+- `/features`: **등록 유형** 뱃지, **신규 Feature 사용 절차** 안내, Registry 요약, **상세** 모달에서 입력 테이블·Lookback·누수 방지 등 확인
+- `/feature-sets/:id`: 포함 Feature **등록 유형** 뱃지, **최근 Feature Build 이력** 선택 + **Feature Lineage** + **Feature 품질 검증** 섹션
 - Lineage 없음 → Feature Set 상세에서 **Feature 생성** 먼저 실행
 
 **Feature 품질 검증** (`check_type=FEATURE_QUALITY`)
@@ -293,6 +295,7 @@ python scripts/test_feature_metadata_consistency.py
 python scripts/test_feature_lineage.py
 python scripts/test_feature_build_jobs.py
 python scripts/test_feature_quality.py
+python scripts/test_feature_registration_validation.py
 ```
 
 ### 모델 학습 테스트 (P0-4-1)

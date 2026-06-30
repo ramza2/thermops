@@ -27,6 +27,7 @@ from app.models.entities import (
     WeatherObservation,
 )
 from app.services.feature_lineage_service import save_feature_lineage
+from app.services.feature_registration_service import analyze_feature_set_coverage
 
 MIN_HISTORY_HOURS = 168
 
@@ -141,8 +142,8 @@ async def get_feature_set(db: AsyncSession, feature_set_id: str) -> FeatureSet:
 
 async def build_feature_dataframe(
     db: AsyncSession, params: FeatureBuildParams, feature_names: list[str] | None = None
-) -> tuple[pd.DataFrame, list[str], list[str]]:
-    """Feature DataFrame과 warnings/errors 반환."""
+) -> tuple[pd.DataFrame, list[str], list[str], dict[str, Any]]:
+    """Feature DataFrame, warnings/errors, 커버리지 분석 반환."""
     warnings: list[str] = []
     errors: list[str] = []
 
@@ -150,7 +151,7 @@ async def build_feature_dataframe(
     heat_df = await _fetch_heat(db, params.site_id, params.start_at, params.end_at)
     if heat_df.empty:
         errors.append("열수요 실적 데이터가 없습니다.")
-        return pd.DataFrame(), warnings, errors
+        return pd.DataFrame(), warnings, errors, {}
 
     area_ids = list({site_map.get(s) for s in heat_df["site_id"].unique() if site_map.get(s)})
     missing_map = [s for s in heat_df["site_id"].unique() if s not in site_map]
@@ -170,12 +171,27 @@ async def build_feature_dataframe(
         if span < MIN_HISTORY_HOURS:
             warnings.append(f"{site_id}: 이력 {int(span)}h — lag_168h 일부 결측 가능")
 
+    coverage: dict[str, Any] = {}
     if feature_names:
-        missing_feats = [f for f in feature_names if f not in full_df.columns]
+        coverage = analyze_feature_set_coverage(feature_names, list(full_df.columns))
+        missing_feats = coverage.get("missing_features") or []
         if missing_feats:
-            warnings.append(f"미계산 Feature: {', '.join(missing_feats[:5])}")
+            preview = ", ".join(missing_feats[:5])
+            if len(missing_feats) > 5:
+                preview += f" 외 {len(missing_feats) - 5}건"
+            warnings.append(f"미계산 Feature: {preview}")
+            catalog_only = coverage.get("catalog_only_features") or []
+            if catalog_only:
+                warnings.append(
+                    f"카탈로그 전용(계산 로직 없음): {', '.join(catalog_only[:5])}"
+                )
+            legacy = coverage.get("legacy_alias_features") or []
+            if legacy:
+                warnings.append(
+                    f"레거시 별칭(공식명 사용 권장): {', '.join(legacy[:5])}"
+                )
 
-    return full_df, warnings, errors
+    return full_df, warnings, errors, coverage
 
 
 async def preview_features(
@@ -193,7 +209,7 @@ async def preview_features(
         start_at=start_at,
         end_at=end_at,
     )
-    df, warnings, errors = await build_feature_dataframe(db, params, fs.features or [])
+    df, warnings, errors, _coverage = await build_feature_dataframe(db, params, fs.features or [])
     if errors:
         raise ValueError("; ".join(errors))
 
@@ -237,7 +253,7 @@ async def run_feature_build(db: AsyncSession, params: FeatureBuildParams) -> dic
     await db.flush()
 
     try:
-        df, warnings, errors = await build_feature_dataframe(db, params, feature_names)
+        df, warnings, errors, coverage = await build_feature_dataframe(db, params, feature_names)
         if errors:
             raise ValueError("; ".join(errors))
 
@@ -327,6 +343,7 @@ async def run_feature_build(db: AsyncSession, params: FeatureBuildParams) -> dic
             "feature_names": feature_names,
             "warnings": warnings,
             "errors": errors,
+            **coverage,
         }
 
         run.run_status = "SUCCESS" if not warnings else "WARNING"

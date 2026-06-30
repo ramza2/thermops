@@ -70,6 +70,35 @@ tb_feature (메타 등록)
 4. Feature 생성 API 재실행
 5. 학습 설정이 해당 Feature Set을 참조하는지 확인
 
+### 5.1 신규 Feature 등록 유형 (Registry 기준)
+
+| 유형 | 설명 | Feature Set 포함 | Feature 생성 | 학습/예측 |
+|------|------|------------------|--------------|-----------|
+| **A. Registry 등록 Feature** | `ml/feature_registry.py` + `ml/features.py`에 계산 로직 존재 | 가능 | `feature_json`에 저장 가능 | 사용 가능 |
+| **B. Catalog-only Feature** | `tb_feature`에만 등록, Registry·계산 로직 없음 | 가능(경고) | 값 미생성 가능 | 바로 사용 불가 |
+| **C. Deprecated/Legacy** | `hdd`, `lag_24h_demand`, `rolling_24h_avg` 등 구 명칭 | TPL 금지 | 공식명으로 대체 필요 | 신규 Set 비권장 |
+
+**중요**: Feature 등록 화면(`/features`)에서 신규 Feature를 등록해도 **자동 계산되지 않습니다**. 학습/예측에 사용 가능하려면 코드 기반 Registry에 등록되어 있고 `build_feature_frame()`에서 값을 만들어야 합니다.
+
+현재 단계에서는 **코드 기반 Registry 방식만** 지원합니다. `LAG(...)`, `MA(...)` 등 DSL 파서/실행 엔진은 없습니다.
+
+### 5.2 Feature명 검증 API
+
+| 메서드 | 경로 | 설명 |
+|--------|------|------|
+| GET | `/api/v1/features/validate-name?feature_name=...` | Registry·카탈로그·레거시·계산 가능 여부 반환 |
+| GET | `/api/v1/features` | 목록 각 행에 `registration` 객체 포함 (동적 계산, DB migration 없음) |
+
+`status` 예: `COMPUTABLE`, `CATALOG_ONLY`, `LEGACY_ALIAS`, `DUPLICATE`, `REGISTERED_IN_REGISTRY`
+
+### 5.3 Feature Build missing Feature 요약
+
+Feature Set에 포함되었으나 `build_feature_frame()` 결과에 없는 Feature는 `result_summary`에 기록됩니다.
+
+- `missing_features`, `catalog_only_features`, `legacy_alias_features`
+- 공식 TPL(`FS-TPL-*`)은 전 Feature가 계산 가능하므로 `SUCCESS` 유지
+- 카탈로그 전용 Feature 포함 시 `WARNING` 가능 (계산 가능 Feature만 `feature_json` 저장)
+
 ## 6. 저장 구조
 
 | 저장소 | 키/컬럼 | 설명 |
@@ -122,6 +151,7 @@ tb_feature (메타 등록)
 |--------|------|
 | GET | `/api/v1/feature-registry` |
 | GET | `/api/v1/feature-registry/{feature_name}` |
+| GET | `/api/v1/features/validate-name?feature_name=...` |
 | GET | `/api/v1/feature-lineage?dataset_version_id=...` |
 | GET | `/api/v1/feature-build-jobs?feature_set_id=...&limit=10` |
 | GET | `/api/v1/feature-build-jobs/{job_id}` |
@@ -139,8 +169,8 @@ tb_feature (메타 등록)
 
 | 화면 | 경로 | 내용 |
 |------|------|------|
-| Feature 목록 | `/features` | Registry 요약 컬럼, **상세** 모달에서 Registry 메타 |
-| Feature Set 상세 | `/feature-sets/:id` | **Feature Build 이력** · **Lineage** · **Feature 품질 검증** |
+| Feature 목록 | `/features` | **등록 유형** 뱃지, **신규 Feature 사용 절차** 안내, Registry 요약, **상세** 모달 |
+| Feature Set 상세 | `/feature-sets/:id` | 포함 Feature **등록 유형** 뱃지, **Feature Build 이력** · **Lineage** · **Feature 품질 검증** |
 
 Lineage 조회 우선순위: 최근 Build Job 목록 → Feature 생성 직후 job → dataset-range fallback → 고급 수동 입력.
 

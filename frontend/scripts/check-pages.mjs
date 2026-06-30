@@ -1,6 +1,6 @@
 import { chromium } from "playwright";
 
-const BASE = "http://localhost:5173";
+const BASE = "http://127.0.0.1:5173";
 const PATHS = [
   "/dashboard",
   "/data/sources",
@@ -25,9 +25,14 @@ page.on("pageerror", (e) => errors.push(`${page.url()}: ${e.message}`));
 
 for (const path of PATHS) {
   await page.goto(`${BASE}${path}`, { waitUntil: "networkidle", timeout: 60000 });
-  await page.waitForTimeout(1500);
+  await page.waitForTimeout(path === "/features" ? 4000 : 1500);
   const h1 = await page.locator("h1").first().innerText().catch(() => "");
   console.log(`OK ${path} -> ${h1.slice(0, 30)}`);
+  if (path === "/features") {
+    await page.getByText("신규 Feature 사용 절차").first().waitFor({ state: "visible", timeout: 60000 });
+    await page.locator("th", { hasText: "등록 유형" }).first().waitFor({ state: "visible", timeout: 30000 });
+    await page.locator("th", { hasText: "계산식 메모" }).first().waitFor({ state: "visible", timeout: 30000 });
+  }
   if (path === "/feature-sets/FS-TPL-LAG-ROLL") {
     const lineage = await page.getByText("Feature Lineage").count();
     const buildHistory = await page.getByText("최근 Feature Build 이력").count();

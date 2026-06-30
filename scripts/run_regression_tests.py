@@ -155,6 +155,12 @@ def _build_registry() -> list[TestCase]:
             timeout_seconds=180,
         ),
         _python_test(
+            "test_feature_registration_validation.py",
+            groups=["model", "full"],
+            description="Feature 등록·Registry 검증",
+            timeout_seconds=240,
+        ),
+        _python_test(
             "test_model_training.py",
             groups=["model", "full"],
             description="LightGBM 학습",

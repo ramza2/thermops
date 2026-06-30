@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Eye, Plus, Trash2 } from "lucide-react";
 import { deleteApi, fetchApi, postApi, PagedData } from "@/api/client";
+import { validateFeatureName } from "@/api/featureRegistration";
 import { getFeatureRegistry } from "@/api/featureRegistry";
 import { Button } from "@/components/Button";
 import { DataTable } from "@/components/DataTable";
@@ -11,8 +12,16 @@ import { SelectInput, TextInput } from "@/components/SearchPanel";
 import { useToast } from "@/hooks/useToast";
 import { PageHeader } from "@/layouts/MainLayout";
 import { CalcMemoText, FeatureRegistryPanel } from "@/components/FeatureRegistryPanel";
+import type { FeatureNameValidation } from "@/types/featureRegistration";
 import type { FeatureRegistryItem } from "@/types/featureRegistry";
 import { formatRegistrySummary } from "@/utils/featureRegistryFormat";
+import {
+  FEATURE_USAGE_STEPS,
+  registrationStatusClass,
+  registrationStatusLabel,
+  validationBlocksRegistration,
+  validationWarnsRegistration,
+} from "@/utils/featureRegistrationFormat";
 
 interface Feature {
   feature_id: string;
@@ -22,17 +31,65 @@ interface Feature {
   calc_expression: string | null;
   status: string;
   description: string | null;
+  registration?: FeatureNameValidation;
 }
 
 const EMPTY = { feature_name: "", feature_group: "", feature_type: "NUMERIC", calc_expression: "", description: "" };
 
-const CALC_MEMO_HELP = `현재 계산식은 설명용 메타데이터입니다.
+const CALC_MEMO_HELP = `계산식 메모는 설명용입니다. 입력한 LAG(...) 식이 자동 실행되지는 않습니다.
+현재 계산식은 설명용 메타데이터입니다.
 LAG(heat_demand, 24)와 같이 입력해도 자동 계산되지는 않습니다.
 실제 계산에 사용하려면 Feature Set 포함과 별도 계산 로직 구현이 필요합니다.`;
 
 const REGISTER_INFO = `Feature 등록은 카탈로그 등록 단계입니다.
 모델 학습/예측에 사용하려면 Feature Set에 포함하고 Feature 생성 작업을 실행해야 합니다.
 신규 파생 Feature는 현재 계산 로직이 코드에 구현되어 있어야 값이 생성됩니다.`;
+
+function RegistrationBadge({ registration }: { registration?: FeatureNameValidation }) {
+  if (!registration) return <span className="text-xs text-slate-400">-</span>;
+  return (
+    <span
+      className={`inline-flex text-[11px] px-1.5 py-0.5 rounded border ${registrationStatusClass(registration.status)}`}
+      title={registration.message}
+    >
+      {registrationStatusLabel(registration.status)}
+    </span>
+  );
+}
+
+function ValidationResultPanel({ validation, validating }: { validation: FeatureNameValidation | null; validating: boolean }) {
+  if (validating) {
+    return <p className="text-xs text-slate-400">Feature명 검증 중...</p>;
+  }
+  if (!validation) return null;
+  const tone =
+    validation.status === "COMPUTABLE"
+      ? "text-emerald-800 bg-emerald-50 border-emerald-200"
+      : validation.status === "LEGACY_ALIAS" || validation.status === "DUPLICATE"
+        ? "text-red-800 bg-red-50 border-red-200"
+        : "text-amber-800 bg-amber-50 border-amber-200";
+  return (
+    <div className={`text-xs border rounded-lg p-3 ${tone}`}>
+      <div className="flex items-center gap-2 mb-1">
+        <RegistrationBadge registration={validation} />
+        {validation.recommended_name && validation.status === "LEGACY_ALIAS" && (
+          <span className="font-medium">권장: {validation.recommended_name}</span>
+        )}
+      </div>
+      <p>{validation.message}</p>
+      {validation.status === "COMPUTABLE" && (
+        <p className="mt-1 text-emerald-700">
+          이 Feature는 코드 기반 Registry에 등록되어 있어 Feature Set에 포함 후 Feature 생성에 사용할 수 있습니다.
+        </p>
+      )}
+      {validation.status === "CATALOG_ONLY" && !validation.catalog_registered && (
+        <p className="mt-1">
+          이 Feature는 카탈로그에만 등록됩니다. 현재 계산 로직이 없으므로 Feature 생성 결과에 값이 생성되지 않을 수 있습니다.
+        </p>
+      )}
+    </div>
+  );
+}
 
 export default function FeaturesPage() {
   const { showToast } = useToast();
@@ -48,6 +105,8 @@ export default function FeaturesPage() {
   const [saving, setSaving] = useState(false);
   const [registryMap, setRegistryMap] = useState<Record<string, FeatureRegistryItem>>({});
   const [registryWarning, setRegistryWarning] = useState("");
+  const [nameValidation, setNameValidation] = useState<FeatureNameValidation | null>(null);
+  const [validatingName, setValidatingName] = useState(false);
 
   const loadRegistry = async () => {
     try {
@@ -77,25 +136,59 @@ export default function FeaturesPage() {
     }
   };
 
+  const runNameValidation = useCallback(async (name: string) => {
+    const trimmed = name.trim();
+    if (!trimmed) {
+      setNameValidation(null);
+      return;
+    }
+    setValidatingName(true);
+    try {
+      const result = await validateFeatureName(trimmed);
+      setNameValidation(result);
+    } catch {
+      setNameValidation(null);
+    } finally {
+      setValidatingName(false);
+    }
+  }, []);
+
   useEffect(() => {
     load(page);
     loadRegistry();
   }, [page]);
+
+  useEffect(() => {
+    if (!createOpen) {
+      setNameValidation(null);
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      void runNameValidation(form.feature_name);
+    }, 400);
+    return () => window.clearTimeout(timer);
+  }, [createOpen, form.feature_name, runNameValidation]);
 
   const detailRegistry = useMemo(
     () => (detailTarget ? registryMap[detailTarget.feature_name] : undefined),
     [detailTarget, registryMap],
   );
 
+  const createBlocked = validationBlocksRegistration(nameValidation);
+
   const handleCreate = async () => {
     if (!form.feature_name.trim()) {
       showToast("warning", "Feature명을 입력하세요.");
       return;
     }
+    if (createBlocked) {
+      showToast("warning", nameValidation?.message || "등록할 수 없는 Feature명입니다.");
+      return;
+    }
     setSaving(true);
     try {
       await postApi("/features", {
-        feature_name: form.feature_name,
+        feature_name: form.feature_name.trim(),
         feature_group: form.feature_group || null,
         feature_type: form.feature_type,
         calc_expression: form.calc_expression || null,
@@ -104,6 +197,7 @@ export default function FeaturesPage() {
       showToast("success", "Feature가 등록되었습니다.");
       setCreateOpen(false);
       setForm(EMPTY);
+      setNameValidation(null);
       load(1);
       setPage(1);
     } catch {
@@ -136,6 +230,12 @@ export default function FeaturesPage() {
         actions={<Button icon={<Plus className="w-4 h-4" />} onClick={() => setCreateOpen(true)}>신규 Feature</Button>}
       />
 
+      <div className="mb-4 text-xs text-slate-600 bg-blue-50 border border-blue-200 rounded-lg p-3 whitespace-pre-line">
+        <strong className="text-slate-800">신규 Feature 사용 절차</strong>
+        {"\n"}
+        {FEATURE_USAGE_STEPS}
+      </div>
+
       <div className="mb-4 text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded-lg p-3 whitespace-pre-line">
         {REGISTER_INFO}
       </div>
@@ -152,6 +252,13 @@ export default function FeaturesPage() {
           { key: "feature_id", header: "ID", width: "120px" },
           { key: "feature_name", header: "Feature명" },
           { key: "feature_group", header: "그룹", render: (r) => String(r.feature_group || "-") },
+          {
+            key: "registration",
+            header: "등록 유형",
+            render: (r) => (
+              <RegistrationBadge registration={r.registration as FeatureNameValidation | undefined} />
+            ),
+          },
           { key: "feature_type", header: "유형" },
           {
             key: "calc_expression",
@@ -218,6 +325,8 @@ export default function FeaturesPage() {
             <dl className="grid grid-cols-2 gap-2 text-sm">
               <dt className="text-slate-500 text-xs">ID</dt>
               <dd className="font-mono text-xs">{detailTarget.feature_id}</dd>
+              <dt className="text-slate-500 text-xs">등록 유형</dt>
+              <dd><RegistrationBadge registration={detailTarget.registration} /></dd>
               <dt className="text-slate-500 text-xs">상태</dt>
               <dd><StatusBadge status={detailTarget.status} /></dd>
               <dt className="text-slate-500 text-xs">카탈로그 설명</dt>
@@ -238,16 +347,31 @@ export default function FeaturesPage() {
         )}
       </Modal>
 
-      <Modal open={createOpen} title="Feature 등록" onClose={() => setCreateOpen(false)}
-        footer={<>
-          <Button variant="secondary" onClick={() => setCreateOpen(false)}>취소</Button>
-          <Button onClick={handleCreate} disabled={saving}>{saving ? "저장 중..." : "저장"}</Button>
-        </>}>
+      <Modal
+        open={createOpen}
+        title="Feature 등록"
+        onClose={() => setCreateOpen(false)}
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setCreateOpen(false)}>취소</Button>
+            <Button onClick={handleCreate} disabled={saving || createBlocked}>
+              {saving ? "저장 중..." : "저장"}
+            </Button>
+          </>
+        }
+      >
         <div className="space-y-3">
           <div>
             <label className="block text-xs text-slate-500 mb-1">Feature명</label>
-            <TextInput value={form.feature_name} onChange={(v) => setForm({ ...form, feature_name: v })} placeholder="demand_lag_24h" />
+            <TextInput
+              value={form.feature_name}
+              onChange={(v) => setForm({ ...form, feature_name: v })}
+              placeholder="demand_lag_24h"
+            />
             <p className="text-[11px] text-slate-400 mt-1">공식 명칭은 docs/md/THERMOps_Feature_명칭_및_계산식_정책.md 참고</p>
+            <div className="mt-2">
+              <ValidationResultPanel validation={nameValidation} validating={validatingName} />
+            </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -261,7 +385,7 @@ export default function FeaturesPage() {
             </div>
           </div>
           <div>
-            <label className="block text-xs text-slate-500 mb-1">계산식 메모</label>
+            <label className="block text-xs text-slate-500 mb-1">계산식 메모 <span className="text-amber-600">[설명용]</span></label>
             <TextInput value={form.calc_expression} onChange={(v) => setForm({ ...form, calc_expression: v })} placeholder="예: 24시간 전 열수요" />
             <p className="text-[11px] text-slate-500 mt-1 whitespace-pre-line">{CALC_MEMO_HELP}</p>
           </div>
@@ -269,7 +393,12 @@ export default function FeaturesPage() {
             <label className="block text-xs text-slate-500 mb-1">설명</label>
             <TextInput value={form.description} onChange={(v) => setForm({ ...form, description: v })} />
           </div>
-          <div className="text-xs text-slate-600 bg-amber-50 border border-amber-100 rounded p-3 whitespace-pre-line">
+          {validationWarnsRegistration(nameValidation) && (
+            <div className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded p-3">
+              등록은 가능하지만 계산 로직이 없어 Feature 생성 시 값이 만들어지지 않을 수 있습니다.
+            </div>
+          )}
+          <div className="text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded p-3 whitespace-pre-line">
             {REGISTER_INFO}
           </div>
         </div>

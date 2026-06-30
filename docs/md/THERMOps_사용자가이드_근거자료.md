@@ -199,13 +199,15 @@ flowchart LR
 
 | 항목 | 내용 |
 |------|------|
-| **화면 목적** | 모델 학습에 사용할 Feature **메타데이터(카탈로그)** 정의·관리 |
+| **화면 목적** | 모델 학습에 사용할 Feature **메타데이터(카탈로그)** 정의·관리. **등록만으로는 값이 생성되지 않음** |
+| **등록 유형** | **계산 가능**(Registry+코드), **카탈로그 전용**, **레거시** — Feature명 입력 시 검증 API로 확인 |
+| **사용 절차 안내** | 메타 등록 → 코드/Registry 구현 → Feature Set 포함 → Feature 생성 → 품질 검증 → 학습 설정 |
 | **주요 입력값** | Feature명, 그룹, 유형(`NUMERIC`/`CATEGORICAL`/`DATETIME`), **계산식 메모**, 설명 |
 | **주요 버튼** | **신규 Feature**, **상세**, **삭제** |
 | **버튼 클릭 시 동작** | 등록 모달 저장 → 목록 1페이지 갱신. **상세** → Registry 정보 모달. 삭제 확인 모달 |
-| **호출 API** | `GET /features`, `POST /features`, `DELETE /features/{id}`, `GET /feature-registry` |
-| **결과 확인 위치** | Feature 목록 테이블, Registry 컬럼·상세 모달 |
-| **주의할 점** | **등록만으로 Feature 값이 생성되거나 학습에 반영되지 않음.** `calc_expression`은 설명용이며 `LAG(...)` 등은 자동 실행되지 않음. Registry에 없는 Feature는 **Registry 미등록**으로 표시. Feature Set 포함 + Feature 생성 + 학습 설정 연결이 필요. 공식 명칭은 `docs/md/THERMOps_Feature_명칭_및_계산식_정책.md` 참고. 수정 UI 없음(삭제 후 재등록). |
+| **호출 API** | `GET /features`, `GET /features/validate-name`, `POST /features`, `DELETE /features/{id}`, `GET /feature-registry` |
+| **결과 확인 위치** | Feature 목록 **등록 유형** 뱃지, Registry 컬럼·상세 모달, 등록 모달 검증 결과 |
+| **주의할 점** | **등록만으로 Feature 값이 생성되거나 학습에 반영되지 않음** (1단계). `calc_expression`은 **설명용**이며 `LAG(...)` 등은 자동 실행되지 않음. **카탈로그 전용** Feature는 Feature 생성 시 값이 없을 수 있음. **레거시 별칭** 입력 시 공식명 추천·등록 차단. Feature Set 포함 + Feature 생성 + 품질 검증 + 학습 설정 연결 필요. |
 | **선행 작업** | (값 생성 시) 데이터 적재 |
 | **후속 작업** | Feature Set 구성 → Feature 생성 |
 
