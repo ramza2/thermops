@@ -1,51 +1,55 @@
 import { useEffect, useState } from "react";
-import { Play } from "lucide-react";
+import { Eye, Play } from "lucide-react";
 import { fetchApi, postApi, PagedData } from "@/api/client";
 import { Button } from "@/components/Button";
 import { DataTable } from "@/components/DataTable";
 import { MetricCard } from "@/components/MetricCard";
+import { Modal } from "@/components/Modal";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Pagination, LoadingState, ErrorState } from "@/components/Pagination";
 import { useToast } from "@/hooks/useToast";
 import { PageHeader } from "@/layouts/MainLayout";
+import {
+  extractQualityCheckError,
+  formatQualityTableSummary,
+  qualityMetricsRows,
+  QualityRun,
+  QualitySummary,
+} from "@/utils/qualitySummary";
 
-interface QualitySummary {
-  quality_score?: number;
-  missing_count?: number;
-  duplicate_count?: number;
-  time_gap_count?: number;
-  outlier_count?: number;
-  missing_rate?: number;
-  target_table?: string;
-  data_domain?: string;
+function SummarySection({ title, items, tone }: { title: string; items: string[]; tone: "error" | "warning" }) {
+  if (!items.length) return null;
+  const boxClass = tone === "error"
+    ? "bg-red-50 border-red-200 text-red-900"
+    : "bg-amber-50 border-amber-200 text-amber-900";
+  return (
+    <div className={`rounded border p-3 text-sm ${boxClass}`}>
+      <p className="font-medium mb-2">{title}</p>
+      <ul className="list-disc list-inside space-y-1 text-xs">
+        {items.map((item) => <li key={item}>{item}</li>)}
+      </ul>
+    </div>
+  );
 }
 
-interface QualityRun {
-  run_id: string;
-  source_id: string | null;
-  check_type: string;
-  run_status: string;
-  result_summary: QualitySummary | null;
-  started_at: string;
-  finished_at: string | null;
-}
-
-function formatSummary(s: QualitySummary | null | undefined): string {
-  if (!s) return "-";
-  const score = s.quality_score != null ? `점수 ${s.quality_score.toFixed(1)}` : null;
-  const missing = s.missing_count != null
-    ? `결측 ${s.missing_count}`
-    : s.missing_rate != null
-      ? `결측 ${(s.missing_rate * 100).toFixed(1)}%`
-      : null;
-  const parts = [
-    score,
-    missing,
-    `중복 ${s.duplicate_count ?? 0}`,
-    `시간누락 ${s.time_gap_count ?? 0}`,
-    `이상치 ${s.outlier_count ?? 0}`,
-  ].filter(Boolean);
-  return parts.join(" · ");
+function DomainSummaryBlock({ summary, title }: { summary: QualitySummary; title?: string }) {
+  return (
+    <div className="border border-slate-200 rounded-lg p-3 space-y-3">
+      {title && <p className="text-sm font-medium text-slate-800">{title}</p>}
+      <dl className="grid grid-cols-2 gap-2 text-xs">
+        <div><dt className="text-slate-500">도메인</dt><dd>{summary.data_domain || "-"}</dd></div>
+        <div><dt className="text-slate-500">대상 테이블</dt><dd className="break-all">{summary.target_table || "-"}</dd></div>
+        {qualityMetricsRows(summary).map((row) => (
+          <div key={row.label}>
+            <dt className="text-slate-500">{row.label}</dt>
+            <dd>{row.value}</dd>
+          </div>
+        ))}
+      </dl>
+      <SummarySection title="오류" items={summary.errors || []} tone="error" />
+      <SummarySection title="경고" items={summary.warnings || []} tone="warning" />
+    </div>
+  );
 }
 
 export default function DataQualityPage() {
@@ -56,6 +60,7 @@ export default function DataQualityPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [running, setRunning] = useState(false);
+  const [detail, setDetail] = useState<QualityRun | null>(null);
 
   const load = async (p = page) => {
     setLoading(true);
@@ -80,18 +85,36 @@ export default function DataQualityPage() {
         run_id: string;
         status: string;
         result_summary?: QualitySummary;
+        error_message?: string | null;
       }>("/data-quality/checks");
-      const score = res.result_summary?.quality_score;
-      showToast(
-        "success",
-        score != null
-          ? `품질 점검 완료 — 점수 ${score.toFixed(1)} (${res.run_id})`
-          : `품질 점검이 완료되었습니다. (${res.run_id})`,
-      );
-      load(1);
+
+      const summary = res.result_summary;
+      const runId = res.run_id;
+
+      if (res.status === "FAILED") {
+        const msg = summary?.errors?.[0] || res.error_message || "품질 점검에 실패했습니다.";
+        showToast("error", `${msg} (${runId})`);
+      } else if (res.status === "WARNING") {
+        const msg = summary?.warnings?.[0] || "경고가 발견되었습니다.";
+        const score = summary?.quality_score;
+        showToast(
+          "warning",
+          score != null ? `품질 점검 완료(주의) — ${msg} · 점수 ${score.toFixed(1)} (${runId})` : `${msg} (${runId})`,
+        );
+      } else {
+        const score = summary?.quality_score;
+        showToast(
+          "success",
+          score != null
+            ? `품질 점검 완료 — 점수 ${score.toFixed(1)} (${runId})`
+            : `품질 점검이 완료되었습니다. (${runId})`,
+        );
+      }
+
+      await load(1);
       setPage(1);
-    } catch {
-      showToast("error", "품질 점검 실행에 실패했습니다.");
+    } catch (err: unknown) {
+      showToast("error", extractQualityCheckError(err));
     } finally {
       setRunning(false);
     }
@@ -99,6 +122,7 @@ export default function DataQualityPage() {
 
   const successCount = items.filter((i) => i.run_status === "SUCCESS").length;
   const latest = items[0]?.result_summary;
+  const detailSummary = detail?.result_summary;
 
   if (loading && !items.length) return <LoadingState />;
   if (error && !items.length) return <ErrorState message={error} onRetry={() => load()} />;
@@ -136,13 +160,79 @@ export default function DataQualityPage() {
           {
             key: "result_summary",
             header: "결과 요약",
-            render: (r) => formatSummary(r.result_summary as QualitySummary | null),
+            render: (r) => formatQualityTableSummary(
+              r.result_summary as QualitySummary | null,
+              r.run_status as string,
+            ),
           },
           { key: "started_at", header: "시작", render: (r) => new Date(r.started_at as string).toLocaleString("ko-KR") },
+          {
+            key: "actions",
+            header: "작업",
+            render: (r) => {
+              const row = r as unknown as QualityRun;
+              return (
+                <div onClick={(e) => e.stopPropagation()}>
+                  <Button variant="ghost" icon={<Eye className="w-3 h-3" />} onClick={() => setDetail(row)}>상세</Button>
+                </div>
+              );
+            },
+          },
         ]}
         data={items as unknown as Record<string, unknown>[]}
       />
       <Pagination page={page} totalPages={totalPages} onChange={setPage} />
+
+      <Modal open={!!detail} title="품질 점검 상세" onClose={() => setDetail(null)} size="lg"
+        footer={<Button variant="secondary" onClick={() => setDetail(null)}>닫기</Button>}>
+        {detail && (
+          <div className="space-y-4 text-sm">
+            <dl className="grid grid-cols-2 gap-3">
+              <div><dt className="text-slate-500">실행 ID</dt><dd className="font-medium">{detail.run_id}</dd></div>
+              <div><dt className="text-slate-500">소스 ID</dt><dd>{detail.source_id || "전체"}</dd></div>
+              <div><dt className="text-slate-500">점검 유형</dt><dd>{detail.check_type}</dd></div>
+              <div><dt className="text-slate-500">상태</dt><dd><StatusBadge status={detail.run_status} /></dd></div>
+              <div><dt className="text-slate-500">시작</dt><dd>{new Date(detail.started_at).toLocaleString("ko-KR")}</dd></div>
+              <div><dt className="text-slate-500">종료</dt><dd>{detail.finished_at ? new Date(detail.finished_at).toLocaleString("ko-KR") : "-"}</dd></div>
+            </dl>
+
+            {detailSummary ? (
+              <>
+                {detailSummary.errors?.length ? (
+                  <SummarySection title="오류 (실패 원인)" items={detailSummary.errors} tone="error" />
+                ) : null}
+                {detailSummary.warnings?.length ? (
+                  <SummarySection title="경고" items={detailSummary.warnings} tone="warning" />
+                ) : null}
+
+                {detailSummary.checks?.length ? (
+                  <div className="space-y-3">
+                    <p className="font-medium text-slate-800">도메인별 점검 결과</p>
+                    {detailSummary.checks.map((check) => (
+                      <DomainSummaryBlock
+                        key={check.data_domain || check.target_table}
+                        summary={check}
+                        title={check.data_domain || check.target_table}
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  <DomainSummaryBlock summary={detailSummary} />
+                )}
+
+                <div>
+                  <p className="text-slate-500 text-xs mb-1">원본 결과 (JSON)</p>
+                  <pre className="text-xs bg-slate-50 border rounded p-3 overflow-auto max-h-48">
+                    {JSON.stringify(detailSummary, null, 2)}
+                  </pre>
+                </div>
+              </>
+            ) : (
+              <p className="text-slate-500 text-sm">저장된 결과 요약이 없습니다.</p>
+            )}
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }
