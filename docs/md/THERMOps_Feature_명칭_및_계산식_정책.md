@@ -140,13 +140,40 @@ tb_feature (메타 등록)
 | 화면 | 경로 | 내용 |
 |------|------|------|
 | Feature 목록 | `/features` | Registry 요약 컬럼, **상세** 모달에서 Registry 메타 |
-| Feature Set 상세 | `/feature-sets/:id` | **최근 Feature Build 이력** 선택 + **Feature Lineage** 섹션 |
+| Feature Set 상세 | `/feature-sets/:id` | **Feature Build 이력** · **Lineage** · **Feature 품질 검증** |
 
 Lineage 조회 우선순위: 최근 Build Job 목록 → Feature 생성 직후 job → dataset-range fallback → 고급 수동 입력.
+
+### Feature 품질 검증 (`tb_data_quality_run`, `check_type=FEATURE_QUALITY`)
+
+- **목적**: Feature 생성 결과(`feature_json`) 값이 학습·예측에 쓸 만한지 점검 (원천 `tb_heat_demand_actual` 품질과 별도)
+- **기준**: `feature_set_id` + `dataset_version_id` (미지정 시 최신 DSV)
+- **Lineage와의 관계**: Lineage = 출처 추적, Feature 품질 = 값 적합성
+
+| 메서드 | 경로 |
+|--------|------|
+| POST | `/api/v1/feature-quality-runs` body: `{ feature_set_id, dataset_version_id? }` |
+| GET | `/api/v1/feature-quality-runs?feature_set_id=...` |
+| GET | `/api/v1/feature-quality-runs/{run_id}` |
+
+**판정**
+
+| 상태 | 조건 |
+|------|------|
+| FAILED | Dataset 없음, key 누락 row 30%+, invalid 10%+, 점수 < 70 |
+| WARNING | null 1%+, 이상치 5%+, 범위 위반 일부, 점수 70~89 |
+| SUCCESS | 점수 ≥ 90, 치명 오류 없음 |
+
+**점수**: 100점에서 missing/null/invalid/range/outlier 비율로 감점 (가중치 40/25/20/10/5).
+
+**지표**: `null_ratio`, `missing_key_count`, `invalid_count`, `range_violation_count`, `outlier_count`, 분포(min/p25/mean/p50/p75/max/std)
+
+`/data/quality` 목록에서는 `FEATURE_QUALITY`를 **제외** (원천 데이터 품질 중심 유지).
 
 ## 11. 검증
 
 - `python scripts/test_feature_metadata_consistency.py`
 - `python scripts/test_feature_lineage.py`
 - `python scripts/test_feature_build_jobs.py`
+- `python scripts/test_feature_quality.py`
 - 회귀: `python scripts/run_regression_tests.py --group model`

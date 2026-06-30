@@ -237,11 +237,11 @@ flowchart LR
 |------|------|
 | **화면 목적** | Feature Set 기본 정보·전처리 옵션·포함 Feature 편집, 미리보기·Feature 생성 실행 |
 | **주요 입력값** | Feature Set 명, 대상 도메인, 설명, 적용 대상, 결측 처리(`PREV`/`MEAN`/`ZERO`/`DROP`), 정규화 체크, 추가할 Feature(체크박스) |
-| **주요 버튼** | **목록**, **Feature 미리보기**, **Feature 생성**, **삭제**, **저장**, **Feature 추가** |
-| **버튼 클릭 시 동작** | 미리보기→샘플 행 모달. Feature 생성→`feature-build-jobs` 호출, 상단 녹색 결과 박스(dataset_version_id·lineage_count) 표시. 저장→메타 갱신 |
-| **호출 API** | `GET /feature-sets/{id}`, `PUT /feature-sets/{id}`, `DELETE /feature-sets/{id}`, `GET /features`, `POST /feature-sets/{id}/preview`, `POST /feature-build-jobs?feature_set_id={id}`, `GET /feature-build-jobs?feature_set_id={id}`, `GET /feature-sets/{id}/dataset-range`, `GET /feature-lineage`, `GET /feature-build-jobs/{job_id}/lineage` |
-| **결과 확인 위치** | 포함 Feature 테이블, 미리보기 모달, 최근 Feature 생성 결과 박스, **최근 Feature Build 이력** 카드/드롭다운, **Feature Lineage** 섹션 |
-| **주의할 점** | Feature 생성 전 데이터 적재·품질 점검 권장. Lineage 없으면 Build Job 선택 또는 Feature 생성 먼저. `WARNING`+`lineage_error`는 데이터 생성됨·Lineage만 실패. **고급 조회**로 dataset_version_id/job_id 수동 입력 가능. Lineage는 조회 전용. 전처리 메타는 description 내 `---META---` JSON으로 저장 |
+| **주요 버튼** | **목록**, **Feature 미리보기**, **Feature 생성**, **삭제**, **저장**, **Feature 추가**, **Feature 품질 점검 실행** |
+| **버튼 클릭 시 동작** | 미리보기→샘플 행 모달. Feature 생성→`feature-build-jobs` 호출, 상단 녹색 결과 박스(dataset_version_id·lineage_count) 표시. **Feature 품질 점검**→`feature-quality-runs` 호출, 점수·Feature별 통계 표시. 저장→메타 갱신 |
+| **호출 API** | `GET /feature-sets/{id}`, `PUT /feature-sets/{id}`, `DELETE /feature-sets/{id}`, `GET /features`, `POST /feature-sets/{id}/preview`, `POST /feature-build-jobs?feature_set_id={id}`, `GET /feature-build-jobs?...`, `GET /feature-sets/{id}/dataset-range`, `GET /feature-lineage`, `GET /feature-build-jobs/{job_id}/lineage`, **`POST/GET /feature-quality-runs`** |
+| **결과 확인 위치** | 포함 Feature 테이블, 미리보기 모달, 최근 Feature 생성 결과 박스, **Feature Build 이력**·**Lineage**, **Feature 품질 검증** 섹션(점수·null/이상치·이슈 샘플) |
+| **주의할 점** | Feature 생성 전 원천 데이터 적재·품질 점검 권장. **Feature 품질**은 `feature_json` 값 점검(원천 품질과 별도). Dataset 없으면 Feature 생성 먼저. Lineage=출처, Feature 품질=값 적합성 |
 | **선행 작업** | Feature Set 생성, 원천 데이터 적재 |
 | **후속 작업** | 모델 학습 설정(`feature_set_id` 연결) |
 

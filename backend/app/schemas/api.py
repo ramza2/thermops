@@ -166,3 +166,8 @@ class DriftCheckCreate(BaseModel):
     current_start_at: datetime | None = None
     current_end_at: datetime | None = None
     force_candidate: bool = False
+
+
+class FeatureQualityRunCreate(BaseModel):
+    feature_set_id: str
+    dataset_version_id: str | None = None

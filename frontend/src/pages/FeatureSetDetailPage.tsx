@@ -10,6 +10,7 @@ import { LoadingState, ErrorState } from "@/components/Pagination";
 import { useToast } from "@/hooks/useToast";
 import { PageHeader } from "@/layouts/MainLayout";
 import { FeatureLineageSection } from "@/components/FeatureLineageSection";
+import { FeatureQualitySection } from "@/components/FeatureQualitySection";
 import type { FeatureBuildResult } from "@/types/featureRegistry";
 import {
   FeatureSet,
@@ -326,6 +327,15 @@ export default function FeatureSetDetailPage() {
       </div>
 
       {id && <FeatureLineageSection featureSetId={id} buildResult={buildResult} />}
+
+      {id && (
+        <FeatureQualitySection
+          featureSetId={id}
+          datasetVersionId={
+            buildResult?.dataset_version_id ?? buildResult?.result_summary?.dataset_version_id ?? null
+          }
+        />
+      )}
 
       <Modal
         open={addFeatureOpen}

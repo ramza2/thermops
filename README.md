@@ -278,13 +278,21 @@ curl -X POST "http://localhost:8000/api/v1/feature-build-jobs?feature_set_id=FS-
 **Feature Registry·Lineage UI**
 
 - `/features`: Registry 요약 컬럼, **상세** 모달에서 입력 테이블·Lookback·누수 방지 등 확인
-- `/feature-sets/:id`: **최근 Feature Build 이력** 선택 + **Feature Lineage** 섹션
+- `/feature-sets/:id`: **최근 Feature Build 이력** 선택 + **Feature Lineage** + **Feature 품질 검증** 섹션
 - Lineage 없음 → Feature Set 상세에서 **Feature 생성** 먼저 실행
+
+**Feature 품질 검증** (`check_type=FEATURE_QUALITY`)
+
+- 대상: `tb_feature_dataset.feature_json` (원천 데이터 품질 점검과 별도)
+- Feature Set 상세에서 `dataset_version_id` 기준 실행 · 이력 조회
+- API: `POST/GET /api/v1/feature-quality-runs`
+- 판정: 점수 90+ SUCCESS, 70~89 WARNING, 70 미만 FAILED (null·key 누락·범위·이상치 가중 감점)
 
 ```powershell
 python scripts/test_feature_metadata_consistency.py
 python scripts/test_feature_lineage.py
 python scripts/test_feature_build_jobs.py
+python scripts/test_feature_quality.py
 ```
 
 ### 모델 학습 테스트 (P0-4-1)

@@ -9,7 +9,7 @@ from app.core.database import get_db
 from app.core.response import ok, paged
 from app.core.time import utc_now
 from app.models.entities import Feature, FeatureSet
-from app.schemas.api import FeatureCreate, FeatureSetCreate
+from app.schemas.api import FeatureCreate, FeatureQualityRunCreate, FeatureSetCreate
 from app.services.feature_build_service import (
     FeatureBuildParams,
     get_feature_build_job,
@@ -24,6 +24,12 @@ from app.services.feature_lineage_service import (
     get_lineage_by_job_id,
 )
 from app.services.feature_registry_service import get_registry_spec, list_registry_specs
+from app.services.feature_quality_service import (
+    FeatureQualityParams,
+    get_feature_quality_run,
+    list_feature_quality_runs,
+    run_feature_quality_check,
+)
 
 router = APIRouter(tags=["Feature"])
 
@@ -318,3 +324,58 @@ async def get_feature_build_job_lineage(job_id: str, db: AsyncSession = Depends(
         "lineage_count": len(rows),
         "items": rows,
     })
+
+
+@router.post("/feature-quality-runs")
+async def create_feature_quality_run(
+    body: FeatureQualityRunCreate,
+    db: AsyncSession = Depends(get_db),
+):
+    params = FeatureQualityParams(
+        feature_set_id=body.feature_set_id,
+        dataset_version_id=body.dataset_version_id,
+    )
+    try:
+        result = await run_feature_quality_check(db, params)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    status = result.get("status", "FAILED")
+    score = result.get("score")
+    msg = f"Feature 품질 점검이 완료되었습니다. (상태: {status}"
+    if score is not None:
+        msg += f", 점수: {score}"
+    msg += ")"
+    return ok(result, message=msg)
+
+
+@router.get("/feature-quality-runs")
+async def list_feature_quality_runs_endpoint(
+    feature_set_id: str | None = Query(default=None),
+    dataset_version_id: str | None = Query(default=None),
+    status: str | None = Query(default=None),
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    include_summary: bool = Query(default=False),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await list_feature_quality_runs(
+        db,
+        feature_set_id=feature_set_id,
+        dataset_version_id=dataset_version_id,
+        status=status,
+        limit=limit,
+        offset=offset,
+        include_summary=include_summary,
+    )
+    return ok(result)
+
+
+@router.get("/feature-quality-runs/{run_id}")
+async def get_feature_quality_run_endpoint(run_id: str, db: AsyncSession = Depends(get_db)):
+    result = await get_feature_quality_run(db, run_id)
+    if not result:
+        raise HTTPException(status_code=404, detail="NOT_FOUND")
+    return ok(result)
