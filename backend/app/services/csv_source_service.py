@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import csv
 import time
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 from app.core.config import get_settings
 
 CSV_SOURCE_TYPES = {"CSV", "FILE_CSV"}
+_TIMESTAMP_COLUMNS = ("measured_at", "target_at")
 
 
 def is_csv_source(source_type: str) -> bool:
@@ -68,3 +70,48 @@ def test_csv_connection(connection_info: dict[str, Any] | None) -> dict[str, Any
             "sample_row_count": 0,
             "columns": [],
         }
+
+
+def _parse_row_timestamp(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(str(value).replace("Z", "+00:00")).replace(tzinfo=None)
+    except ValueError:
+        return None
+
+
+def get_csv_data_range(connection_info: dict[str, Any] | None) -> dict[str, Any]:
+    rows, columns = read_csv_rows(connection_info)
+    ts_col = next((c for c in _TIMESTAMP_COLUMNS if c in columns), None)
+    if not ts_col:
+        return {
+            "exists": False,
+            "row_count": len(rows),
+            "valid_timestamp_count": 0,
+            "min_at": None,
+            "max_at": None,
+            "timestamp_column": None,
+        }
+
+    min_dt: datetime | None = None
+    max_dt: datetime | None = None
+    valid_count = 0
+    for row in rows:
+        dt = _parse_row_timestamp(row.get(ts_col))
+        if dt is None:
+            continue
+        valid_count += 1
+        if min_dt is None or dt < min_dt:
+            min_dt = dt
+        if max_dt is None or dt > max_dt:
+            max_dt = dt
+
+    return {
+        "exists": min_dt is not None and max_dt is not None,
+        "row_count": len(rows),
+        "valid_timestamp_count": valid_count,
+        "min_at": min_dt.isoformat() if min_dt else None,
+        "max_at": max_dt.isoformat() if max_dt else None,
+        "timestamp_column": ts_col,
+    }

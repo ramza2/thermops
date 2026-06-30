@@ -14,6 +14,7 @@ from app.models.entities import DataQualityRun, DataSource
 from app.schemas.api import DataSourceCreate, DataSourceUpdate
 from app.services.connectors.base import ConnectorError
 from app.services.connectors.registry import get_connector
+from app.services.csv_source_service import get_csv_data_range, is_csv_source
 from app.services.data_quality_service import QualityCheckParams, run_quality_check
 from app.services.ingestion_service import IngestionError, fail_ingestion_job, get_active_mapping, run_ingestion
 
@@ -170,6 +171,35 @@ async def preview_data_source(
         )
     except ConnectorError as exc:
         raise _http_connector_error(exc) from exc
+    return ok({"source_id": source_id, **result})
+
+
+@router.get("/data-sources/{source_id}/source-range")
+async def get_data_source_range(source_id: str, db: AsyncSession = Depends(get_db)):
+    s = (await db.execute(select(DataSource).where(DataSource.data_source_id == source_id))).scalar_one_or_none()
+    if not s:
+        raise HTTPException(status_code=404, detail="NOT_FOUND")
+    if not is_csv_source(s.source_type):
+        return ok({
+            "source_id": source_id,
+            "exists": False,
+            "row_count": 0,
+            "valid_timestamp_count": 0,
+            "min_at": None,
+            "max_at": None,
+            "timestamp_column": None,
+            "message": "CSV 소스만 데이터 기간 조회를 지원합니다.",
+        })
+    try:
+        result = await asyncio.to_thread(get_csv_data_range, s.connection_info)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error_code": "PREVIEW_FAILED",
+                "message": str(exc),
+            },
+        ) from exc
     return ok({"source_id": source_id, **result})
 
 

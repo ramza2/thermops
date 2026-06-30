@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Plus, Plug, Trash2, Eye, Pencil, Upload } from "lucide-react";
 import { deleteApi, fetchApi, postApi, putApi, PagedData } from "@/api/client";
 import { Button } from "@/components/Button";
@@ -9,6 +9,15 @@ import { Pagination, LoadingState, ErrorState } from "@/components/Pagination";
 import { SelectInput, TextInput } from "@/components/SearchPanel";
 import { useToast } from "@/hooks/useToast";
 import { PageHeader } from "@/layouts/MainLayout";
+import {
+  defaultIngestionPeriod,
+  formatDisplayDateTime,
+  INGESTION_LIMIT_OPTIONS,
+  isPeriodWithinRange,
+  SourceDataRange,
+  toNaiveApiDateTime,
+  validateCsvIngestionPeriod,
+} from "@/utils/ingestionPeriod";
 
 interface DataSource {
   source_id: string;
@@ -144,10 +153,12 @@ export default function DataSourcesPage() {
   const [saving, setSaving] = useState(false);
   const [ingesting, setIngesting] = useState<string | null>(null);
   const [ingestTarget, setIngestTarget] = useState<DataSource | null>(null);
+  const [sourceRange, setSourceRange] = useState<SourceDataRange | null>(null);
+  const [rangeLoading, setRangeLoading] = useState(false);
   const [ingestForm, setIngestForm] = useState({
     start_at: "",
     end_at: "",
-    limit: "1000",
+    limit: "",
     load_mode: "UPSERT",
   });
 
@@ -259,17 +270,59 @@ export default function DataSourcesPage() {
     }
   };
 
+  const loadSourceRange = useCallback(async (row: DataSource) => {
+    if (!isCsvType(row.source_type)) {
+      setSourceRange(null);
+      setIngestForm((f) => ({ ...f, start_at: "", end_at: "" }));
+      return;
+    }
+    setRangeLoading(true);
+    try {
+      const range = await fetchApi<SourceDataRange>(`/data-sources/${encodeURIComponent(row.source_id)}/source-range`);
+      setSourceRange(range);
+      if (range.exists) {
+        const { start, end } = defaultIngestionPeriod(range);
+        setIngestForm((f) => ({ ...f, start_at: start, end_at: end }));
+      } else {
+        setIngestForm((f) => ({ ...f, start_at: "", end_at: "" }));
+      }
+    } catch {
+      setSourceRange(null);
+      setIngestForm((f) => ({ ...f, start_at: "", end_at: "" }));
+    } finally {
+      setRangeLoading(false);
+    }
+  }, []);
+
   const openIngestModal = (row: DataSource) => {
     setIngestTarget(row);
-    setIngestForm({ start_at: "", end_at: "", limit: "1000", load_mode: "UPSERT" });
+    setSourceRange(null);
+    setIngestForm({ start_at: "", end_at: "", limit: "", load_mode: "UPSERT" });
+    void loadSourceRange(row);
+  };
+
+  const validateIngest = (): string | null => {
+    if (!ingestTarget) return "적재 대상이 없습니다.";
+    if (isCsvType(ingestTarget.source_type)) {
+      return validateCsvIngestionPeriod(ingestForm.start_at, ingestForm.end_at, sourceRange);
+    }
+    if (ingestForm.start_at && ingestForm.end_at && ingestForm.start_at > ingestForm.end_at) {
+      return "시작 시각은 종료 시각보다 이전이어야 합니다.";
+    }
+    return null;
   };
 
   const runIngest = async () => {
     if (!ingestTarget) return;
+    const validationError = validateIngest();
+    if (validationError) {
+      showToast("warning", validationError);
+      return;
+    }
     setIngesting(ingestTarget.source_id);
     const params = new URLSearchParams({ source_id: ingestTarget.source_id, load_mode: ingestForm.load_mode });
-    if (ingestForm.start_at.trim()) params.set("start_at", ingestForm.start_at.trim());
-    if (ingestForm.end_at.trim()) params.set("end_at", ingestForm.end_at.trim());
+    if (ingestForm.start_at.trim()) params.set("start_at", toNaiveApiDateTime(ingestForm.start_at.trim()));
+    if (ingestForm.end_at.trim()) params.set("end_at", toNaiveApiDateTime(ingestForm.end_at.trim()));
     if (ingestForm.limit.trim()) params.set("limit", ingestForm.limit.trim());
     try {
       const res = await postApi<{
@@ -306,6 +359,18 @@ export default function DataSourcesPage() {
   };
 
   const handleIngest = (row: DataSource) => openIngestModal(row);
+
+  const isCsvIngest = ingestTarget ? isCsvType(ingestTarget.source_type) : false;
+  const csvPeriodInRange = isCsvIngest && sourceRange?.exists
+    ? isPeriodWithinRange(ingestForm.start_at, ingestForm.end_at, sourceRange.min_at, sourceRange.max_at)
+    : true;
+  const ingestBlocked = Boolean(validateIngest()) || (isCsvIngest && rangeLoading);
+
+  const rangeBoxClass = isCsvIngest && !sourceRange?.exists
+    ? "bg-amber-50 border-amber-200 text-amber-900"
+    : isCsvIngest && ingestForm.start_at && ingestForm.end_at && !csvPeriodInRange
+      ? "bg-red-50 border-red-200 text-red-900"
+      : "bg-slate-50 border-slate-200 text-slate-700";
 
   const sourceFormFields = (
     <div className="space-y-3">
@@ -529,10 +594,10 @@ export default function DataSourcesPage() {
       </Modal>
 
       <Modal open={!!ingestTarget} title={`데이터 적재 — ${ingestTarget?.source_name ?? ""}`}
-        onClose={() => setIngestTarget(null)}
+        onClose={() => { setIngestTarget(null); setSourceRange(null); }}
         footer={<>
-          <Button variant="secondary" onClick={() => setIngestTarget(null)}>취소</Button>
-          <Button onClick={runIngest} disabled={!!ingesting}>
+          <Button variant="secondary" onClick={() => { setIngestTarget(null); setSourceRange(null); }}>취소</Button>
+          <Button onClick={runIngest} disabled={!!ingesting || ingestBlocked}>
             {ingesting ? "적재 중..." : "적재 실행"}
           </Button>
         </>}>
@@ -541,6 +606,24 @@ export default function DataSourcesPage() {
             <p className="text-slate-500">
               유형: <strong>{ingestTarget.source_type}</strong> · 도메인: {ingestTarget.data_domain}
             </p>
+            {isCsvIngest && (
+              <div className={`rounded border p-3 text-xs ${rangeBoxClass}`}>
+                {rangeLoading ? (
+                  <p>CSV 데이터 기간을 조회하는 중...</p>
+                ) : sourceRange?.exists ? (
+                  <>
+                    <p className="font-medium mb-1">사용 가능한 데이터 기간</p>
+                    <p>
+                      {formatDisplayDateTime(sourceRange.min_at)} ~ {formatDisplayDateTime(sourceRange.max_at)}
+                      {" "}(총 {sourceRange.row_count.toLocaleString()}행 · 시각 유효 {sourceRange.valid_timestamp_count.toLocaleString()}행)
+                    </p>
+                    <p className="mt-1 text-slate-500">시각 컬럼: {sourceRange.timestamp_column}</p>
+                  </>
+                ) : (
+                  <p>CSV 파일에서 시각 컬럼(measured_at)을 찾을 수 없거나 파싱할 수 없습니다. 파일 경로와 컬럼을 확인하세요.</p>
+                )}
+              </div>
+            )}
             {(isDbType(ingestTarget.source_type) || isApiType(ingestTarget.source_type)) && (
               <p className="text-xs text-amber-700 bg-amber-50 p-2 rounded">
                 DB/API 소스는 start_at/end_at으로 기간 필터를 지정할 수 있습니다. 미입력 시 전체(또는 connector 기본) 범위로 조회합니다.
@@ -549,19 +632,43 @@ export default function DataSourcesPage() {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs text-slate-500 mb-1">시작 시각 (start_at)</label>
-                <TextInput value={ingestForm.start_at} onChange={(v) => setIngestForm({ ...ingestForm, start_at: v })}
-                  placeholder="2026-05-22T00:00:00" />
+                {isCsvIngest ? (
+                  <input
+                    type="datetime-local"
+                    className="w-full border border-slate-300 rounded px-3 py-2 text-sm"
+                    value={ingestForm.start_at}
+                    onChange={(e) => setIngestForm({ ...ingestForm, start_at: e.target.value })}
+                    disabled={rangeLoading || !sourceRange?.exists}
+                  />
+                ) : (
+                  <TextInput value={ingestForm.start_at} onChange={(v) => setIngestForm({ ...ingestForm, start_at: v })}
+                    placeholder="2026-05-22T00:00:00" />
+                )}
               </div>
               <div>
                 <label className="block text-xs text-slate-500 mb-1">종료 시각 (end_at)</label>
-                <TextInput value={ingestForm.end_at} onChange={(v) => setIngestForm({ ...ingestForm, end_at: v })}
-                  placeholder="2026-05-23T23:00:00" />
+                {isCsvIngest ? (
+                  <input
+                    type="datetime-local"
+                    className="w-full border border-slate-300 rounded px-3 py-2 text-sm"
+                    value={ingestForm.end_at}
+                    onChange={(e) => setIngestForm({ ...ingestForm, end_at: e.target.value })}
+                    disabled={rangeLoading || !sourceRange?.exists}
+                  />
+                ) : (
+                  <TextInput value={ingestForm.end_at} onChange={(v) => setIngestForm({ ...ingestForm, end_at: v })}
+                    placeholder="2026-05-23T23:00:00" />
+                )}
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs text-slate-500 mb-1">limit</label>
-                <TextInput value={ingestForm.limit} onChange={(v) => setIngestForm({ ...ingestForm, limit: v })} placeholder="1000" />
+                <label className="block text-xs text-slate-500 mb-1">적재 건수 제한</label>
+                <SelectInput
+                  value={ingestForm.limit}
+                  onChange={(v) => setIngestForm({ ...ingestForm, limit: v })}
+                  options={INGESTION_LIMIT_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
+                />
               </div>
               <div>
                 <label className="block text-xs text-slate-500 mb-1">load_mode</label>
@@ -572,7 +679,13 @@ export default function DataSourcesPage() {
                   ]} />
               </div>
             </div>
-            <p className="text-xs text-slate-400">start_at/end_at 미입력 시 connector 기본 동작으로 실행됩니다.</p>
+            {isCsvIngest ? (
+              <p className="text-xs text-slate-400">
+                CSV 적재는 파일 내 사용 가능한 기간 안에서만 실행됩니다. 적재 건수 제한 기본값은 무제한입니다.
+              </p>
+            ) : (
+              <p className="text-xs text-slate-400">start_at/end_at 미입력 시 connector 기본 동작으로 실행됩니다.</p>
+            )}
           </div>
         )}
       </Modal>
