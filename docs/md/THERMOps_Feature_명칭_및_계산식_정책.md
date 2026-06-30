@@ -102,7 +102,33 @@ tb_feature (메타 등록)
 | B | `ml/features.py` 코드 기반 Feature 추가 (현재 방식) |
 | C | SQL view / materialized table 기반 Feature 계산 |
 
-## 10. 검증
+## 10. Feature Registry·Lineage
 
-- 스크립트: `python scripts/test_feature_metadata_consistency.py`
+### Registry (`ml/feature_registry.py`)
+
+- `ALL_COMPUTED_FEATURES`와 1:1 메타데이터 (`source_tables`, `lookback_hours`, `leakage_safe` 등)
+- `calc_expression`은 설명용; **실행 연결 없음** (`calc_method=CODE`)
+
+### Lineage (`tb_feature_lineage`)
+
+- Feature 생성 성공 시 `dataset_version_id` 기준 Feature별 1행 저장
+- `dataset_version_id` 형식: `DSV-{feature_set_id}-{timestamp}` → Feature Set별 유일
+- 유니크 키: `(dataset_version_id, feature_name)` — 동일 DSV를 여러 Set이 공유하지 않으므로 충분
+- Lineage 저장 실패 시 Feature Build는 **WARNING**으로 완료 (`inserted_count` 유지, `lineage_count=0`)
+
+### API (prefix `/api/v1`)
+
+| 메서드 | 경로 |
+|--------|------|
+| GET | `/api/v1/feature-registry` |
+| GET | `/api/v1/feature-registry/{feature_name}` |
+| GET | `/api/v1/feature-lineage?dataset_version_id=...` |
+| GET | `/api/v1/feature-build-jobs/{job_id}/lineage` |
+
+테스트·스크립트는 `THERMOOPS_API_BASE=http://localhost:8000/api/v1` (또는 Traefik 공개 URL + `/api/v1`) 기준.
+
+## 11. 검증
+
+- `python scripts/test_feature_metadata_consistency.py`
+- `python scripts/test_feature_lineage.py`
 - 회귀: `python scripts/run_regression_tests.py --group model`

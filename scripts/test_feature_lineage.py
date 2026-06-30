@@ -96,14 +96,14 @@ def check_registry_api() -> None:
     names = {f["feature_name"] for f in payload.get("features", [])}
     missing = [n for n in OFFICIAL_FEATURES if n not in names]
     if missing:
-        raise RuntimeError(f"/feature-registry missing: {missing}")
+        raise RuntimeError(f"{API_BASE}/feature-registry missing: {missing}")
 
     spec = api("GET", "/feature-registry/demand_lag_24h")
     if spec.get("lookback_hours") != 24 or not spec.get("requires_shift"):
         raise RuntimeError(f"unexpected demand_lag_24h spec: {spec}")
     if "tb_heat_demand_actual" not in (spec.get("source_tables") or []):
         raise RuntimeError("demand_lag_24h source_tables missing heat table")
-    print("  [api] /feature-registry OK")
+    print(f"  [api] {API_BASE}/feature-registry OK")
 
 
 def run_feature_build() -> tuple[str, str]:

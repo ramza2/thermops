@@ -198,6 +198,7 @@ CREATE TABLE IF NOT EXISTS tb_feature_lineage (
 
 CREATE INDEX IF NOT EXISTS ix_feature_lineage_dsv ON tb_feature_lineage(dataset_version_id);
 CREATE INDEX IF NOT EXISTS ix_feature_lineage_job ON tb_feature_lineage(feature_build_job_id);
+-- dataset_version_id = DSV-{feature_set_id}-{timestamp} 이므로 Feature Set별 유일. 동일 DSV 내 Feature당 1행.
 CREATE UNIQUE INDEX IF NOT EXISTS ux_feature_lineage_dsv_feature ON tb_feature_lineage(dataset_version_id, feature_name);
 
 CREATE TABLE IF NOT EXISTS tb_training_config (
