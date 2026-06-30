@@ -161,6 +161,70 @@ def test_custom_set_build_warning() -> None:
                 pass
 
 
+def test_custom_set_quality_registration() -> None:
+    build_fs_id: str | None = None
+    feat_id: str | None = None
+    name = f"test_quality_reg_{uuid.uuid4().hex[:8]}"
+    try:
+        created_feat = api(
+            "POST",
+            "/features",
+            {
+                "feature_name": name,
+                "feature_group": "테스트",
+                "feature_type": "NUMERIC",
+                "calc_expression": "없음",
+                "description": "Quality registration status test",
+            },
+        )
+        feat_id = created_feat.get("feature_id")
+        fs = api(
+            "POST",
+            "/feature-sets",
+            {
+                "feature_set_name": "Quality registration test set",
+                "target_domain": "HEAT_DEMAND",
+                "apply_site_scope": "ALL",
+                "features": ["temperature", name],
+                "description": "THERMOps test: catalog-only quality registration",
+            },
+        )
+        build_fs_id = fs.get("feature_set_id")
+        q = urllib.parse.urlencode({"feature_set_id": build_fs_id})
+        build = api("POST", f"/feature-build-jobs?{q}")
+        dsv = build.get("dataset_version_id") or (build.get("result_summary") or {}).get("dataset_version_id")
+        assert dsv, build
+        quality = api(
+            "POST",
+            "/feature-quality-runs",
+            {"feature_set_id": build_fs_id, "dataset_version_id": dsv},
+        )
+        rs = quality.get("result_summary") or {}
+        by_name = {f["feature_name"]: f for f in rs.get("features", [])}
+        custom = by_name.get(name)
+        assert custom, by_name.keys()
+        assert custom.get("registration_status") in ("CATALOG_ONLY", "DUPLICATE"), custom
+        assert custom.get("computable") is False, custom
+        reg_sum = rs.get("registration_summary") or rs.get("summary") or {}
+        assert reg_sum.get("non_computable_feature_count", 0) >= 1, reg_sum
+        assert (
+            reg_sum.get("catalog_only_feature_count", 0) >= 1
+            or reg_sum.get("non_computable_feature_count", 0) >= 1
+        ), reg_sum
+        print("  [ok] custom set quality registration_status for catalog-only")
+    finally:
+        if build_fs_id:
+            try:
+                api("DELETE", f"/feature-sets/{build_fs_id}")
+            except Exception:
+                pass
+        if feat_id:
+            try:
+                api("DELETE", f"/features/{feat_id}")
+            except Exception:
+                pass
+
+
 def main() -> int:
     print(f"THERMOps feature registration validation test ({API_BASE})")
     try:
@@ -170,6 +234,7 @@ def main() -> int:
         test_duplicate_catalog_only()
         test_tpl_build_success_with_coverage()
         test_custom_set_build_warning()
+        test_custom_set_quality_registration()
         print("\nPASSED: feature registration validation")
         return 0
     except (urllib.error.URLError, AssertionError, RuntimeError, KeyError) as exc:

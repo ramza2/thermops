@@ -170,7 +170,9 @@ Feature Set에 포함되었으나 `build_feature_frame()` 결과에 없는 Featu
 | 화면 | 경로 | 내용 |
 |------|------|------|
 | Feature 목록 | `/features` | **등록 유형** 뱃지, **신규 Feature 사용 절차** 안내, Registry 요약, **상세** 모달 |
-| Feature Set 상세 | `/feature-sets/:id` | 포함 Feature **등록 유형** 뱃지, **Feature Build 이력** · **Lineage** · **Feature 품질 검증** |
+| Feature Set 상세 | `/feature-sets/:id` | 포함 Feature **등록 유형** 뱃지·필터·TPL 보호, **Feature Build 이력** · **Lineage** · **Feature 품질 검증** |
+
+**공식 TPL(`FS-TPL-*`) 보호**: computable이 아닌 Feature(Catalog-only·Legacy) 추가 차단. 사용자 정의 Set은 Catalog-only 실험 가능(저장 전 확인).
 
 Lineage 조회 우선순위: 최근 Build Job 목록 → Feature 생성 직후 job → dataset-range fallback → 고급 수동 입력.
 
@@ -179,6 +181,10 @@ Lineage 조회 우선순위: 최근 Build Job 목록 → Feature 생성 직후 j
 - **목적**: Feature 생성 결과(`feature_json`) 값이 학습·예측에 쓸 만한지 점검 (원천 `tb_heat_demand_actual` 품질과 별도)
 - **기준**: `feature_set_id` + `dataset_version_id` (미지정 시 최신 DSV)
 - **Lineage와의 관계**: Lineage = 출처 추적, Feature 품질 = 값 적합성
+- **registration_status**: Feature별 `COMPUTABLE` / `CATALOG_ONLY` / `LEGACY_ALIAS` 등 — missing key가 단순 누락인지, Catalog-only·Legacy 때문인지 구분
+- **build_coverage**: 동일 `dataset_version_id`의 Feature Build `result_summary`에서 missing/catalog_only/legacy 목록 참조(있을 때)
+
+Feature Quality의 `registry_status`는 해당 Feature가 실제 계산 가능한 Registry Feature인지, 카탈로그에만 등록된 Feature인지, 레거시 별칭인지 확인하기 위한 값입니다. Catalog-only 또는 Legacy Feature는 Feature 생성 결과에 값이 없을 수 있으므로 학습/예측에 사용하기 전에 반드시 Feature Build 결과와 Feature Quality 결과를 확인해야 합니다.
 
 | 메서드 | 경로 |
 |--------|------|

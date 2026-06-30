@@ -4,6 +4,10 @@ export interface FeatureQualitySummary {
   invalid_count?: number;
   range_violation_count?: number;
   outlier_count?: number;
+  catalog_only_feature_count?: number;
+  legacy_alias_feature_count?: number;
+  non_computable_feature_count?: number;
+  registry_missing_feature_count?: number;
 }
 
 export interface FeatureQualityFeatureResult {
@@ -22,6 +26,13 @@ export interface FeatureQualityFeatureResult {
   p75?: number | null;
   max?: number | null;
   std?: number | null;
+  registration_status?: string;
+  catalog_registered?: boolean;
+  registry_registered?: boolean;
+  computable?: boolean;
+  legacy_alias?: boolean;
+  recommended_name?: string | null;
+  registration_message?: string;
 }
 
 export interface FeatureQualityIssueSample {
@@ -31,6 +42,10 @@ export interface FeatureQualityIssueSample {
   value: unknown;
   issue_type: string;
   message: string;
+  registration_status?: string;
+  computable?: boolean;
+  recommended_name?: string | null;
+  registration_message?: string;
 }
 
 export interface FeatureQualityResultSummary {
@@ -49,6 +64,13 @@ export interface FeatureQualityResultSummary {
   };
   site_count?: number;
   summary?: FeatureQualitySummary;
+  registration_summary?: FeatureQualitySummary;
+  build_coverage?: {
+    missing_feature_count?: number;
+    missing_features?: string[];
+    catalog_only_features?: string[];
+    legacy_alias_features?: string[];
+  };
   features?: FeatureQualityFeatureResult[];
   warnings?: string[];
   errors?: string[];

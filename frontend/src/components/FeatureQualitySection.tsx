@@ -6,7 +6,13 @@ import { Button } from "@/components/Button";
 import { DataTable } from "@/components/DataTable";
 import { SelectInput } from "@/components/SearchPanel";
 import { StatusBadge } from "@/components/StatusBadge";
-import type { FeatureQualityRun } from "@/types/featureQuality";
+import type { FeatureQualityFeatureResult, FeatureQualityRun } from "@/types/featureQuality";
+import type { FeatureRegistrationStatus } from "@/types/featureRegistration";
+import {
+  FEATURE_QUALITY_REGISTRATION_HINT,
+  registrationStatusClass,
+  registrationStatusLabelExtended,
+} from "@/utils/featureRegistrationFormat";
 import type { FeatureDatasetRange } from "@/utils/predictionPeriod";
 import {
   formatNumber,
@@ -147,6 +153,7 @@ export function FeatureQualitySection({ featureSetId, datasetVersionId: propDsv 
             Feature 생성 결과(feature_json)가 학습·예측에 적합한지 점검합니다.
             원천 데이터 품질 점검과는 별도로, Feature 값의 누락·범위·이상치·분포를 확인합니다.
           </p>
+          <p className="text-xs text-amber-700 mt-2 max-w-2xl">{FEATURE_QUALITY_REGISTRATION_HINT}</p>
         </div>
         <div className="flex gap-2">
           <Button
@@ -225,6 +232,39 @@ export function FeatureQualitySection({ featureSetId, datasetVersionId: propDsv 
             </div>
           )}
 
+          {(rs?.registration_summary || agg?.catalog_only_feature_count != null) && (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+              <Metric
+                label="카탈로그 전용"
+                value={rs?.registration_summary?.catalog_only_feature_count ?? agg?.catalog_only_feature_count}
+              />
+              <Metric
+                label="레거시 별칭"
+                value={rs?.registration_summary?.legacy_alias_feature_count ?? agg?.legacy_alias_feature_count}
+              />
+              <Metric
+                label="비계산 Feature"
+                value={rs?.registration_summary?.non_computable_feature_count ?? agg?.non_computable_feature_count}
+              />
+              <Metric
+                label="Registry 미등록"
+                value={rs?.registration_summary?.registry_missing_feature_count ?? agg?.registry_missing_feature_count}
+              />
+            </div>
+          )}
+
+          {rs?.build_coverage && (rs.build_coverage.missing_feature_count ?? 0) > 0 && (
+            <div className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded p-2">
+              Feature Build 기준 미생성 Feature {rs.build_coverage.missing_feature_count}건
+              {(rs.build_coverage.catalog_only_features?.length ?? 0) > 0 && (
+                <span> · 카탈로그 전용: {rs.build_coverage.catalog_only_features?.join(", ")}</span>
+              )}
+              {(rs.build_coverage.legacy_alias_features?.length ?? 0) > 0 && (
+                <span> · 레거시: {rs.build_coverage.legacy_alias_features?.join(", ")}</span>
+              )}
+            </div>
+          )}
+
           {(detail.errors?.length ?? rs?.errors?.length) ? (
             <div className="text-xs text-red-700 bg-red-50 rounded p-2">
               {(detail.errors ?? rs?.errors ?? []).map((e) => (
@@ -245,8 +285,15 @@ export function FeatureQualitySection({ featureSetId, datasetVersionId: propDsv 
             columns={[
               { key: "feature_name", header: "Feature명" },
               {
+                key: "registration_status",
+                header: "등록 상태",
+                render: (r) => (
+                  <QualityRegistrationBadge row={r as unknown as FeatureQualityFeatureResult} />
+                ),
+              },
+              {
                 key: "status",
-                header: "상태",
+                header: "품질 상태",
                 render: (r) => <StatusBadge status={String(r.status)} />,
               },
               { key: "count", header: "count" },
@@ -301,6 +348,7 @@ export function FeatureQualitySection({ featureSetId, datasetVersionId: propDsv 
                 <thead>
                   <tr className="text-left text-slate-500 border-b">
                     <th className="py-1 pr-2">Feature</th>
+                    <th className="py-1 pr-2">등록 상태</th>
                     <th className="py-1 pr-2">유형</th>
                     <th className="py-1 pr-2">site</th>
                     <th className="py-1 pr-2">시각</th>
@@ -312,11 +360,27 @@ export function FeatureQualitySection({ featureSetId, datasetVersionId: propDsv 
                   {(issueSamples as unknown as Record<string, unknown>[]).map((s, i) => (
                     <tr key={i} className="border-b border-slate-100">
                       <td className="py-1 pr-2 font-mono">{String(s.feature_name)}</td>
+                      <td className="py-1 pr-2">
+                        {s.registration_status ? (
+                          <span
+                            className={`inline-flex text-[10px] px-1 rounded border ${registrationStatusClass(String(s.registration_status) as FeatureRegistrationStatus)}`}
+                          >
+                            {registrationStatusLabelExtended({
+                              registration_status: String(s.registration_status),
+                              recommended_name: s.recommended_name as string | null,
+                            })}
+                          </span>
+                        ) : (
+                          "-"
+                        )}
+                      </td>
                       <td className="py-1 pr-2">{String(s.issue_type)}</td>
                       <td className="py-1 pr-2">{String(s.site_id)}</td>
                       <td className="py-1 pr-2">{formatDateTimeShort(s.feature_at as string)}</td>
                       <td className="py-1 pr-2">{String(s.value ?? "-")}</td>
-                      <td className="py-1">{String(s.message)}</td>
+                      <td className="py-1">
+                        {String(s.registration_message || s.message)}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -349,5 +413,22 @@ function Metric({ label, value }: { label: string; value?: number | null }) {
       <p className="text-slate-500">{label}</p>
       <p className="font-medium text-slate-800">{value?.toLocaleString() ?? "-"}</p>
     </div>
+  );
+}
+
+function QualityRegistrationBadge({ row }: { row: FeatureQualityFeatureResult }) {
+  const rs = row.registration_status;
+  if (!rs) return <span className="text-xs text-slate-400">-</span>;
+  const warn = rs === "CATALOG_ONLY" || rs === "LEGACY_ALIAS" || row.computable === false;
+  return (
+    <span
+      className={`inline-flex text-[11px] px-1.5 py-0.5 rounded border ${registrationStatusClass(rs as FeatureRegistrationStatus)} ${warn ? "font-medium" : ""}`}
+      title={row.registration_message || undefined}
+    >
+      {registrationStatusLabelExtended({
+        registration_status: rs,
+        recommended_name: row.recommended_name,
+      })}
+    </span>
   );
 }

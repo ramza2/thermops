@@ -238,12 +238,12 @@ flowchart LR
 | 항목 | 내용 |
 |------|------|
 | **화면 목적** | Feature Set 기본 정보·전처리 옵션·포함 Feature 편집, 미리보기·Feature 생성 실행 |
-| **주요 입력값** | Feature Set 명, 대상 도메인, 설명, 적용 대상, 결측 처리(`PREV`/`MEAN`/`ZERO`/`DROP`), 정규화 체크, 추가할 Feature(체크박스) |
+| **주요 입력값** | Feature Set 명, 대상 도메인, 설명, 적용 대상, 결측 처리, 정규화, **Feature 추가 모달**(필터: 전체/계산 가능/카탈로그 전용/레거시, 검색) |
 | **주요 버튼** | **목록**, **Feature 미리보기**, **Feature 생성**, **삭제**, **저장**, **Feature 추가**, **Feature 품질 점검 실행** |
-| **버튼 클릭 시 동작** | 미리보기→샘플 행 모달. Feature 생성→`feature-build-jobs` 호출, 상단 녹색 결과 박스(dataset_version_id·lineage_count) 표시. **Feature 품질 점검**→`feature-quality-runs` 호출, 점수·Feature별 통계 표시. 저장→메타 갱신 |
-| **호출 API** | `GET /feature-sets/{id}`, `PUT /feature-sets/{id}`, `DELETE /feature-sets/{id}`, `GET /features`, `POST /feature-sets/{id}/preview`, `POST /feature-build-jobs?feature_set_id={id}`, `GET /feature-build-jobs?...`, `GET /feature-sets/{id}/dataset-range`, `GET /feature-lineage`, `GET /feature-build-jobs/{job_id}/lineage`, **`POST/GET /feature-quality-runs`** |
-| **결과 확인 위치** | 포함 Feature 테이블, 미리보기 모달, 최근 Feature 생성 결과 박스, **Feature Build 이력**·**Lineage**, **Feature 품질 검증** 섹션(점수·null/이상치·이슈 샘플) |
-| **주의할 점** | Feature 생성 전 원천 데이터 적재·품질 점검 권장. **Feature 품질**은 `feature_json` 값 점검(원천 품질과 별도). Dataset 없으면 Feature 생성 먼저. Lineage=출처, Feature 품질=값 적합성 |
+| **버튼 클릭 시 동작** | Feature 추가 모달에서 **등록 유형** 뱃지·경고 확인. 공식 TPL은 non-computable 선택 비활성. 저장 시 Catalog-only 포함 사용자 Set은 확인 대화상자 |
+| **호출 API** | `GET /feature-sets/{id}`, `PUT /feature-sets/{id}`, `GET /features`, `POST /feature-build-jobs`, `POST/GET /feature-quality-runs` 등 |
+| **결과 확인 위치** | 포함 Feature **등록 유형** 컬럼, Build missing 요약, **Feature 품질 검증**의 **등록 상태** 컬럼·registration 집계 |
+| **주의할 점** | **공식 TPL**은 computable Feature만 허용. Catalog-only/Legacy는 Build WARNING·Quality missing key 유발. Feature 품질에서 `registration_status`로 원인 확인 |
 | **선행 작업** | Feature Set 생성, 원천 데이터 적재 |
 | **후속 작업** | 모델 학습 설정(`feature_set_id` 연결) |
 

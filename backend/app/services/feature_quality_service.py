@@ -15,6 +15,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.time import utc_now
 from app.models.entities import DataQualityRun, FeatureDataset, FeatureSet
 from app.services.feature_dataset_service import _feature_set_filter, latest_dataset_version_id
+from app.services.feature_registration_service import (
+    load_catalog_feature_names,
+    quality_context_message,
+    registration_metadata_for_feature,
+    summarize_registration_counts,
+)
 
 # feature_name -> (min, max). None means no upper/lower bound on that side.
 RANGE_RULES: dict[str, tuple[float | None, float | None]] = {
@@ -162,19 +168,26 @@ def _append_issue(
     value: Any,
     issue_type: str,
     message: str,
+    registration_meta: dict[str, Any] | None = None,
 ) -> None:
     if len(samples) >= MAX_ISSUE_SAMPLES:
         return
-    samples.append(
-        {
-            "feature_name": feature_name,
-            "site_id": site_id,
-            "feature_at": feature_at.isoformat() if feature_at else None,
-            "value": value,
-            "issue_type": issue_type,
-            "message": message,
-        }
-    )
+    sample: dict[str, Any] = {
+        "feature_name": feature_name,
+        "site_id": site_id,
+        "feature_at": feature_at.isoformat() if feature_at else None,
+        "value": value,
+        "issue_type": issue_type,
+        "message": message,
+    }
+    if registration_meta:
+        sample["registration_status"] = registration_meta.get("registration_status")
+        sample["computable"] = registration_meta.get("computable")
+        sample["recommended_name"] = registration_meta.get("recommended_name")
+        ctx = quality_context_message(registration_meta, has_missing_key=issue_type == "MISSING_KEY")
+        if ctx:
+            sample["registration_message"] = ctx
+    samples.append(sample)
 
 
 async def run_feature_quality_check(db: AsyncSession, params: FeatureQualityParams) -> dict[str, Any]:
@@ -250,7 +263,8 @@ async def run_feature_quality_check(db: AsyncSession, params: FeatureQualityPara
         run.result_summary = result_summary
         return _run_response(run, result_summary)
 
-    # lineage_error 참고 warning
+    # lineage_error / build coverage 참고
+    build_coverage: dict[str, Any] = {}
     lineage_run = (
         await db.execute(
             select(DataQualityRun)
@@ -264,9 +278,23 @@ async def run_feature_quality_check(db: AsyncSession, params: FeatureQualityPara
         )
     ).scalar_one_or_none()
     if lineage_run and isinstance(lineage_run.result_summary, dict):
-        lineage_error = lineage_run.result_summary.get("lineage_error")
+        build_rs = lineage_run.result_summary
+        build_coverage = {
+            "missing_feature_count": build_rs.get("missing_feature_count", 0),
+            "missing_features": build_rs.get("missing_features") or [],
+            "catalog_only_features": build_rs.get("catalog_only_features") or [],
+            "legacy_alias_features": build_rs.get("legacy_alias_features") or [],
+        }
+        lineage_error = build_rs.get("lineage_error")
         if lineage_error:
             warnings.append(f"해당 dataset_version의 Lineage 저장 실패 이력: {lineage_error}")
+
+    catalog_names = await load_catalog_feature_names(db)
+    registration_by_name: dict[str, dict[str, Any]] = {}
+    for fname in feature_names:
+        meta = registration_metadata_for_feature(fname, catalog_names=catalog_names)
+        meta["feature_name"] = fname
+        registration_by_name[fname] = meta
 
     feature_at_values = [r.feature_at for r in rows if r.feature_at]
     site_ids = sorted({r.site_id for r in rows})
@@ -283,14 +311,16 @@ async def run_feature_quality_check(db: AsyncSession, params: FeatureQualityPara
         if missing:
             rows_with_missing += 1
             if len(issue_samples) < MAX_ISSUE_SAMPLES:
+                feat = missing[0]
                 _append_issue(
                     issue_samples,
-                    feature_name=missing[0],
+                    feature_name=feat,
                     site_id=row.site_id,
                     feature_at=row.feature_at,
                     value=None,
                     issue_type="MISSING_KEY",
-                    message=f"feature_json에 {missing[0]} key 없음",
+                    message=f"feature_json에 {feat} key 없음",
+                    registration_meta=registration_by_name.get(feat),
                 )
 
     missing_key_row_ratio = rows_with_missing / row_count if row_count else 0.0
@@ -431,9 +461,20 @@ async def run_feature_quality_check(db: AsyncSession, params: FeatureQualityPara
                 "p75": _percentile(arr, 75),
                 "max": float(np.max(arr)) if arr.size else None,
                 "std": float(np.std(arr)) if arr.size else None,
+                **registration_by_name.get(name, {}),
             }
         )
+        if feat_missing_ratio > 0:
+            ctx = quality_context_message(
+                registration_by_name.get(name, {}),
+                has_missing_key=True,
+            )
+            if ctx and ctx not in warnings:
+                warnings.append(f"{name}: {ctx}")
 
+    registration_summary = summarize_registration_counts(
+        [registration_by_name[n] for n in feature_names if n in registration_by_name]
+    )
     null_ratio_all = total_null / total_cells if total_cells else 0.0
     invalid_ratio_all = total_invalid / total_cells if total_cells else 0.0
     range_ratio_all = total_range / total_cells if total_cells else 0.0
@@ -467,7 +508,10 @@ async def run_feature_quality_check(db: AsyncSession, params: FeatureQualityPara
             "invalid_count": total_invalid,
             "range_violation_count": total_range,
             "outlier_count": total_outlier,
+            **registration_summary,
         },
+        "registration_summary": registration_summary,
+        "build_coverage": build_coverage,
         "features": feature_results,
         "warnings": warnings,
         "errors": errors,

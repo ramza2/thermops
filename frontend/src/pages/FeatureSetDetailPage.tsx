@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, Eye, Play, Plus, Save, Trash2 } from "lucide-react";
 import { deleteApi, extractApiErrorMessage, fetchApi, postApi, putApi, PagedData } from "@/api/client";
@@ -15,8 +15,14 @@ import { FeatureQualitySection } from "@/components/FeatureQualitySection";
 import type { FeatureBuildResult } from "@/types/featureRegistry";
 import type { FeatureNameValidation } from "@/types/featureRegistration";
 import {
+  CATALOG_ONLY_WARNING_MSG,
+  FEATURE_QUALITY_REGISTRATION_HINT,
+  LEGACY_ALIAS_WARNING_MSG,
+  TPL_FEATURE_BLOCK_MSG,
+  matchesFeatureListFilter,
   registrationStatusClass,
   registrationStatusLabel,
+  type FeatureListFilter,
 } from "@/utils/featureRegistrationFormat";
 import {
   FeatureSet,
@@ -77,6 +83,8 @@ export default function FeatureSetDetailPage() {
   const [selectedToAdd, setSelectedToAdd] = useState<string[]>([]);
   const [featureStatusMap, setFeatureStatusMap] = useState<Record<string, FeatureNameValidation>>({});
   const [addWarnings, setAddWarnings] = useState<string[]>([]);
+  const [featureFilter, setFeatureFilter] = useState<FeatureListFilter>("all");
+  const [featureSearch, setFeatureSearch] = useState("");
 
   const isTplSet = Boolean(id?.startsWith("FS-TPL-"));
 
@@ -142,11 +150,32 @@ export default function FeatureSetDetailPage() {
     return () => { cancelled = true; };
   }, [form.features]);
 
+  const filteredFeatures = useMemo(() => {
+    const q = featureSearch.trim().toLowerCase();
+    return allFeatures.filter((f) => {
+      if (!matchesFeatureListFilter(f.registration, featureFilter)) return false;
+      if (!q) return true;
+      return (
+        f.feature_name.toLowerCase().includes(q)
+        || (f.feature_group || "").toLowerCase().includes(q)
+      );
+    });
+  }, [allFeatures, featureFilter, featureSearch]);
+
+  const isAddCheckboxDisabled = (f: FeatureItem) => {
+    if (form.features.includes(f.feature_name)) return true;
+    if (f.registration?.status === "LEGACY_ALIAS") return true;
+    if (isTplSet && f.registration && !f.registration.computable) return true;
+    return false;
+  };
+
   const openAddFeature = async () => {
     try {
       const res = await fetchApi<PagedData<FeatureItem>>("/features", { page: 1, size: 100 });
       setAllFeatures(res.items);
       setSelectedToAdd([]);
+      setFeatureFilter("all");
+      setFeatureSearch("");
       setAddFeatureOpen(true);
     } catch {
       showToast("error", "Feature 목록을 불러오지 못했습니다.");
@@ -154,16 +183,23 @@ export default function FeatureSetDetailPage() {
   };
 
   const handleAddFeatures = () => {
+    const legacySelected = selectedToAdd.filter((name) => {
+      const reg = allFeatures.find((f) => f.feature_name === name)?.registration;
+      return reg?.status === "LEGACY_ALIAS";
+    });
+    if (legacySelected.length) {
+      const alias = legacySelected[0];
+      const rec = allFeatures.find((f) => f.feature_name === alias)?.registration?.recommended_name || "공식명";
+      showToast("warning", LEGACY_ALIAS_WARNING_MSG(alias, rec));
+      return;
+    }
     if (isTplSet) {
       const blocked = selectedToAdd.filter((name) => {
         const reg = allFeatures.find((f) => f.feature_name === name)?.registration;
         return !reg?.computable;
       });
       if (blocked.length) {
-        showToast(
-          "warning",
-          `공식 TPL Feature Set에는 계산 가능한 Feature만 추가할 수 있습니다: ${blocked.join(", ")}`,
-        );
+        showToast("warning", `${TPL_FEATURE_BLOCK_MSG} (${blocked.join(", ")})`);
         return;
       }
     }
@@ -184,9 +220,9 @@ export default function FeatureSetDetailPage() {
       const reg = allFeatures.find((f) => f.feature_name === name)?.registration;
       if (!reg) continue;
       if (reg.status === "LEGACY_ALIAS") {
-        warnings.push(`${name}: 레거시 별칭 — ${reg.recommended_name || "공식명"} 사용을 권장합니다.`);
-      } else if (reg.status === "CATALOG_ONLY") {
-        warnings.push(`${name}: 카탈로그 전용 — Feature 생성 시 값이 생성되지 않을 수 있습니다.`);
+        warnings.push(LEGACY_ALIAS_WARNING_MSG(name, reg.recommended_name || "공식명"));
+      } else if (reg.status === "CATALOG_ONLY" || !reg.computable) {
+        warnings.push(`${name}: ${CATALOG_ONLY_WARNING_MSG}`);
       }
     }
     setAddWarnings(warnings);
@@ -200,6 +236,23 @@ export default function FeatureSetDetailPage() {
     if (!id || !form.feature_set_name.trim()) {
       showToast("warning", "Feature Set 명을 입력하세요.");
       return;
+    }
+    const legacyInSet = form.features.filter((name) => featureStatusMap[name]?.status === "LEGACY_ALIAS");
+    if (legacyInSet.length) {
+      showToast("warning", `레거시 별칭은 저장할 수 없습니다: ${legacyInSet.join(", ")}`);
+      return;
+    }
+    if (!isTplSet) {
+      const catalogOnly = form.features.filter(
+        (name) => featureStatusMap[name] && !featureStatusMap[name].computable,
+      );
+      if (catalogOnly.length) {
+        const ok = window.confirm(
+          `카탈로그 전용(비계산) Feature ${catalogOnly.length}건이 포함되어 있습니다.\n`
+          + `${CATALOG_ONLY_WARNING_MSG}\n\n저장하시겠습니까?`,
+        );
+        if (!ok) return;
+      }
     }
     setSaving(true);
     try {
@@ -383,6 +436,18 @@ export default function FeatureSetDetailPage() {
           {buildResult.warnings && buildResult.warnings.length > 0 && (
             <p className="text-amber-700 text-xs">경고 {buildResult.warnings.length}건</p>
           )}
+          {(buildResult.result_summary?.missing_feature_count ?? 0) > 0 && (
+            <div className="text-amber-800 text-xs mt-1 bg-amber-50 border border-amber-100 rounded p-2">
+              미생성 Feature {buildResult.result_summary?.missing_feature_count}건
+              {(buildResult.result_summary?.catalog_only_features?.length ?? 0) > 0 && (
+                <span> · 카탈로그 전용: {buildResult.result_summary?.catalog_only_features?.join(", ")}</span>
+              )}
+              {(buildResult.result_summary?.legacy_alias_features?.length ?? 0) > 0 && (
+                <span> · 레거시: {buildResult.result_summary?.legacy_alias_features?.join(", ")}</span>
+              )}
+              <p className="mt-1 text-amber-700">{FEATURE_QUALITY_REGISTRATION_HINT}</p>
+            </div>
+          )}
         </div>
       )}
 
@@ -393,6 +458,11 @@ export default function FeatureSetDetailPage() {
             Feature 추가
           </Button>
         </div>
+        {isTplSet && (
+          <p className="text-xs text-blue-800 bg-blue-50 border border-blue-100 rounded p-2 mb-3">
+            {TPL_FEATURE_BLOCK_MSG}
+          </p>
+        )}
         <DataTable
           columns={[
             { key: "name", header: "Feature명" },
@@ -438,24 +508,53 @@ export default function FeatureSetDetailPage() {
           </>
         }
       >
+        {isTplSet && (
+          <p className="text-xs text-blue-800 bg-blue-50 border border-blue-100 rounded p-2 mb-3">
+            {TPL_FEATURE_BLOCK_MSG}
+          </p>
+        )}
+        <div className="flex flex-wrap gap-2 mb-3">
+          <SelectInput
+            value={featureFilter}
+            onChange={(v) => setFeatureFilter(v as FeatureListFilter)}
+            options={[
+              { value: "all", label: "전체" },
+              { value: "computable", label: "계산 가능" },
+              { value: "catalog_only", label: "카탈로그 전용" },
+              { value: "legacy", label: "레거시/비권장" },
+            ]}
+          />
+          <div className="flex-1 min-w-[160px]">
+            <TextInput
+              value={featureSearch}
+              onChange={setFeatureSearch}
+              placeholder="Feature명·그룹 검색"
+            />
+          </div>
+        </div>
         <div className="max-h-64 overflow-y-auto space-y-2">
           {addWarnings.length > 0 && (
             <div className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded p-2 mb-2">
               {addWarnings.map((w) => <div key={w}>{w}</div>)}
             </div>
           )}
-          {allFeatures.map((f) => (
+          {filteredFeatures.length === 0 && (
+            <p className="text-xs text-slate-500 py-4 text-center">조건에 맞는 Feature가 없습니다.</p>
+          )}
+          {filteredFeatures.map((f) => (
             <label key={f.feature_id} className="flex items-center gap-2 text-sm py-1 border-b border-slate-100">
               <input
                 type="checkbox"
                 checked={selectedToAdd.includes(f.feature_name)}
-                disabled={form.features.includes(f.feature_name)}
+                disabled={isAddCheckboxDisabled(f)}
                 onChange={(e) => {
                   if (e.target.checked) setSelectedToAdd([...selectedToAdd, f.feature_name]);
                   else setSelectedToAdd(selectedToAdd.filter((n) => n !== f.feature_name));
                 }}
               />
-              <span className="font-medium">{f.feature_name}</span>
+              <span className={`font-medium ${isAddCheckboxDisabled(f) ? "text-slate-400" : ""}`}>
+                {f.feature_name}
+              </span>
               <FeatureRegistrationBadge registration={f.registration} />
               <span className="text-slate-400 text-xs">{f.feature_group || "-"}</span>
             </label>

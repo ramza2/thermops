@@ -75,6 +75,10 @@ export interface FeatureBuildResult {
     lineage_error?: string | null;
     dataset_version_id?: string;
     warnings?: string[];
+    missing_feature_count?: number;
+    missing_features?: string[];
+    catalog_only_features?: string[];
+    legacy_alias_features?: string[];
   };
 }
 

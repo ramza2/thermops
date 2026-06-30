@@ -34,10 +34,23 @@ for (const path of PATHS) {
     await page.locator("th", { hasText: "계산식 메모" }).first().waitFor({ state: "visible", timeout: 30000 });
   }
   if (path === "/feature-sets/FS-TPL-LAG-ROLL") {
+    await page.waitForTimeout(2000);
     const lineage = await page.getByText("Feature Lineage").count();
     const buildHistory = await page.getByText("최근 Feature Build 이력").count();
+    const quality = await page.getByText("Feature 품질 검증").count();
+    const regCol = await page.locator("th", { hasText: "등록 유형" }).count();
+    const tplGuard = await page.getByText("공식 템플릿 Feature Set").count();
     if (!lineage || !buildHistory) {
       errors.push(`${path}: Feature Lineage / Build history section missing`);
+    }
+    if (!quality) {
+      errors.push(`${path}: Feature Quality section missing`);
+    }
+    if (!regCol) {
+      errors.push(`${path}: Feature list registration column missing`);
+    }
+    if (!tplGuard) {
+      errors.push(`${path}: TPL protection notice missing`);
     }
   }
 }

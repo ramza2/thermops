@@ -65,3 +65,47 @@ export function validationWarnsRegistration(v: FeatureNameValidation | null): bo
   if (!v) return false;
   return v.status === "CATALOG_ONLY" && !v.catalog_registered;
 }
+
+export const TPL_FEATURE_BLOCK_MSG =
+  "공식 템플릿 Feature Set에는 계산 가능한 Registry Feature만 추가할 수 있습니다. Catalog-only 또는 Legacy Feature는 사용자 정의 Feature Set에서만 실험적으로 사용할 수 있습니다.";
+
+export const CATALOG_ONLY_WARNING_MSG =
+  "이 Feature는 카탈로그에만 등록되어 있으며 현재 계산 로직이 없습니다. Feature 생성 시 값이 생성되지 않아 Build WARNING 또는 Feature Quality 실패가 발생할 수 있습니다.";
+
+export const LEGACY_ALIAS_WARNING_MSG = (name: string, recommended: string) =>
+  `이 Feature명(${name})은 레거시 별칭입니다. 신규 Feature Set에는 공식명 ${recommended}을 사용하세요.`;
+
+export const FEATURE_QUALITY_REGISTRATION_HINT =
+  "Catalog-only 또는 Legacy Feature가 Feature Set에 포함되면 Feature Build에서 값이 생성되지 않거나 Feature Quality에서 missing key로 표시될 수 있습니다.";
+
+export type FeatureListFilter = "all" | "computable" | "catalog_only" | "legacy";
+
+export function matchesFeatureListFilter(
+  reg: FeatureNameValidation | undefined,
+  filter: FeatureListFilter,
+): boolean {
+  if (filter === "all") return true;
+  if (!reg) return filter === "catalog_only";
+  if (filter === "computable") return reg.computable;
+  if (filter === "catalog_only") return reg.status === "CATALOG_ONLY" || reg.status === "DUPLICATE";
+  if (filter === "legacy") return reg.status === "LEGACY_ALIAS";
+  return true;
+}
+
+export function registrationStatusLabelExtended(meta: {
+  registration_status?: string;
+  status?: string;
+  recommended_name?: string | null;
+}): string {
+  const status = (meta.registration_status ?? meta.status) as FeatureRegistrationStatus | undefined;
+  if (!status) return "미등록";
+  if (status === "LEGACY_ALIAS" && meta.recommended_name) {
+    return `레거시: ${meta.recommended_name} 권장`;
+  }
+  return registrationStatusLabel(status);
+}
+
+export function isNonComputableRegistration(reg?: FeatureNameValidation | null): boolean {
+  if (!reg) return true;
+  return !reg.computable || reg.status === "LEGACY_ALIAS" || reg.status === "CATALOG_ONLY";
+}

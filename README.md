@@ -280,10 +280,13 @@ curl -X POST "http://localhost:8000/api/v1/feature-build-jobs?feature_set_id=FS-
 **Feature Registry·Lineage UI**
 
 - `/features`: **등록 유형** 뱃지, **신규 Feature 사용 절차** 안내, Registry 요약, **상세** 모달에서 입력 테이블·Lookback·누수 방지 등 확인
-- `/feature-sets/:id`: 포함 Feature **등록 유형** 뱃지, **최근 Feature Build 이력** 선택 + **Feature Lineage** + **Feature 품질 검증** 섹션
+- `/feature-sets/:id`: 포함 Feature **등록 유형** 뱃지·필터·TPL 보호, **Feature Build 이력** + **Lineage** + **Feature 품질 검증**(등록 상태 컬럼)
 - Lineage 없음 → Feature Set 상세에서 **Feature 생성** 먼저 실행
 
 **Feature 품질 검증** (`check_type=FEATURE_QUALITY`)
+
+- Feature별 **registration_status**(계산 가능/카탈로그 전용/레거시) 표시
+- Build `result_summary`의 missing/catalog_only 정보를 `build_coverage`로 참조
 
 - 대상: `tb_feature_dataset.feature_json` (원천 데이터 품질 점검과 별도)
 - Feature Set 상세에서 `dataset_version_id` 기준 실행 · 이력 조회

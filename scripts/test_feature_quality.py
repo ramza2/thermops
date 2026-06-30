@@ -31,18 +31,6 @@ def api(method: str, path: str, body: dict | None = None) -> dict:
     return payload["data"]
 
 
-def api_expect_error(method: str, path: str, body: dict | None = None) -> tuple[int, str]:
-    url = f"{API_BASE}{path}"
-    data = json.dumps(body).encode() if body is not None else None
-    headers = {"Content-Type": "application/json"} if body is not None else {}
-    req = urllib.request.Request(url, data=data, headers=headers, method=method)
-    try:
-        with urllib.request.urlopen(req, timeout=60) as resp:
-            return resp.status, resp.read().decode()
-    except urllib.error.HTTPError as exc:
-        return exc.code, exc.read().decode()
-
-
 def ensure_dataset_version() -> str:
     range_info = api("GET", f"/feature-sets/{FEATURE_SET_ID}/dataset-range")
     dsv = range_info.get("dataset_version_id")
@@ -80,6 +68,24 @@ def check_post_quality(dsv: str) -> str:
         f"score={result['score']} rows={rs['row_count']}"
     )
     return result["run_id"]
+
+
+def check_registration_metadata(run_id: str) -> None:
+    detail = api("GET", f"/feature-quality-runs/{run_id}")
+    rs = detail.get("result_summary") or {}
+    feats = {f["feature_name"]: f for f in rs.get("features", [])}
+    for feat in REQUIRED_FEATURES:
+        row = feats.get(feat)
+        if not row:
+            raise RuntimeError(f"missing feature row {feat}")
+        if row.get("registration_status") != "COMPUTABLE":
+            raise RuntimeError(f"{feat} expected COMPUTABLE, got {row.get('registration_status')}")
+        if row.get("computable") is not True:
+            raise RuntimeError(f"{feat} computable flag false")
+    reg_sum = rs.get("registration_summary") or rs.get("summary") or {}
+    if "non_computable_feature_count" not in reg_sum:
+        raise RuntimeError(f"registration summary missing counts: {reg_sum.keys()}")
+    print("  [registration] COMPUTABLE status on official features OK")
 
 
 def check_list_and_get(run_id: str) -> None:
@@ -122,6 +128,7 @@ def main() -> int:
     try:
         dsv = ensure_dataset_version()
         run_id = check_post_quality(dsv)
+        check_registration_metadata(run_id)
         check_list_and_get(run_id)
         check_bad_dataset()
         check_data_quality_isolation()

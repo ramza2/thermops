@@ -30,7 +30,13 @@ from app.services.feature_quality_service import (
     list_feature_quality_runs,
     run_feature_quality_check,
 )
-from app.services.feature_registration_service import classify_feature_name, validate_feature_name
+from app.services.feature_registration_service import (
+    LEGACY_ALIASES,
+    classify_feature_name,
+    is_computable,
+    is_tpl_feature_set,
+    validate_feature_name,
+)
 
 router = APIRouter(tags=["Feature"])
 
@@ -196,8 +202,33 @@ async def update_feature_set(feature_set_id: str, body: FeatureSetCreate, db: As
     fs = (await db.execute(select(FeatureSet).where(FeatureSet.feature_set_id == feature_set_id))).scalar_one_or_none()
     if not fs:
         raise HTTPException(status_code=404, detail="NOT_FOUND")
+
+    existing = set(fs.features or [])
+    requested = list(body.features or [])
+
+    if is_tpl_feature_set(feature_set_id):
+        blocked = [n for n in requested if not is_computable(n)]
+        if blocked:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "공식 TPL Feature Set에는 계산 가능한 Registry Feature만 포함할 수 있습니다: "
+                    + ", ".join(blocked[:5])
+                ),
+            )
+
+    new_names = [n for n in requested if n not in existing]
+    legacy_new = [n for n in new_names if n in LEGACY_ALIASES]
+    if legacy_new:
+        alias = legacy_new[0]
+        official = LEGACY_ALIASES[alias]
+        raise HTTPException(
+            status_code=400,
+            detail=f"레거시 별칭 '{alias}'는 신규 추가할 수 없습니다. 공식명 '{official}'을 사용하세요.",
+        )
+
     fs.feature_set_name = body.feature_set_name
-    fs.features = body.features
+    fs.features = requested
     fs.apply_site_scope = body.apply_site_scope
     fs.description = body.description
     return ok({"feature_set_id": feature_set_id}, message="Feature Set이 수정되었습니다.")

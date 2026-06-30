@@ -225,3 +225,78 @@ def analyze_feature_set_coverage(
 
 def is_tpl_feature_set(feature_set_id: str) -> bool:
     return feature_set_id.startswith(TPL_FEATURE_SET_PREFIX)
+
+
+async def load_catalog_feature_names(db: AsyncSession) -> frozenset[str]:
+    rows = (await db.execute(select(Feature.feature_name))).all()
+    return frozenset(r[0] for r in rows)
+
+
+def registration_metadata_for_feature(
+    feature_name: str,
+    *,
+    catalog_names: frozenset[str],
+) -> dict[str, Any]:
+    """Feature Quality·Build 등에서 재사용하는 registration 메타데이터."""
+    reg = classify_feature_name(
+        feature_name,
+        catalog_registered=feature_name in catalog_names,
+    )
+    status = reg["status"]
+    return {
+        "registration_status": status,
+        "catalog_registered": reg["catalog_registered"],
+        "registry_registered": reg["registry_registered"],
+        "computable": reg["computable"],
+        "legacy_alias": status == "LEGACY_ALIAS",
+        "recommended_name": reg.get("recommended_name"),
+        "registration_message": reg["message"],
+    }
+
+
+def quality_context_message(
+    meta: dict[str, Any],
+    *,
+    has_missing_key: bool,
+) -> str | None:
+    """missing key 등 품질 이슈와 registration이 겹칠 때 추가 안내."""
+    if not has_missing_key:
+        return None
+    status = meta.get("registration_status")
+    name = meta.get("feature_name", "")
+    if status == "LEGACY_ALIAS":
+        rec = meta.get("recommended_name")
+        return f"{name}는 레거시 별칭입니다. 공식명 {rec}를 사용하세요."
+    if status == "CATALOG_ONLY":
+        if meta.get("catalog_registered"):
+            return (
+                "카탈로그에는 등록되어 있으나 계산 로직이 없어 feature_json에 값이 없습니다."
+            )
+        return "Registry에 등록되지 않았고 계산 로직이 없어 feature_json에 값이 없습니다."
+    if not meta.get("registry_registered") and not meta.get("computable"):
+        return f"{name}는 Registry 미등록 Feature로 feature_json에 값이 없을 수 있습니다."
+    return None
+
+
+def summarize_registration_counts(feature_metas: list[dict[str, Any]]) -> dict[str, int]:
+    catalog_only = 0
+    legacy = 0
+    non_computable = 0
+    registry_missing = 0
+    for m in feature_metas:
+        status = m.get("registration_status")
+        computable = m.get("computable")
+        if status == "CATALOG_ONLY" or (status == "DUPLICATE" and not computable):
+            catalog_only += 1
+        if status == "LEGACY_ALIAS":
+            legacy += 1
+        if not computable:
+            non_computable += 1
+        if not m.get("registry_registered") and status != "LEGACY_ALIAS":
+            registry_missing += 1
+    return {
+        "catalog_only_feature_count": catalog_only,
+        "legacy_alias_feature_count": legacy,
+        "non_computable_feature_count": non_computable,
+        "registry_missing_feature_count": registry_missing,
+    }
