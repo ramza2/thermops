@@ -338,12 +338,12 @@ docker compose -f docker-compose.traefik.yml --env-file .env.deploy exec backend
 
 ```bash
 git pull
-python scripts/apply_dev_migrations.py
+python3 scripts/apply_dev_migrations.py
 docker compose -f docker-compose.traefik.yml --env-file .env.deploy restart backend
 docker compose -f docker-compose.traefik.yml --env-file .env.deploy up -d --build backend airflow mlflow
 ```
 
-`apply_dev_migrations.py`는 **호스트**에서 실행합니다. 스크립트가 `docker exec`로 postgres 컨테이너에 SQL을 적용합니다 (`THERMOOPS_USE_DOCKER=1` 기본). backend 컨테이너에는 `scripts/`가 `/workspace/scripts`로 마운트되지만 Docker CLI가 없어 컨테이너 내부 실행은 권장하지 않습니다.
+`apply_dev_migrations.py`는 **호스트**에서 실행합니다. Ubuntu 등 Linux 서버는 `python` 대신 **`python3`** 를 사용하세요. 스크립트가 `docker exec`로 postgres 컨테이너에 SQL을 적용합니다 (`THERMOOPS_USE_DOCKER=1` 기본). backend 컨테이너에는 `scripts/`가 `/workspace/scripts`로 마운트되지만 Docker CLI가 없어 컨테이너 내부 실행은 권장하지 않습니다.
 
 구버전이거나 급한 경우: 비밀번호에서 `@` 제거 후 `down -v`로 DB volume 재생성.
 
@@ -368,7 +368,7 @@ docker compose -f docker-compose.traefik.yml --env-file .env.deploy up -d --buil
 THERMOPS_DEPLOY_ENV=clean python scripts/reset_clean_deploy.py --yes
 
 # 기존 DB 볼륨 스키마 보완 (신규 테이블·컬럼, 예: tb_feature_lineage)
-python scripts/apply_dev_migrations.py
+python3 scripts/apply_dev_migrations.py
 docker compose -f docker-compose.traefik.yml --env-file .env.deploy restart backend
 ```
 

@@ -153,7 +153,7 @@ async def get_lineage_by_dataset_version(db: AsyncSession, dataset_version_id: s
     except ProgrammingError as exc:
         if _is_missing_lineage_table(exc):
             raise LineageTableMissingError(
-                "tb_feature_lineage 테이블이 없습니다. 호스트에서 python scripts/apply_dev_migrations.py 를 실행하세요."
+                "tb_feature_lineage 테이블이 없습니다. 호스트에서 python3 scripts/apply_dev_migrations.py 를 실행하세요."
             ) from exc
         raise
     return [_lineage_row_to_dict(r) for r in rows]
@@ -171,7 +171,7 @@ async def get_lineage_by_job_id(db: AsyncSession, job_id: str) -> list[dict[str,
     except ProgrammingError as exc:
         if _is_missing_lineage_table(exc):
             raise LineageTableMissingError(
-                "tb_feature_lineage 테이블이 없습니다. 호스트에서 python scripts/apply_dev_migrations.py 를 실행하세요."
+                "tb_feature_lineage 테이블이 없습니다. 호스트에서 python3 scripts/apply_dev_migrations.py 를 실행하세요."
             ) from exc
         raise
     return [_lineage_row_to_dict(r) for r in rows]
