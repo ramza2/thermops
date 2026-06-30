@@ -12,7 +12,11 @@ from datetime import datetime, timedelta
 
 API_BASE = os.environ.get("THERMOOPS_API_BASE", "http://localhost:8000/api/v1")
 FEATURE_SET_ID = os.environ.get("THERMOOPS_FEATURE_SET_ID", "FS-TPL-LAG-ROLL")
-EMPTY_FEATURE_SET_ID = os.environ.get("THERMOOPS_EMPTY_FEATURE_SET_ID", "FS-TPL-MINIMAL")
+# 테스트 전용: Dataset 없는 Feature Set (기본은 실행 시 생성·재사용)
+TEST_NO_DATASET_FS_NAME = "TEST-NO-DATASET period validation"
+TEST_NO_DATASET_FS_MARKER = "THERMOps test: no feature dataset (period validation)"
+# Dataset 있는 다른 Feature Set 후보 (MODEL_FEATURE_SET_MISMATCH)
+ALT_FEATURE_SET_CANDIDATES = ("FS-TPL-MINIMAL", "FS-TPL-TWO-STAGE")
 
 
 def api(method: str, path: str, body: dict | None = None, timeout: int = 300) -> dict:
@@ -60,6 +64,90 @@ def ensure_feature_dataset() -> dict:
     return api_data("GET", f"/feature-sets/{FEATURE_SET_ID}/dataset-range")
 
 
+def _dataset_range(feature_set_id: str) -> dict:
+    return api_data("GET", f"/feature-sets/{feature_set_id}/dataset-range")
+
+
+def _feature_set_exists(feature_set_id: str) -> bool:
+    try:
+        api_data("GET", f"/feature-sets/{feature_set_id}")
+        return True
+    except urllib.error.HTTPError as exc:
+        if exc.code == 404:
+            return False
+        raise
+
+
+def ensure_no_dataset_feature_set() -> str:
+    """Dataset 없는 Feature Set 확보 (메타만 존재, Feature Build 미실행)."""
+    env_id = os.environ.get("THERMOOPS_EMPTY_FEATURE_SET_ID")
+    if env_id:
+        if not _feature_set_exists(env_id):
+            raise RuntimeError(f"THERMOOPS_EMPTY_FEATURE_SET_ID={env_id} not found")
+        dr = _dataset_range(env_id)
+        if dr.get("exists") and int(dr.get("row_count", 0)) > 0:
+            raise RuntimeError(
+                f"THERMOOPS_EMPTY_FEATURE_SET_ID={env_id} has dataset rows={dr.get('row_count')}; "
+                "expected empty for NO_FEATURE_DATASET test"
+            )
+        print(f"  [setup] using env empty feature set {env_id}")
+        return env_id
+
+    for fs in api_data("GET", "/feature-sets"):
+        if fs.get("description") == TEST_NO_DATASET_FS_MARKER or fs.get("feature_set_name") == TEST_NO_DATASET_FS_NAME:
+            fsid = fs["feature_set_id"]
+            dr = _dataset_range(fsid)
+            if dr.get("exists") and int(dr.get("row_count", 0)) > 0:
+                raise RuntimeError(
+                    f"test feature set {fsid} has dataset rows={dr.get('row_count')}; "
+                    "delete dataset or use THERMOOPS_EMPTY_FEATURE_SET_ID"
+                )
+            print(f"  [setup] reusing no-dataset feature set {fsid}")
+            return fsid
+
+    created = api_data(
+        "POST",
+        "/feature-sets",
+        {
+            "feature_set_name": TEST_NO_DATASET_FS_NAME,
+            "target_domain": "HEAT_DEMAND",
+            "features": ["temperature", "hour"],
+            "apply_site_scope": "ALL",
+            "description": TEST_NO_DATASET_FS_MARKER,
+        },
+    )
+    fsid = created["feature_set_id"]
+    print(f"  [setup] created no-dataset feature set {fsid}")
+    return fsid
+
+
+def ensure_other_feature_set_with_dataset(primary_id: str) -> tuple[str, dict]:
+    """primary와 다른 Feature Set 중 Dataset이 있는 것을 반환 (없으면 build)."""
+    for fsid in ALT_FEATURE_SET_CANDIDATES:
+        if fsid == primary_id:
+            continue
+        if not _feature_set_exists(fsid):
+            continue
+        dr = _dataset_range(fsid)
+        if dr.get("exists") and int(dr.get("row_count", 0)) > 0:
+            return fsid, dr
+
+    for fsid in ALT_FEATURE_SET_CANDIDATES:
+        if fsid == primary_id:
+            continue
+        if not _feature_set_exists(fsid):
+            continue
+        print(f"  [setup] building dataset for mismatch test: {fsid}")
+        api_data("POST", f"/feature-build-jobs?feature_set_id={fsid}", timeout=180)
+        dr = _dataset_range(fsid)
+        if dr.get("exists") and int(dr.get("row_count", 0)) > 0:
+            return fsid, dr
+
+    raise RuntimeError(
+        f"no alternate feature set with dataset found (candidates={ALT_FEATURE_SET_CANDIDATES})"
+    )
+
+
 def find_compatible_model_version() -> str | None:
     models = api_data("GET", "/models")
     for m in models:
@@ -94,8 +182,10 @@ def main() -> int:
         min_at = range_data["min_target_at"]
         max_at = range_data["max_target_at"]
         model_version_id = ensure_model()
+        no_dataset_fs_id = ensure_no_dataset_feature_set()
         print(f"  [range] {min_at} ~ {max_at}")
         print(f"  [model] {model_version_id}")
+        print(f"  [no-dataset-fs] {no_dataset_fs_id}")
 
         ok_body = {
             "feature_set_id": FEATURE_SET_ID,
@@ -133,8 +223,7 @@ def main() -> int:
             "POST",
             "/prediction-jobs",
             {
-                "feature_set_id": EMPTY_FEATURE_SET_ID,
-                "model_version_id": model_version_id,
+                "feature_set_id": no_dataset_fs_id,
                 "start_at": min_at,
                 "end_at": max_at,
                 "prediction_horizon": "BATCH",
@@ -142,8 +231,25 @@ def main() -> int:
             },
             "NO_FEATURE_DATASET",
         )
-        assert empty_detail.get("feature_set_id") == EMPTY_FEATURE_SET_ID
-        print(f"  [ok] no dataset -> 400 NO_FEATURE_DATASET")
+        assert empty_detail.get("feature_set_id") == no_dataset_fs_id
+        print(f"  [ok] no dataset ({no_dataset_fs_id}) -> 400 NO_FEATURE_DATASET")
+
+        alt_fs_id, alt_range = ensure_other_feature_set_with_dataset(FEATURE_SET_ID)
+        mismatch_detail = api_expect_error(
+            "POST",
+            "/prediction-jobs",
+            {
+                "feature_set_id": alt_fs_id,
+                "model_version_id": model_version_id,
+                "start_at": alt_range["min_target_at"],
+                "end_at": alt_range["max_target_at"],
+                "prediction_horizon": "BATCH",
+                "overwrite_yn": True,
+            },
+            "MODEL_FEATURE_SET_MISMATCH",
+        )
+        assert mismatch_detail.get("message")
+        print(f"  [ok] model/fs mismatch ({alt_fs_id}) -> 400 MODEL_FEATURE_SET_MISMATCH")
 
         aware_body = dict(ok_body)
         aware_body["start_at"] = f"{min_at}Z"
