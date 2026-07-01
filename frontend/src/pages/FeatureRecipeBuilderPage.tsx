@@ -3,13 +3,11 @@ import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom"
 import {
   createFeatureRecipe,
   getFeatureRecipe,
-  previewSavedFeatureRecipe,
   publishFeatureRecipe,
   updateFeatureRecipe,
-  validateSavedFeatureRecipe,
 } from "@/api/featureRecipes";
 import { getColumnRoles } from "@/api/featureColumnRoles";
-import { fetchApi, PagedData, postApi, putApi } from "@/api/client";
+import { fetchApi, PagedData } from "@/api/client";
 import { getFeatureRecipeTemplates, previewFeatureRecipe, validateFeatureRecipe } from "@/api/featureRecipeTemplates";
 import { Button } from "@/components/Button";
 import { DataTable } from "@/components/DataTable";
@@ -125,6 +123,38 @@ export default function FeatureRecipeBuilderPage() {
   useEffect(() => { void loadRoles(); }, [loadRoles]);
   useEffect(() => { void loadRecipe(); }, [loadRecipe]);
 
+  const defaultSourceForType = useCallback((type: string, options: { value: string }[]) => {
+    if (type === "DATE_PART") {
+      return timeKey || options.find((o) => o.value === "measured_at")?.value || options[0]?.value || "";
+    }
+    return options.find((o) => o.value === "heat_demand")?.value || options[0]?.value || "";
+  }, [timeKey]);
+
+  const handleRecipeTypeChange = (nextType: string) => {
+    if (recipe?.status === "PUBLISHED") return;
+    setRecipeType(nextType);
+    setValidateResult(null);
+    setPreviewResult(null);
+    const nextSource = defaultSourceForType(nextType, sourceOptions);
+    if (nextSource) setSourceColumn(nextSource);
+    if (nextType === "DATE_PART") {
+      setDateParts(["hour"]);
+    }
+    setOutputFeatureName("");
+  };
+
+  const handleSourceColumnChange = (col: string) => {
+    setSourceColumn(col);
+    setValidateResult(null);
+    setPreviewResult(null);
+  };
+
+  const handleMappingChange = (nextMappingId: string) => {
+    setMappingId(nextMappingId);
+    setValidateResult(null);
+    setPreviewResult(null);
+  };
+
   const buildPayload = useMemo(() => {
     const params: Record<string, unknown> = recipeType === "DATE_PART"
       ? { parts: dateParts }
@@ -165,12 +195,20 @@ export default function FeatureRecipeBuilderPage() {
       .map((c) => ({ value: c.source_column, label: c.source_column }));
   }, [columnRoles, mappingId, mappings, recipeType]);
 
+  useEffect(() => {
+    if (!sourceOptions.length) return;
+    const allowed = new Set(sourceOptions.map((o) => o.value));
+    if (!allowed.has(sourceColumn)) {
+      setSourceColumn(defaultSourceForType(recipeType, sourceOptions));
+      setValidateResult(null);
+      setPreviewResult(null);
+    }
+  }, [sourceOptions, sourceColumn, recipeType, defaultSourceForType]);
+
   const runValidate = async () => {
     setBusy("validate");
     try {
-      const res = isNew || !recipe
-        ? await validateFeatureRecipe(buildPayload)
-        : (await validateSavedFeatureRecipe(recipe.recipe_id)).validation;
+      const res = await validateFeatureRecipe(buildPayload);
       setValidateResult(res as unknown as Record<string, unknown>);
       if (res.output_feature_names && !outputFeatureName) {
         const names = res.output_feature_names as string[];
@@ -188,15 +226,13 @@ export default function FeatureRecipeBuilderPage() {
   const runPreview = async () => {
     setBusy("preview");
     try {
-      if (recipe?.recipe_id && recipe.status !== "PUBLISHED") {
-        const res = await previewSavedFeatureRecipe(recipe.recipe_id, 50);
-        setPreviewResult(res.preview);
-        setRecipe(res.recipe);
+      const res = await previewFeatureRecipe({ ...buildPayload, sample_size: 50 });
+      setPreviewResult(res);
+      if (!res.valid && res.errors?.length) {
+        showToast("warning", res.errors[0]?.message ?? "Preview 검증에 실패했습니다.");
       } else {
-        const res = await previewFeatureRecipe({ ...buildPayload, sample_size: 50 });
-        setPreviewResult(res);
+        showToast("success", "Preview를 실행했습니다.");
       }
-      showToast("success", "Preview를 실행했습니다.");
     } catch {
       showToast("error", "Preview 요청에 실패했습니다.");
     } finally {
@@ -259,6 +295,7 @@ export default function FeatureRecipeBuilderPage() {
       <div className="mb-4 text-xs text-slate-600 bg-blue-50 border border-blue-200 rounded-lg p-3 space-y-1">
         <p>{R5_BUILD_WARNING}</p>
         <p>{RECIPE_PREVIEW_NO_SAVE_NOTE}</p>
+        <p className="text-slate-500">검증·미리보기는 현재 화면 입력값을 기준으로 실행됩니다. 초안 저장 전에도 확인할 수 있습니다.</p>
         {TIME_SERIES.has(recipeType) && <p>{RECIPE_PREVIEW_ROW_STEP_NOTE}</p>}
       </div>
 
@@ -282,7 +319,7 @@ export default function FeatureRecipeBuilderPage() {
                 type="button"
                 disabled={recipe?.status === "PUBLISHED"}
                 className={`w-full text-left text-xs px-2 py-1.5 rounded border ${recipeType === t ? "border-blue-400 bg-blue-50" : "border-slate-200"}`}
-                onClick={() => setRecipeType(t)}
+                onClick={() => handleRecipeTypeChange(t)}
               >
                 {t}
               </button>
@@ -300,7 +337,7 @@ export default function FeatureRecipeBuilderPage() {
               <div className="text-xs text-slate-500 mb-1">매핑</div>
               <SelectInput
                 value={mappingId}
-                onChange={setMappingId}
+                onChange={handleMappingChange}
                 options={mappings.map((m) => ({ value: m.mapping_id, label: m.mapping_name }))}
               />
             </div>
@@ -308,7 +345,7 @@ export default function FeatureRecipeBuilderPage() {
               <div className="text-xs text-slate-500 mb-1">Source column</div>
               <SelectInput
                 value={sourceColumn}
-                onChange={setSourceColumn}
+                onChange={handleSourceColumnChange}
                 options={sourceOptions}
               />
             </div>
