@@ -177,6 +177,8 @@ flowchart LR
 
 **R3 Recipe Preview**: RAW_COLUMN·DATE_PART 템플릿에 한해 `POST /feature-recipes/preview`로 샘플 결과를 확인합니다. 결과는 저장되지 않으며 Feature Build·학습·예측에 반영되지 않습니다. DATE_PART 표준 Feature(`hour` 등)는 기존 Catalog/Registry 재사용 가능 안내가 표시됩니다.
 
+**R4 Recipe Preview**: LAG·ROLLING_MEAN·ROLLING_SUM 템플릿 Preview가 추가되었습니다. `entity_keys`와 `time_key`로 정렬한 뒤 **row step** 기반으로 계산하며, 시간 간격 불규칙·이력 부족·target 누수 가능성은 Preview 응답의 warnings로 안내됩니다. `include_current_row=true`이고 source가 target과 같으면 누수 경고가 표시됩니다. DIFF·RATIO 등은 후속 Preview입니다. 결과는 여전히 저장되지 않습니다.
+
 ---
 
 ### 2.4 `/data/quality` — 데이터 품질 점검

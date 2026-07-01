@@ -72,10 +72,22 @@ export const RECIPE_BUILDER_FUTURE_NOTE =
   "Recipe Builder는 후속 단계에서 제공됩니다. 현재 단계에서는 템플릿 사용 가능 여부만 확인할 수 있습니다.";
 
 export const RECIPE_PREVIEW_NO_SAVE_NOTE =
-  "R3 Preview는 결과를 저장하지 않습니다. Recipe 저장과 Feature Build는 후속 단계에서 제공됩니다.";
+  "Preview 결과는 저장하지 않습니다. Recipe 저장과 Feature Build는 후속 단계에서 제공됩니다.";
 
-export const RECIPE_PREVIEW_R4_NOTE = "LAG/ROLLING 등 시계열 템플릿 Preview는 R4에서 제공됩니다.";
+export const RECIPE_PREVIEW_ROW_STEP_NOTE =
+  "LAG/ROLLING Preview는 row step 기반입니다. 데이터 간격이 불규칙하면 실제 시간 기준 결과와 다를 수 있습니다.";
 
-export const PREVIEW_SUPPORTED_RECIPE_TYPES = new Set(["RAW_COLUMN", "DATE_PART"]);
+export const RECIPE_PREVIEW_R4_NOTE =
+  "ROLLING에서 현재 행 포함 시 target 누수 위험이 있을 수 있습니다.";
+
+export const PREVIEW_SUPPORTED_RECIPE_TYPES = new Set([
+  "RAW_COLUMN",
+  "DATE_PART",
+  "LAG",
+  "ROLLING_MEAN",
+  "ROLLING_SUM",
+]);
+
+export const PREVIEW_FUTURE_RECIPE_TYPES = new Set(["DIFF", "RATIO", "BINNING", "FILL_NULL", "CATEGORY_ENCODING"]);
 
 export const RECIPE_TEMPLATE_SECTION_TITLE = "사용 가능한 Recipe 템플릿";

@@ -34,8 +34,10 @@ import {
 import {
   formatRequiredRoles,
   PREVIEW_SUPPORTED_RECIPE_TYPES,
+  PREVIEW_FUTURE_RECIPE_TYPES,
   RECIPE_BUILDER_FUTURE_NOTE,
   RECIPE_PREVIEW_NO_SAVE_NOTE,
+  RECIPE_PREVIEW_ROW_STEP_NOTE,
   RECIPE_PREVIEW_R4_NOTE,
   RECIPE_TEMPLATE_SECTION_TITLE,
   templateAvailabilityClass,
@@ -130,6 +132,7 @@ function RecipeTemplatesSection({
       <div className="font-semibold text-slate-800">{RECIPE_TEMPLATE_SECTION_TITLE}</div>
       <p className="text-slate-500">{RECIPE_BUILDER_FUTURE_NOTE}</p>
       <p className="text-slate-500">{RECIPE_PREVIEW_NO_SAVE_NOTE}</p>
+      <p className="text-slate-500">{RECIPE_PREVIEW_ROW_STEP_NOTE}</p>
       <p className="text-slate-500">{RECIPE_PREVIEW_R4_NOTE}</p>
       <p className="text-slate-600">
         LAG/ROLLING은 ENTITY_KEY, TIME_KEY, NUMERIC_INPUT 역할이 필요합니다.
@@ -176,6 +179,7 @@ function RecipeTemplateRow({
 }) {
   const avail = tpl.availability;
   const previewSupported = PREVIEW_SUPPORTED_RECIPE_TYPES.has(tpl.recipe_type);
+  const previewFuture = PREVIEW_FUTURE_RECIPE_TYPES.has(tpl.recipe_type);
   return (
     <div className={`border rounded p-2 ${unavailable ? "border-amber-200 bg-amber-50/50" : "border-slate-200"}`}>
       <div className="flex flex-wrap items-center gap-2">
@@ -205,8 +209,10 @@ function RecipeTemplateRow({
           >
             Preview
           </Button>
+        ) : previewFuture ? (
+          <span className="text-[10px] text-slate-400 whitespace-nowrap">후속 Preview</span>
         ) : (
-          <span className="text-[10px] text-slate-400 whitespace-nowrap">R4 Preview</span>
+          <span className="text-[10px] text-slate-400 whitespace-nowrap">Preview 미지원</span>
         )}
       </div>
       {expanded && (
@@ -658,6 +664,7 @@ export default function DataMappingsPage() {
           {RECIPE_BUILDER_FUTURE_NOTE}
         </p>
         <p>{RECIPE_PREVIEW_NO_SAVE_NOTE}</p>
+        <p>{RECIPE_PREVIEW_ROW_STEP_NOTE}</p>
       </div>
 
       <DataTable
@@ -879,6 +886,7 @@ export default function DataMappingsPage() {
           template={recipePreviewTemplate}
           mappingId={editingId}
           columns={form.columns}
+          columnRoles={columnRoles}
         />
       )}
     </div>

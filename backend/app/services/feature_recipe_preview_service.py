@@ -1,13 +1,14 @@
-"""Feature Recipe Preview (RAW_COLUMN, DATE_PART only — 저장/실행 없음)."""
+"""Feature Recipe Preview (RAW/DATE/LAG/ROLLING — 저장/실행 없음)."""
 
 from __future__ import annotations
 
 import asyncio
 import math
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any
 from uuid import uuid4
 
+import pandas as pd
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -15,6 +16,7 @@ from app.models.entities import DataMapping, DataSource, FeatureDataset, HeatDem
 from app.services.feature_column_role_service import get_mapping_or_raise, list_column_roles
 from app.services.feature_recipe_template_service import (
     PREVIEW_SUPPORTED_RECIPE_TYPES,
+    TIME_SERIES_PREVIEW_TYPES,
     generate_date_part_feature_names,
     get_template_spec,
     validate_recipe_definition,
@@ -23,6 +25,7 @@ from app.services.mapping_service import MappingValidationError, preview_mapping
 
 DEFAULT_SAMPLE_SIZE = 100
 MAX_SAMPLE_SIZE = 500
+MAX_FETCH_ROWS = 2500
 
 TABLE_MODELS: dict[str, type] = {
     "heat_demand_actual": HeatDemandActual,
@@ -32,10 +35,26 @@ TABLE_MODELS: dict[str, type] = {
 ENTITY_KEY_CANDIDATES = ("site_id", "weather_area_id")
 TIME_KEY_DEFAULT = "measured_at"
 
+GRANULARITY_SECONDS: dict[str, int] = {
+    "1min": 60,
+    "5min": 300,
+    "10min": 600,
+    "30min": 1800,
+    "1h": 3600,
+    "1d": 86400,
+    "1w": 604800,
+}
+
 PREVIEW_NOT_SUPPORTED_MSG = (
-    "R3 단계에서는 RAW_COLUMN과 DATE_PART Preview만 지원합니다. "
-    "LAG/ROLLING Preview는 R4에서 제공됩니다."
+    "R4 단계에서는 RAW_COLUMN, DATE_PART, LAG, ROLLING_MEAN, ROLLING_SUM Preview만 지원합니다. "
+    "DIFF/RATIO 등은 후속 단계에서 제공됩니다."
 )
+
+COMPUTATION_POLICY = {
+    "row_step_based": True,
+    "sort_order": "asc",
+    "note": "offset/window는 행(step) 기준이며 실제 시간 간격이 불규칙하면 의미가 달라질 수 있습니다.",
+}
 
 
 def _parse_optional_dt(value: Any) -> datetime | None:
@@ -117,7 +136,7 @@ async def _load_from_standard_table(
     model: type,
     mapping: DataMapping,
     *,
-    sample_size: int,
+    fetch_limit: int,
     start_at: datetime | None,
     end_at: datetime | None,
     time_key: str,
@@ -136,9 +155,9 @@ async def _load_from_standard_table(
             q = q.where(ts_attr >= start_at)
         if end_at:
             q = q.where(ts_attr <= end_at)
-        q = q.order_by(ts_attr.desc()).limit(sample_size)
+        q = q.order_by(ts_attr.desc()).limit(fetch_limit)
     else:
-        q = q.limit(sample_size)
+        q = q.limit(fetch_limit)
 
     rows = (await db.execute(q)).mappings().all()
     serialized = [{k: _serialize_value(v) for k, v in dict(row).items()} for row in reversed(rows)]
@@ -153,7 +172,9 @@ async def load_preview_rows(
     start_at: datetime | None = None,
     end_at: datetime | None = None,
     time_key: str | None = None,
+    fetch_limit: int | None = None,
 ) -> list[dict[str, Any]]:
+    limit = min(fetch_limit or sample_size, MAX_FETCH_ROWS)
     table_key = _normalize_table_key(mapping.target_table)
     model = TABLE_MODELS.get(table_key)
     ts_col = time_key or TIME_KEY_DEFAULT
@@ -163,7 +184,7 @@ async def load_preview_rows(
             db,
             model,
             mapping,
-            sample_size=sample_size,
+            fetch_limit=limit,
             start_at=start_at,
             end_at=end_at,
             time_key=ts_col,
@@ -177,7 +198,7 @@ async def load_preview_rows(
             preview_mapping_data,
             source,
             mapping,
-            sample_size,
+            limit,
             start_at,
             end_at,
         )
@@ -271,13 +292,294 @@ def apply_date_part_preview(
     return result, invalid_counts
 
 
+def parse_granularity_to_timedelta(granularity: str) -> timedelta | None:
+    seconds = GRANULARITY_SECONDS.get(str(granularity))
+    if seconds is None:
+        return None
+    return timedelta(seconds=seconds)
+
+
+def _rows_to_dataframe(rows: list[dict[str, Any]], time_key: str) -> pd.DataFrame:
+    if not rows:
+        return pd.DataFrame()
+    df = pd.DataFrame(rows)
+    if time_key in df.columns:
+        df[time_key] = pd.to_datetime(df[time_key], errors="coerce")
+    return df
+
+
+def prepare_time_series_frame(
+    rows: list[dict[str, Any]],
+    *,
+    entity_keys: list[str],
+    time_key: str,
+    source_column: str,
+) -> pd.DataFrame:
+    df = _rows_to_dataframe(rows, time_key)
+    if df.empty:
+        return df
+    sort_cols = [c for c in (*entity_keys, time_key) if c in df.columns]
+    if sort_cols:
+        df = df.sort_values(sort_cols).reset_index(drop=True)
+    if source_column in df.columns:
+        df[source_column] = pd.to_numeric(df[source_column], errors="coerce")
+    return df
+
+
+def compute_time_gap_warnings(
+    df: pd.DataFrame,
+    *,
+    entity_keys: list[str],
+    time_key: str,
+    expected_granularity: str,
+) -> tuple[list[str], dict[str, Any]]:
+    warnings: list[str] = []
+    expected_td = parse_granularity_to_timedelta(expected_granularity)
+    summary: dict[str, Any] = {"expected_granularity": expected_granularity}
+    if df.empty or time_key not in df.columns or expected_td is None:
+        return warnings, summary
+
+    observed_seconds: list[float] = []
+    irregular_entities: list[str] = []
+    tol = max(expected_td.total_seconds() * 0.25, 60.0)
+
+    group_keys = entity_keys if entity_keys else ["__all__"]
+    if not entity_keys:
+        df = df.copy()
+        df["__all__"] = "ALL"
+
+    for key_vals, grp in df.groupby(group_keys, dropna=False):
+        entity_label = key_vals if isinstance(key_vals, str) else "_".join(str(v) for v in key_vals)
+        diffs = grp[time_key].diff().dt.total_seconds().dropna()
+        if diffs.empty:
+            continue
+        observed_seconds.extend(diffs.tolist())
+        median_diff = float(diffs.median())
+        if abs(median_diff - expected_td.total_seconds()) > tol:
+            irregular_entities.append(str(entity_label))
+
+    if observed_seconds:
+        summary["observed_median_seconds"] = float(pd.Series(observed_seconds).median())
+        summary["observed_granularity_summary"] = f"median {summary['observed_median_seconds']:.0f}s"
+
+    if irregular_entities:
+        sample = irregular_entities[:3]
+        extra = f" 외 {len(irregular_entities) - 3}건" if len(irregular_entities) > 3 else ""
+        warnings.append(
+            f"{time_key} 간격이 {expected_granularity}로 일정하지 않은 entity가 있습니다: "
+            f"{', '.join(sample)}{extra}. row step 기반 결과가 실제 시간 기준과 다를 수 있습니다."
+        )
+    return warnings, summary
+
+
+def apply_lag_preview(
+    df: pd.DataFrame,
+    *,
+    entity_keys: list[str],
+    time_key: str,
+    source_column: str,
+    output_name: str,
+    offset_steps: int,
+) -> tuple[pd.DataFrame, int]:
+    if df.empty:
+        return df, 0
+    work = df.copy()
+    group_keys = entity_keys if entity_keys else []
+    if group_keys:
+        work[output_name] = work.groupby(group_keys, dropna=False)[source_column].shift(offset_steps)
+    else:
+        work[output_name] = work[source_column].shift(offset_steps)
+    insufficient = int(work[output_name].isna().sum())
+    return work, insufficient
+
+
+def apply_rolling_preview(
+    df: pd.DataFrame,
+    *,
+    entity_keys: list[str],
+    source_column: str,
+    output_name: str,
+    window_steps: int,
+    min_periods: int,
+    include_current_row: bool,
+    agg: str,
+) -> tuple[pd.DataFrame, int]:
+    if df.empty:
+        return df, 0
+    work = df.copy()
+    group_keys = entity_keys if entity_keys else []
+
+    def _rolling(series: pd.Series) -> pd.Series:
+        base = series if include_current_row else series.shift(1)
+        roller = base.rolling(window=window_steps, min_periods=min_periods)
+        return roller.mean() if agg == "mean" else roller.sum()
+
+    if group_keys:
+        work[output_name] = work.groupby(group_keys, dropna=False)[source_column].transform(_rolling)
+    else:
+        work[output_name] = _rolling(work[source_column])
+    insufficient = int(work[output_name].isna().sum())
+    return work, insufficient
+
+
+def _dataframe_to_preview_rows(
+    df: pd.DataFrame,
+    *,
+    entity_keys: list[str],
+    time_key: str,
+    source_column: str,
+    output_names: list[str],
+    sample_size: int,
+) -> list[dict[str, Any]]:
+    if df.empty:
+        return []
+    display = df.head(sample_size) if len(df) <= sample_size else df.iloc[-sample_size:]
+    cols = [c for c in (*entity_keys, time_key, source_column, *output_names) if c in display.columns]
+    result: list[dict[str, Any]] = []
+    for _, row in display[cols].iterrows():
+        out: dict[str, Any] = {}
+        for col in cols:
+            out[col] = _serialize_value(row[col])
+        result.append(out)
+    return result
+
+
+def build_entity_summary(df: pd.DataFrame, entity_keys: list[str]) -> dict[str, Any]:
+    if df.empty or not entity_keys:
+        return {"entity_count": 0, "rows_per_entity_min": 0, "rows_per_entity_max": 0}
+    counts = df.groupby(entity_keys, dropna=False).size()
+    return {
+        "entity_count": int(len(counts)),
+        "rows_per_entity_min": int(counts.min()),
+        "rows_per_entity_max": int(counts.max()),
+    }
+
+
+def apply_time_series_preview(
+    rows: list[dict[str, Any]],
+    recipe: dict[str, Any],
+    *,
+    recipe_type: str,
+    entity_keys: list[str],
+    time_key: str,
+    source_column: str,
+    output_names: list[str],
+    sample_size: int,
+) -> dict[str, Any]:
+    params = recipe.get("params") or {}
+    granularity = str(params.get("granularity", "1h"))
+    output_name = output_names[0]
+    df = prepare_time_series_frame(
+        rows,
+        entity_keys=entity_keys,
+        time_key=time_key,
+        source_column=source_column,
+    )
+
+    time_gap_warnings, gap_summary = compute_time_gap_warnings(
+        df,
+        entity_keys=entity_keys,
+        time_key=time_key,
+        expected_granularity=granularity,
+    )
+
+    leakage_warnings: list[str] = []
+    history_warnings: list[str] = []
+    infos: list[str] = []
+    insufficient_history = 0
+
+    if recipe_type == "LAG":
+        offset_steps = int(params.get("offset_steps", 24))
+        df, insufficient_history = apply_lag_preview(
+            df,
+            entity_keys=entity_keys,
+            time_key=time_key,
+            source_column=source_column,
+            output_name=output_name,
+            offset_steps=offset_steps,
+        )
+        infos.append("LAG는 과거 행을 사용하므로 현재 행 직접 누수 위험은 낮습니다.")
+    else:
+        window_steps = int(params.get("window_steps", 24))
+        min_periods = int(params.get("min_periods", window_steps))
+        include_current_row = bool(params.get("include_current_row", False))
+        agg = "mean" if recipe_type == "ROLLING_MEAN" else "sum"
+        df, insufficient_history = apply_rolling_preview(
+            df,
+            entity_keys=entity_keys,
+            source_column=source_column,
+            output_name=output_name,
+            window_steps=window_steps,
+            min_periods=min_periods,
+            include_current_row=include_current_row,
+            agg=agg,
+        )
+        if include_current_row:
+            target_column = recipe.get("target_column")
+            if target_column and source_column == target_column:
+                leakage_warnings.append(
+                    "include_current_row=true이고 source_column이 target_column과 동일하여 데이터 누수 위험이 있습니다."
+                )
+        else:
+            infos.append("ROLLING Preview는 현재 행을 제외하고 계산합니다(include_current_row=false).")
+
+    if insufficient_history > 0:
+        history_warnings.append(
+            f"이력 부족으로 {insufficient_history}개 row의 Preview 값이 null입니다."
+        )
+
+    preview_rows = _dataframe_to_preview_rows(
+        df,
+        entity_keys=entity_keys,
+        time_key=time_key,
+        source_column=source_column,
+        output_names=output_names,
+        sample_size=sample_size,
+    )
+
+    feature_extra = {
+        output_name: {
+            "insufficient_history_count": insufficient_history,
+            "expected_granularity": granularity,
+            "observed_granularity_summary": gap_summary.get("observed_granularity_summary"),
+        }
+    }
+
+    return {
+        "preview_rows": preview_rows,
+        "time_gap_warnings": time_gap_warnings,
+        "leakage_warnings": leakage_warnings,
+        "history_warnings": history_warnings,
+        "infos": infos,
+        "time_series_preview": {
+            "entity_keys": entity_keys,
+            "time_key": time_key,
+            "source_column": source_column,
+            "sort_order": "asc",
+            "row_step_based": True,
+            "expected_granularity": granularity,
+            "include_current_row": bool(params.get("include_current_row", False))
+            if recipe_type != "LAG"
+            else False,
+        },
+        "entity_summary": build_entity_summary(df, entity_keys),
+        "computation_policy": COMPUTATION_POLICY,
+        "feature_extra": feature_extra,
+        "time_gap_warning_count": len(time_gap_warnings),
+    }
+
+
 def compute_preview_stats(
     preview_rows: list[dict[str, Any]],
     output_feature_names: list[str],
     *,
     invalid_counts: dict[str, int] | None = None,
+    feature_extra: dict[str, dict[str, Any]] | None = None,
+    entity_summary: dict[str, Any] | None = None,
+    time_gap_warning_count: int = 0,
 ) -> dict[str, Any]:
     invalid_counts = invalid_counts or {}
+    feature_extra = feature_extra or {}
     row_count = len(preview_rows)
     features: dict[str, Any] = {}
 
@@ -285,25 +587,41 @@ def compute_preview_stats(
         values = [row.get(name) for row in preview_rows]
         null_count = sum(1 for v in values if v is None)
         numeric_vals = [float(v) for v in values if v is not None and isinstance(v, (int, float))]
+        extra = feature_extra.get(name, {})
         feat_stats: dict[str, Any] = {
             "null_count": null_count,
             "null_ratio": round(null_count / row_count, 4) if row_count else 0,
             "invalid_count": invalid_counts.get(name, 0),
+            "insufficient_history_count": extra.get("insufficient_history_count", 0),
+            "expected_granularity": extra.get("expected_granularity"),
+            "observed_granularity_summary": extra.get("observed_granularity_summary"),
+            "time_gap_warning_count": time_gap_warning_count,
         }
         if numeric_vals:
             feat_stats["min"] = min(numeric_vals)
             feat_stats["max"] = max(numeric_vals)
+            feat_stats["mean"] = round(sum(numeric_vals) / len(numeric_vals), 4)
         features[name] = feat_stats
 
-    return {
+    stats: dict[str, Any] = {
         "row_count": row_count,
         "sample_size": row_count,
         "features": features,
+        "time_gap_warning_count": time_gap_warning_count,
     }
+    if entity_summary:
+        stats["entity_count"] = entity_summary.get("entity_count", 0)
+    return stats
 
 
-def build_quality_preview(stats: dict[str, Any]) -> dict[str, Any]:
-    warnings: list[str] = []
+def build_quality_preview(
+    stats: dict[str, Any],
+    *,
+    history_warnings: list[str] | None = None,
+    time_gap_warnings: list[str] | None = None,
+    leakage_warnings: list[str] | None = None,
+) -> dict[str, Any]:
+    warnings: list[str] = list(history_warnings or []) + list(time_gap_warnings or []) + list(leakage_warnings or [])
     estimated_status = "SUCCESS"
     for name, feat in (stats.get("features") or {}).items():
         if feat.get("invalid_count", 0) > 0:
@@ -311,6 +629,11 @@ def build_quality_preview(stats: dict[str, Any]) -> dict[str, Any]:
             estimated_status = "WARNING"
         if feat.get("null_ratio", 0) > 0.5:
             warnings.append(f"{name}: 결측 비율 {feat['null_ratio']:.0%}")
+            estimated_status = "WARNING"
+        if feat.get("insufficient_history_count", 0) > 0:
+            msg = f"{name}: 이력 부족 null {feat['insufficient_history_count']}건"
+            if msg not in warnings:
+                warnings.append(msg)
             estimated_status = "WARNING"
     return {"estimated_status": estimated_status, "warnings": warnings}
 
@@ -336,6 +659,12 @@ def _empty_preview_response(
         "stats": {"row_count": 0, "sample_size": 0, "features": {}},
         "lineage_preview": None,
         "quality_preview": {"estimated_status": "FAILED", "warnings": []},
+        "time_series_preview": None,
+        "time_gap_warnings": [],
+        "leakage_warnings": [],
+        "history_warnings": [],
+        "entity_summary": None,
+        "computation_policy": None,
         "errors": errors or [],
         "warnings": warnings or [],
         "infos": infos or [],
@@ -419,6 +748,34 @@ async def preview_feature_recipe(db: AsyncSession, request: dict[str, Any]) -> d
     source_columns = list(recipe.get("source_columns") or [])
     source_column = source_columns[0] if source_columns else time_key
 
+    params = recipe.get("params") or {}
+    fetch_limit = sample_size
+    if recipe_type in TIME_SERIES_PREVIEW_TYPES:
+        if not entity_keys:
+            return {
+                **_empty_preview_response(
+                    recipe_type,
+                    supported=True,
+                    valid=False,
+                    errors=[{"code": "MISSING_ENTITY_KEY", "message": "entity_keys가 필요합니다."}],
+                ),
+                "generated_feature_names": output_names,
+                "output_feature_names": output_names,
+            }
+        if not time_key:
+            return {
+                **_empty_preview_response(
+                    recipe_type,
+                    supported=True,
+                    valid=False,
+                    errors=[{"code": "MISSING_TIME_KEY", "message": "time_key가 필요합니다."}],
+                ),
+                "generated_feature_names": output_names,
+                "output_feature_names": output_names,
+            }
+        steps = int(params.get("offset_steps", 24) if recipe_type == "LAG" else params.get("window_steps", 24))
+        fetch_limit = min(sample_size + steps + 50, MAX_FETCH_ROWS)
+
     rows = await load_preview_rows(
         db,
         mapping,
@@ -426,6 +783,7 @@ async def preview_feature_recipe(db: AsyncSession, request: dict[str, Any]) -> d
         start_at=start_at,
         end_at=end_at,
         time_key=time_key,
+        fetch_limit=fetch_limit,
     )
 
     if not rows:
@@ -445,6 +803,7 @@ async def preview_feature_recipe(db: AsyncSession, request: dict[str, Any]) -> d
         }
 
     invalid_counts: dict[str, int] = {}
+    ts_extras: dict[str, Any] = {}
     if recipe_type == "RAW_COLUMN":
         preview_rows = apply_raw_column_preview(
             rows,
@@ -453,8 +812,7 @@ async def preview_feature_recipe(db: AsyncSession, request: dict[str, Any]) -> d
             entity_keys=entity_keys,
             time_key=time_key,
         )
-    else:
-        params = recipe.get("params") or {}
+    elif recipe_type == "DATE_PART":
         parts = params.get("parts") or ["hour"]
         if isinstance(parts, str):
             parts = [parts]
@@ -469,9 +827,42 @@ async def preview_feature_recipe(db: AsyncSession, request: dict[str, Any]) -> d
             output_names=output_names,
             entity_keys=entity_keys,
         )
+    else:
+        ts_result = apply_time_series_preview(
+            rows,
+            recipe,
+            recipe_type=recipe_type,
+            entity_keys=entity_keys,
+            time_key=time_key,
+            source_column=source_column,
+            output_names=output_names,
+            sample_size=sample_size,
+        )
+        preview_rows = ts_result["preview_rows"]
+        ts_extras = ts_result
 
-    stats = compute_preview_stats(preview_rows, output_names, invalid_counts=invalid_counts)
-    quality_preview = build_quality_preview(stats)
+    stats = compute_preview_stats(
+        preview_rows,
+        output_names,
+        invalid_counts=invalid_counts,
+        feature_extra=ts_extras.get("feature_extra"),
+        entity_summary=ts_extras.get("entity_summary"),
+        time_gap_warning_count=ts_extras.get("time_gap_warning_count", 0),
+    )
+    quality_preview = build_quality_preview(
+        stats,
+        history_warnings=ts_extras.get("history_warnings"),
+        time_gap_warnings=ts_extras.get("time_gap_warnings"),
+        leakage_warnings=ts_extras.get("leakage_warnings"),
+    )
+
+    all_warnings = list(validate_result.get("warnings") or [])
+    all_warnings.extend(ts_extras.get("time_gap_warnings") or [])
+    all_warnings.extend(ts_extras.get("leakage_warnings") or [])
+    all_warnings.extend(ts_extras.get("history_warnings") or [])
+
+    all_infos = list(validate_result.get("infos") or [])
+    all_infos.extend(ts_extras.get("infos") or [])
 
     return {
         "preview_id": f"PREVIEW-LOCAL-{uuid4().hex[:12].upper()}",
@@ -486,9 +877,15 @@ async def preview_feature_recipe(db: AsyncSession, request: dict[str, Any]) -> d
         "stats": stats,
         "lineage_preview": validate_result.get("lineage_preview"),
         "quality_preview": quality_preview,
+        "time_series_preview": ts_extras.get("time_series_preview"),
+        "time_gap_warnings": ts_extras.get("time_gap_warnings") or [],
+        "leakage_warnings": ts_extras.get("leakage_warnings") or [],
+        "history_warnings": ts_extras.get("history_warnings") or [],
+        "entity_summary": ts_extras.get("entity_summary"),
+        "computation_policy": ts_extras.get("computation_policy"),
         "errors": [],
-        "warnings": validate_result.get("warnings") or [],
-        "infos": validate_result.get("infos") or [],
+        "warnings": all_warnings,
+        "infos": all_infos,
     }
 
 

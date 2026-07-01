@@ -280,6 +280,7 @@ curl -X POST "http://localhost:8000/api/v1/feature-build-jobs?feature_set_id=FS-
 - **R1 Column Role**: `/data/mappings`에서 컬럼 역할 지정 — [`docs/md/THERMOps_Feature_Recipe_Builder_1차_설계.md`](docs/md/THERMOps_Feature_Recipe_Builder_1차_설계.md) 부록 C
 - **R2 Recipe Template Catalog**: 템플릿 목록·validate API — 동일 설계서 부록 D
 - **R3 Recipe Preview**: RAW_COLUMN·DATE_PART 샘플 Preview — 동일 설계서 부록 E
+- **R4 Recipe Preview**: LAG·ROLLING_MEAN·ROLLING_SUM row step 기반 Preview — 동일 설계서 부록 F (저장·Build 미연동)
 
 **Feature Registry·Lineage UI**
 

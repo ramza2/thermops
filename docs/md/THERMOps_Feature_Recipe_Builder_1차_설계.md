@@ -808,8 +808,37 @@ python scripts/test_feature_recipe_templates.py
 python scripts/test_feature_recipe_preview.py
 ```
 
-### 후속 단계
+### 후속 단계 (R3 시점)
 
 - R4: LAG/ROLLING Preview
 - R5: Recipe 저장 + Builder UI
+
+---
+
+## 부록 F. Phase R4 구현 완료 (LAG / ROLLING Preview)
+
+### 지원 범위
+
+- **Preview 지원**: `LAG`, `ROLLING_MEAN`, `ROLLING_SUM` (기존 `RAW_COLUMN`, `DATE_PART` 유지)
+- **Preview 미지원(후속)**: `DIFF`, `RATIO`, `BINNING`, `FILL_NULL`, `CATEGORY_ENCODING`
+- Validate API는 DIFF 등 기존 정책 유지 (DIFF Preview만 미구현)
+
+### 계산 정책
+
+R4의 LAG/ROLLING Preview는 `entity_keys`와 `time_key` 기준으로 데이터를 정렬한 뒤 row step 기반으로 계산합니다. `offset_steps=24`, `granularity=1h`는 1시간 간격 데이터에서 24행 전 값을 의미하며, 원천 데이터의 시간 간격이 불규칙하면 실제 24시간 전 값과 다를 수 있습니다.
+
+- ROLLING 기본: `include_current_row=false`; Preview에서 `min_periods` 미지정 시 `window_steps`
+- `include_current_row=true` + `source_column == target_column` → leakage warning
+- 이력 부족 → `insufficient_history_count`, `history_warnings`
+
+### API·UI
+
+- `POST /api/v1/feature-recipes/preview` — `time_series_preview`, `time_gap_warnings`, `leakage_warnings` 등 선택 필드
+- Data Mappings → LAG/ROLLING **Preview** 버튼, row step·저장 안내 문구
+- Preview 결과 **저장하지 않음**
+
+### 후속 단계
+
+- **R5**: Recipe 저장 + Builder UI
+- **R6**: Recipe Engine 기반 Feature Build
 

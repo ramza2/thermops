@@ -90,13 +90,36 @@ export interface ReusableExistingFeature {
 export interface FeatureRecipePreviewStats {
   row_count: number;
   sample_size: number;
+  entity_count?: number;
+  time_gap_warning_count?: number;
   features: Record<string, {
     null_count: number;
     null_ratio: number;
     invalid_count?: number;
+    insufficient_history_count?: number;
     min?: number;
     max?: number;
+    mean?: number;
+    expected_granularity?: string;
+    observed_granularity_summary?: string;
+    time_gap_warning_count?: number;
   }>;
+}
+
+export interface TimeSeriesPreviewMeta {
+  entity_keys: string[];
+  time_key: string;
+  source_column: string;
+  sort_order: string;
+  row_step_based: boolean;
+  expected_granularity: string;
+  include_current_row?: boolean;
+}
+
+export interface EntitySummary {
+  entity_count: number;
+  rows_per_entity_min: number;
+  rows_per_entity_max: number;
 }
 
 export interface QualityPreview {
@@ -123,6 +146,12 @@ export interface FeatureRecipePreviewResponse {
   stats: FeatureRecipePreviewStats;
   lineage_preview?: RecipeLineagePreview | null;
   quality_preview?: QualityPreview;
+  time_series_preview?: TimeSeriesPreviewMeta | null;
+  time_gap_warnings?: string[];
+  leakage_warnings?: string[];
+  history_warnings?: string[];
+  entity_summary?: EntitySummary | null;
+  computation_policy?: Record<string, unknown> | null;
   errors: RecipeValidationMessage[];
   warnings: string[];
   infos: string[];

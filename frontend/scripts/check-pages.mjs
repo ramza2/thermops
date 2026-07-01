@@ -39,7 +39,8 @@ for (const path of PATHS) {
     await page.getByText("컬럼 역할").first().waitFor({ state: "visible", timeout: 30000 });
     await page.getByText("사용 가능한 Recipe 템플릿").first().waitFor({ state: "visible", timeout: 30000 });
     await page.getByText("Recipe Builder는 후속 단계").first().waitFor({ state: "visible", timeout: 30000 });
-    await page.getByText("R3 Preview는 결과를 저장하지 않습니다").first().waitFor({ state: "visible", timeout: 30000 });
+    await page.getByText("Preview 결과는 저장하지 않습니다").first().waitFor({ state: "visible", timeout: 30000 });
+    await page.getByText("row step 기반").first().waitFor({ state: "visible", timeout: 30000 });
   }
   if (path === "/feature-sets/FS-TPL-LAG-ROLL") {
     await page.waitForTimeout(2000);

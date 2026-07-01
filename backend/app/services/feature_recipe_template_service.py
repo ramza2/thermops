@@ -45,7 +45,14 @@ GRANULARITY_SUFFIX = {
 
 DATE_PART_OPTIONS = ["hour", "day_of_week", "month", "day", "is_weekend", "week_of_year"]
 STANDARD_DATE_PART_CANONICAL_NAMES = frozenset({"hour", "day_of_week", "month", "is_weekend"})
-PREVIEW_SUPPORTED_RECIPE_TYPES = frozenset({"RAW_COLUMN", "DATE_PART"})
+PREVIEW_SUPPORTED_RECIPE_TYPES = frozenset({
+    "RAW_COLUMN",
+    "DATE_PART",
+    "LAG",
+    "ROLLING_MEAN",
+    "ROLLING_SUM",
+})
+TIME_SERIES_PREVIEW_TYPES = frozenset({"LAG", "ROLLING_MEAN", "ROLLING_SUM"})
 FILL_NULL_STRATEGIES = ["ZERO", "MEAN", "MEDIAN", "MODE", "PREVIOUS", "CONSTANT"]
 BINNING_STRATEGIES = ["equal_width", "quantile", "custom"]
 
@@ -765,6 +772,30 @@ async def validate_recipe_definition(
 
     params = _merge_params(spec, recipe.get("params"))
     errors.extend(_validate_params(spec, params))
+
+    if recipe_type in ("ROLLING_MEAN", "ROLLING_SUM"):
+        window = int(params.get("window_steps", 24))
+        min_periods = params.get("min_periods")
+        if min_periods is not None:
+            if not isinstance(min_periods, int) or isinstance(min_periods, bool):
+                errors.append(_err("INVALID_PARAM", "min_periods는 정수여야 합니다."))
+            elif min_periods <= 0:
+                errors.append(_err("INVALID_PARAM", "min_periods는 1 이상이어야 합니다."))
+            elif min_periods > window:
+                errors.append(_err("INVALID_PARAM", "min_periods는 window_steps 이하여야 합니다."))
+
+    if recipe_type in ("LAG", "ROLLING_MEAN", "ROLLING_SUM", "DIFF"):
+        steps = params.get("offset_steps") if recipe_type == "LAG" else params.get("window_steps")
+        if recipe_type == "DIFF":
+            steps = params.get("offset_steps")
+        if isinstance(steps, int) and steps >= 10000:
+            warnings.append(f"{steps} step은 매우 큽니다. Preview 이력·성능에 주의하세요.")
+
+    if recipe_type in TIME_SERIES_PREVIEW_TYPES and role_items:
+        if not recipe.get("entity_keys") and role_summary.get("entity_key_count", 0) < 1:
+            errors.append(_err("MISSING_ENTITY_KEY", f"{recipe_type} Preview에는 ENTITY_KEY가 필요합니다."))
+        if not recipe.get("time_key") and role_summary.get("time_key_count", 0) != 1:
+            errors.append(_err("MISSING_TIME_KEY", f"{recipe_type} Preview에는 TIME_KEY가 1개 필요합니다."))
 
     if recipe_type == "LAG" and params.get("include_current_row"):
         warnings.append("LAG에서 include_current_row=true는 무시되며 shift가 적용됩니다.")
