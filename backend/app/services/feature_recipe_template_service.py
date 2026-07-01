@@ -44,6 +44,8 @@ GRANULARITY_SUFFIX = {
 }
 
 DATE_PART_OPTIONS = ["hour", "day_of_week", "month", "day", "is_weekend", "week_of_year"]
+STANDARD_DATE_PART_CANONICAL_NAMES = frozenset({"hour", "day_of_week", "month", "is_weekend"})
+PREVIEW_SUPPORTED_RECIPE_TYPES = frozenset({"RAW_COLUMN", "DATE_PART"})
 FILL_NULL_STRATEGIES = ["ZERO", "MEAN", "MEDIAN", "MODE", "PREVIOUS", "CONSTANT"]
 BINNING_STRATEGIES = ["equal_width", "quantile", "custom"]
 
@@ -183,7 +185,7 @@ ALL_RECIPE_TEMPLATES: dict[str, TemplateSpec] = {
                 "type": "array",
                 "required": True,
                 "min_items": 1,
-                "max_items": 1,
+                "max_items": len(DATE_PART_OPTIONS),
                 "item_options": DATE_PART_OPTIONS,
                 "default": ["hour"],
             },
@@ -195,10 +197,10 @@ ALL_RECIPE_TEMPLATES: dict[str, TemplateSpec] = {
             {
                 "source_column": "measured_at",
                 "params": {"parts": ["hour"]},
-                "output_feature_name": "measured_at_hour",
+                "output_feature_name": "hour",
             },
         ],
-        warnings=["R2에서는 part 1개만 지원합니다."],
+        warnings=["R3 Preview에서 parts 복수 선택을 지원합니다."],
     ),
     "LAG": TemplateSpec(
         recipe_type="LAG",
@@ -624,6 +626,23 @@ def _sanitize_feature_name(name: str) -> str:
     return text or "feature"
 
 
+def _date_part_feature_name(part: str, time_col: str) -> str:
+    if part in STANDARD_DATE_PART_CANONICAL_NAMES:
+        return part
+    base = _sanitize_feature_name(time_col)
+    return f"{base}_{part}"
+
+
+def generate_date_part_feature_names(recipe: dict[str, Any], spec: TemplateSpec) -> list[str]:
+    params = recipe.get("params") or {}
+    source_columns = list(recipe.get("source_columns") or [])
+    time_col = recipe.get("time_key") or (source_columns[0] if source_columns else "time")
+    parts = params.get("parts") or spec.default_params.get("parts") or ["hour"]
+    if isinstance(parts, str):
+        parts = [parts]
+    return [_date_part_feature_name(str(part), str(time_col)) for part in parts]
+
+
 def generate_output_feature_name(recipe: dict[str, Any], spec: TemplateSpec) -> str | list[str]:
     recipe_type = spec.recipe_type
     params = recipe.get("params") or {}
@@ -634,18 +653,8 @@ def generate_output_feature_name(recipe: dict[str, Any], spec: TemplateSpec) -> 
         return _sanitize_feature_name(col)
 
     if recipe_type == "DATE_PART":
-        time_col = recipe.get("time_key") or (source_columns[0] if source_columns else "time")
-        parts = params.get("parts") or spec.default_params.get("parts") or ["hour"]
-        part = parts[0] if isinstance(parts, list) else parts
-        base = _sanitize_feature_name(str(time_col))
-        if part in ("hour", "day_of_week", "month", "day", "is_weekend", "week_of_year"):
-            if part == "hour":
-                return "hour"
-            if part == "day_of_week":
-                return "day_of_week"
-            if part == "month":
-                return "month"
-        return f"{base}_{part}"
+        names = generate_date_part_feature_names(recipe, spec)
+        return names[0] if len(names) == 1 else names
 
     col = _sanitize_feature_name(source_columns[0]) if source_columns else "value"
     gran = params.get("granularity", "1h")
@@ -732,7 +741,10 @@ async def validate_recipe_definition(
 
     for col in source_columns:
         if known_cols and col not in known_cols:
-            warnings.append(f"매핑 컬럼 목록에 없는 source_column: {col}")
+            if recipe_type in PREVIEW_SUPPORTED_RECIPE_TYPES:
+                errors.append(_err("UNKNOWN_SOURCE_COLUMN", f"매핑에 없는 source_column: {col}"))
+            else:
+                warnings.append(f"매핑 컬럼 목록에 없는 source_column: {col}")
 
     role_map = _column_role_map(role_items or [])
     role_summary = _role_summary_from_items(role_items or []) if role_items else {}
@@ -791,28 +803,65 @@ async def validate_recipe_definition(
         infos.append("LAG 템플릿은 현재 행을 사용하지 않으므로 누수 위험이 낮습니다.")
 
     recipe_for_name = {**recipe, "params": params}
-    generated = generate_output_feature_name(recipe_for_name, spec)
-    if isinstance(generated, list):
-        output_name = recipe.get("output_feature_name") or generated[0]
-        generated_names = generated
+    explicit_output = recipe.get("output_feature_name")
+    reusable_existing_features: list[dict[str, str]] = []
+    duplicate_policy = "STRICT"
+
+    if recipe_type == "DATE_PART":
+        duplicate_policy = "STANDARD_DATE_PART_REUSE"
+        parts = params.get("parts") or ["hour"]
+        if isinstance(parts, str):
+            parts = [parts]
+        generated_names = generate_date_part_feature_names(recipe_for_name, spec)
+        if explicit_output:
+            if len(parts) > 1:
+                errors.append(
+                    _err(
+                        "INVALID_OUTPUT_NAME",
+                        "parts가 2개 이상일 때 output_feature_name 단일 문자열은 사용할 수 없습니다.",
+                    )
+                )
+            output_names = [_sanitize_feature_name(str(explicit_output))]
+        else:
+            output_names = generated_names
     else:
-        generated_names = [generated]
-        output_name = recipe.get("output_feature_name") or generated
-
-    output_name = _sanitize_feature_name(str(output_name))
-
-    if is_legacy_alias(output_name):
-        errors.append(_err("LEGACY_FEATURE_NAME", f"{output_name}는 레거시 별칭입니다. 공식명을 사용하세요."))
+        generated = generate_output_feature_name(recipe_for_name, spec)
+        generated_names = generated if isinstance(generated, list) else [generated]
+        output_names = [_sanitize_feature_name(str(explicit_output or generated_names[0]))]
 
     catalog_names = await load_catalog_feature_names(db)
-    in_catalog = output_name in catalog_names
-    name_check = classify_feature_name(output_name, catalog_registered=in_catalog)
-    if name_check["status"] == "DUPLICATE" or in_catalog or name_check["status"] in (
-        "COMPUTABLE",
-        "REGISTERED_IN_REGISTRY",
-    ):
-        errors.append(_err("DUPLICATE_FEATURE_NAME", f"Feature명 '{output_name}'은(는) 이미 카탈로그에 등록되어 있습니다."))
+    for name in output_names:
+        if is_legacy_alias(name):
+            errors.append(_err("LEGACY_FEATURE_NAME", f"{name}는 레거시 별칭입니다. 공식명을 사용하세요."))
+            continue
 
+        in_catalog = name in catalog_names
+        name_check = classify_feature_name(name, catalog_registered=in_catalog)
+        exists = in_catalog or name_check["status"] in (
+            "DUPLICATE",
+            "COMPUTABLE",
+            "REGISTERED_IN_REGISTRY",
+        )
+        is_standard_date_part = recipe_type == "DATE_PART" and name in STANDARD_DATE_PART_CANONICAL_NAMES
+
+        if is_standard_date_part and exists:
+            reusable_existing_features.append(
+                {
+                    "feature_name": name,
+                    "reason": "STANDARD_DATE_PART_ALREADY_EXISTS",
+                }
+            )
+            infos.append(
+                f"동일한 표준 DATE_PART Feature '{name}'가 이미 등록되어 있어 기존 Feature를 재사용할 수 있습니다."
+            )
+            continue
+
+        if exists:
+            errors.append(
+                _err("DUPLICATE_FEATURE_NAME", f"Feature명 '{name}'은(는) 이미 카탈로그에 등록되어 있습니다.")
+            )
+
+    output_name = output_names[0] if output_names else ""
     valid = len(errors) == 0
 
     lineage_preview = {
@@ -837,6 +886,10 @@ async def validate_recipe_definition(
             "generated_feature_name": generated_names[0] if generated_names else output_name,
             "output_feature_name": output_name,
             "generated_feature_names": generated_names,
+            "output_feature_names": output_names,
+            "duplicate_policy": duplicate_policy,
+            "reusable_existing_feature": bool(reusable_existing_features),
+            "reusable_existing_features": reusable_existing_features,
             "lineage_preview": lineage_preview,
             "template": template_dict,
         },

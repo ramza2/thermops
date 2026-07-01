@@ -175,6 +175,8 @@ flowchart LR
 
 **R2 Recipe Template Catalog**: 매핑 수정 화면에서 Column Role 저장 후 **사용 가능한 Recipe 템플릿** 카드로 LAG/ROLLING 등 사용 가능 여부를 확인합니다. `POST /feature-recipes/validate`는 draft 검증만 수행하며 저장·Preview·실행은 하지 않습니다.
 
+**R3 Recipe Preview**: RAW_COLUMN·DATE_PART 템플릿에 한해 `POST /feature-recipes/preview`로 샘플 결과를 확인합니다. 결과는 저장되지 않으며 Feature Build·학습·예측에 반영되지 않습니다. DATE_PART 표준 Feature(`hour` 등)는 기존 Catalog/Registry 재사용 가능 안내가 표시됩니다.
+
 ---
 
 ### 2.4 `/data/quality` — 데이터 품질 점검

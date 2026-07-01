@@ -103,6 +103,20 @@ def test_validate_date_part() -> None:
     print("  [ok] validate DATE_PART")
 
 
+def test_validate_date_part_reusable_hour() -> None:
+    body = {
+        "mapping_id": HEAT_MAPPING_ID,
+        "recipe_type": "DATE_PART",
+        "source_columns": ["measured_at"],
+        "time_key": "measured_at",
+        "params": {"parts": ["hour"]},
+    }
+    data = api("POST", "/feature-recipes/validate", body)
+    assert data["valid"] is True, data
+    assert data.get("reusable_existing_feature") is True, data
+    print("  [ok] validate DATE_PART reusable hour")
+
+
 def test_validate_lag() -> None:
     body = {
         "mapping_id": HEAT_MAPPING_ID,
@@ -229,6 +243,7 @@ def main() -> int:
         test_availability_with_mapping,
         test_validate_raw_column,
         test_validate_date_part,
+        test_validate_date_part_reusable_hour,
         test_validate_lag,
         test_validate_ratio_insufficient,
         test_validate_ratio_success,

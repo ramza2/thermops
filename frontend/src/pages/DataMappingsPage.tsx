@@ -9,6 +9,7 @@ import {
   validateColumnRoles,
 } from "@/api/featureColumnRoles";
 import { getFeatureRecipeTemplates } from "@/api/featureRecipeTemplates";
+import { FeatureRecipePreviewModal } from "@/components/FeatureRecipePreviewModal";
 import { Button } from "@/components/Button";
 import { DataTable } from "@/components/DataTable";
 import { Modal } from "@/components/Modal";
@@ -32,7 +33,10 @@ import {
 } from "@/utils/featureColumnRoleFormat";
 import {
   formatRequiredRoles,
+  PREVIEW_SUPPORTED_RECIPE_TYPES,
   RECIPE_BUILDER_FUTURE_NOTE,
+  RECIPE_PREVIEW_NO_SAVE_NOTE,
+  RECIPE_PREVIEW_R4_NOTE,
   RECIPE_TEMPLATE_SECTION_TITLE,
   templateAvailabilityClass,
   templateCategoryLabel,
@@ -101,12 +105,14 @@ function RecipeTemplatesSection({
   error,
   expandedType,
   onToggle,
+  onPreview,
 }: {
   catalog: RecipeTemplateListResponse | null;
   loading: boolean;
   error: string;
   expandedType: string | null;
   onToggle: (type: string) => void;
+  onPreview: (tpl: RecipeTemplate) => void;
 }) {
   if (loading) {
     return <p className="text-xs text-slate-400">Recipe 템플릿 불러오는 중...</p>;
@@ -123,6 +129,8 @@ function RecipeTemplatesSection({
     <div className="text-xs border border-slate-200 rounded-lg p-3 bg-white space-y-3">
       <div className="font-semibold text-slate-800">{RECIPE_TEMPLATE_SECTION_TITLE}</div>
       <p className="text-slate-500">{RECIPE_BUILDER_FUTURE_NOTE}</p>
+      <p className="text-slate-500">{RECIPE_PREVIEW_NO_SAVE_NOTE}</p>
+      <p className="text-slate-500">{RECIPE_PREVIEW_R4_NOTE}</p>
       <p className="text-slate-600">
         LAG/ROLLING은 ENTITY_KEY, TIME_KEY, NUMERIC_INPUT 역할이 필요합니다.
         {" "}
@@ -130,10 +138,23 @@ function RecipeTemplatesSection({
       </p>
       <div className="space-y-2">
         {available.map((tpl) => (
-          <RecipeTemplateRow key={tpl.recipe_type} tpl={tpl} expanded={expandedType === tpl.recipe_type} onToggle={onToggle} />
+          <RecipeTemplateRow
+            key={tpl.recipe_type}
+            tpl={tpl}
+            expanded={expandedType === tpl.recipe_type}
+            onToggle={onToggle}
+            onPreview={onPreview}
+          />
         ))}
         {unavailable.map((tpl) => (
-          <RecipeTemplateRow key={tpl.recipe_type} tpl={tpl} expanded={expandedType === tpl.recipe_type} onToggle={onToggle} unavailable />
+          <RecipeTemplateRow
+            key={tpl.recipe_type}
+            tpl={tpl}
+            expanded={expandedType === tpl.recipe_type}
+            onToggle={onToggle}
+            onPreview={onPreview}
+            unavailable
+          />
         ))}
       </div>
     </div>
@@ -144,34 +165,50 @@ function RecipeTemplateRow({
   tpl,
   expanded,
   onToggle,
+  onPreview,
   unavailable,
 }: {
   tpl: RecipeTemplate;
   expanded: boolean;
   onToggle: (type: string) => void;
+  onPreview: (tpl: RecipeTemplate) => void;
   unavailable?: boolean;
 }) {
   const avail = tpl.availability;
+  const previewSupported = PREVIEW_SUPPORTED_RECIPE_TYPES.has(tpl.recipe_type);
   return (
     <div className={`border rounded p-2 ${unavailable ? "border-amber-200 bg-amber-50/50" : "border-slate-200"}`}>
-      <button type="button" className="w-full text-left" onClick={() => onToggle(tpl.recipe_type)}>
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="font-medium text-slate-800">{tpl.display_name}</span>
-          <span className={`text-[10px] px-1 py-0.5 rounded border ${templateStatusClass(tpl.status)}`}>
-            {templateStatusLabel(tpl.status)}
-          </span>
-          <span className="text-[10px] text-slate-500">{templateCategoryLabel(tpl.category)}</span>
-          <span className={`text-[10px] ${templateAvailabilityClass(tpl.available)}`}>
-            {tpl.available ? "사용 가능" : "사용 불가"}
-          </span>
-        </div>
-        {!tpl.available && avail?.warnings?.[0] && (
-          <p className="text-amber-700 mt-1">{avail.warnings[0]}</p>
+      <div className="flex flex-wrap items-center gap-2">
+        <button type="button" className="flex-1 text-left min-w-0" onClick={() => onToggle(tpl.recipe_type)}>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="font-medium text-slate-800">{tpl.display_name}</span>
+            <span className={`text-[10px] px-1 py-0.5 rounded border ${templateStatusClass(tpl.status)}`}>
+              {templateStatusLabel(tpl.status)}
+            </span>
+            <span className="text-[10px] text-slate-500">{templateCategoryLabel(tpl.category)}</span>
+            <span className={`text-[10px] ${templateAvailabilityClass(tpl.available)}`}>
+              {tpl.available ? "사용 가능" : "사용 불가"}
+            </span>
+          </div>
+          {!tpl.available && avail?.warnings?.[0] && (
+            <p className="text-amber-700 mt-1">{avail.warnings[0]}</p>
+          )}
+          {avail?.missing_roles?.length ? (
+            <p className="text-amber-700 mt-1">부족 역할: {avail.missing_roles.join(", ")}</p>
+          ) : null}
+        </button>
+        {previewSupported ? (
+          <Button
+            variant="secondary"
+            disabled={tpl.available === false}
+            onClick={() => onPreview(tpl)}
+          >
+            Preview
+          </Button>
+        ) : (
+          <span className="text-[10px] text-slate-400 whitespace-nowrap">R4 Preview</span>
         )}
-        {avail?.missing_roles?.length ? (
-          <p className="text-amber-700 mt-1">부족 역할: {avail.missing_roles.join(", ")}</p>
-        ) : null}
-      </button>
+      </div>
       {expanded && (
         <div className="mt-2 pt-2 border-t border-slate-200 text-slate-600 space-y-1">
           <p>{tpl.description}</p>
@@ -247,6 +284,8 @@ export default function DataMappingsPage() {
   const [templateError, setTemplateError] = useState("");
   const [expandedTemplateType, setExpandedTemplateType] = useState<string | null>(null);
   const [templateSectionOpen, setTemplateSectionOpen] = useState(true);
+  const [recipePreviewOpen, setRecipePreviewOpen] = useState(false);
+  const [recipePreviewTemplate, setRecipePreviewTemplate] = useState<RecipeTemplate | null>(null);
 
   const roleOptions = useMemo(
     () => [
@@ -618,6 +657,7 @@ export default function DataMappingsPage() {
           {" "}
           {RECIPE_BUILDER_FUTURE_NOTE}
         </p>
+        <p>{RECIPE_PREVIEW_NO_SAVE_NOTE}</p>
       </div>
 
       <DataTable
@@ -803,6 +843,10 @@ export default function DataMappingsPage() {
                       error={templateError}
                       expandedType={expandedTemplateType}
                       onToggle={(type) => setExpandedTemplateType((prev) => (prev === type ? null : type))}
+                      onPreview={(tpl) => {
+                        setRecipePreviewTemplate(tpl);
+                        setRecipePreviewOpen(true);
+                      }}
                     />
                   )}
                 </div>
@@ -824,6 +868,19 @@ export default function DataMappingsPage() {
           data={previewRows}
         />
       </Modal>
+
+      {recipePreviewTemplate && editingId && (
+        <FeatureRecipePreviewModal
+          open={recipePreviewOpen}
+          onClose={() => {
+            setRecipePreviewOpen(false);
+            setRecipePreviewTemplate(null);
+          }}
+          template={recipePreviewTemplate}
+          mappingId={editingId}
+          columns={form.columns}
+        />
+      )}
     </div>
   );
 }

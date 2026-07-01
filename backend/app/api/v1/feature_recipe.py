@@ -3,8 +3,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.response import ok
-from app.schemas.api import FeatureRecipeValidateRequest
+from app.schemas.api import FeatureRecipePreviewRequest, FeatureRecipeValidateRequest
 from app.services.feature_column_role_service import get_mapping_or_raise, list_column_roles
+from app.services.feature_recipe_preview_service import preview_feature_recipe
 from app.services.feature_recipe_template_service import (
     evaluate_template_availability,
     get_catalog_for_mapping,
@@ -102,4 +103,13 @@ async def validate_feature_recipe(
         mapping_columns=mapping_columns,
         role_items=role_items,
     )
+    return ok(result)
+
+
+@router.post("/feature-recipes/preview")
+async def preview_feature_recipe_api(
+    body: FeatureRecipePreviewRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    result = await preview_feature_recipe(db, body.model_dump())
     return ok(result)

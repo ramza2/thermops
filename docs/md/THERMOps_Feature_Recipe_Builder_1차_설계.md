@@ -766,7 +766,50 @@ python scripts/test_feature_recipe_templates.py
 
 ### 후속 단계
 
-- R3: RAW/DATE Preview
+- R4: LAG/ROLLING Preview
+- R5: Recipe 저장 + Builder UI
+
+---
+
+## 부록 E. Phase R3 구현 완료 (RAW_COLUMN / DATE_PART Preview)
+
+> **구현 완료**: Recipe draft를 샘플 데이터에 적용해 결과만 반환 (저장·Build 없음)
+
+### Preview 지원 범위
+
+- **지원**: `RAW_COLUMN`, `DATE_PART`
+- **미지원**: LAG, ROLLING, DIFF, RATIO, BINNING, FILL_NULL, CATEGORY_ENCODING (R4 이후)
+
+### API
+
+| 메서드 | 경로 |
+|--------|------|
+| POST | `/api/v1/feature-recipes/preview` |
+
+### DATE_PART 기존 Feature 재사용 정책
+
+- `hour`, `day_of_week`, `month`, `is_weekend` 등 **표준 DATE_PART** 이름이 Catalog/Registry에 이미 있으면 `reusable_existing_feature=true`로 안내
+- Validate/Preview는 **통과**하며 duplicate error가 아님
+- 사용자 지정 `output_feature_name`이 기존 다른 Feature와 충돌하면 error
+
+### UI
+
+- `/data/mappings` — RAW_COLUMN·DATE_PART 템플릿 **Preview** 버튼 및 모달
+
+### 정책
+
+- Preview 결과는 `tb_feature_dataset`·`tb_feature_recipe`에 **저장하지 않음**
+- `preview_id`는 로컬 식별용이며 영속 ID 아님
+- DSL 자동 실행은 여전히 미지원
+
+### 테스트
+
+```bash
+python scripts/test_feature_recipe_preview.py
+```
+
+### 후속 단계
+
 - R4: LAG/ROLLING Preview
 - R5: Recipe 저장 + Builder UI
 

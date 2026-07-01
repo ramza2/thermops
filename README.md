@@ -279,6 +279,7 @@ curl -X POST "http://localhost:8000/api/v1/feature-build-jobs?feature_set_id=FS-
 - **향후**: 범용 Feature Recipe Builder 1차 설계 — [`docs/md/THERMOps_Feature_Recipe_Builder_1차_설계.md`](docs/md/THERMOps_Feature_Recipe_Builder_1차_설계.md) (현재는 CODE Registry + Catalog/Quality/Lineage; DSL 자동 실행 미지원)
 - **R1 Column Role**: `/data/mappings`에서 컬럼 역할 지정 — [`docs/md/THERMOps_Feature_Recipe_Builder_1차_설계.md`](docs/md/THERMOps_Feature_Recipe_Builder_1차_설계.md) 부록 C
 - **R2 Recipe Template Catalog**: 템플릿 목록·validate API — 동일 설계서 부록 D
+- **R3 Recipe Preview**: RAW_COLUMN·DATE_PART 샘플 Preview — 동일 설계서 부록 E
 
 **Feature Registry·Lineage UI**
 

@@ -3,6 +3,8 @@ import type {
   RecipeTemplateListResponse,
   RecipeValidateRequest,
   RecipeValidateResponse,
+  FeatureRecipePreviewRequest,
+  FeatureRecipePreviewResponse,
 } from "@/types/featureRecipeTemplates";
 import { fetchApi, postApi } from "@/api/client";
 
@@ -24,4 +26,10 @@ export async function getFeatureRecipeTemplate(
 
 export async function validateFeatureRecipe(body: RecipeValidateRequest): Promise<RecipeValidateResponse> {
   return postApi<RecipeValidateResponse>("/feature-recipes/validate", body);
+}
+
+export async function previewFeatureRecipe(
+  body: FeatureRecipePreviewRequest,
+): Promise<FeatureRecipePreviewResponse> {
+  return postApi<FeatureRecipePreviewResponse>("/feature-recipes/preview", body);
 }

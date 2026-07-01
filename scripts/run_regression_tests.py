@@ -179,6 +179,12 @@ def _build_registry() -> list[TestCase]:
             timeout_seconds=120,
         ),
         _python_test(
+            "test_feature_recipe_preview.py",
+            groups=["model", "full"],
+            description="Feature Recipe Preview RAW/DATE (R3)",
+            timeout_seconds=120,
+        ),
+        _python_test(
             "test_model_training.py",
             groups=["model", "full"],
             description="LightGBM 학습",

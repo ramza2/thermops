@@ -133,6 +133,12 @@ class FeatureRecipeValidateRequest(BaseModel):
     cardinality: int | None = None
 
 
+class FeatureRecipePreviewRequest(FeatureRecipeValidateRequest):
+    sample_size: int = 100
+    start_at: str | None = None
+    end_at: str | None = None
+
+
 class TrainingConfigCreate(BaseModel):
     config_name: str
     feature_set_id: str

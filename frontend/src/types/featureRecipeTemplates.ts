@@ -71,9 +71,59 @@ export interface RecipeValidateResponse {
   generated_feature_name?: string;
   output_feature_name?: string;
   generated_feature_names?: string[];
+  output_feature_names?: string[];
+  duplicate_policy?: string;
+  reusable_existing_feature?: boolean;
+  reusable_existing_features?: ReusableExistingFeature[];
   errors: RecipeValidationMessage[];
   warnings: string[];
   infos: string[];
   template?: RecipeTemplate;
   lineage_preview?: RecipeLineagePreview;
+}
+
+export interface ReusableExistingFeature {
+  feature_name: string;
+  reason: string;
+}
+
+export interface FeatureRecipePreviewStats {
+  row_count: number;
+  sample_size: number;
+  features: Record<string, {
+    null_count: number;
+    null_ratio: number;
+    invalid_count?: number;
+    min?: number;
+    max?: number;
+  }>;
+}
+
+export interface QualityPreview {
+  estimated_status: string;
+  warnings: string[];
+}
+
+export interface FeatureRecipePreviewRequest extends RecipeValidateRequest {
+  sample_size?: number;
+  start_at?: string | null;
+  end_at?: string | null;
+}
+
+export interface FeatureRecipePreviewResponse {
+  preview_id: string;
+  recipe_type: string;
+  supported: boolean;
+  valid: boolean;
+  generated_feature_names?: string[];
+  output_feature_names?: string[];
+  reusable_existing_features?: ReusableExistingFeature[];
+  duplicate_policy?: string;
+  preview_rows: Record<string, unknown>[];
+  stats: FeatureRecipePreviewStats;
+  lineage_preview?: RecipeLineagePreview | null;
+  quality_preview?: QualityPreview;
+  errors: RecipeValidationMessage[];
+  warnings: string[];
+  infos: string[];
 }

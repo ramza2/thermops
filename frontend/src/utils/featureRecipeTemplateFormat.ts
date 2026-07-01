@@ -71,4 +71,11 @@ export function formatRequiredRoles(template: RecipeTemplate): string {
 export const RECIPE_BUILDER_FUTURE_NOTE =
   "Recipe Builder는 후속 단계에서 제공됩니다. 현재 단계에서는 템플릿 사용 가능 여부만 확인할 수 있습니다.";
 
+export const RECIPE_PREVIEW_NO_SAVE_NOTE =
+  "R3 Preview는 결과를 저장하지 않습니다. Recipe 저장과 Feature Build는 후속 단계에서 제공됩니다.";
+
+export const RECIPE_PREVIEW_R4_NOTE = "LAG/ROLLING 등 시계열 템플릿 Preview는 R4에서 제공됩니다.";
+
+export const PREVIEW_SUPPORTED_RECIPE_TYPES = new Set(["RAW_COLUMN", "DATE_PART"]);
+
 export const RECIPE_TEMPLATE_SECTION_TITLE = "사용 가능한 Recipe 템플릿";
