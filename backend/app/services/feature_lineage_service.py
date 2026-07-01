@@ -73,38 +73,75 @@ async def save_feature_lineage(
     build_start_at: datetime,
     build_end_at: datetime,
     site_ids: list[str],
+    template_lineage_map: dict[str, dict[str, Any]] | None = None,
 ) -> int:
     """Feature Set에 포함된 각 Feature별 lineage 1행 저장."""
     reg = _load_ml_registry()
     await delete_lineage_for_dataset(db, dataset_version_id)
+    template_lineage_map = template_lineage_map or {}
 
     now = utc_now()
     inserted = 0
     for name in feature_names:
-        spec = _spec_or_fallback(reg, name)
+        if name in template_lineage_map:
+            meta = template_lineage_map[name]
+            calc_method = "TEMPLATE"
+            calc_expression = ""
+            source_columns = list(meta.get("source_columns") or [])
+            source_tables = []
+            partition_keys = list(meta.get("entity_keys") or [])
+            time_key = meta.get("time_key")
+            lookback_hours = None
+            requires_shift = meta.get("recipe_type") == "LAG"
+            leakage_safe = meta.get("recipe_type") not in ("ROLLING_MEAN", "ROLLING_SUM")
+            spec_dict = {
+                "feature_name": name,
+                "display_name": name,
+                "feature_group": "TEMPLATE",
+                "feature_type": "TEMPLATE",
+                "calc_method": "TEMPLATE",
+                "calc_expression": "",
+                "description": f"Recipe {meta.get('recipe_type')} (R6 Engine)",
+            }
+        else:
+            spec = _spec_or_fallback(reg, name)
+            calc_method = spec.calc_method
+            calc_expression = spec.calc_expression
+            source_columns = spec.source_columns
+            source_tables = spec.source_tables
+            partition_keys = spec.partition_keys
+            time_key = spec.time_key
+            lookback_hours = spec.lookback_hours
+            requires_shift = spec.requires_shift
+            leakage_safe = spec.leakage_safe
+            spec_dict = spec.to_dict()
+
         lineage_json: dict[str, Any] = {
             "registry_version": reg.REGISTRY_VERSION,
             "feature_set_id": feature_set_id,
             "feature_build_job_id": job_id,
             "site_filter": site_filter,
             "site_ids": site_ids,
-            "spec": spec.to_dict(),
+            "spec": spec_dict,
         }
+        if name in template_lineage_map:
+            lineage_json["recipe"] = template_lineage_map[name]
+
         row = FeatureLineage(
             dataset_version_id=dataset_version_id,
             feature_build_job_id=job_id,
             feature_set_id=feature_set_id,
             feature_name=name,
             registry_version=reg.REGISTRY_VERSION,
-            calc_method=spec.calc_method,
-            calc_expression=spec.calc_expression,
-            source_tables=spec.source_tables,
-            source_columns=spec.source_columns,
-            partition_keys=spec.partition_keys,
-            time_key=spec.time_key,
-            lookback_hours=spec.lookback_hours,
-            requires_shift=spec.requires_shift,
-            leakage_safe=spec.leakage_safe,
+            calc_method=calc_method,
+            calc_expression=calc_expression,
+            source_tables=source_tables,
+            source_columns=source_columns,
+            partition_keys=partition_keys,
+            time_key=time_key,
+            lookback_hours=lookback_hours,
+            requires_shift=requires_shift,
+            leakage_safe=leakage_safe,
             build_start_at=build_start_at,
             build_end_at=build_end_at,
             site_filter=site_filter,

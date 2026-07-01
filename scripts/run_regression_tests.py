@@ -125,6 +125,12 @@ def _build_registry() -> list[TestCase]:
             timeout_seconds=120,
         ),
         _python_test(
+            "test_feature_recipe_build.py",
+            groups=["model", "full"],
+            description="Recipe Engine Feature Build (R6)",
+            timeout_seconds=300,
+        ),
+        _python_test(
             "test_feature_build.py",
             groups=["model", "full"],
             description="Feature 생성",

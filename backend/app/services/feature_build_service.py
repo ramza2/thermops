@@ -27,7 +27,16 @@ from app.models.entities import (
     WeatherObservation,
 )
 from app.services.feature_lineage_service import save_feature_lineage
-from app.services.feature_registration_service import analyze_feature_set_coverage
+from app.services.feature_recipe_engine_service import (
+    build_template_features,
+    split_feature_names_by_recipe,
+    summarize_template_build_result,
+)
+from app.services.feature_recipe_service import load_published_recipes_for_features
+from app.services.feature_registration_service import (
+    analyze_feature_set_coverage,
+    is_tpl_feature_set,
+)
 
 MIN_HISTORY_HOURS = 168
 
@@ -242,6 +251,11 @@ async def run_feature_build(db: AsyncSession, params: FeatureBuildParams) -> dic
     fs = await get_feature_set(db, params.feature_set_id)
     feature_names: list[str] = fs.features or []
 
+    published_recipes = await load_published_recipes_for_features(db, feature_names)
+    code_feature_names, template_recipes = split_feature_names_by_recipe(
+        feature_names, published_recipes
+    )
+
     run = DataQualityRun(
         run_id=job_id,
         source_id=params.feature_set_id,
@@ -253,12 +267,47 @@ async def run_feature_build(db: AsyncSession, params: FeatureBuildParams) -> dic
     await db.flush()
 
     try:
-        df, warnings, errors, coverage = await build_feature_dataframe(db, params, feature_names)
+        df, warnings, errors, coverage = await build_feature_dataframe(
+            db, params, code_feature_names or None
+        )
         if errors:
             raise ValueError("; ".join(errors))
 
         if df.empty:
             raise ValueError("생성할 Feature 행이 없습니다.")
+
+        template_result: dict[str, Any] = {}
+        template_lineage_map: dict[str, dict[str, Any]] = {}
+        if template_recipes:
+            if is_tpl_feature_set(params.feature_set_id):
+                tpl_names = [r.feature_name for r in template_recipes if r.feature_name]
+                warnings.append(
+                    f"공식 TPL Feature Set에 TEMPLATE Recipe Feature 포함: {', '.join(tpl_names)}"
+                )
+            template_result = build_template_features(df, template_recipes)
+            df = template_result["feature_frame"]
+            warnings.extend(template_result.get("warnings") or [])
+            for item in template_result.get("lineage_items") or []:
+                template_lineage_map[item["feature_name"]] = item
+
+        final_coverage = analyze_feature_set_coverage(feature_names, list(df.columns))
+        template_summary = summarize_template_build_result(
+            template_result,
+            code_feature_count=len(code_feature_names),
+        )
+        final_coverage.update(template_summary)
+
+        generated_count = final_coverage.get("generated_feature_count", 0)
+        missing_count = final_coverage.get("missing_feature_count", 0)
+        if missing_count > 0 and generated_count > 0:
+            missing_feats = final_coverage.get("missing_features") or []
+            preview = ", ".join(missing_feats[:5])
+            if len(missing_feats) > 5:
+                preview += f" 외 {len(missing_feats) - 5}건"
+            warnings.append(f"미계산 Feature: {preview}")
+
+        if generated_count == 0:
+            raise ValueError("Feature Set에 포함된 Feature를 계산할 수 없습니다.")
 
         dataset_version_id = _dataset_version_id(params.feature_set_id)
         start_ts = params.start_at or df["measured_at"].min()
@@ -323,6 +372,7 @@ async def run_feature_build(db: AsyncSession, params: FeatureBuildParams) -> dic
                     build_start_at=start_ts.to_pydatetime() if hasattr(start_ts, "to_pydatetime") else start_ts,
                     build_end_at=end_ts.to_pydatetime() if hasattr(end_ts, "to_pydatetime") else end_ts,
                     site_ids=site_ids,
+                    template_lineage_map=template_lineage_map,
                 )
         except Exception as lineage_exc:
             lineage_error = str(lineage_exc)
@@ -343,10 +393,20 @@ async def run_feature_build(db: AsyncSession, params: FeatureBuildParams) -> dic
             "feature_names": feature_names,
             "warnings": warnings,
             "errors": errors,
-            **coverage,
+            **final_coverage,
         }
 
-        run.run_status = "SUCCESS" if not warnings else "WARNING"
+        has_template_issues = bool(
+            template_summary.get("template_build_failed_features")
+            or template_summary.get("template_build_unsupported_features")
+        )
+        if errors:
+            run_status = "FAILED"
+        elif warnings or has_template_issues or missing_count > 0:
+            run_status = "WARNING"
+        else:
+            run_status = "SUCCESS"
+        run.run_status = run_status
         run.finished_at = finished
         run.result_summary = result_summary
 

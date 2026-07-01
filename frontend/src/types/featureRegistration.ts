@@ -6,6 +6,7 @@ export type FeatureRegistrationStatus =
   | "REGISTERED_IN_REGISTRY"
   | "REGISTERED_IN_CATALOG"
   | "TEMPLATE_PUBLISHED"
+  | "TEMPLATE_BUILD_SUPPORTED"
   | "UNKNOWN";
 
 export interface FeatureNameValidation {
@@ -21,6 +22,7 @@ export interface FeatureNameValidation {
   recipe_type?: string;
   recipe_status?: string;
   build_supported?: boolean;
+  registration_status?: FeatureRegistrationStatus;
 }
 
 export interface LegacyFeatureReplacement {

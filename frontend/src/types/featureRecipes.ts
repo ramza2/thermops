@@ -62,8 +62,10 @@ export interface FeatureSetAddRecipeFeatureResult {
   message?: string;
 }
 
-export const R5_BUILD_WARNING =
-  "Recipe Feature는 저장/등록되었지만 실제 Feature Build 계산은 R6 단계에서 제공됩니다.";
+export const R6_BUILD_INFO =
+  "R6 Recipe Engine이 RAW_COLUMN, DATE_PART, LAG, ROLLING_MEAN, ROLLING_SUM Feature Build를 지원합니다.";
+
+export const R5_BUILD_WARNING = R6_BUILD_INFO;
 
 export const RECIPE_PREVIEW_NO_SAVE_NOTE =
   "Preview 결과는 저장하지 않습니다. preview_summary만 Recipe에 기록됩니다.";

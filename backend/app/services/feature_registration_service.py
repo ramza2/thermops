@@ -193,14 +193,15 @@ async def validate_feature_name(db: AsyncSession, feature_name: str) -> dict[str
     recipe = await get_published_recipe_by_feature_name(db, name)
     if recipe:
         template_meta = recipe_registration_metadata(recipe)
+        reg_status = template_meta.get("registration_status", "TEMPLATE_PUBLISHED")
         return {
             "feature_name": name,
-            "status": "TEMPLATE_PUBLISHED",
+            "status": reg_status if reg_status == "TEMPLATE_BUILD_SUPPORTED" else "TEMPLATE_PUBLISHED",
             "recommended_name": name,
             "catalog_registered": True,
             "registry_registered": False,
             "computable": False,
-            "message": "Recipe로 발행되었지만 실제 Feature Build 계산은 R6에서 제공됩니다.",
+            "message": template_meta.get("registration_message", ""),
             **template_meta,
         }
 
@@ -260,15 +261,19 @@ def registration_metadata_for_feature(
 
         base = classify_feature_name(feature_name, catalog_registered=feature_name in catalog_names)
         template_meta = recipe_registration_metadata(recipe)
+        reg_status = template_meta.get("registration_status", "TEMPLATE_PUBLISHED")
+        supported = bool(template_meta.get("build_supported"))
         return {
             **base,
             **template_meta,
-            "status": "TEMPLATE_PUBLISHED",
-            "registration_status": "TEMPLATE_PUBLISHED",
+            "status": reg_status if supported else "TEMPLATE_PUBLISHED",
+            "registration_status": reg_status,
             "computable": False,
             "registry_registered": base.get("registry_registered", False),
-            "registration_message": (
-                "Recipe로 발행되었지만 실제 Feature Build 계산은 R6에서 제공됩니다."
+            "registration_message": template_meta.get(
+                "registration_message",
+                "Recipe Engine으로 Build 계산이 지원됩니다." if supported
+                else "현재 R6에서는 해당 Recipe Type의 Build 계산을 지원하지 않습니다.",
             ),
         }
 
@@ -311,6 +316,13 @@ def quality_context_message(
                 "카탈로그에는 등록되어 있으나 계산 로직이 없어 feature_json에 값이 없습니다."
             )
         return "Registry에 등록되지 않았고 계산 로직이 없어 feature_json에 값이 없습니다."
+    if status in ("TEMPLATE_PUBLISHED", "TEMPLATE_BUILD_SUPPORTED"):
+        if meta.get("build_supported"):
+            return None
+        return (
+            f"{name}는 Recipe Feature이지만 R6 Build 미지원 recipe_type입니다. "
+            "feature_json에 값이 없을 수 있습니다."
+        )
     if not meta.get("registry_registered") and not meta.get("computable"):
         return f"{name}는 Registry 미등록 Feature로 feature_json에 값이 없을 수 있습니다."
     return None

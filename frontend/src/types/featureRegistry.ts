@@ -79,6 +79,11 @@ export interface FeatureBuildResult {
     missing_features?: string[];
     catalog_only_features?: string[];
     legacy_alias_features?: string[];
+    template_build_unsupported_features?: string[];
+    template_build_failed_features?: string[];
+    template_generated_feature_count?: number;
+    template_recipe_features?: string[];
+    recipe_engine_version?: string;
   };
 }
 

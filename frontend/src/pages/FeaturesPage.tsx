@@ -48,12 +48,16 @@ const REGISTER_INFO = `Feature 등록은 카탈로그 등록 단계입니다.
 
 function RegistrationBadge({ registration }: { registration?: FeatureNameValidation }) {
   if (!registration) return <span className="text-xs text-slate-400">-</span>;
+  const status = (registration.registration_status ?? registration.status) as FeatureNameValidation["status"];
+  const title = registration.build_supported
+    ? `${registration.message} (Recipe Engine Build 지원)`
+    : registration.message;
   return (
     <span
-      className={`inline-flex text-[11px] px-1.5 py-0.5 rounded border ${registrationStatusClass(registration.status)}`}
-      title={registration.message}
+      className={`inline-flex text-[11px] px-1.5 py-0.5 rounded border ${registrationStatusClass(status)}`}
+      title={title}
     >
-      {registrationStatusLabel(registration.status)}
+      {registrationStatusLabel(status)}
     </span>
   );
 }
@@ -246,6 +250,8 @@ export default function FeaturesPage() {
 
       <div className="mb-4 text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded-lg p-3 whitespace-pre-line">
         {REGISTER_INFO}
+        {"\n"}
+        Recipe로 발행된 TEMPLATE Feature 중 RAW_COLUMN·DATE_PART·LAG·ROLLING은 R6 Recipe Engine Build가 지원됩니다.
       </div>
 
       {registryWarning && (

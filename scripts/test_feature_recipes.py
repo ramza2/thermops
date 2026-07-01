@@ -119,7 +119,7 @@ def test_publish(recipe_id: str) -> str:
     feature_name = data["feature"]["feature_name"]
     assert feature_name, data
     feat = api("GET", f"/features/validate-name?feature_name={feature_name}")
-    assert feat["status"] == "TEMPLATE_PUBLISHED", feat
+    assert feat["status"] in ("TEMPLATE_PUBLISHED", "TEMPLATE_BUILD_SUPPORTED"), feat
     print("  [ok] publish recipe + catalog registration")
     return feature_name
 
@@ -142,7 +142,7 @@ def test_add_to_custom_feature_set(recipe_id: str) -> str:
     fsid = fs["feature_set_id"]
     result = api("POST", f"/feature-sets/{fsid}/add-recipe-feature", {"recipe_id": recipe_id})
     assert result["added"] is True, result
-    assert any("R5" in w or "R6" in w for w in result.get("warnings", [])), result
+    assert any("R5" in w or "R6" in w or "Recipe Engine" in w for w in result.get("warnings", [])), result
     print("  [ok] add published recipe to custom Feature Set")
     return fsid
 
@@ -191,9 +191,9 @@ def test_archive(recipe_id: str) -> None:
 
 def test_template_registration(feature_name: str) -> None:
     data = api("GET", f"/features/validate-name?feature_name={feature_name}")
-    assert data["status"] == "TEMPLATE_PUBLISHED", data
-    assert data.get("build_supported") is False, data
-    print("  [ok] TEMPLATE_PUBLISHED registration status")
+    assert data["status"] in ("TEMPLATE_PUBLISHED", "TEMPLATE_BUILD_SUPPORTED"), data
+    assert data.get("build_supported") is True, data
+    print("  [ok] TEMPLATE build_supported registration")
 
 
 def test_preview_api_unchanged() -> None:

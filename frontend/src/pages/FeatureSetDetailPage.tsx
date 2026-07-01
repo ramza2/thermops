@@ -16,7 +16,7 @@ import { FeatureQualitySection } from "@/components/FeatureQualitySection";
 import type { FeatureBuildResult } from "@/types/featureRegistry";
 import type { FeatureNameValidation, FeatureSetLegacyReplaceResult } from "@/types/featureRegistration";
 import type { FeatureRecipe } from "@/types/featureRecipes";
-import { R5_BUILD_WARNING } from "@/types/featureRecipes";
+import { R6_BUILD_INFO } from "@/types/featureRecipes";
 import {
   CATALOG_ONLY_WARNING_MSG,
   FEATURE_QUALITY_REGISTRATION_HINT,
@@ -45,12 +45,16 @@ interface FeatureItem {
 
 function FeatureRegistrationBadge({ registration }: { registration?: FeatureNameValidation }) {
   if (!registration) return <span className="text-xs text-slate-400">-</span>;
+  const status = (registration.registration_status ?? registration.status) as FeatureNameValidation["status"];
+  const title = registration.build_supported
+    ? `${registration.message} (Recipe Engine Build 지원)`
+    : registration.message;
   return (
     <span
-      className={`inline-flex text-[11px] px-1.5 py-0.5 rounded border ${registrationStatusClass(registration.status)}`}
-      title={registration.message}
+      className={`inline-flex text-[11px] px-1.5 py-0.5 rounded border ${registrationStatusClass(status)}`}
+      title={title}
     >
-      {registrationStatusLabel(registration.status)}
+      {registrationStatusLabel(status)}
     </span>
   );
 }
@@ -527,6 +531,26 @@ export default function FeatureSetDetailPage() {
           {buildResult.warnings && buildResult.warnings.length > 0 && (
             <p className="text-amber-700 text-xs">경고 {buildResult.warnings.length}건</p>
           )}
+          {(buildResult.result_summary?.template_generated_feature_count ?? 0) > 0 && (
+            <p className="text-emerald-700 text-xs">
+              Recipe Engine Build: TEMPLATE {buildResult.result_summary?.template_generated_feature_count}건 생성
+              {(buildResult.result_summary?.template_recipe_features as string[] | undefined)?.length ? (
+                <span className="font-mono ml-1">
+                  ({(buildResult.result_summary?.template_recipe_features as string[]).join(", ")})
+                </span>
+              ) : null}
+            </p>
+          )}
+          {((buildResult.result_summary?.template_build_failed_features as string[] | undefined)?.length ?? 0) > 0 && (
+            <p className="text-amber-800 text-xs">
+              TEMPLATE Build 실패: {(buildResult.result_summary?.template_build_failed_features as string[]).join(", ")}
+            </p>
+          )}
+          {((buildResult.result_summary?.template_build_unsupported_features as string[] | undefined)?.length ?? 0) > 0 && (
+            <p className="text-amber-800 text-xs">
+              TEMPLATE Build 미지원: {(buildResult.result_summary?.template_build_unsupported_features as string[]).join(", ")}
+            </p>
+          )}
           {(buildResult.result_summary?.missing_feature_count ?? 0) > 0 && (
             <div className="text-amber-800 text-xs mt-1 bg-amber-50 border border-amber-100 rounded p-2">
               미생성 Feature {buildResult.result_summary?.missing_feature_count}건
@@ -778,7 +802,7 @@ export default function FeatureSetDetailPage() {
         )}
       >
         <p className="text-xs text-violet-800 bg-violet-50 border border-violet-100 rounded p-2 mb-3">
-          {R5_BUILD_WARNING}
+          {R6_BUILD_INFO}
         </p>
         <SelectInput
           value={selectedRecipeId}

@@ -48,6 +48,7 @@ from app.services.feature_recipe_service import (
     RecipeServiceError,
     add_recipe_feature_to_feature_set,
     load_published_recipe_map,
+    recipe_registration_metadata,
 )
 
 router = APIRouter(tags=["Feature"])
@@ -89,16 +90,13 @@ async def list_features(
         recipe = recipe_map.get(f["feature_name"])
         reg = classify_feature_name(f["feature_name"], catalog_registered=True)
         if recipe:
+            template_meta = recipe_registration_metadata(recipe)
             reg = {
                 **reg,
-                "status": "TEMPLATE_PUBLISHED",
+                **template_meta,
+                "status": template_meta.get("registration_status", "TEMPLATE_PUBLISHED"),
                 "computable": False,
-                "template_recipe_registered": True,
-                "recipe_id": recipe.recipe_id,
-                "recipe_type": recipe.recipe_type,
-                "recipe_status": recipe.status,
-                "build_supported": False,
-                "message": "Recipe로 발행되었지만 실제 Feature Build 계산은 R6에서 제공됩니다.",
+                "message": template_meta.get("registration_message", ""),
             }
         enriched.append({
             **f,

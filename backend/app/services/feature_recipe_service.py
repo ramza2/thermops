@@ -18,20 +18,20 @@ from app.services.feature_recipe_template_service import (
 )
 from app.services.feature_registration_service import is_tpl_feature_set
 
+from app.services.feature_recipe_engine_service import (
+    BUILD_SUPPORTED_RECIPE_TYPES,
+    is_recipe_build_supported,
+)
+
 RECIPE_STATUSES = frozenset({"DRAFT", "VALIDATED", "PUBLISHED", "ARCHIVED"})
 EDITABLE_STATUSES = frozenset({"DRAFT", "VALIDATED"})
-BUILDER_SUPPORTED_TYPES = frozenset({
-    "RAW_COLUMN",
-    "DATE_PART",
-    "LAG",
-    "ROLLING_MEAN",
-    "ROLLING_SUM",
-})
+BUILDER_SUPPORTED_TYPES = BUILD_SUPPORTED_RECIPE_TYPES
 
-R5_BUILD_WARNING = (
-    "R5에서는 Recipe Feature Build 계산이 아직 연결되지 않았습니다. "
-    "실제 Feature Dataset 계산은 R6 Recipe Engine에서 제공됩니다."
+R6_BUILD_INFO = (
+    "R6 Recipe Engine이 RAW_COLUMN, DATE_PART, LAG, ROLLING_MEAN, ROLLING_SUM Build를 지원합니다. "
+    "DIFF/RATIO 등은 후속 단계에서 제공됩니다."
 )
+R5_BUILD_WARNING = R6_BUILD_INFO
 
 
 class RecipeServiceError(Exception):
@@ -114,7 +114,7 @@ def recipe_to_dict(recipe: FeatureRecipe) -> dict[str, Any]:
         "published_at": recipe.published_at.isoformat() if recipe.published_at else None,
         "created_at": recipe.created_at.isoformat() if recipe.created_at else None,
         "updated_at": recipe.updated_at.isoformat() if recipe.updated_at else None,
-        "build_supported": recipe.status == "PUBLISHED" and False,
+        "build_supported": recipe.status == "PUBLISHED" and is_recipe_build_supported(str(recipe.recipe_type or "")),
     }
 
 
@@ -498,7 +498,7 @@ async def publish_recipe(db: AsyncSession, recipe_id: str) -> dict[str, Any]:
     warnings: list[str] = []
     if not recipe.preview_summary:
         warnings.append("Preview를 실행하지 않고 발행했습니다. Preview 실행을 권장합니다.")
-    warnings.append(R5_BUILD_WARNING)
+    warnings.append(R6_BUILD_INFO)
 
     return {
         "recipe": recipe_to_dict(recipe),
@@ -548,6 +548,9 @@ async def add_recipe_feature_to_feature_set(
     if not fs:
         raise RecipeServiceError("FEATURE_SET_NOT_FOUND", "Feature Set을 찾을 수 없습니다.", status_code=404)
 
+    meta = recipe_registration_metadata(recipe)
+    build_hint = meta.get("registration_message", R6_BUILD_INFO)
+
     features = list(fs.features or [])
     if target_name in features:
         return {
@@ -556,7 +559,7 @@ async def add_recipe_feature_to_feature_set(
             "recipe_id": recipe_id,
             "added": False,
             "features": features,
-            "warnings": [R5_BUILD_WARNING],
+            "warnings": [build_hint],
             "message": "이미 Feature Set에 포함되어 있습니다.",
         }
 
@@ -568,7 +571,7 @@ async def add_recipe_feature_to_feature_set(
         "recipe_id": recipe_id,
         "added": True,
         "features": features,
-        "warnings": [R5_BUILD_WARNING],
+        "warnings": [build_hint],
         "message": "Recipe Feature가 Feature Set에 추가되었습니다.",
     }
 
@@ -580,6 +583,24 @@ async def load_published_recipe_map(db: AsyncSession) -> dict[str, FeatureRecipe
                 FeatureRecipe.status == "PUBLISHED",
                 FeatureRecipe.active_yn == "Y",
                 FeatureRecipe.feature_name.isnot(None),
+            )
+        )
+    ).scalars().all()
+    return {r.feature_name: r for r in rows if r.feature_name}
+
+
+async def load_published_recipes_for_features(
+    db: AsyncSession,
+    feature_names: list[str],
+) -> dict[str, FeatureRecipe]:
+    if not feature_names:
+        return {}
+    rows = (
+        await db.execute(
+            select(FeatureRecipe).where(
+                FeatureRecipe.feature_name.in_(feature_names),
+                FeatureRecipe.status == "PUBLISHED",
+                FeatureRecipe.active_yn == "Y",
             )
         )
     ).scalars().all()
@@ -602,11 +623,22 @@ async def get_published_recipe_by_feature_name(
 
 
 def recipe_registration_metadata(recipe: FeatureRecipe) -> dict[str, Any]:
+    supported = (
+        recipe.status == "PUBLISHED"
+        and recipe.active_yn == "Y"
+        and is_recipe_build_supported(str(recipe.recipe_type or ""))
+    )
+    reg_status = "TEMPLATE_BUILD_SUPPORTED" if supported else "TEMPLATE_PUBLISHED"
+    if supported:
+        message = "Recipe Engine으로 Build 계산이 지원됩니다."
+    else:
+        message = "현재 R6에서는 해당 Recipe Type의 Build 계산을 지원하지 않습니다."
     return {
         "template_recipe_registered": True,
         "recipe_id": recipe.recipe_id,
         "recipe_type": recipe.recipe_type,
         "recipe_status": recipe.status,
-        "build_supported": False,
-        "registration_status": "TEMPLATE_PUBLISHED",
+        "build_supported": supported,
+        "registration_status": reg_status,
+        "registration_message": message,
     }

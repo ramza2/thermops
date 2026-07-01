@@ -38,6 +38,18 @@ export const BUILDER_SUPPORTED_TYPES = [
   "ROLLING_SUM",
 ] as const;
 
+export function recipeBuildSupportLabel(recipe: { status?: string; recipe_type?: string; build_supported?: boolean }): string {
+  if (recipe.status !== "PUBLISHED") return "-";
+  if (recipe.build_supported) return "Build 지원";
+  return "Build 미지원";
+}
+
+export function recipeBuildSupportClass(recipe: { build_supported?: boolean }): string {
+  return recipe.build_supported
+    ? "bg-emerald-50 text-emerald-800 border-emerald-200"
+    : "bg-amber-50 text-amber-800 border-amber-200";
+}
+
 export const BUILDER_FUTURE_TYPES = [
   "DIFF",
   "RATIO",

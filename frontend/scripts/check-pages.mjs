@@ -33,7 +33,7 @@ for (const path of PATHS) {
   console.log(`OK ${path} -> ${h1.slice(0, 30)}`);
   if (path === "/features") {
     await page.getByText("신규 Feature 사용 절차").first().waitFor({ state: "visible", timeout: 60000 });
-    await page.getByText("Recipe로 Feature 만들기").first().waitFor({ state: "visible", timeout: 30000 });
+    await page.getByText("Recipe Engine").first().waitFor({ state: "visible", timeout: 30000 });
     await page.locator("th", { hasText: "등록 유형" }).first().waitFor({ state: "visible", timeout: 30000 });
     await page.locator("th", { hasText: "계산식 메모" }).first().waitFor({ state: "visible", timeout: 30000 });
   }

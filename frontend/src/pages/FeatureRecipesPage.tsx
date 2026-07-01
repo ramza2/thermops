@@ -7,8 +7,8 @@ import { DataTable } from "@/components/DataTable";
 import { ErrorState, LoadingState } from "@/components/Pagination";
 import { PageHeader } from "@/layouts/MainLayout";
 import type { FeatureRecipe } from "@/types/featureRecipes";
-import { R5_BUILD_WARNING } from "@/types/featureRecipes";
-import { recipeStatusClass, recipeStatusLabel } from "@/utils/featureRecipeFormat";
+import { R6_BUILD_INFO } from "@/types/featureRecipes";
+import { recipeBuildSupportClass, recipeBuildSupportLabel, recipeStatusClass, recipeStatusLabel } from "@/utils/featureRecipeFormat";
 
 export default function FeatureRecipesPage() {
   const [items, setItems] = useState<FeatureRecipe[]>([]);
@@ -48,9 +48,9 @@ export default function FeatureRecipesPage() {
       />
 
       <div className="mb-4 text-xs text-slate-600 bg-blue-50 border border-blue-200 rounded-lg p-3 space-y-1">
-        <p className="font-medium text-slate-800">Feature Recipe Builder (R5)</p>
-        <p>{R5_BUILD_WARNING}</p>
-        <p>Publish는 Feature Catalog 등록과 feature_name 확정을 의미합니다. 실제 Feature Build 계산은 R6에서 제공됩니다.</p>
+        <p className="font-medium text-slate-800">Feature Recipe Builder (R5–R6)</p>
+        <p>{R6_BUILD_INFO}</p>
+        <p>DIFF/RATIO/BINNING 등은 Build 미지원이며 Preview·저장만 가능합니다.</p>
       </div>
 
       <DataTable
@@ -69,6 +69,19 @@ export default function FeatureRecipesPage() {
             ),
           },
           { key: "feature_name", header: "Feature명", render: (r) => String(r.feature_name ?? "-") },
+          {
+            key: "build_supported",
+            header: "Build",
+            width: "100px",
+            render: (r) => {
+              const recipe = r as unknown as FeatureRecipe;
+              return (
+              <span className={`text-[10px] px-1 py-0.5 rounded border ${recipeBuildSupportClass(recipe)}`}>
+                {recipeBuildSupportLabel(recipe)}
+              </span>
+              );
+            },
+          },
           { key: "mapping_id", header: "매핑", width: "110px", render: (r) => String(r.mapping_id ?? "-") },
           {
             key: "actions",

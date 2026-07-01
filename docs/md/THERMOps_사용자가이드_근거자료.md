@@ -179,7 +179,9 @@ flowchart LR
 
 **R4 Recipe Preview**: LAG·ROLLING_MEAN·ROLLING_SUM 템플릿 Preview가 추가되었습니다. `entity_keys`와 `time_key`로 정렬한 뒤 **row step** 기반으로 계산하며, 시간 간격 불규칙·이력 부족·target 누수 가능성은 Preview 응답의 warnings로 안내됩니다. DIFF·RATIO 등은 후속 Preview입니다. 결과는 여전히 저장되지 않습니다.
 
-**R5 Recipe 저장·Builder**: `/feature-recipes`에서 Recipe를 저장·검증·Preview·발행할 수 있습니다. Publish는 Feature Catalog 등록과 feature_name 확정을 의미하며, 발행된 TEMPLATE Feature를 Feature Set(사용자 정의)에 추가할 수 있습니다. 공식 `FS-TPL-*`에는 Recipe Feature 추가가 차단됩니다. **실제 Feature Build 계산은 R6에서 제공**됩니다.
+**R5 Recipe 저장·Builder**: `/feature-recipes`에서 Recipe를 저장·검증·Preview·발행할 수 있습니다. Publish는 Feature Catalog 등록과 feature_name 확정을 의미하며, 발행된 TEMPLATE Feature를 Feature Set(사용자 정의)에 추가할 수 있습니다. 공식 `FS-TPL-*`에는 Recipe Feature 추가가 차단됩니다.
+
+**R6 Recipe Engine Build**: 발행된 TEMPLATE Recipe 중 `RAW_COLUMN`, `DATE_PART`, `LAG`, `ROLLING_MEAN`, `ROLLING_SUM`은 Feature Build 시 Recipe Engine으로 계산되어 기존 CODE Feature와 함께 `feature_json`에 저장됩니다. `DIFF`/`RATIO` 등은 Build 미지원이며 WARNING으로 안내됩니다. Preview 결과는 여전히 DB에 저장되지 않습니다.
 
 ---
 
