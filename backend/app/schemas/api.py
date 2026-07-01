@@ -139,6 +139,46 @@ class FeatureRecipePreviewRequest(FeatureRecipeValidateRequest):
     end_at: str | None = None
 
 
+class FeatureRecipeCreateRequest(FeatureRecipeValidateRequest):
+    display_name: str | None = None
+    description: str | None = None
+    domain: str | None = None
+    task_type: str | None = None
+    owner: str | None = None
+    output_data_type: str | None = None
+    unit: str | None = None
+    null_handling: str | None = None
+    leakage_policy: str | None = None
+
+
+class FeatureRecipeUpdateRequest(BaseModel):
+    display_name: str | None = None
+    description: str | None = None
+    domain: str | None = None
+    task_type: str | None = None
+    owner: str | None = None
+    mapping_id: str | None = None
+    source_columns: list[str] | None = None
+    entity_keys: list[str] | None = None
+    time_key: str | None = None
+    target_column: str | None = None
+    params: dict[str, Any] | None = None
+    output_feature_name: str | None = None
+    output_data_type: str | None = None
+    unit: str | None = None
+    null_handling: str | None = None
+    leakage_policy: str | None = None
+
+
+class FeatureRecipePreviewSavedRequest(BaseModel):
+    sample_size: int = 100
+
+
+class FeatureSetAddRecipeFeatureRequest(BaseModel):
+    recipe_id: str
+    feature_name: str | None = None
+
+
 class TrainingConfigCreate(BaseModel):
     config_name: str
     feature_set_id: str

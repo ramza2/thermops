@@ -5,6 +5,7 @@ export type FeatureRegistrationStatus =
   | "DUPLICATE"
   | "REGISTERED_IN_REGISTRY"
   | "REGISTERED_IN_CATALOG"
+  | "TEMPLATE_PUBLISHED"
   | "UNKNOWN";
 
 export interface FeatureNameValidation {
@@ -15,6 +16,11 @@ export interface FeatureNameValidation {
   registry_registered: boolean;
   computable: boolean;
   message: string;
+  template_recipe_registered?: boolean;
+  recipe_id?: string;
+  recipe_type?: string;
+  recipe_status?: string;
+  build_supported?: boolean;
 }
 
 export interface LegacyFeatureReplacement {

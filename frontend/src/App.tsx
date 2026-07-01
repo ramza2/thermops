@@ -8,6 +8,8 @@ import DataQualityPage from "@/pages/DataQualityPage";
 import FeaturesPage from "@/pages/FeaturesPage";
 import FeatureSetsPage from "@/pages/FeatureSetsPage";
 import FeatureSetDetailPage from "@/pages/FeatureSetDetailPage";
+import FeatureRecipesPage from "@/pages/FeatureRecipesPage";
+import FeatureRecipeBuilderPage from "@/pages/FeatureRecipeBuilderPage";
 import TrainingConfigsPage from "@/pages/TrainingConfigsPage";
 import TrainingJobsPage from "@/pages/TrainingJobsPage";
 import ModelPerformancePage from "@/pages/ModelPerformancePage";
@@ -33,6 +35,9 @@ export default function App() {
             <Route path="data/mappings" element={<DataMappingsPage />} />
             <Route path="data/quality" element={<DataQualityPage />} />
             <Route path="features" element={<FeaturesPage />} />
+            <Route path="feature-recipes" element={<FeatureRecipesPage />} />
+            <Route path="feature-recipes/new" element={<FeatureRecipeBuilderPage />} />
+            <Route path="feature-recipes/:recipeId" element={<FeatureRecipeBuilderPage />} />
             <Route path="feature-sets" element={<FeatureSetsPage />} />
             <Route path="feature-sets/:id" element={<FeatureSetDetailPage />} />
             <Route path="models/training-configs" element={<TrainingConfigsPage />} />

@@ -21,6 +21,7 @@ from app.services.feature_registration_service import (
     registration_metadata_for_feature,
     summarize_registration_counts,
 )
+from app.services.feature_recipe_service import load_published_recipe_map
 
 # feature_name -> (min, max). None means no upper/lower bound on that side.
 RANGE_RULES: dict[str, tuple[float | None, float | None]] = {
@@ -290,9 +291,14 @@ async def run_feature_quality_check(db: AsyncSession, params: FeatureQualityPara
             warnings.append(f"해당 dataset_version의 Lineage 저장 실패 이력: {lineage_error}")
 
     catalog_names = await load_catalog_feature_names(db)
+    recipe_map = await load_published_recipe_map(db)
     registration_by_name: dict[str, dict[str, Any]] = {}
     for fname in feature_names:
-        meta = registration_metadata_for_feature(fname, catalog_names=catalog_names)
+        meta = registration_metadata_for_feature(
+            fname,
+            catalog_names=catalog_names,
+            recipe=recipe_map.get(fname),
+        )
         meta["feature_name"] = fname
         registration_by_name[fname] = meta
 

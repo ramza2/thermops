@@ -3,9 +3,27 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.response import ok
-from app.schemas.api import FeatureRecipePreviewRequest, FeatureRecipeValidateRequest
+from app.schemas.api import (
+    FeatureRecipeCreateRequest,
+    FeatureRecipePreviewRequest,
+    FeatureRecipePreviewSavedRequest,
+    FeatureRecipeUpdateRequest,
+    FeatureRecipeValidateRequest,
+)
 from app.services.feature_column_role_service import get_mapping_or_raise, list_column_roles
 from app.services.feature_recipe_preview_service import preview_feature_recipe
+from app.services.feature_recipe_service import (
+    RecipeServiceError,
+    archive_recipe,
+    create_recipe,
+    get_recipe_or_raise,
+    list_recipes,
+    preview_saved_recipe,
+    publish_recipe,
+    recipe_to_dict,
+    update_recipe,
+    validate_saved_recipe,
+)
 from app.services.feature_recipe_template_service import (
     evaluate_template_availability,
     get_catalog_for_mapping,
@@ -15,6 +33,13 @@ from app.services.feature_recipe_template_service import (
 )
 
 router = APIRouter(tags=["Feature Recipe"])
+
+
+def _recipe_error(exc: RecipeServiceError) -> HTTPException:
+    return HTTPException(
+        status_code=exc.status_code,
+        detail={"code": exc.code, "message": exc.message},
+    )
 
 
 @router.get("/feature-recipe-templates")
@@ -113,3 +138,103 @@ async def preview_feature_recipe_api(
 ):
     result = await preview_feature_recipe(db, body.model_dump())
     return ok(result)
+
+
+@router.post("/feature-recipes")
+async def create_feature_recipe(
+    body: FeatureRecipeCreateRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        result = await create_recipe(db, body.model_dump())
+    except RecipeServiceError as exc:
+        raise _recipe_error(exc) from exc
+    return ok(result, message="Recipe 초안이 저장되었습니다.")
+
+
+@router.get("/feature-recipes")
+async def list_feature_recipes(
+    status: str | None = Query(default=None),
+    recipe_type: str | None = Query(default=None),
+    mapping_id: str | None = Query(default=None),
+    feature_name: str | None = Query(default=None),
+    include_archived: bool = Query(default=False),
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await list_recipes(
+        db,
+        status=status,
+        recipe_type=recipe_type,
+        mapping_id=mapping_id,
+        feature_name=feature_name,
+        include_archived=include_archived,
+        limit=limit,
+        offset=offset,
+    )
+    return ok(result)
+
+
+@router.get("/feature-recipes/{recipe_id}")
+async def get_feature_recipe(recipe_id: str, db: AsyncSession = Depends(get_db)):
+    try:
+        recipe = await get_recipe_or_raise(db, recipe_id)
+    except RecipeServiceError as exc:
+        raise _recipe_error(exc) from exc
+    return ok(recipe_to_dict(recipe))
+
+
+@router.put("/feature-recipes/{recipe_id}")
+async def update_feature_recipe(
+    recipe_id: str,
+    body: FeatureRecipeUpdateRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    payload = {k: v for k, v in body.model_dump().items() if v is not None}
+    try:
+        result = await update_recipe(db, recipe_id, payload)
+    except RecipeServiceError as exc:
+        raise _recipe_error(exc) from exc
+    return ok(result, message="Recipe가 수정되었습니다.")
+
+
+@router.post("/feature-recipes/{recipe_id}/archive")
+async def archive_feature_recipe(recipe_id: str, db: AsyncSession = Depends(get_db)):
+    try:
+        result = await archive_recipe(db, recipe_id)
+    except RecipeServiceError as exc:
+        raise _recipe_error(exc) from exc
+    return ok(result, message="Recipe가 보관되었습니다.")
+
+
+@router.post("/feature-recipes/{recipe_id}/validate")
+async def validate_saved_feature_recipe(recipe_id: str, db: AsyncSession = Depends(get_db)):
+    try:
+        result = await validate_saved_recipe(db, recipe_id)
+    except RecipeServiceError as exc:
+        raise _recipe_error(exc) from exc
+    return ok(result)
+
+
+@router.post("/feature-recipes/{recipe_id}/preview")
+async def preview_saved_feature_recipe_api(
+    recipe_id: str,
+    body: FeatureRecipePreviewSavedRequest | None = None,
+    db: AsyncSession = Depends(get_db),
+):
+    sample_size = body.sample_size if body else 100
+    try:
+        result = await preview_saved_recipe(db, recipe_id, sample_size=sample_size)
+    except RecipeServiceError as exc:
+        raise _recipe_error(exc) from exc
+    return ok(result)
+
+
+@router.post("/feature-recipes/{recipe_id}/publish")
+async def publish_feature_recipe(recipe_id: str, db: AsyncSession = Depends(get_db)):
+    try:
+        result = await publish_recipe(db, recipe_id)
+    except RecipeServiceError as exc:
+        raise _recipe_error(exc) from exc
+    return ok(result, message="Recipe가 발행되어 Feature Catalog에 등록되었습니다.")

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { Eye, Plus, Trash2 } from "lucide-react";
 import { deleteApi, fetchApi, postApi, PagedData } from "@/api/client";
 import { validateFeatureName } from "@/api/featureRegistration";
@@ -227,7 +228,14 @@ export default function FeaturesPage() {
       <PageHeader
         title="Feature 목록"
         description="모델 학습에 사용되는 Feature 메타데이터(카탈로그)를 정의합니다. 등록만으로는 값이 생성되지 않습니다."
-        actions={<Button icon={<Plus className="w-4 h-4" />} onClick={() => setCreateOpen(true)}>신규 Feature</Button>}
+        actions={(
+          <div className="flex gap-2">
+            <Link to="/feature-recipes/new">
+              <Button variant="secondary">Recipe로 Feature 만들기</Button>
+            </Link>
+            <Button icon={<Plus className="w-4 h-4" />} onClick={() => setCreateOpen(true)}>신규 Feature</Button>
+          </div>
+        )}
       />
 
       <div className="mb-4 text-xs text-slate-600 bg-blue-50 border border-blue-200 rounded-lg p-3 whitespace-pre-line">

@@ -9,7 +9,13 @@ from app.core.database import get_db
 from app.core.response import ok, paged
 from app.core.time import utc_now
 from app.models.entities import Feature, FeatureSet
-from app.schemas.api import FeatureCreate, FeatureQualityRunCreate, FeatureSetCreate, FeatureSetLegacyReplaceRequest
+from app.schemas.api import (
+    FeatureCreate,
+    FeatureQualityRunCreate,
+    FeatureSetAddRecipeFeatureRequest,
+    FeatureSetCreate,
+    FeatureSetLegacyReplaceRequest,
+)
 from app.services.feature_build_service import (
     FeatureBuildParams,
     get_feature_build_job,
@@ -38,6 +44,11 @@ from app.services.feature_registration_service import (
     replace_legacy_features_in_feature_set,
     validate_feature_name,
 )
+from app.services.feature_recipe_service import (
+    RecipeServiceError,
+    add_recipe_feature_to_feature_set,
+    load_published_recipe_map,
+)
 
 router = APIRouter(tags=["Feature"])
 
@@ -58,6 +69,7 @@ async def list_features(
     db: AsyncSession = Depends(get_db),
 ):
     rows = (await db.execute(select(Feature).order_by(Feature.feature_name))).scalars().all()
+    recipe_map = await load_published_recipe_map(db)
     items = [
         {
             "feature_id": r.feature_id,
@@ -74,9 +86,23 @@ async def list_features(
     page_items = items[start:start + size]
     enriched = []
     for f in page_items:
+        recipe = recipe_map.get(f["feature_name"])
+        reg = classify_feature_name(f["feature_name"], catalog_registered=True)
+        if recipe:
+            reg = {
+                **reg,
+                "status": "TEMPLATE_PUBLISHED",
+                "computable": False,
+                "template_recipe_registered": True,
+                "recipe_id": recipe.recipe_id,
+                "recipe_type": recipe.recipe_type,
+                "recipe_status": recipe.status,
+                "build_supported": False,
+                "message": "Recipe로 발행되었지만 실제 Feature Build 계산은 R6에서 제공됩니다.",
+            }
         enriched.append({
             **f,
-            "registration": classify_feature_name(f["feature_name"], catalog_registered=True),
+            "registration": reg,
         })
     return paged(enriched, page, size, len(items))
 
@@ -252,6 +278,27 @@ async def replace_legacy_features_api(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     msg = result.get("message", "Legacy Feature 대체 계획을 반환했습니다.")
     return ok(result, message=msg)
+
+
+@router.post("/feature-sets/{feature_set_id}/add-recipe-feature")
+async def add_recipe_feature_to_set(
+    feature_set_id: str,
+    body: FeatureSetAddRecipeFeatureRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        result = await add_recipe_feature_to_feature_set(
+            db,
+            feature_set_id,
+            recipe_id=body.recipe_id,
+            feature_name=body.feature_name,
+        )
+    except RecipeServiceError as exc:
+        raise HTTPException(
+            status_code=exc.status_code,
+            detail={"code": exc.code, "message": exc.message},
+        ) from exc
+    return ok(result, message=result.get("message"))
 
 
 @router.post("/feature-sets/{feature_set_id}/preview")

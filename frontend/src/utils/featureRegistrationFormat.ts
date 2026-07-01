@@ -26,6 +26,8 @@ export function registrationStatusLabel(status: FeatureRegistrationStatus): stri
       return "중복";
     case "REGISTERED_IN_REGISTRY":
       return "Registry 등록";
+    case "TEMPLATE_PUBLISHED":
+      return "Recipe 발행";
     default:
       return "미등록";
   }
@@ -43,6 +45,8 @@ export function registrationStatusClass(status: FeatureRegistrationStatus): stri
       return "bg-red-50 text-red-800 border-red-200";
     case "REGISTERED_IN_REGISTRY":
       return "bg-sky-50 text-sky-800 border-sky-200";
+    case "TEMPLATE_PUBLISHED":
+      return "bg-violet-50 text-violet-800 border-violet-200";
     default:
       return "bg-slate-50 text-slate-600 border-slate-200";
   }

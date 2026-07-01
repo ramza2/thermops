@@ -188,6 +188,22 @@ async def validate_feature_name(db: AsyncSession, feature_name: str) -> dict[str
     if not name:
         raise ValueError("feature_name이 비어 있습니다.")
 
+    from app.services.feature_recipe_service import get_published_recipe_by_feature_name, recipe_registration_metadata
+
+    recipe = await get_published_recipe_by_feature_name(db, name)
+    if recipe:
+        template_meta = recipe_registration_metadata(recipe)
+        return {
+            "feature_name": name,
+            "status": "TEMPLATE_PUBLISHED",
+            "recommended_name": name,
+            "catalog_registered": True,
+            "registry_registered": False,
+            "computable": False,
+            "message": "Recipe로 발행되었지만 실제 Feature Build 계산은 R6에서 제공됩니다.",
+            **template_meta,
+        }
+
     row = (
         await db.execute(select(Feature).where(Feature.feature_name == name))
     ).scalar_one_or_none()
@@ -236,21 +252,43 @@ def registration_metadata_for_feature(
     feature_name: str,
     *,
     catalog_names: frozenset[str],
+    recipe: Any | None = None,
 ) -> dict[str, Any]:
     """Feature Quality·Build 등에서 재사용하는 registration 메타데이터."""
+    if recipe is not None:
+        from app.services.feature_recipe_service import recipe_registration_metadata
+
+        base = classify_feature_name(feature_name, catalog_registered=feature_name in catalog_names)
+        template_meta = recipe_registration_metadata(recipe)
+        return {
+            **base,
+            **template_meta,
+            "status": "TEMPLATE_PUBLISHED",
+            "registration_status": "TEMPLATE_PUBLISHED",
+            "computable": False,
+            "registry_registered": base.get("registry_registered", False),
+            "registration_message": (
+                "Recipe로 발행되었지만 실제 Feature Build 계산은 R6에서 제공됩니다."
+            ),
+        }
+
     reg = classify_feature_name(
         feature_name,
         catalog_registered=feature_name in catalog_names,
     )
     status = reg["status"]
     return {
+        "feature_name": feature_name,
         "registration_status": status,
+        "status": status,
         "catalog_registered": reg["catalog_registered"],
         "registry_registered": reg["registry_registered"],
         "computable": reg["computable"],
         "legacy_alias": status == "LEGACY_ALIAS",
         "recommended_name": reg.get("recommended_name"),
         "registration_message": reg["message"],
+        "template_recipe_registered": False,
+        "build_supported": reg["computable"],
     }
 
 

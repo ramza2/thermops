@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, Eye, Play, Plus, Save, Trash2 } from "lucide-react";
 import { deleteApi, extractApiErrorMessage, fetchApi, postApi, putApi, PagedData } from "@/api/client";
+import { addRecipeFeatureToFeatureSet, listFeatureRecipes } from "@/api/featureRecipes";
 import { validateFeatureName, replaceLegacyFeatures } from "@/api/featureRegistration";
 import { Button } from "@/components/Button";
 import { DataTable } from "@/components/DataTable";
@@ -14,6 +15,8 @@ import { FeatureLineageSection } from "@/components/FeatureLineageSection";
 import { FeatureQualitySection } from "@/components/FeatureQualitySection";
 import type { FeatureBuildResult } from "@/types/featureRegistry";
 import type { FeatureNameValidation, FeatureSetLegacyReplaceResult } from "@/types/featureRegistration";
+import type { FeatureRecipe } from "@/types/featureRecipes";
+import { R5_BUILD_WARNING } from "@/types/featureRecipes";
 import {
   CATALOG_ONLY_WARNING_MSG,
   FEATURE_QUALITY_REGISTRATION_HINT,
@@ -91,8 +94,40 @@ export default function FeatureSetDetailPage() {
   const [replacePlan, setReplacePlan] = useState<FeatureSetLegacyReplaceResult | null>(null);
   const [replaceLoading, setReplaceLoading] = useState(false);
   const [replaceApplying, setReplaceApplying] = useState(false);
+  const [recipeAddOpen, setRecipeAddOpen] = useState(false);
+  const [publishedRecipes, setPublishedRecipes] = useState<FeatureRecipe[]>([]);
+  const [selectedRecipeId, setSelectedRecipeId] = useState("");
+  const [recipeAddLoading, setRecipeAddLoading] = useState(false);
 
   const isTplSet = Boolean(id?.startsWith("FS-TPL-"));
+
+  const openAddRecipeFeature = async () => {
+    if (isTplSet) return;
+    setRecipeAddOpen(true);
+    setSelectedRecipeId("");
+    try {
+      const res = await listFeatureRecipes({ status: "PUBLISHED", limit: 100 });
+      setPublishedRecipes(res.items);
+    } catch {
+      showToast("error", "발행된 Recipe 목록을 불러오지 못했습니다.");
+    }
+  };
+
+  const handleAddRecipeFeature = async () => {
+    if (!id || !selectedRecipeId) return;
+    setRecipeAddLoading(true);
+    try {
+      const res = await addRecipeFeatureToFeatureSet(id, { recipe_id: selectedRecipeId });
+      setForm({ ...form, features: res.features });
+      setRecipeAddOpen(false);
+      showToast("success", res.message || "Recipe Feature가 추가되었습니다.");
+      if (res.warnings?.length) showToast("warning", res.warnings.join(" "));
+    } catch (e) {
+      showToast("error", extractApiErrorMessage(e));
+    } finally {
+      setRecipeAddLoading(false);
+    }
+  };
 
   const [form, setForm] = useState({
     feature_set_name: "",
@@ -534,9 +569,18 @@ export default function FeatureSetDetailPage() {
       <div className="bg-white rounded-lg border border-slate-200 p-4">
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-sm font-semibold text-slate-800">포함 Feature 목록 ({form.features.length})</h3>
-          <Button variant="secondary" icon={<Plus className="w-4 h-4" />} onClick={openAddFeature}>
-            Feature 추가
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="secondary" icon={<Plus className="w-4 h-4" />} onClick={openAddFeature}>
+              Feature 추가
+            </Button>
+            <Button
+              variant="secondary"
+              disabled={isTplSet}
+              onClick={() => void openAddRecipeFeature()}
+            >
+              Recipe Feature 추가
+            </Button>
+          </div>
         </div>
         {isTplSet && (
           <p className="text-xs text-blue-800 bg-blue-50 border border-blue-100 rounded p-2 mb-3">
@@ -718,6 +762,35 @@ export default function FeatureSetDetailPage() {
             <p className="text-xs text-slate-600">{LEGACY_REPLACE_AFTER_HINT}</p>
           </div>
         )}
+      </Modal>
+
+      <Modal
+        open={recipeAddOpen}
+        title="Recipe Feature 추가"
+        onClose={() => setRecipeAddOpen(false)}
+        footer={(
+          <>
+            <Button variant="secondary" onClick={() => setRecipeAddOpen(false)}>취소</Button>
+            <Button disabled={!selectedRecipeId || recipeAddLoading} onClick={() => void handleAddRecipeFeature()}>
+              {recipeAddLoading ? "추가 중..." : "추가"}
+            </Button>
+          </>
+        )}
+      >
+        <p className="text-xs text-violet-800 bg-violet-50 border border-violet-100 rounded p-2 mb-3">
+          {R5_BUILD_WARNING}
+        </p>
+        <SelectInput
+          value={selectedRecipeId}
+          onChange={setSelectedRecipeId}
+          options={[
+            { value: "", label: "발행된 Recipe 선택" },
+            ...publishedRecipes.map((r) => ({
+              value: r.recipe_id,
+              label: `${r.feature_name} (${r.recipe_type})`,
+            })),
+          ]}
+        />
       </Modal>
 
       <Modal

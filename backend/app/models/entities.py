@@ -144,6 +144,53 @@ class FeatureColumnRole(Base):
     updated_at: Mapped[datetime | None] = mapped_column(DateTime)
 
 
+class FeatureRecipe(Base):
+    __tablename__ = "tb_feature_recipe"
+    recipe_id: Mapped[str] = mapped_column(String(50), primary_key=True)
+    feature_name: Mapped[str | None] = mapped_column(String(100))
+    display_name: Mapped[str] = mapped_column(String(200))
+    description: Mapped[str | None] = mapped_column(Text)
+    domain: Mapped[str | None] = mapped_column(String(50))
+    task_type: Mapped[str | None] = mapped_column(String(50))
+    calc_mode: Mapped[str] = mapped_column(String(20), default="TEMPLATE")
+    recipe_type: Mapped[str] = mapped_column(String(50))
+    mapping_id: Mapped[str | None] = mapped_column(String(50))
+    data_source_id: Mapped[str | None] = mapped_column(String(50))
+    source_table: Mapped[str | None] = mapped_column(String(100))
+    target_table: Mapped[str | None] = mapped_column(String(100))
+    source_columns: Mapped[list] = mapped_column(JSONB, default=list)
+    entity_keys: Mapped[list | None] = mapped_column(JSONB)
+    time_key: Mapped[str | None] = mapped_column(String(100))
+    target_column: Mapped[str | None] = mapped_column(String(100))
+    params: Mapped[dict] = mapped_column(JSONB, default=dict)
+    output_feature_names: Mapped[list | None] = mapped_column(JSONB)
+    output_data_type: Mapped[str | None] = mapped_column(String(50))
+    unit: Mapped[str | None] = mapped_column(String(50))
+    null_handling: Mapped[str | None] = mapped_column(String(50))
+    leakage_policy: Mapped[str | None] = mapped_column(String(50))
+    validation_summary: Mapped[dict | None] = mapped_column(JSONB)
+    preview_summary: Mapped[dict | None] = mapped_column(JSONB)
+    lineage_preview: Mapped[dict | None] = mapped_column(JSONB)
+    quality_preview: Mapped[dict | None] = mapped_column(JSONB)
+    status: Mapped[str] = mapped_column(String(30), default="DRAFT")
+    version: Mapped[int] = mapped_column(Integer, default=1)
+    owner: Mapped[str | None] = mapped_column(String(100))
+    active_yn: Mapped[str] = mapped_column(String(1), default="Y")
+    published_at: Mapped[datetime | None] = mapped_column(DateTime)
+    created_at: Mapped[datetime] = mapped_column(DateTime)
+    updated_at: Mapped[datetime] = mapped_column(DateTime)
+
+
+class FeatureRecipeVersion(Base):
+    __tablename__ = "tb_feature_recipe_version"
+    version_id: Mapped[str] = mapped_column(String(50), primary_key=True)
+    recipe_id: Mapped[str] = mapped_column(String(50))
+    version_no: Mapped[int] = mapped_column(Integer)
+    recipe_snapshot: Mapped[dict] = mapped_column(JSONB)
+    change_reason: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime)
+
+
 class DataQualityRun(Base):
     __tablename__ = "tb_data_quality_run"
     run_id: Mapped[str] = mapped_column(String(80), primary_key=True)

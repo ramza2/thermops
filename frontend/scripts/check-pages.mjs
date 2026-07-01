@@ -6,6 +6,8 @@ const PATHS = [
   "/data/sources",
   "/data/mappings",
   "/features",
+  "/feature-recipes",
+  "/feature-recipes/new",
   "/feature-sets",
   "/feature-sets/FS-TPL-LAG-ROLL",
   "/models/training-jobs",
@@ -31,8 +33,18 @@ for (const path of PATHS) {
   console.log(`OK ${path} -> ${h1.slice(0, 30)}`);
   if (path === "/features") {
     await page.getByText("신규 Feature 사용 절차").first().waitFor({ state: "visible", timeout: 60000 });
+    await page.getByText("Recipe로 Feature 만들기").first().waitFor({ state: "visible", timeout: 30000 });
     await page.locator("th", { hasText: "등록 유형" }).first().waitFor({ state: "visible", timeout: 30000 });
     await page.locator("th", { hasText: "계산식 메모" }).first().waitFor({ state: "visible", timeout: 30000 });
+  }
+  if (path === "/feature-recipes") {
+    await page.getByText("Feature Recipe").first().waitFor({ state: "visible", timeout: 30000 });
+    await page.getByText("R6").first().waitFor({ state: "visible", timeout: 30000 });
+  }
+  if (path === "/feature-recipes/new") {
+    await page.getByText("Feature Recipe Builder").first().waitFor({ state: "visible", timeout: 30000 });
+    await page.getByText("Preview 결과는 저장하지 않습니다").first().waitFor({ state: "visible", timeout: 30000 });
+    await page.getByText("R6").first().waitFor({ state: "visible", timeout: 30000 });
   }
   if (path === "/data/mappings") {
     await page.getByText("Column Role").first().waitFor({ state: "visible", timeout: 30000 });

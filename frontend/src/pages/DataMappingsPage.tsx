@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { CheckCircle, Eye, Plus, Pencil, Sparkles, Save } from "lucide-react";
 import { fetchApi, postApi, putApi, PagedData } from "@/api/client";
 import {
@@ -108,6 +109,7 @@ function RecipeTemplatesSection({
   expandedType,
   onToggle,
   onPreview,
+  mappingId,
 }: {
   catalog: RecipeTemplateListResponse | null;
   loading: boolean;
@@ -115,6 +117,7 @@ function RecipeTemplatesSection({
   expandedType: string | null;
   onToggle: (type: string) => void;
   onPreview: (tpl: RecipeTemplate) => void;
+  mappingId?: string | null;
 }) {
   if (loading) {
     return <p className="text-xs text-slate-400">Recipe 템플릿 불러오는 중...</p>;
@@ -134,6 +137,16 @@ function RecipeTemplatesSection({
       <p className="text-slate-500">{RECIPE_PREVIEW_NO_SAVE_NOTE}</p>
       <p className="text-slate-500">{RECIPE_PREVIEW_ROW_STEP_NOTE}</p>
       <p className="text-slate-500">{RECIPE_PREVIEW_R4_NOTE}</p>
+      {mappingId && (
+        <p>
+          <Link
+            to={`/feature-recipes/new?mapping_id=${encodeURIComponent(mappingId)}&recipe_type=LAG`}
+            className="text-blue-600 hover:underline"
+          >
+            Recipe Builder에서 계속하기
+          </Link>
+        </p>
+      )}
       <p className="text-slate-600">
         LAG/ROLLING은 ENTITY_KEY, TIME_KEY, NUMERIC_INPUT 역할이 필요합니다.
         {" "}
@@ -849,6 +862,7 @@ export default function DataMappingsPage() {
                       loading={templateLoading}
                       error={templateError}
                       expandedType={expandedTemplateType}
+                      mappingId={editingId}
                       onToggle={(type) => setExpandedTemplateType((prev) => (prev === type ? null : type))}
                       onPreview={(tpl) => {
                         setRecipePreviewTemplate(tpl);

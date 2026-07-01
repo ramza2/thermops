@@ -101,6 +101,60 @@ CREATE INDEX IF NOT EXISTS ix_feature_column_role_target_table
     ON tb_feature_column_role(target_table)
     WHERE active_yn = 'Y';
 
+-- Feature Recipe Builder (R5)
+CREATE TABLE IF NOT EXISTS tb_feature_recipe (
+    recipe_id VARCHAR(50) PRIMARY KEY,
+    feature_name VARCHAR(100),
+    display_name VARCHAR(200) NOT NULL,
+    description TEXT,
+    domain VARCHAR(50),
+    task_type VARCHAR(50),
+    calc_mode VARCHAR(20) NOT NULL DEFAULT 'TEMPLATE',
+    recipe_type VARCHAR(50) NOT NULL,
+    mapping_id VARCHAR(50),
+    data_source_id VARCHAR(50),
+    source_table VARCHAR(100),
+    target_table VARCHAR(100),
+    source_columns JSONB NOT NULL DEFAULT '[]',
+    entity_keys JSONB,
+    time_key VARCHAR(100),
+    target_column VARCHAR(100),
+    params JSONB NOT NULL DEFAULT '{}',
+    output_feature_names JSONB,
+    output_data_type VARCHAR(50),
+    unit VARCHAR(50),
+    null_handling VARCHAR(50),
+    leakage_policy VARCHAR(50),
+    validation_summary JSONB,
+    preview_summary JSONB,
+    lineage_preview JSONB,
+    quality_preview JSONB,
+    status VARCHAR(30) NOT NULL DEFAULT 'DRAFT',
+    version INTEGER NOT NULL DEFAULT 1,
+    owner VARCHAR(100),
+    active_yn CHAR(1) NOT NULL DEFAULT 'Y',
+    published_at TIMESTAMP,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS tb_feature_recipe_version (
+    version_id VARCHAR(50) PRIMARY KEY,
+    recipe_id VARCHAR(50) NOT NULL REFERENCES tb_feature_recipe(recipe_id),
+    version_no INTEGER NOT NULL,
+    recipe_snapshot JSONB NOT NULL,
+    change_reason TEXT,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS ux_feature_recipe_published_feature_name
+    ON tb_feature_recipe(feature_name)
+    WHERE active_yn = 'Y' AND status = 'PUBLISHED' AND feature_name IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS ix_feature_recipe_status ON tb_feature_recipe(status) WHERE active_yn = 'Y';
+CREATE INDEX IF NOT EXISTS ix_feature_recipe_mapping ON tb_feature_recipe(mapping_id) WHERE active_yn = 'Y';
+CREATE INDEX IF NOT EXISTS ix_feature_recipe_type ON tb_feature_recipe(recipe_type) WHERE active_yn = 'Y';
+
 CREATE TABLE IF NOT EXISTS tb_data_quality_run (
     run_id VARCHAR(80) PRIMARY KEY,
     source_id VARCHAR(50),

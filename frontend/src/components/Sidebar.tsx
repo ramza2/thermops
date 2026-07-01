@@ -18,6 +18,7 @@ const MENU = [
   {
     label: "Feature 관리", icon: Layers, children: [
       { label: "Feature 목록", path: "/features" },
+      { label: "Feature Recipe", path: "/feature-recipes" },
       { label: "Feature Set 관리", path: "/feature-sets" },
     ],
   },

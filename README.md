@@ -281,6 +281,7 @@ curl -X POST "http://localhost:8000/api/v1/feature-build-jobs?feature_set_id=FS-
 - **R2 Recipe Template Catalog**: 템플릿 목록·validate API — 동일 설계서 부록 D
 - **R3 Recipe Preview**: RAW_COLUMN·DATE_PART 샘플 Preview — 동일 설계서 부록 E
 - **R4 Recipe Preview**: LAG·ROLLING_MEAN·ROLLING_SUM row step 기반 Preview — 동일 설계서 부록 F (저장·Build 미연동)
+- **R5 Recipe 저장·Builder**: `tb_feature_recipe` 저장·발행·Feature Set 연동 — 동일 설계서 부록 G (Build는 R6)
 
 **Feature Registry·Lineage UI**
 
