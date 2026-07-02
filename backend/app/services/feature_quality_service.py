@@ -285,6 +285,13 @@ async def run_feature_quality_check(db: AsyncSession, params: FeatureQualityPara
             "missing_features": build_rs.get("missing_features") or [],
             "catalog_only_features": build_rs.get("catalog_only_features") or [],
             "legacy_alias_features": build_rs.get("legacy_alias_features") or [],
+            "template_feature_count": build_rs.get("template_feature_count", 0),
+            "template_generated_feature_count": build_rs.get("template_generated_feature_count", 0),
+            "template_build_failed_feature_count": len(build_rs.get("template_build_failed_features") or []),
+            "template_build_unsupported_feature_count": len(
+                build_rs.get("template_build_unsupported_features") or []
+            ),
+            "template_build_status_counts": build_rs.get("template_build_status_counts"),
         }
         lineage_error = build_rs.get("lineage_error")
         if lineage_error:

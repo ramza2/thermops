@@ -33,6 +33,9 @@ export interface FeatureQualityFeatureResult {
   legacy_alias?: boolean;
   recommended_name?: string | null;
   registration_message?: string;
+  recipe_id?: string;
+  recipe_type?: string;
+  build_supported?: boolean;
 }
 
 export interface FeatureQualityIssueSample {
@@ -70,6 +73,11 @@ export interface FeatureQualityResultSummary {
     missing_features?: string[];
     catalog_only_features?: string[];
     legacy_alias_features?: string[];
+    template_feature_count?: number;
+    template_generated_feature_count?: number;
+    template_build_failed_feature_count?: number;
+    template_build_unsupported_feature_count?: number;
+    template_build_status_counts?: Record<string, number>;
   };
   features?: FeatureQualityFeatureResult[];
   warnings?: string[];

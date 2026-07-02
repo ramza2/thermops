@@ -40,6 +40,7 @@ for (const path of PATHS) {
   if (path === "/feature-recipes") {
     await page.getByText("Feature Recipe").first().waitFor({ state: "visible", timeout: 30000 });
     await page.getByText("R6").first().waitFor({ state: "visible", timeout: 30000 });
+    await page.getByText("최근 Build 이력").first().waitFor({ state: "visible", timeout: 30000 });
   }
   if (path === "/feature-recipes/new") {
     await page.getByText("Feature Recipe Builder").first().waitFor({ state: "visible", timeout: 30000 });
@@ -72,6 +73,11 @@ for (const path of PATHS) {
     }
     if (!tplGuard) {
       errors.push(`${path}: TPL protection notice missing`);
+    }
+    const recipeBuildDetail = await page.getByText("Recipe Engine Build 상세").count();
+    const lagNullNote = await page.getByText("LAG/ROLLING Feature의 초기 null").count();
+    if (!recipeBuildDetail || !lagNullNote) {
+      errors.push(`${path}: Recipe Engine Build detail / LAG null notice missing`);
     }
   }
 }

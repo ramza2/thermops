@@ -174,6 +174,12 @@ class FeatureRecipePreviewSavedRequest(BaseModel):
     sample_size: int = 100
 
 
+class FeatureRecipeComparePreviewBuildRequest(BaseModel):
+    dataset_version_id: str
+    feature_set_id: str | None = None
+    sample_size: int = Field(default=20, ge=1, le=100)
+
+
 class FeatureSetAddRecipeFeatureRequest(BaseModel):
     recipe_id: str
     feature_name: str | None = None

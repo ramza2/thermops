@@ -28,6 +28,7 @@ from app.models.entities import (
 )
 from app.services.feature_lineage_service import save_feature_lineage
 from app.services.feature_recipe_engine_service import (
+    build_template_diagnostics,
     build_template_features,
     split_feature_names_by_recipe,
     summarize_template_build_result,
@@ -295,6 +296,10 @@ async def run_feature_build(db: AsyncSession, params: FeatureBuildParams) -> dic
             template_result,
             code_feature_count=len(code_feature_names),
         )
+        if template_recipes:
+            template_summary.update(
+                build_template_diagnostics(template_recipes, template_result, df)
+            )
         final_coverage.update(template_summary)
 
         generated_count = final_coverage.get("generated_feature_count", 0)
@@ -528,6 +533,8 @@ async def list_feature_build_jobs(
     *,
     feature_set_id: str | None = None,
     status: str | None = None,
+    feature_name: str | None = None,
+    recipe_id: str | None = None,
     limit: int = 20,
     offset: int = 0,
     include_summary: bool = True,
@@ -540,19 +547,38 @@ async def list_feature_build_jobs(
         clauses.append(DataQualityRun.run_status == status)
 
     where = and_(*clauses)
-    total = int((await db.execute(select(func.count()).select_from(DataQualityRun).where(where))).scalar_one() or 0)
+    fetch_limit = limit + offset
+    if feature_name or recipe_id:
+        fetch_limit = min(500, max(fetch_limit * 10, 100))
 
     rows = (
         await db.execute(
             select(DataQualityRun)
             .where(where)
             .order_by(DataQualityRun.started_at.desc())
-            .limit(limit)
-            .offset(offset)
+            .limit(fetch_limit)
         )
     ).scalars().all()
 
-    items = [_run_to_job_summary(r, include_summary=include_summary) for r in rows]
+    if feature_name or recipe_id:
+        filtered: list[DataQualityRun] = []
+        for run in rows:
+            summary = _parse_result_summary(run.result_summary)
+            if recipe_id:
+                by_feat = summary.get("template_build_status_by_feature") or {}
+                if not any(v.get("recipe_id") == recipe_id for v in by_feat.values()):
+                    if feature_name and feature_name not in (summary.get("template_recipe_features") or []):
+                        continue
+            elif feature_name:
+                if feature_name not in (summary.get("feature_names") or []):
+                    if feature_name not in (summary.get("template_recipe_features") or []):
+                        continue
+            filtered.append(run)
+        rows = filtered
+
+    total = len(rows)
+    page_rows = rows[offset : offset + limit]
+    items = [_run_to_job_summary(r, include_summary=include_summary) for r in page_rows]
     return {
         "items": items,
         "total": total,

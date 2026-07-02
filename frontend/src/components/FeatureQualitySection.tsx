@@ -262,6 +262,21 @@ export function FeatureQualitySection({
             </div>
           )}
 
+          {rs?.build_coverage && (rs.build_coverage.template_feature_count ?? 0) > 0 && (
+            <div className="text-xs text-violet-800 bg-violet-50 border border-violet-200 rounded p-2 space-y-1">
+              <p className="font-medium">TEMPLATE Feature Build 커버리지</p>
+              <p>
+                TEMPLATE {rs.build_coverage.template_feature_count}건 · 생성{" "}
+                {rs.build_coverage.template_generated_feature_count ?? 0}건 · 실패{" "}
+                {rs.build_coverage.template_build_failed_feature_count ?? 0}건 · 미지원{" "}
+                {rs.build_coverage.template_build_unsupported_feature_count ?? 0}건
+              </p>
+              <p className="text-violet-700">
+                LAG/ROLLING Feature의 초기 null은 Recipe 계산 이력 부족 또는 원천 결측으로 발생할 수 있습니다.
+              </p>
+            </div>
+          )}
+
           {rs?.build_coverage && (rs.build_coverage.missing_feature_count ?? 0) > 0 && (
             <div className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded p-2">
               Feature Build 기준 미생성 Feature {rs.build_coverage.missing_feature_count}건
@@ -429,15 +444,24 @@ function QualityRegistrationBadge({ row }: { row: FeatureQualityFeatureResult })
   const rs = row.registration_status;
   if (!rs) return <span className="text-xs text-slate-400">-</span>;
   const warn = rs === "CATALOG_ONLY" || rs === "LEGACY_ALIAS" || row.computable === false;
+  const isTemplate = rs === "TEMPLATE_BUILD_SUPPORTED" || rs === "TEMPLATE_PUBLISHED";
   return (
-    <span
-      className={`inline-flex text-[11px] px-1.5 py-0.5 rounded border ${registrationStatusClass(rs as FeatureRegistrationStatus)} ${warn ? "font-medium" : ""}`}
-      title={row.registration_message || undefined}
-    >
-      {registrationStatusLabelExtended({
-        registration_status: rs,
-        recommended_name: row.recommended_name,
-      })}
-    </span>
+    <div className="space-y-0.5">
+      <span
+        className={`inline-flex text-[11px] px-1.5 py-0.5 rounded border ${registrationStatusClass(rs as FeatureRegistrationStatus)} ${warn ? "font-medium" : ""}`}
+        title={row.registration_message || undefined}
+      >
+        {registrationStatusLabelExtended({
+          registration_status: rs,
+          recommended_name: row.recommended_name,
+        })}
+      </span>
+      {isTemplate && row.recipe_type && (
+        <div className="text-[10px] font-mono text-violet-700">
+          {row.recipe_type}
+          {row.recipe_id ? ` · ${row.recipe_id}` : ""}
+        </div>
+      )}
+    </div>
   );
 }

@@ -51,6 +51,8 @@ export default function FeatureRecipesPage() {
         <p className="font-medium text-slate-800">Feature Recipe Builder (R5–R6)</p>
         <p>{R6_BUILD_INFO}</p>
         <p>DIFF/RATIO/BINNING 등은 Build 미지원이며 Preview·저장만 가능합니다.</p>
+        <p>발행된 Recipe의 최근 Build 이력은 Recipe 상세(Builder) 화면에서 확인할 수 있습니다.</p>
+        <p>최근 Build 이력: Builder에서 PUBLISHED Recipe를 열면 Job별 생성 상태·null 비율을 볼 수 있습니다.</p>
       </div>
 
       <DataTable

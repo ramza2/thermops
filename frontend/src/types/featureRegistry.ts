@@ -84,6 +84,10 @@ export interface FeatureBuildResult {
     template_generated_feature_count?: number;
     template_recipe_features?: string[];
     recipe_engine_version?: string;
+    template_feature_count?: number;
+    template_build_status_by_feature?: Record<string, unknown>;
+    template_build_status_counts?: Record<string, number>;
+    template_build_diagnostics?: Array<Record<string, unknown>>;
   };
 }
 

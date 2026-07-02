@@ -88,9 +88,15 @@ def test_duplicate_catalog_only() -> None:
         assert v["computable"] is False, v
         print(f"  [ok] {CUSTOM_FEATURE_NAME} -> DUPLICATE")
 
-        listed = api("GET", "/features?page=1&size=100")
-        items = listed.get("items") if isinstance(listed, dict) else listed
-        match = next((i for i in items if i.get("feature_name") == CUSTOM_FEATURE_NAME), None)
+        match = None
+        for page in range(1, 11):
+            listed = api("GET", f"/features?page={page}&size=100")
+            items = listed.get("items") if isinstance(listed, dict) else listed
+            if not items:
+                break
+            match = next((i for i in items if i.get("feature_name") == CUSTOM_FEATURE_NAME), None)
+            if match:
+                break
         assert match and match.get("registration", {}).get("status") == "DUPLICATE", match
         print("  [ok] catalog-only feature list registration status")
     finally:

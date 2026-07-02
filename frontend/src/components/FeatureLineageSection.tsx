@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { ChevronDown, ChevronRight, RefreshCw } from "lucide-react";
 import { getFeatureBuildJobLineage, getFeatureLineageByDatasetVersion } from "@/api/featureRegistry";
 import { getFeatureBuildJobs, pickDefaultBuildJob } from "@/api/featureBuildJobs";
@@ -356,7 +357,28 @@ export function FeatureLineageSection({ featureSetId, buildResult }: FeatureLine
             {
               key: "calc_method",
               header: "계산 방식",
-              render: (r) => formatCalcMethod(r.calc_method as string),
+              render: (r) => {
+                const method = r.calc_method as string;
+                const recipeMeta = (r.lineage_json as { recipe?: Record<string, unknown> } | undefined)?.recipe;
+                return (
+                  <div className="space-y-1">
+                    <span
+                      className={`inline-flex text-[10px] px-1 rounded border ${
+                        method === "TEMPLATE"
+                          ? "bg-violet-50 text-violet-800 border-violet-200"
+                          : "bg-slate-50 text-slate-700 border-slate-200"
+                      }`}
+                    >
+                      {formatCalcMethod(method)}
+                    </span>
+                    {method === "TEMPLATE" && recipeMeta && (
+                      <div className="text-[10px] font-mono text-violet-700">
+                        {String(recipeMeta.recipe_type)} · {String(recipeMeta.recipe_id)}
+                      </div>
+                    )}
+                  </div>
+                );
+              },
             },
             {
               key: "calc_expression",
@@ -437,6 +459,28 @@ export function FeatureLineageSection({ featureSetId, buildResult }: FeatureLine
 
       {expandedId != null && (
         <div className="mt-3 border border-slate-200 rounded bg-slate-50 p-3">
+          {(() => {
+            const row = items.find((i) => i.lineage_id === expandedId);
+            const recipeMeta = (row?.lineage_json as { recipe?: Record<string, unknown> } | undefined)?.recipe;
+            if (row?.calc_method === "TEMPLATE" && recipeMeta) {
+              return (
+                <div className="mb-3 text-xs text-violet-800 bg-violet-50 border border-violet-100 rounded p-2 space-y-1">
+                  <p className="font-medium">TEMPLATE Recipe Lineage</p>
+                  <p>recipe_id: <span className="font-mono">{String(recipeMeta.recipe_id)}</span></p>
+                  <p>recipe_type: {String(recipeMeta.recipe_type)}</p>
+                  <p>params: <span className="font-mono">{JSON.stringify(recipeMeta.params)}</span></p>
+                  <p>entity_keys: {String((recipeMeta.entity_keys as string[])?.join(", "))}</p>
+                  <p>time_key: {String(recipeMeta.time_key)}</p>
+                  {recipeMeta.recipe_id != null && (
+                    <Link to={`/feature-recipes/${String(recipeMeta.recipe_id)}`} className="text-blue-600 hover:underline">
+                      Recipe 상세 보기
+                    </Link>
+                  )}
+                </div>
+              );
+            }
+            return null;
+          })()}
           <p className="text-xs font-medium text-slate-600 mb-2">Lineage JSON (lineage_id={expandedId})</p>
           <pre className="text-[11px] font-mono overflow-x-auto whitespace-pre-wrap break-all text-slate-700">
             {JSON.stringify(

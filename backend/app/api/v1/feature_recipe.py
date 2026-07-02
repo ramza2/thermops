@@ -4,11 +4,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.response import ok
 from app.schemas.api import (
+    FeatureRecipeComparePreviewBuildRequest,
     FeatureRecipeCreateRequest,
     FeatureRecipePreviewRequest,
     FeatureRecipePreviewSavedRequest,
     FeatureRecipeUpdateRequest,
     FeatureRecipeValidateRequest,
+)
+from app.services.feature_recipe_build_ops_service import (
+    compare_preview_with_build,
+    list_recipe_build_history,
 )
 from app.services.feature_column_role_service import get_mapping_or_raise, list_column_roles
 from app.services.feature_recipe_preview_service import preview_feature_recipe
@@ -238,3 +243,37 @@ async def publish_feature_recipe(recipe_id: str, db: AsyncSession = Depends(get_
     except RecipeServiceError as exc:
         raise _recipe_error(exc) from exc
     return ok(result, message="Recipe가 발행되어 Feature Catalog에 등록되었습니다.")
+
+
+@router.get("/feature-recipes/{recipe_id}/build-history")
+async def get_recipe_build_history(
+    recipe_id: str,
+    limit: int = Query(default=20, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        result = await list_recipe_build_history(db, recipe_id, limit=limit)
+    except RecipeServiceError as exc:
+        raise _recipe_error(exc) from exc
+    return ok(result)
+
+
+@router.post("/feature-recipes/{recipe_id}/compare-preview-build")
+async def compare_recipe_preview_build(
+    recipe_id: str,
+    body: FeatureRecipeComparePreviewBuildRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        result = await compare_preview_with_build(
+            db,
+            recipe_id,
+            dataset_version_id=body.dataset_version_id,
+            feature_set_id=body.feature_set_id,
+            sample_size=body.sample_size,
+        )
+    except RecipeServiceError as exc:
+        raise _recipe_error(exc) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return ok(result)

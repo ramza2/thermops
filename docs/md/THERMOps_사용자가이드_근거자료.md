@@ -183,6 +183,8 @@ flowchart LR
 
 **R6 Recipe Engine Build**: 발행된 TEMPLATE Recipe 중 `RAW_COLUMN`, `DATE_PART`, `LAG`, `ROLLING_MEAN`, `ROLLING_SUM`은 Feature Build 시 Recipe Engine으로 계산되어 기존 CODE Feature와 함께 `feature_json`에 저장됩니다. `DIFF`/`RATIO` 등은 Build 미지원이며 WARNING으로 안내됩니다. Preview 결과는 여전히 DB에 저장되지 않습니다.
 
+**R6-S1 Build 안정화**: Build `result_summary`에 Feature별 상태·진단 코드가 추가되며, Recipe별 최근 Build 이력(`GET .../build-history`)과 Preview vs Build 샘플 비교 API로 운영 검증을 보강합니다. Feature Set 상세 **Recipe Engine Build 상세**, Lineage TEMPLATE 메타데이터, Feature Quality TEMPLATE coverage를 확인합니다. LAG/ROLLING 초기 null은 이력 부족 warning으로 안내됩니다.
+
 ---
 
 ### 2.4 `/data/quality` — 데이터 품질 점검

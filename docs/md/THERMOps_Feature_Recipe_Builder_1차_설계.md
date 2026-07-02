@@ -921,3 +921,60 @@ python scripts/test_feature_recipe_build.py
 
 - DIFF/RATIO/BINNING/FILL_NULL Build 확장, Recipe version 고도화, Domain Pack
 
+---
+
+## 부록 I. Phase R6-S1 구현 완료 (Recipe Engine Build 안정화·운영 검증)
+
+R6-S1은 **새로운 Recipe 계산 Type을 추가하지 않고**, R6에서 생성된 TEMPLATE Feature Build 결과를 운영자가 검증할 수 있도록 Build 상태·진단 코드·Recipe별 최근 Build 이력·Lineage/Quality 표시를 보강하는 안정화 단계입니다.
+
+### result_summary 추가 필드 (optional, 하위 호환)
+
+- `template_build_status_by_feature`: Feature별 `status`, `recipe_id`, `recipe_type`, `warning_codes`, `error_codes`, `null_ratio` 등
+- `template_build_status_counts`: `generated`, `warning`, `failed`, `unsupported`
+- `template_build_diagnostics`: severity·code·message 목록 (상위 N건)
+- `recipe_engine_diagnostics_version` (`R6-S1`)
+
+### status 값
+
+- `GENERATED`, `GENERATED_WITH_WARNING`, `FAILED`, `UNSUPPORTED`, `SKIPPED`
+
+### 진단 코드 (일부는 warning)
+
+- `RECIPE_NOT_PUBLISHED`, `RECIPE_ARCHIVED`, `UNSUPPORTED_RECIPE_TYPE`
+- `SOURCE_COLUMN_MISSING`, `ENTITY_KEY_MISSING`, `TIME_KEY_MISSING`, `INVALID_PARAM`
+- `NUMERIC_CONVERSION_FAILED`, `DATETIME_CONVERSION_FAILED`
+- `INSUFFICIENT_HISTORY`, `TIME_GAP_DETECTED`, `LEAKAGE_RISK` (warning 가능)
+- `UNKNOWN_BUILD_ERROR`
+
+### API
+
+- `GET /api/v1/feature-recipes/{recipe_id}/build-history` — Recipe별 최근 Build 이력 (`result_summary` 검색)
+- `POST /api/v1/feature-recipes/{recipe_id}/compare-preview-build` — Preview vs Build 샘플 비교 (`SAMPLE_BY_ENTITY_TIME`)
+- `GET /api/v1/feature-build-jobs` — `recipe_id`, `feature_name` 필터
+
+### UI
+
+- Feature Set 상세: **Recipe Engine Build 상세** 패널, 진단·Feature별 상태 테이블
+- Feature Recipe Builder: PUBLISHED Recipe **최근 Build 이력**
+- Lineage: TEMPLATE badge, recipe_id/type/params, Recipe 상세 링크
+- Feature Quality: TEMPLATE `build_coverage`, registration_status 표시
+
+### 운영자 Build 실패 진단 절차
+
+1. Feature Set 상세 Build 결과·**Recipe Engine Build 상세**에서 `status`·`error_codes` 확인
+2. 실패 Feature의 Recipe 상세 → Validate·Preview 재실행
+3. Lineage에서 `calc_method=TEMPLATE` 메타데이터 확인
+4. Feature Quality에서 TEMPLATE coverage·null 비율 확인
+5. 필요 시 `compare-preview-build`로 Preview·Build 샘플 비교
+
+### 테스트
+
+```bash
+python scripts/test_feature_recipe_build_diagnostics.py
+```
+
+### 후속 (R7+)
+
+- DIFF/RATIO/BINNING/FILL_NULL/CATEGORY_ENCODING Build 확장
+- Domain Pack, Preview/Build 이력 비교 고도화, mapping별 외부 테이블 join 확장
+

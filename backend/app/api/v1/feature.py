@@ -355,6 +355,8 @@ async def create_feature_build_job(
 async def list_feature_build_jobs_endpoint(
     feature_set_id: str | None = Query(default=None),
     status: str | None = Query(default=None),
+    feature_name: str | None = Query(default=None),
+    recipe_id: str | None = Query(default=None),
     limit: int = Query(default=20, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
     include_summary: bool = Query(default=True),
@@ -364,6 +366,8 @@ async def list_feature_build_jobs_endpoint(
         db,
         feature_set_id=feature_set_id,
         status=status,
+        feature_name=feature_name,
+        recipe_id=recipe_id,
         limit=limit,
         offset=offset,
         include_summary=include_summary,

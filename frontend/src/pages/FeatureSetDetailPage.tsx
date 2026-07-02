@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, Eye, Play, Plus, Save, Trash2 } from "lucide-react";
 import { deleteApi, extractApiErrorMessage, fetchApi, postApi, putApi, PagedData } from "@/api/client";
+import { getLatestFeatureBuildJob } from "@/api/featureBuildJobs";
 import { addRecipeFeatureToFeatureSet, listFeatureRecipes } from "@/api/featureRecipes";
 import { validateFeatureName, replaceLegacyFeatures } from "@/api/featureRegistration";
 import { Button } from "@/components/Button";
@@ -13,7 +14,8 @@ import { useToast } from "@/hooks/useToast";
 import { PageHeader } from "@/layouts/MainLayout";
 import { FeatureLineageSection } from "@/components/FeatureLineageSection";
 import { FeatureQualitySection } from "@/components/FeatureQualitySection";
-import type { FeatureBuildResult } from "@/types/featureRegistry";
+import { RecipeBuildDiagnosticsPanel } from "@/components/RecipeBuildDiagnosticsPanel";
+import type { FeatureBuildJobSummary, FeatureBuildResult } from "@/types/featureRegistry";
 import type { FeatureNameValidation, FeatureSetLegacyReplaceResult } from "@/types/featureRegistration";
 import type { FeatureRecipe } from "@/types/featureRecipes";
 import { R6_BUILD_INFO } from "@/types/featureRecipes";
@@ -88,6 +90,7 @@ export default function FeatureSetDetailPage() {
   const [previewRows, setPreviewRows] = useState<Record<string, unknown>[]>([]);
   const [previewWarnings, setPreviewWarnings] = useState<string[]>([]);
   const [buildResult, setBuildResult] = useState<FeatureBuildResult | null>(null);
+  const [latestBuildJob, setLatestBuildJob] = useState<FeatureBuildJobSummary | null>(null);
   const [allFeatures, setAllFeatures] = useState<FeatureItem[]>([]);
   const [selectedToAdd, setSelectedToAdd] = useState<string[]>([]);
   const [featureStatusMap, setFeatureStatusMap] = useState<Record<string, FeatureNameValidation>>({});
@@ -167,6 +170,13 @@ export default function FeatureSetDetailPage() {
   };
 
   useEffect(() => { load(); }, [id]);
+
+  useEffect(() => {
+    if (!id) return;
+    void getLatestFeatureBuildJob(id)
+      .then(setLatestBuildJob)
+      .catch(() => setLatestBuildJob(null));
+  }, [id, buildResult?.job_id]);
 
   useEffect(() => {
     if (!form.features.length) {
@@ -570,8 +580,21 @@ export default function FeatureSetDetailPage() {
               )}
             </div>
           )}
+          <RecipeBuildDiagnosticsPanel buildResult={buildResult} jobSummary={latestBuildJob} />
         </div>
       )}
+
+      {!buildResult && latestBuildJob && (
+        <div className="mb-6">
+          <RecipeBuildDiagnosticsPanel jobSummary={latestBuildJob} />
+        </div>
+      )}
+
+      <div className="mb-6 text-xs text-violet-800 bg-violet-50 border border-violet-200 rounded-lg p-3 space-y-1">
+        <p className="font-medium">Recipe Engine Build 상세</p>
+        <p>Feature 생성 후 또는 최근 Build 이력에서 TEMPLATE Feature별 생성·경고·실패·미지원 상태와 진단 코드를 확인할 수 있습니다.</p>
+        <p>LAG/ROLLING Feature의 초기 null은 이력 부족으로 발생할 수 있습니다.</p>
+      </div>
 
       {(hasLegacyInSet || buildHasLegacy) && (
         <div className="mb-6 text-xs text-orange-800 bg-orange-50 border border-orange-200 rounded-lg p-3 flex flex-wrap items-start justify-between gap-3">

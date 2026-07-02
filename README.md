@@ -283,11 +283,12 @@ curl -X POST "http://localhost:8000/api/v1/feature-build-jobs?feature_set_id=FS-
 - **R4 Recipe Preview**: LAG·ROLLING_MEAN·ROLLING_SUM row step 기반 Preview — 동일 설계서 부록 F (저장·Build 미연동)
 - **R5 Recipe 저장·Builder**: `tb_feature_recipe` 저장·발행·Feature Set 연동 — 동일 설계서 부록 G
 - **R6 Recipe Engine Build**: PUBLISHED TEMPLATE Recipe를 Feature Build에 연결 — 설계서 부록 H (`RAW_COLUMN`/`DATE_PART`/`LAG`/`ROLLING_*` 지원)
+- **R6-S1 Build 안정화**: Build 진단·Recipe별 이력·Preview/Build 비교·운영 UI 보강 — 설계서 부록 I (신규 Recipe Type 없음)
 
 **Feature Registry·Lineage UI**
 
 - `/features`: **등록 유형** 뱃지, **신규 Feature 사용 절차** 안내, Registry 요약, **상세** 모달에서 입력 테이블·Lookback·누수 방지 등 확인
-- `/feature-sets/:id`: 포함 Feature **등록 유형** 뱃지·필터·TPL 보호, **Feature Build 이력** + **Lineage** + **Feature 품질 검증**(등록 상태 컬럼)
+- `/feature-sets/:id`: 포함 Feature **등록 유형** 뱃지·필터·TPL 보호, **Feature Build 이력** + **Recipe Engine Build 상세** + **Lineage** + **Feature 품질 검증**(TEMPLATE coverage·등록 상태)
 - Lineage 없음 → Feature Set 상세에서 **Feature 생성** 먼저 실행
 
 **Feature 품질 검증** (`check_type=FEATURE_QUALITY`)

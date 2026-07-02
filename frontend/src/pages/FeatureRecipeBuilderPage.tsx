@@ -3,8 +3,10 @@ import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom"
 import {
   createFeatureRecipe,
   getFeatureRecipe,
+  getRecipeBuildHistory,
   publishFeatureRecipe,
   updateFeatureRecipe,
+  type RecipeBuildHistoryResponse,
 } from "@/api/featureRecipes";
 import { getColumnRoles } from "@/api/featureColumnRoles";
 import { fetchApi, PagedData } from "@/api/client";
@@ -65,6 +67,7 @@ export default function FeatureRecipeBuilderPage() {
   const [busy, setBusy] = useState("");
   const [validateResult, setValidateResult] = useState<Record<string, unknown> | null>(null);
   const [previewResult, setPreviewResult] = useState<FeatureRecipePreviewResponse | null>(null);
+  const [buildHistory, setBuildHistory] = useState<RecipeBuildHistoryResponse | null>(null);
 
   const loadMappings = useCallback(async () => {
     const res = await fetchApi<PagedData<MappingItem>>("/mappings", { page: 1, size: 50 });
@@ -122,6 +125,16 @@ export default function FeatureRecipeBuilderPage() {
   useEffect(() => { void loadTemplates(); }, [loadTemplates]);
   useEffect(() => { void loadRoles(); }, [loadRoles]);
   useEffect(() => { void loadRecipe(); }, [loadRecipe]);
+
+  useEffect(() => {
+    if (!recipe?.recipe_id || recipe.status !== "PUBLISHED") {
+      setBuildHistory(null);
+      return;
+    }
+    void getRecipeBuildHistory(recipe.recipe_id, 5)
+      .then(setBuildHistory)
+      .catch(() => setBuildHistory(null));
+  }, [recipe?.recipe_id, recipe?.status]);
 
   const defaultSourceForType = useCallback((type: string, options: { value: string }[]) => {
     if (type === "DATE_PART") {
@@ -306,6 +319,25 @@ export default function FeatureRecipeBuilderPage() {
             {recipeStatusLabel(recipe.status)}
           </span>
           {recipe.feature_name && <span className="text-slate-700">→ {recipe.feature_name}</span>}
+        </div>
+      )}
+
+      {recipe?.status === "PUBLISHED" && buildHistory && (
+        <div className="mb-4 text-xs border border-slate-200 rounded-lg p-3 bg-white space-y-2">
+          <p className="font-medium text-slate-800">최근 Build 이력</p>
+          <p className="text-slate-600">
+            최근 상태: <strong>{buildHistory.latest_build_status}</strong>
+            {buildHistory.items.length === 0 && " (아직 Build 없음)"}
+          </p>
+          {buildHistory.items.slice(0, 3).map((item) => (
+            <div key={item.job_id} className="text-slate-600 border-t border-slate-100 pt-2">
+              <span className="font-mono">{item.job_id}</span>
+              {" · "}
+              {item.template_feature_status}
+              {item.null_ratio != null && ` · null ${(item.null_ratio * 100).toFixed(1)}%`}
+            </div>
+          ))}
+          <p className="text-slate-500">실패 시 Validate·Preview를 다시 실행해 Recipe 정의를 확인하세요.</p>
         </div>
       )}
 
