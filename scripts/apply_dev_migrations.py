@@ -284,6 +284,14 @@ MIGRATIONS = [
         "R7 standard dataset seed",
         _load_sql("r7_standard_dataset_seed.sql"),
     ),
+    (
+        "R8 pipeline builder schema",
+        _load_sql("r8_pipeline_builder_schema.sql"),
+    ),
+    (
+        "R8 pipeline builder seed",
+        _load_sql("r8_pipeline_builder_seed.sql"),
+    ),
 ]
 
 

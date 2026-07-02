@@ -13,6 +13,7 @@ from app.api.v1 import (
     model,
     monitoring,
     pipeline,
+    pipeline_builder,
     prediction,
     sample_external,
     standard_dataset,
@@ -52,6 +53,7 @@ app.include_router(model.router, prefix=api_prefix)
 app.include_router(prediction.router, prefix=api_prefix)
 app.include_router(monitoring.router, prefix=api_prefix)
 app.include_router(pipeline.router, prefix=api_prefix)
+app.include_router(pipeline_builder.router, prefix=api_prefix)
 app.include_router(system.router, prefix=api_prefix)
 
 

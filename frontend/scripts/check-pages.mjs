@@ -16,6 +16,7 @@ const PATHS = [
   "/predictions/results",
   "/predictions/errors",
   "/ops/pipeline-runs",
+  "/pipeline-builder",
   "/ops/model-monitoring",
   "/ops/drift-reports",
   "/ops/retraining-candidates",
@@ -88,6 +89,15 @@ for (const path of PATHS) {
     if (!recipeBuildDetail || !lagNullNote) {
       errors.push(`${path}: Recipe Engine Build detail / LAG null notice missing`);
     }
+  }
+  if (path === "/pipeline-builder") {
+    await page.getByText("Pipeline Builder").first().waitFor({ state: "visible", timeout: 30000 });
+    await page.getByText("새 Pipeline 만들기").first().waitFor({ state: "visible", timeout: 30000 });
+    await page.getByText("Flow Chart").first().waitFor({ state: "visible", timeout: 30000 });
+    await page.getByText("Airflow DAG 동적 생성").first().waitFor({ state: "visible", timeout: 30000 });
+  }
+  if (path === "/ops/pipeline-runs") {
+    await page.getByText("Pipeline Builder에서 실행 설정").first().waitFor({ state: "visible", timeout: 30000 });
   }
 }
 

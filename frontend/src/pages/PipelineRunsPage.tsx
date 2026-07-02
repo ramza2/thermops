@@ -1,5 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
+import { Link } from "react-router-dom";
 import { RefreshCw, Eye, Play } from "lucide-react";
+import { getPipelineTemplates } from "@/api/pipelineBuilder";
 import { fetchApi, postApi, PagedData } from "@/api/client";
 import { Button } from "@/components/Button";
 import { DataTable } from "@/components/DataTable";
@@ -62,6 +64,19 @@ export default function PipelineRunsPage() {
   const [permissionDenied, setPermissionDenied] = useState(false);
   const [dateRange, setDateRange] = useState(defaultDateRange(14));
   const [autoRefresh, setAutoRefresh] = useState(true);
+  const [templateByDag, setTemplateByDag] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    getPipelineTemplates({ active_only: true })
+      .then((res) => {
+        const map: Record<string, string> = {};
+        for (const t of res.items) {
+          if (t.airflow_dag_id) map[t.airflow_dag_id] = t.template_name;
+        }
+        setTemplateByDag(map);
+      })
+      .catch(() => {});
+  }, []);
 
   const filterByDate = (rows: PipelineRun[]) => {
     if (!dateRange.from && !dateRange.to) return rows;
@@ -191,6 +206,13 @@ export default function PipelineRunsPage() {
         }
       />
 
+      <div className="mb-4 text-xs text-slate-600 bg-blue-50 border border-blue-200 rounded-lg p-3">
+        Pipeline Builder에서 실행 설정을 구성할 수 있습니다.{" "}
+        <Link to="/pipeline-builder" className="text-blue-600 hover:underline">
+          Pipeline Builder에서 실행 설정 구성하기
+        </Link>
+      </div>
+
       <div className="bg-white rounded-lg border border-slate-200 p-4 mb-4 shadow-sm">
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-sm font-semibold text-slate-800">파이프라인 목록</h3>
@@ -201,10 +223,14 @@ export default function PipelineRunsPage() {
         </div>
         <div className="flex flex-wrap gap-2">
           {pipelines.map((p) => (
-            <Button key={p.pipeline_id} variant="secondary" icon={<Play className="w-3 h-3" />}
-              onClick={() => openTrigger(p)}>
-              {p.name} 수동 실행
-            </Button>
+            <div key={p.pipeline_id} className="inline-flex flex-col items-start gap-0.5">
+              <Button variant="secondary" icon={<Play className="w-3 h-3" />} onClick={() => openTrigger(p)}>
+                {p.name} 수동 실행
+              </Button>
+              {templateByDag[p.pipeline_id] && (
+                <span className="text-[10px] text-slate-500 pl-1">Template: {templateByDag[p.pipeline_id]}</span>
+              )}
+            </div>
           ))}
         </div>
       </div>

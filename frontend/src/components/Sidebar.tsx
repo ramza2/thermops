@@ -41,6 +41,7 @@ const MENU = [
   {
     label: "운영 관리", icon: Activity, children: [
       { label: "파이프라인 실행 이력", path: "/ops/pipeline-runs" },
+      { label: "Pipeline Builder", path: "/pipeline-builder" },
       { label: "성능 모니터링", path: "/ops/model-monitoring" },
       { label: "드리프트 리포트", path: "/ops/drift-reports" },
       { label: "재학습 후보 관리", path: "/ops/retraining-candidates" },

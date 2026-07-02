@@ -75,6 +75,9 @@ ON CONFLICT DO NOTHING;
 -- Standard dataset types (R7)
 \ir r7_standard_dataset_seed.sql
 
+-- Pipeline templates (R8)
+\ir r8_pipeline_builder_seed.sql
+
 -- Column Role preset (Feature Recipe Builder R1)
 INSERT INTO tb_feature_column_role (
     role_id, mapping_id, data_source_id, target_table,

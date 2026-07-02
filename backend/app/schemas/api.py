@@ -115,6 +115,30 @@ class ValidateTargetTableRequest(BaseModel):
     target_table: str
 
 
+class PipelineDefinitionCreate(BaseModel):
+    template_id: str
+    pipeline_name: str
+    description: str | None = None
+    node_config: dict[str, dict[str, Any]] = {}
+    runtime_params: dict[str, Any] | None = None
+    schedule_config: dict[str, Any] | None = None
+    created_by: str | None = None
+
+
+class PipelineDefinitionUpdate(BaseModel):
+    pipeline_name: str | None = None
+    description: str | None = None
+    node_config: dict[str, dict[str, Any]] | None = None
+    runtime_params: dict[str, Any] | None = None
+    schedule_config: dict[str, Any] | None = None
+    change_summary: str | None = None
+
+
+class PipelineDefinitionValidateRequest(BaseModel):
+    template_id: str | None = None
+    node_config: dict[str, dict[str, Any]] | None = None
+
+
 # Feature
 class FeatureCreate(BaseModel):
     feature_name: str

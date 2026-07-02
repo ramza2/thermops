@@ -486,6 +486,56 @@ class PipelineRun(Base):
     result_summary: Mapped[dict | None] = mapped_column(JSONB)
 
 
+class PipelineTemplate(Base):
+    __tablename__ = "tb_pipeline_template"
+    template_id: Mapped[str] = mapped_column(String(50), primary_key=True)
+    template_code: Mapped[str] = mapped_column(String(80))
+    template_name: Mapped[str] = mapped_column(String(200))
+    description: Mapped[str | None] = mapped_column(Text)
+    pipeline_type: Mapped[str] = mapped_column(String(80))
+    airflow_dag_id: Mapped[str | None] = mapped_column(String(200))
+    template_version: Mapped[str] = mapped_column(String(30), default="1.0")
+    node_schema_json: Mapped[dict] = mapped_column(JSONB)
+    edge_schema_json: Mapped[dict] = mapped_column(JSONB)
+    default_config_json: Mapped[dict | None] = mapped_column(JSONB)
+    status: Mapped[str] = mapped_column(String(30), default="ACTIVE")
+    active_yn: Mapped[str] = mapped_column(String(1), default="Y")
+    created_at: Mapped[datetime] = mapped_column(DateTime)
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime)
+
+
+class PipelineDefinition(Base):
+    __tablename__ = "tb_pipeline_definition"
+    pipeline_id: Mapped[str] = mapped_column(String(50), primary_key=True)
+    template_id: Mapped[str] = mapped_column(String(50))
+    pipeline_name: Mapped[str] = mapped_column(String(200))
+    description: Mapped[str | None] = mapped_column(Text)
+    pipeline_type: Mapped[str] = mapped_column(String(80))
+    airflow_dag_id: Mapped[str | None] = mapped_column(String(200))
+    node_config_json: Mapped[dict] = mapped_column(JSONB, default=dict)
+    edge_config_json: Mapped[dict | None] = mapped_column(JSONB)
+    runtime_params_json: Mapped[dict | None] = mapped_column(JSONB)
+    schedule_config_json: Mapped[dict | None] = mapped_column(JSONB)
+    validation_result_json: Mapped[dict | None] = mapped_column(JSONB)
+    status: Mapped[str] = mapped_column(String(30), default="DRAFT")
+    last_validated_at: Mapped[datetime | None] = mapped_column(DateTime)
+    last_run_id: Mapped[str | None] = mapped_column(String(80))
+    active_yn: Mapped[str] = mapped_column(String(1), default="Y")
+    created_by: Mapped[str | None] = mapped_column(String(100))
+    created_at: Mapped[datetime] = mapped_column(DateTime)
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime)
+
+
+class PipelineDefinitionVersion(Base):
+    __tablename__ = "tb_pipeline_definition_version"
+    version_id: Mapped[str] = mapped_column(String(50), primary_key=True)
+    pipeline_id: Mapped[str] = mapped_column(String(50))
+    version_no: Mapped[int] = mapped_column(Integer)
+    snapshot_json: Mapped[dict] = mapped_column(JSONB)
+    change_summary: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime)
+
+
 class CommonCode(Base):
     __tablename__ = "tb_common_code"
     code_group: Mapped[str] = mapped_column(String(50), primary_key=True)

@@ -18,6 +18,7 @@ import ModelRegistryPage from "@/pages/ModelRegistryPage";
 import PredictionJobsPage from "@/pages/PredictionJobsPage";
 import PredictionResultsPage from "@/pages/PredictionResultsPage";
 import PredictionErrorsPage from "@/pages/PredictionErrorsPage";
+import PipelineBuilderPage from "@/pages/PipelineBuilderPage";
 import PipelineRunsPage from "@/pages/PipelineRunsPage";
 import ModelMonitoringPage from "@/pages/ModelMonitoringPage";
 import DriftReportsPage from "@/pages/DriftReportsPage";
@@ -50,6 +51,8 @@ export default function App() {
             <Route path="predictions/results" element={<PredictionResultsPage />} />
             <Route path="predictions/errors" element={<PredictionErrorsPage />} />
             <Route path="ops/pipeline-runs" element={<PipelineRunsPage />} />
+            <Route path="pipeline-builder" element={<PipelineBuilderPage />} />
+            <Route path="pipeline-builder/:pipelineId" element={<PipelineBuilderPage />} />
             <Route path="ops/model-monitoring" element={<ModelMonitoringPage />} />
             <Route path="ops/drift-reports" element={<DriftReportsPage />} />
             <Route path="ops/retraining-candidates" element={<RetrainingCandidatesPage />} />
