@@ -27,8 +27,8 @@ from app.services.drift_detection_service import (
 from app.services.system_config_service import DEFAULT_CONFIG_VALUES
 from app.services.training_service import TrainingJobParams, run_training_job
 
-DEFAULT_FEATURE_SET_ID = "FS-TPL-LAG-ROLL"
-DEFAULT_CONFIG_ID = "TRC-TPL-LAG-ROLL"
+DEFAULT_FEATURE_SET_ID = ""
+DEFAULT_CONFIG_ID = ""
 RETRAINING_DAG_ID = "retraining_dag"
 EXECUTION_MODE_SYNC = "SYNC"
 EXECUTION_MODE_AIRFLOW = "AIRFLOW"
@@ -107,8 +107,7 @@ async def _resolve_feature_set_id(
         return candidate.feature_set_id
     if drift_report and drift_report.feature_set_id:
         return drift_report.feature_set_id
-    warnings.append(f"feature_set_id 없음 — 기본값 {DEFAULT_FEATURE_SET_ID} 사용")
-    return DEFAULT_FEATURE_SET_ID
+    raise ValueError("재학습 후보에 feature_set_id가 없습니다. 후보 또는 Drift 리포트에 Feature Set을 지정하세요.")
 
 
 async def _resolve_config_id(
@@ -142,8 +141,7 @@ async def _resolve_config_id(
     ).scalar_one_or_none()
     if cfg:
         return cfg.config_id
-    warnings.append(f"feature_set {feature_set_id}용 학습 설정 없음 — {DEFAULT_CONFIG_ID} 사용")
-    return DEFAULT_CONFIG_ID
+    raise ValueError(f"feature_set {feature_set_id}에 연결된 학습 설정이 없습니다.")
 
 
 async def _resolve_train_period(

@@ -14,6 +14,15 @@ import ast
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+_SCRIPTS = Path(__file__).resolve().parent
+if str(_SCRIPTS) not in sys.path:
+    sys.path.insert(0, str(_SCRIPTS))
+from test_fixtures import (
+    FS_LAG_ROLL_ID,
+    ensure_csv_ingested,
+    ensure_test_platform,
+)
+
 API_BASE = os.environ.get("THERMOOPS_API_BASE", "http://localhost:8000/api/v1")
 DB_URL = os.environ.get(
     "DATABASE_URL",
@@ -30,7 +39,7 @@ OFFICIAL_FEATURES = (
     "cooling_degree_days",
 )
 
-FEATURE_SET_ID = os.environ.get("THERMOOPS_FEATURE_SET_ID", "FS-TPL-LAG-ROLL")
+FEATURE_SET_ID = os.environ.get("THERMOOPS_FEATURE_SET_ID", FS_LAG_ROLL_ID)
 
 
 def api(method: str, path: str) -> dict:
@@ -170,6 +179,8 @@ def resolve_feature_set() -> list[str]:
 def main() -> int:
     print(f"THERMOps feature lineage test ({API_BASE})")
     try:
+        ensure_test_platform()
+        ensure_csv_ingested(api)
         check_registry_module()
         check_registry_api()
         feature_names = resolve_feature_set()

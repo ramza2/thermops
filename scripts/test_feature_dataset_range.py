@@ -8,25 +8,26 @@ import os
 import sys
 import urllib.error
 import urllib.request
+from pathlib import Path
+
+_SCRIPTS = Path(__file__).resolve().parent
+if str(_SCRIPTS) not in sys.path:
+    sys.path.insert(0, str(_SCRIPTS))
+from test_fixtures import (
+    FS_LAG_ROLL_ID,
+    FS_MINIMAL_ID,
+    ensure_csv_ingested,
+    ensure_test_platform,
+)
 
 API_BASE = os.environ.get("THERMOOPS_API_BASE", "http://localhost:8000/api/v1")
-FEATURE_SET_ID = os.environ.get("THERMOOPS_FEATURE_SET_ID", "FS-TPL-LAG-ROLL")
-EMPTY_FEATURE_SET_ID = os.environ.get("THERMOOPS_EMPTY_FEATURE_SET_ID", "FS-TPL-MINIMAL")
+FEATURE_SET_ID = os.environ.get("THERMOOPS_FEATURE_SET_ID", FS_LAG_ROLL_ID)
+EMPTY_FEATURE_SET_ID = os.environ.get("THERMOOPS_EMPTY_FEATURE_SET_ID", FS_MINIMAL_ID)
 
 
-def api_get(path: str) -> dict:
+def api(method: str, path: str) -> dict:
     url = f"{API_BASE}{path}"
-    req = urllib.request.Request(url, method="GET")
-    with urllib.request.urlopen(req, timeout=60) as resp:
-        payload = json.loads(resp.read().decode())
-    if not payload.get("success"):
-        raise RuntimeError(f"API failed {path}: {payload}")
-    return payload["data"]
-
-
-def api_post_query(path: str) -> dict:
-    url = f"{API_BASE}{path}"
-    req = urllib.request.Request(url, method="POST", data=b"")
+    req = urllib.request.Request(url, method=method, data=b"" if method == "POST" else None)
     with urllib.request.urlopen(req, timeout=180) as resp:
         payload = json.loads(resp.read().decode())
     if not payload.get("success"):
@@ -35,20 +36,22 @@ def api_post_query(path: str) -> dict:
 
 
 def ensure_feature_dataset() -> None:
-    data = api_get(f"/feature-sets/{FEATURE_SET_ID}/dataset-range")
+    data = api("GET", f"/feature-sets/{FEATURE_SET_ID}/dataset-range")
     if data.get("exists") and int(data.get("row_count", 0)) > 0:
         print(f"  [skip] feature dataset exists rows={data['row_count']}")
         return
     print("  [build] creating feature dataset...")
-    api_post_query(f"/feature-build-jobs?feature_set_id={FEATURE_SET_ID}")
+    api("POST", f"/feature-build-jobs?feature_set_id={FEATURE_SET_ID}")
 
 
 def main() -> int:
     print(f"THERMOps feature dataset range test ({API_BASE})")
     try:
+        ensure_test_platform()
+        ensure_csv_ingested(api)
         ensure_feature_dataset()
 
-        data = api_get(f"/feature-sets/{FEATURE_SET_ID}/dataset-range")
+        data = api("GET", f"/feature-sets/{FEATURE_SET_ID}/dataset-range")
         assert data["feature_set_id"] == FEATURE_SET_ID
         assert data["exists"] is True, data
         assert data["row_count"] > 0, data
@@ -59,7 +62,7 @@ def main() -> int:
         assert isinstance(data["sites"], list)
         print(f"  [ok] range {data['min_target_at']} ~ {data['max_target_at']} rows={data['row_count']}")
 
-        empty = api_get(f"/feature-sets/{EMPTY_FEATURE_SET_ID}/dataset-range")
+        empty = api("GET", f"/feature-sets/{EMPTY_FEATURE_SET_ID}/dataset-range")
         if empty.get("exists"):
             print(f"  [warn] {EMPTY_FEATURE_SET_ID} unexpectedly has dataset rows={empty.get('row_count')}")
         else:

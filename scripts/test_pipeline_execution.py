@@ -14,7 +14,12 @@ from pathlib import Path
 _SCRIPTS = Path(__file__).resolve().parent
 if str(_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS))
-from test_fixtures import heat_pipeline_node_config
+from test_fixtures import (
+    ensure_test_pipeline_templates,
+    heat_pipeline_node_config,
+    resolve_batch_pipeline_template_id,
+    resolve_feature_build_template_id,
+)
 
 API_BASE = os.environ.get("THERMOOPS_API_BASE", "http://localhost:8000/api/v1")
 
@@ -46,7 +51,7 @@ def api(method: str, path: str, body: dict | None = None, expect_fail: bool = Fa
 
 def _create_runnable_pipeline() -> str:
     body = {
-        "template_id": "PT-FEATURE-BUILD",
+        "template_id": resolve_feature_build_template_id(),
         "pipeline_name": f"R9-exec-{uuid.uuid4().hex[:6]}",
         "node_config": heat_pipeline_node_config(api),
     }
@@ -76,7 +81,7 @@ def test_dry_run_success() -> str:
 
 def test_draft_run_blocked() -> None:
     body = {
-        "template_id": "PT-FEATURE-BUILD",
+        "template_id": resolve_feature_build_template_id(),
         "pipeline_name": f"R9-draft-{uuid.uuid4().hex[:6]}",
         "node_config": heat_pipeline_node_config(api),
     }
@@ -97,7 +102,7 @@ def test_archived_run_blocked(pid: str) -> None:
 
 def test_validation_error_blocks_run() -> None:
     body = {
-        "template_id": "PT-BATCH-PREDICTION",
+        "template_id": resolve_batch_pipeline_template_id(),
         "pipeline_name": f"R9-invalid-{uuid.uuid4().hex[:6]}",
         "node_config": {},
     }
@@ -152,6 +157,7 @@ def test_direct_dag_trigger_unchanged() -> None:
 
 def main() -> int:
     print("THERMOps pipeline execution tests (R9)")
+    ensure_test_pipeline_templates()
     failed = 0
     pid: str | None = None
     tests = [

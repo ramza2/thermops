@@ -128,6 +128,7 @@ export default function FeatureSetsPage() {
       />
 
       <DataTable
+        emptyMessage="등록된 Feature Set이 없습니다. 신규 Feature Set을 구성하세요."
         columns={[
           { key: "feature_set_id", header: "ID", width: "120px" },
           { key: "feature_set_name", header: "Set명" },

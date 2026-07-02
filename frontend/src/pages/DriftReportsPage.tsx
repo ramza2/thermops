@@ -73,6 +73,7 @@ export default function DriftReportsPage() {
   const [running, setRunning] = useState(false);
   const [detail, setDetail] = useState<DriftReport | null>(null);
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>("computed");
+  const [defaultFeatureSetId, setDefaultFeatureSetId] = useState("");
 
   const load = useCallback(async (p = page, filter = sourceFilter) => {
     setLoading(true);
@@ -93,16 +94,26 @@ export default function DriftReportsPage() {
 
   useEffect(() => { load(page, sourceFilter); }, [page, sourceFilter, load]);
 
+  useEffect(() => {
+    fetchApi<{ feature_set_id: string }[]>("/feature-sets")
+      .then((fs) => setDefaultFeatureSetId(fs[0]?.feature_set_id || ""))
+      .catch(() => setDefaultFeatureSetId(""));
+  }, []);
+
   const handleFilterChange = (filter: SourceFilter) => {
     setSourceFilter(filter);
     setPage(1);
   };
 
   const handleRunCheck = async () => {
+    if (!defaultFeatureSetId) {
+      showToast("warning", "Feature Set이 없습니다. Feature Set을 먼저 구성하세요.");
+      return;
+    }
     setRunning(true);
     try {
       const res = await postApi<DriftCheckResult>("/drift-checks", {
-        feature_set_id: "FS-TPL-LAG-ROLL",
+        feature_set_id: defaultFeatureSetId,
         baseline_start_at: "2026-05-22T00:00:00",
         baseline_end_at: "2026-06-05T23:00:00",
         current_start_at: "2026-06-06T00:00:00",

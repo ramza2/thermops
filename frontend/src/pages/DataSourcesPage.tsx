@@ -520,6 +520,7 @@ export default function DataSourcesPage() {
 
       <DataTable
         loading={loading}
+        emptyMessage="등록된 데이터 소스가 없습니다. REST API, DB, CSV 소스를 신규 등록하세요."
         columns={[
           { key: "source_id", header: "ID", width: "120px" },
           { key: "source_name", header: "소스명" },

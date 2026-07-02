@@ -83,40 +83,22 @@ PIPELINE_IDS = {p["pipeline_id"] for p in PIPELINE_DEFINITIONS}
 
 DEFAULT_CONF_BY_PIPELINE: dict[str, dict[str, Any]] = {
     "data_ingestion_dag": {
-        "data_domain": "HEAT_DEMAND",
         "load_mode": "UPSERT",
     },
-    "data_quality_dag": {
-        "data_domain": "HEAT_DEMAND",
-    },
-    "feature_build_dag": {
-        "feature_set_id": "FS-TPL-LAG-ROLL",
-    },
+    "data_quality_dag": {},
+    "feature_build_dag": {},
     "model_training_dag": {
-        "config_id": "TRC-TPL-LAG-ROLL",
         "register_model_yn": True,
     },
     "batch_prediction_dag": {
-        "feature_set_id": "FS-TPL-LAG-ROLL",
-        "model_name": "heat_demand_lightgbm",
         "overwrite_yn": True,
     },
-    "monitoring_dag": {
-        "model_name": "heat_demand_lightgbm",
-    },
-    "drift_detection_dag": {
-        "feature_set_id": "FS-TPL-LAG-ROLL",
-        "model_name": "heat_demand_lightgbm",
-    },
+    "monitoring_dag": {},
+    "drift_detection_dag": {},
     "retraining_dag": {
         "candidate_id": None,
     },
-    "thermops_full_pipeline_dag": {
-        "feature_set_id": "FS-TPL-LAG-ROLL",
-        "config_id": "TRC-TPL-LAG-ROLL",
-        "model_name": "heat_demand_lightgbm",
-        "data_domain": "HEAT_DEMAND",
-    },
+    "thermops_full_pipeline_dag": {},
 }
 
 

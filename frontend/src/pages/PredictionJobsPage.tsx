@@ -67,7 +67,7 @@ export default function PredictionJobsPage() {
   const [running, setRunning] = useState(false);
   const [form, setForm] = useState({
     site_id: "",
-    feature_set_id: "FS-TPL-LAG-ROLL",
+    feature_set_id: "",
     model_version_id: "",
     target_start: "",
     target_end: "",
@@ -75,6 +75,10 @@ export default function PredictionJobsPage() {
   });
 
   const loadDatasetRange = useCallback(async (featureSetId: string, autoFill: boolean) => {
+    if (!featureSetId) {
+      setDatasetRange(null);
+      return;
+    }
     setRangeLoading(true);
     try {
       const range = await fetchApi<FeatureDatasetRange>(`/feature-sets/${encodeURIComponent(featureSetId)}/dataset-range`);
@@ -99,8 +103,8 @@ export default function PredictionJobsPage() {
       .then(async ([siteRes, fsRes, modelRes]) => {
         setSites(siteRes);
         setFeatureSets(fsRes);
-        const preferred = fsRes.find((f) => f.feature_set_id === "FS-TPL-LAG-ROLL") || fsRes[0];
-        const featureSetId = preferred?.feature_set_id || "FS-TPL-LAG-ROLL";
+        const preferred = fsRes[0];
+        const featureSetId = preferred?.feature_set_id || "";
         setForm((f) => ({
           ...f,
           site_id: siteRes[0]?.site_id || "",
@@ -119,7 +123,7 @@ export default function PredictionJobsPage() {
           || flat[0];
         if (champion) setForm((f) => ({ ...f, model_version_id: champion.model_version_id }));
 
-        await loadDatasetRange(featureSetId, true);
+        if (featureSetId) await loadDatasetRange(featureSetId, true);
       })
       .finally(() => setLoading(false));
   }, [loadDatasetRange]);
@@ -139,6 +143,9 @@ export default function PredictionJobsPage() {
   const siteMissingData = Boolean(form.site_id && datasetRange?.exists && !effective.min);
 
   const validateBeforeRun = (): string | null => {
+    if (!form.feature_set_id) {
+      return "Feature Set을 선택하세요.";
+    }
     if (!datasetRange?.exists) {
       return "이 Feature Set으로 생성된 Feature Dataset이 없습니다. 먼저 Feature 생성을 실행하세요.";
     }

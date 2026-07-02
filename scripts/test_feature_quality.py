@@ -9,9 +9,15 @@ import sys
 import urllib.error
 import urllib.parse
 import urllib.request
+from pathlib import Path
+
+_SCRIPTS = Path(__file__).resolve().parent
+if str(_SCRIPTS) not in sys.path:
+    sys.path.insert(0, str(_SCRIPTS))
+from test_fixtures import FS_LAG_ROLL_ID, ensure_csv_ingested, ensure_test_platform
 
 API_BASE = os.environ.get("THERMOOPS_API_BASE", "http://localhost:8000/api/v1")
-FEATURE_SET_ID = os.environ.get("THERMOOPS_FEATURE_SET_ID", "FS-TPL-LAG-ROLL")
+FEATURE_SET_ID = os.environ.get("THERMOOPS_FEATURE_SET_ID", FS_LAG_ROLL_ID)
 REQUIRED_FEATURES = ("demand_lag_24h", "demand_lag_168h", "demand_ma_24h", "demand_ma_168h")
 
 
@@ -126,6 +132,8 @@ def check_data_quality_isolation() -> None:
 def main() -> int:
     print(f"THERMOps feature quality test ({API_BASE})")
     try:
+        ensure_test_platform()
+        ensure_csv_ingested(api)
         dsv = ensure_dataset_version()
         run_id = check_post_quality(dsv)
         check_registration_metadata(run_id)

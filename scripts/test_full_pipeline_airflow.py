@@ -15,7 +15,14 @@ from pathlib import Path
 _SCRIPTS = Path(__file__).resolve().parent
 if str(_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS))
-from test_fixtures import resolve_heat_source_id, resolve_weather_source_id
+from test_fixtures import (
+    FS_LAG_ROLL_ID,
+    TRC_LGBM_ID,
+    ensure_csv_ingested,
+    ensure_test_platform,
+    resolve_heat_source_id,
+    resolve_weather_source_id,
+)
 
 API_BASE = os.environ.get("THERMOOPS_API_BASE", "http://localhost:8000/api/v1")
 AIRFLOW_BASE = os.environ.get("AIRFLOW_BASE_URL", "http://localhost:8080")
@@ -88,6 +95,8 @@ def assert_xcom_chain(summary: dict) -> None:
 def main() -> int:
     print(f"THERMOps full pipeline E2E test (timeout={POLL_TIMEOUT}s)")
     try:
+        ensure_test_platform()
+        ensure_csv_ingested(api)
         heat_source_id = resolve_heat_source_id(api)
         weather_source_id = resolve_weather_source_id(api)
         print(f"  [fixture] heat source={heat_source_id} weather source={weather_source_id}")
@@ -101,8 +110,8 @@ def main() -> int:
             "parameters": {
                 "source_id": heat_source_id,
                 "weather_source_id": weather_source_id,
-                "feature_set_id": "FS-TPL-LAG-ROLL",
-                "config_id": "TRC-TPL-LAG-ROLL",
+                "feature_set_id": FS_LAG_ROLL_ID,
+                "config_id": TRC_LGBM_ID,
                 "model_name": "heat_demand_lightgbm",
                 "data_domain": "HEAT_DEMAND",
                 "start_at": "2026-06-01",

@@ -10,9 +10,15 @@ import urllib.error
 import urllib.parse
 import urllib.request
 import uuid
+from pathlib import Path
+
+_SCRIPTS = Path(__file__).resolve().parent
+if str(_SCRIPTS) not in sys.path:
+    sys.path.insert(0, str(_SCRIPTS))
+from test_fixtures import FS_LAG_ROLL_ID, ensure_test_platform
 
 API_BASE = os.environ.get("THERMOOPS_API_BASE", "http://localhost:8000/api/v1")
-TPL_FEATURE_SET_ID = os.environ.get("THERMOOPS_FEATURE_SET_ID", "FS-TPL-LAG-ROLL")
+TPL_FEATURE_SET_ID = os.environ.get("THERMOOPS_FEATURE_SET_ID", FS_LAG_ROLL_ID)
 CUSTOM_FEATURE_NAME = f"test_catalog_only_{uuid.uuid4().hex[:8]}"
 
 
@@ -234,6 +240,7 @@ def test_custom_set_quality_registration() -> None:
 def main() -> int:
     print(f"THERMOps feature registration validation test ({API_BASE})")
     try:
+        ensure_test_platform()
         test_registry_computable()
         test_legacy_aliases()
         test_catalog_only_unknown()

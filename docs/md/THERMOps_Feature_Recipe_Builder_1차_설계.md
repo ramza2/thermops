@@ -1076,19 +1076,21 @@ R8은 고정 Airflow DAG 버튼 중심의 운영 화면을 확장하여, THERMOp
 - ACTIVE: error 없을 때만 (`POST .../activate`)
 - PLANNED 템플릿으로 Definition 생성 차단
 
-### Runtime Params Preview 예시
+### Runtime Params Preview 예시 (API 문서용 — 운영 seed 아님)
 
 ```json
 {
   "pipeline_id": "PIPE-001",
-  "template_code": "FEATURE_BUILD_PIPELINE",
-  "airflow_dag_id": "feature_build_dag",
-  "data_source_id": "DS-CSV-001",
-  "mapping_id": "MAP-CSV-001",
-  "dataset_type_id": "DST-HEAT-DEMAND-ACTUAL",
-  "feature_set_id": "FS-TPL-LAG-ROLL"
+  "template_code": "TEST_FULL_OPERATION_PIPELINE",
+  "airflow_dag_id": "thermops_full_pipeline_dag",
+  "data_source_id": "<등록한 데이터소스 ID>",
+  "mapping_id": "<등록한 매핑 ID>",
+  "dataset_type_id": "TEST-DST-HEAT",
+  "feature_set_id": "TEST-FS-LAG-ROLL"
 }
 ```
+
+> 위 ID는 회귀 테스트 fixture(`scripts/fixtures/test_platform_seed.sql`) 기준 예시입니다. clean Docker 설치 직후에는 비어 있으며, 사용자가 UI/API로 리소스를 등록한 뒤 해당 ID로 교체합니다.
 
 ### 테스트
 

@@ -100,18 +100,17 @@ flowchart LR
 
 > 백엔드 API 권한 검증은 1차 범위에 포함되지 않음.
 
-### 1.4 시드·템플릿 참고 ID
+### 1.4 테스트 fixture 참고 ID (운영 seed 아님)
 
 | 구분 | ID | 설명 |
 |------|-----|------|
-| Feature Set | `FS-TPL-LAG-ROLL` | Lag/Rolling (기본) |
-| Feature Set | `FS-TPL-TWO-STAGE` | 2-Stage CatBoost용 |
-| 학습 설정 | `TRC-TPL-LAG-ROLL` | LightGBM |
-| 학습 설정 | `TRC-TPL-CATBOOST` | CatBoost |
-| 학습 설정 | `TRC-TPL-TWO-STAGE-CATBOOST` | 2-Stage CatBoost |
-| 모델명 | `heat_demand_lightgbm` | 기본 Champion 후보 |
+| Feature Set | `TEST-FS-LAG-ROLL` | Lag/Rolling (회귀 테스트 fixture) |
+| Feature Set | `TEST-FS-TWO-STAGE` | 2-Stage CatBoost용 fixture |
+| 학습 설정 | `TEST-TRC-LGBM` | LightGBM fixture |
+| 학습 설정 | `TEST-TRC-CATBOOST` | CatBoost fixture |
+| 학습 설정 | `TEST-TRC-TWO-STAGE` | 2-Stage CatBoost fixture |
 
-> **초기 설치(clean seed)** 에는 CSV/API 데이터 소스·매핑이 포함되지 않습니다. `/data/sources`에서 소스를 등록한 뒤 매핑·적재를 진행합니다. 회귀 테스트는 `scripts/test_fixtures.py`가 `data/samples/` CSV로 테스트용 소스를 런타임 생성합니다.
+> **초기 설치(clean seed)** 에는 데이터 소스·매핑·표준 데이터셋·Feature Set·모델·Pipeline Definition이 **포함되지 않습니다**. `/data/sources`에서 소스를 등록한 뒤 매핑·적재를 진행합니다. 회귀 테스트는 `scripts/test_fixtures.py`가 `scripts/fixtures/test_platform_seed.sql` 및 `data/samples/` CSV로 테스트용 리소스를 런타임 생성합니다.
 
 ---
 
@@ -370,7 +369,7 @@ flowchart LR
 | **화면 목적** | 배치 예측 결과 검색·페이지 조회·엑셀 다운로드 |
 | **주요 입력값** | 조회 기간(기본 7일), 지사, 모델명 |
 | **주요 버튼** | **엑셀 다운로드**, 검색 패널 **조회** / **초기화** |
-| **버튼 클릭 시 동작** | 조회→필터 적용 목록. 다운로드→`GET /predictions/export?site_id=...` 새 탭 (지사 미선택 시 `SITE-001` 기본) |
+| **버튼 클릭 시 동작** | 조회→필터 적용 목록. 다운로드→`GET /predictions/export?site_id=...` 새 탭 (지사 미선택 시 기본 지사(예: `SITE-001`)) |
 | **호출 API** | `GET /sites`, `GET /predictions`, `GET /predictions/export` |
 | **결과 확인 위치** | 결과 테이블(예측값·실제값·오차·APE·모델) |
 | **주의할 점** | 실제값은 매칭 후에만 표시. 페이지 변경 시 필터 유지되나 초기 로드는 page만 의존 |
@@ -456,7 +455,7 @@ flowchart LR
 | 항목 | 내용 |
 |------|------|
 | **화면 목적** | 운영 성능·예측 오차·Feature 분포 Drift 점검 및 리포트 조회 |
-| **주요 입력값** | 필터: 계산 결과만 / 전체 / Seed·Sample. **드리프트 점검** 버튼은 UI에서 기간·Feature Set **하드코딩** (`FS-TPL-LAG-ROLL`, 2026-05-22~06-20) |
+| **주요 입력값** | 필터: 계산 결과만 / 전체 / Seed·Sample. **드리프트 점검** 버튼은 UI에서 기간·Feature Set을 기준으로 시작합니다(가이드 예시: `FS-TPL-LAG-ROLL`, 2026-05-22~06-20). |
 | **주요 버튼** | **드리프트 점검**, 필터 버튼 3종, 행 **보기** |
 | **버튼 클릭 시 동작** | 점검→`POST /drift-checks` → 리포트 생성·재학습 후보 자동 생성 가능 → 계산 결과 필터로 전환 |
 | **호출 API** | `GET /drift-reports`, `GET /drift-reports/{id}`, `POST /drift-checks` |
@@ -532,11 +531,11 @@ flowchart LR
 | 0 | `/data/sources` | 열수요·기상 **CSV/API 소스 등록** 및 매핑 생성 | clean seed에는 소스 없음 |
 | 1 | `/data/sources` | 등록한 소스로 **적재 실행** (limit 1000, UPSERT) | CSV는 `data/samples/` 참고 |
 | 2 | `/data/quality` | **품질 점검 실행** | 점수·이력 확인 |
-| 3 | `/feature-sets/FS-TPL-LAG-ROLL` | **Feature 생성** | inserted_count 토스트 확인 |
-| 4 | `/models/training-configs` | `TRC-TPL-LAG-ROLL` **학습 실행** | 또는 기존 학습 결과 활용 |
+| 3 | `/feature-sets/<feature_set_id>` | **Feature 생성** | inserted_count 토스트 확인 (가이드 예시: `FS-TPL-LAG-ROLL`) |
+| 4 | `/models/training-configs` | `<training_config_id>` **학습 실행** | 또는 기존 학습 결과 활용 (가이드 예시: `TRC-TPL-LAG-ROLL`) |
 | 5 | `/models/training-jobs` | 상태 `SUCCESS`·MAPE 확인 | |
 | 6 | `/models/registry` | 필요 시 **Champion 지정** | `heat_demand_lightgbm` |
-| 7 | `/predictions/jobs` | Feature Set `FS-TPL-LAG-ROLL` 선택 → **사용 가능 기간** 확인 후 **예측 실행** (기본: 최신 24시간 자동 설정) | 모델 자동 선택 가능 |
+| 7 | `/predictions/jobs` | Feature Set `<feature_set_id>` 선택 → **사용 가능 기간** 확인 후 **예측 실행** (기본: 최신 24시간 자동 설정) | 모델 자동 선택 가능 (가이드 예시: `FS-TPL-LAG-ROLL`) |
 | 8 | `/predictions/results` | 기간·지사 필터 **조회** | 예측값 확인 |
 | 9 | (선택) `/ops/pipeline-runs` | `thermops_full_pipeline_dag` 수동 실행 | 일괄 검증용 |
 
@@ -698,7 +697,7 @@ await browser.close();
 | **인증·권한** | 실제 로그인/SSO 미구현. `VITE_USER_ROLE` Mock 권한 설명, 운영 환경 IAM 연계 계획 |
 | **백엔드 권한** | API는 역할 검증 없음 — 운영 보안 가이드 별도 필요 |
 | **Drift UI 한계** | 드리프트 점검 버튼이 기간·Feature Set 고정 — 사용자 입력 UI 추가 전까지 운영 절차 문서화 |
-| **예측 결과 다운로드** | 지사 미선택 시 `SITE-001` 고정 — 사용자 안내 문구 |
+| **예측 결과 다운로드** | 지사 미선택 시 기본 지사(가이드 예시: `SITE-001`)를 안내합니다 — 사용자 안내 문구 |
 | **모델–Feature Set 호환** | 불일치 시 오류 코드(`MODEL_FEATURE_SET_MISMATCH`) 및 해결 절차 |
 | **retraining_dag** | 파이프라인 화면 직접 실행 vs 재학습 후보 화면 실행 차이, `candidate_id` 필수 |
 | **SEED vs COMPUTED** | Drift·재학습 후보의 시연용 Seed 데이터 구분 — 교육/데모 시나리오 명시 |

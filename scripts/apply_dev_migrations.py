@@ -106,16 +106,6 @@ MIGRATIONS = [
             wind_speed NUMERIC(18,6),
             data_type VARCHAR(20) DEFAULT 'OBSERVATION'
         );
-        INSERT INTO external_heat_demand_sample (site_id, measured_at, heat_demand, supply_temp)
-        SELECT site_id, measured_at, heat_demand, supply_temp
-        FROM tb_heat_demand_actual
-        WHERE NOT EXISTS (SELECT 1 FROM external_heat_demand_sample LIMIT 1)
-        LIMIT 500;
-        INSERT INTO external_weather_sample (weather_area_id, measured_at, temperature, humidity, rainfall, wind_speed, data_type)
-        SELECT weather_area_id, measured_at, temperature, humidity, rainfall, wind_speed, data_type
-        FROM tb_weather_observation
-        WHERE NOT EXISTS (SELECT 1 FROM external_weather_sample LIMIT 1)
-        LIMIT 500;
         """,
     ),
     (
@@ -149,13 +139,12 @@ MIGRATIONS = [
         """,
     ),
     (
-        "P1-4 CatBoost training configs",
-        """
-        INSERT INTO tb_training_config (config_id, config_name, feature_set_id, algorithm, train_period_months, validation_period_months, hyperparams) VALUES
-        ('TRC-TPL-CATBOOST', 'CatBoost 학습', 'FS-TPL-LAG-ROLL', 'catboost', 1, 1, '{"validation_ratio":0.2,"iterations":80,"learning_rate":0.05,"depth":6}'),
-        ('TRC-TPL-TWO-STAGE-CATBOOST', '2-Stage CatBoost 학습', 'FS-TPL-TWO-STAGE', 'two_stage_catboost', 1, 1, '{"validation_ratio":0.2,"iterations":80,"learning_rate":0.05,"depth":6}')
-        ON CONFLICT DO NOTHING;
-        """,
+        "R7 standard dataset schema",
+        _load_sql("r7_standard_dataset_schema.sql"),
+    ),
+    (
+        "R8 pipeline builder schema",
+        _load_sql("r8_pipeline_builder_schema.sql"),
     ),
     (
         "tb_feature_column_role",
@@ -188,10 +177,6 @@ MIGRATIONS = [
             ON tb_feature_column_role(target_table)
             WHERE active_yn = 'Y';
         """,
-    ),
-    (
-        "tb_feature_column_role seed (clean demo mappings)",
-        "-- clean seed: 데이터 소스·매핑·Column Role은 초기 설치 시 포함하지 않음 (scripts/test_fixtures.py 참고)",
     ),
     (
         "tb_feature_recipe R5 tables",
@@ -246,22 +231,6 @@ MIGRATIONS = [
         CREATE INDEX IF NOT EXISTS ix_feature_recipe_mapping ON tb_feature_recipe(mapping_id) WHERE active_yn = 'Y';
         CREATE INDEX IF NOT EXISTS ix_feature_recipe_type ON tb_feature_recipe(recipe_type) WHERE active_yn = 'Y';
         """,
-    ),
-    (
-        "R7 standard dataset schema",
-        _load_sql("r7_standard_dataset_schema.sql"),
-    ),
-    (
-        "R7 standard dataset seed",
-        _load_sql("r7_standard_dataset_seed.sql"),
-    ),
-    (
-        "R8 pipeline builder schema",
-        _load_sql("r8_pipeline_builder_schema.sql"),
-    ),
-    (
-        "R8 pipeline builder seed",
-        _load_sql("r8_pipeline_builder_seed.sql"),
     ),
     (
         "R9 pipeline run link schema",

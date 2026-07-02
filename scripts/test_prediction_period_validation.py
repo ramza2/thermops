@@ -14,15 +14,22 @@ from pathlib import Path
 _SCRIPTS = Path(__file__).resolve().parent
 if str(_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS))
+from test_fixtures import (
+    FS_LAG_ROLL_ID,
+    FS_MINIMAL_ID,
+    FS_TWO_STAGE_ID,
+    ensure_csv_ingested,
+    ensure_test_platform,
+)
 from test_http_debug import api_error_summary
 
 API_BASE = os.environ.get("THERMOOPS_API_BASE", "http://localhost:8000/api/v1")
-FEATURE_SET_ID = os.environ.get("THERMOOPS_FEATURE_SET_ID", "FS-TPL-LAG-ROLL")
+FEATURE_SET_ID = os.environ.get("THERMOOPS_FEATURE_SET_ID", FS_LAG_ROLL_ID)
 # 테스트 전용: Dataset 없는 Feature Set (기본은 실행 시 생성·재사용)
 TEST_NO_DATASET_FS_NAME = "TEST-NO-DATASET period validation"
 TEST_NO_DATASET_FS_MARKER = "THERMOps test: no feature dataset (period validation)"
 # Dataset 있는 다른 Feature Set 후보 (MODEL_FEATURE_SET_MISMATCH)
-ALT_FEATURE_SET_CANDIDATES = ("FS-TPL-MINIMAL", "FS-TPL-TWO-STAGE")
+ALT_FEATURE_SET_CANDIDATES = (FS_MINIMAL_ID, FS_TWO_STAGE_ID)
 
 
 def api(method: str, path: str, body: dict | None = None, timeout: int = 300) -> dict:
@@ -187,6 +194,8 @@ def ensure_model() -> str:
 def main() -> int:
     print(f"THERMOps prediction period validation test ({API_BASE})")
     try:
+        ensure_test_platform()
+        ensure_csv_ingested(api_data)
         range_data = ensure_feature_dataset()
         assert range_data["exists"], range_data
         min_at = range_data["min_target_at"]

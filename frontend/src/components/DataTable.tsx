@@ -12,14 +12,15 @@ interface DataTableProps<T> {
   data: T[];
   onRowClick?: (row: T) => void;
   loading?: boolean;
+  emptyMessage?: string;
 }
 
-export function DataTable<T extends Record<string, unknown>>({ columns, data, onRowClick, loading }: DataTableProps<T>) {
+export function DataTable<T extends Record<string, unknown>>({ columns, data, onRowClick, loading, emptyMessage }: DataTableProps<T>) {
   if (loading) {
     return <div className="bg-white rounded-lg border p-8 text-center text-slate-400">로딩 중...</div>;
   }
   if (!data.length) {
-    return <div className="bg-white rounded-lg border p-8 text-center text-slate-400">데이터가 없습니다.</div>;
+    return <div className="bg-white rounded-lg border p-8 text-center text-slate-500 text-sm">{emptyMessage || "데이터가 없습니다."}</div>;
   }
   return (
     <div className="bg-white rounded-lg border border-slate-200 overflow-hidden shadow-sm">

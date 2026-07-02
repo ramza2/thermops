@@ -9,9 +9,15 @@ import sys
 import urllib.error
 import urllib.parse
 import urllib.request
+from pathlib import Path
+
+_SCRIPTS = Path(__file__).resolve().parent
+if str(_SCRIPTS) not in sys.path:
+    sys.path.insert(0, str(_SCRIPTS))
+from test_fixtures import FS_LAG_ROLL_ID, ensure_csv_ingested, ensure_test_platform
 
 API_BASE = os.environ.get("THERMOOPS_API_BASE", "http://localhost:8000/api/v1")
-FEATURE_SET_ID = os.environ.get("THERMOOPS_FEATURE_SET_ID", "FS-TPL-LAG-ROLL")
+FEATURE_SET_ID = os.environ.get("THERMOOPS_FEATURE_SET_ID", FS_LAG_ROLL_ID)
 
 
 def api(method: str, path: str) -> dict:
@@ -89,6 +95,8 @@ def check_filter_and_lineage(job_id: str) -> None:
 def main() -> int:
     print(f"THERMOps feature build jobs test ({API_BASE})")
     try:
+        ensure_test_platform()
+        ensure_csv_ingested(api)
         job_id = check_list_api()
         check_filter_and_lineage(job_id)
         print("\nPASSED: feature build jobs API")

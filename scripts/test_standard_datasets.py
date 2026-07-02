@@ -15,7 +15,13 @@ from pathlib import Path
 _SCRIPTS = Path(__file__).resolve().parent
 if str(_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS))
-from test_fixtures import resolve_heat_source_id
+from test_fixtures import (
+    DST_FACILITY_ID,
+    DST_HEAT_CODE,
+    DST_HEAT_ID,
+    ensure_test_standard_datasets,
+    resolve_heat_source_id,
+)
 
 API_BASE = os.environ.get("THERMOOPS_API_BASE", "http://localhost:8000/api/v1")
 HEAT_SOURCE_ID = ""
@@ -51,7 +57,7 @@ def test_list_dataset_types() -> None:
     items = data.get("items") or []
     assert len(items) >= 5, len(items)
     codes = {i["dataset_type_code"] for i in items}
-    assert "HEAT_DEMAND_ACTUAL" in codes, codes
+    assert DST_HEAT_CODE in codes, codes
     print(f"  [ok] standard dataset list ({len(items)}건)")
 
 
@@ -70,7 +76,7 @@ def test_target_tables_active_only() -> None:
 
 
 def test_heat_columns_and_validate() -> None:
-    detail = api("GET", "/standard-dataset-types/DST-HEAT-DEMAND-ACTUAL?include_columns=true")
+    detail = api("GET", f"/standard-dataset-types/{DST_HEAT_ID}?include_columns=true")
     cols = {c["column_name"] for c in detail.get("columns") or []}
     assert {"site_id", "measured_at", "heat_demand"}.issubset(cols), cols
     valid = api("POST", "/standard-dataset-types/validate-target-table", {"target_table": "heat_demand_actual"})
@@ -142,7 +148,7 @@ def test_infer_standard_roles() -> None:
 def test_recipe_availability_on_detail() -> None:
     detail = api(
         "GET",
-        "/standard-dataset-types/DST-HEAT-DEMAND-ACTUAL?include_recipe_availability=true",
+        f"/standard-dataset-types/{DST_HEAT_ID}?include_recipe_availability=true",
     )
     readiness = detail.get("recipe_readiness")
     assert readiness and readiness.get("templates"), readiness
@@ -151,7 +157,7 @@ def test_recipe_availability_on_detail() -> None:
 
 def test_activate_missing_physical_fails() -> None:
     types = api("GET", "/standard-dataset-types?status=PLANNED")
-    facility = next((i for i in types.get("items") or [] if i["dataset_type_code"] == "FACILITY_MASTER"), None)
+    facility = next((i for i in types.get("items") or [] if i["dataset_type_id"] == DST_FACILITY_ID), None)
     if not facility:
         print("  [skip] FACILITY_MASTER seed 없음")
         return
@@ -166,6 +172,7 @@ def test_activate_missing_physical_fails() -> None:
 
 def main() -> int:
     global HEAT_SOURCE_ID
+    ensure_test_standard_datasets()
     HEAT_SOURCE_ID = resolve_heat_source_id(api)
     print(f"  [fixture] heat source={HEAT_SOURCE_ID}")
     tests = [

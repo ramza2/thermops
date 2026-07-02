@@ -11,6 +11,12 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from base64 import b64encode
+from pathlib import Path
+
+_SCRIPTS = Path(__file__).resolve().parent
+if str(_SCRIPTS) not in sys.path:
+    sys.path.insert(0, str(_SCRIPTS))
+from test_fixtures import FS_LAG_ROLL_ID, ensure_test_platform
 
 API_BASE = os.environ.get("THERMOOPS_API_BASE", "http://localhost:8000/api/v1")
 AIRFLOW_BASE = os.environ.get("AIRFLOW_BASE_URL", "http://localhost:8080")
@@ -134,7 +140,7 @@ def create_computed_candidate() -> str:
 
     body = {
         "model_version_id": mv_id,
-        "feature_set_id": "FS-TPL-LAG-ROLL",
+        "feature_set_id": FS_LAG_ROLL_ID,
         "baseline_start_at": "2026-05-22T00:00:00",
         "baseline_end_at": "2026-06-05T23:00:00",
         "current_start_at": "2026-06-06T00:00:00",
@@ -175,6 +181,7 @@ def main() -> int:
     print(f"THERMOps retraining Airflow test ({API_BASE})")
     restored = False
     try:
+        ensure_test_platform()
         wait_for_services()
 
         dags = airflow_get("/dags?limit=100")

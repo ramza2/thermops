@@ -15,6 +15,14 @@ from pathlib import Path
 _SCRIPTS = Path(__file__).resolve().parent
 if str(_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS))
+from test_fixtures import (
+    FS_LAG_ROLL_ID,
+    TRC_LGBM_ID,
+    ensure_csv_ingested,
+    ensure_feature_dataset_built,
+    ensure_test_platform,
+    ensure_test_training_configs,
+)
 from test_http_debug import api_error_summary
 
 API_BASE = os.environ.get("THERMOOPS_API_BASE", "http://localhost:8000/api/v1")
@@ -22,7 +30,7 @@ DB_URL = os.environ.get(
     "DATABASE_URL",
     "postgresql://thermops:thermops@localhost:5432/thermops",
 )
-FEATURE_SET_ID = os.environ.get("THERMOOPS_FEATURE_SET_ID", "FS-TPL-LAG-ROLL")
+FEATURE_SET_ID = os.environ.get("THERMOOPS_FEATURE_SET_ID", FS_LAG_ROLL_ID)
 
 
 def api(method: str, path: str, body: dict | None = None, timeout: int = 300) -> dict:
@@ -87,14 +95,7 @@ def ensure_schema() -> None:
 
 
 def ensure_feature_dataset() -> None:
-    count = psql_scalar(
-        f"SELECT COUNT(*) FROM tb_feature_dataset WHERE feature_json->>'feature_set_id' = '{FEATURE_SET_ID}'"
-    )
-    if count and int(count) > 0:
-        print(f"  [feature] existing rows={count}")
-        return
-    print("  [feature] building feature dataset...")
-    api("POST", f"/feature-build-jobs?feature_set_id={FEATURE_SET_ID}", timeout=180)
+    ensure_feature_dataset_built(api, FEATURE_SET_ID, timeout=180)
 
 
 def find_compatible_model_version(feature_set_id: str) -> str | None:
@@ -118,16 +119,22 @@ def ensure_trained_model() -> str:
         return row
 
     print("  [train] no compatible model found, running LightGBM training...")
+    ensure_test_training_configs()
     configs = api("GET", "/training-configs")
     config_id = next(
-        (
-            c["config_id"]
-            for c in configs
-            if c.get("feature_set_id") == FEATURE_SET_ID
-            and "lightgbm" in c.get("algorithm", "").lower()
-        ),
+        (c["config_id"] for c in configs if c.get("config_id") == TRC_LGBM_ID),
         None,
     )
+    if not config_id:
+        config_id = next(
+            (
+                c["config_id"]
+                for c in configs
+                if c.get("feature_set_id") == FEATURE_SET_ID
+                and "lightgbm" in c.get("algorithm", "").lower()
+            ),
+            None,
+        )
     if not config_id:
         config_id = next(
             (c["config_id"] for c in configs if c.get("feature_set_id") == FEATURE_SET_ID),
@@ -155,6 +162,8 @@ def prediction_period() -> tuple[str, str]:
 def main() -> int:
     print(f"THERMOps batch prediction test ({API_BASE})")
     try:
+        ensure_test_platform()
+        ensure_csv_ingested(api)
         ensure_schema()
         models = api("GET", "/models")
         print(f"  [list] models: {len(models)}")

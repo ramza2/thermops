@@ -10,13 +10,24 @@ import sys
 import urllib.error
 import urllib.parse
 import urllib.request
+from pathlib import Path
+
+_SCRIPTS = Path(__file__).resolve().parent
+if str(_SCRIPTS) not in sys.path:
+    sys.path.insert(0, str(_SCRIPTS))
+from test_fixtures import (
+    FS_TWO_STAGE_ID,
+    ensure_csv_ingested,
+    ensure_test_calendar,
+    ensure_test_platform,
+)
 
 API_BASE = os.environ.get("THERMOOPS_API_BASE", "http://localhost:8000/api/v1")
 DB_URL = os.environ.get(
     "DATABASE_URL",
     "postgresql://thermops:thermops@localhost:5432/thermops",
 )
-FEATURE_SET_ID = os.environ.get("THERMOOPS_FEATURE_SET_ID", "FS-TPL-TWO-STAGE")
+FEATURE_SET_ID = os.environ.get("THERMOOPS_FEATURE_SET_ID", FS_TWO_STAGE_ID)
 
 
 def api(method: str, path: str, body: dict | None = None) -> dict:
@@ -36,25 +47,7 @@ def api(method: str, path: str, body: dict | None = None) -> dict:
 
 
 def ensure_calendar_seed() -> None:
-    sql = """
-    INSERT INTO tb_calendar (calendar_date, day_of_week, is_weekend, is_holiday, holiday_name, season)
-    SELECT d::date, EXTRACT(DOW FROM d)::int,
-      CASE WHEN EXTRACT(DOW FROM d) IN (0,6) THEN 'Y' ELSE 'N' END,
-      CASE WHEN d::date IN ('2026-05-05','2026-06-06') THEN 'Y' ELSE 'N' END,
-      NULL,
-      CASE WHEN EXTRACT(MONTH FROM d) IN (6,7,8) THEN 'SUMMER' WHEN EXTRACT(MONTH FROM d) IN (12,1,2) THEN 'WINTER' ELSE 'SHOULDER' END
-    FROM generate_series('2026-05-01'::date, '2026-07-31'::date, '1 day') d
-    ON CONFLICT (calendar_date) DO NOTHING;
-    """
-    try:
-        subprocess.run(
-            ["docker", "exec", "-i", "thermops-postgres", "psql", "-U", "thermops", "-d", "thermops", "-c", sql],
-            check=True,
-            capture_output=True,
-            text=True,
-        )
-    except Exception:
-        pass
+    ensure_test_calendar()
 
 
 def resolve_feature_set_id() -> str:
@@ -134,6 +127,8 @@ def sample_feature_json(dataset_version_id: str) -> dict | None:
 def main() -> int:
     print(f"THERMOps feature build test ({API_BASE})")
     try:
+        ensure_test_platform()
+        ensure_csv_ingested(api)
         ensure_calendar_seed()
         fs_id = resolve_feature_set_id()
         print(f"  feature_set_id={fs_id}")

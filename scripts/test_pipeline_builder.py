@@ -15,7 +15,17 @@ from pathlib import Path
 _SCRIPTS = Path(__file__).resolve().parent
 if str(_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS))
-from test_fixtures import heat_pipeline_node_config, resolve_heat_source_id
+from test_fixtures import (
+    PT_BATCH_ID,
+    PT_FEATURE_BUILD_CODE,
+    PT_FULL_CODE,
+    PT_FULL_ID,
+    PT_RETRAINING_ID,
+    ensure_test_pipeline_templates,
+    heat_pipeline_node_config,
+    resolve_feature_build_template_id,
+    resolve_lag_roll_feature_set_id,
+)
 
 API_BASE = os.environ.get("THERMOOPS_API_BASE", "http://localhost:8000/api/v1")
 
@@ -50,12 +60,12 @@ def test_template_list() -> None:
     items = data.get("items") or []
     assert len(items) >= 3, len(items)
     codes = {i["template_code"] for i in items}
-    assert "FULL_OPERATION_PIPELINE" in codes, codes
+    assert PT_FULL_CODE in codes, codes
     print(f"  [ok] pipeline templates ({len(items)}건)")
 
 
 def test_full_template_detail() -> None:
-    data = api("GET", "/pipeline-templates/PT-FULL-OPERATION")
+    data = api("GET", f"/pipeline-templates/{PT_FULL_ID}")
     flow = data.get("flow") or {}
     nodes = flow.get("nodes") or []
     edges = flow.get("edges") or []
@@ -66,7 +76,7 @@ def test_full_template_detail() -> None:
 
 def test_create_definition() -> str:
     body = {
-        "template_id": "PT-FEATURE-BUILD",
+        "template_id": resolve_feature_build_template_id(),
         "pipeline_name": f"R8-test-{uuid.uuid4().hex[:6]}",
         "description": "R8 automated test",
         "node_config": heat_pipeline_node_config(api),
@@ -87,7 +97,7 @@ def test_get_definition(pipeline_id: str) -> None:
 
 def test_validate_missing_required() -> None:
     body = {
-        "template_id": "PT-BATCH-PREDICTION",
+        "template_id": PT_BATCH_ID,
         "pipeline_name": f"R8-invalid-{uuid.uuid4().hex[:6]}",
         "node_config": {},
     }
@@ -111,8 +121,8 @@ def test_validate_and_activate(pipeline_id: str) -> None:
 def test_runtime_preview(pipeline_id: str) -> None:
     data = api("POST", f"/pipeline-definitions/{pipeline_id}/runtime-preview")
     params = data.get("runtime_params") or {}
-    assert params.get("template_code") == "FEATURE_BUILD_PIPELINE", params
-    assert params.get("feature_set_id") == "FS-TPL-LAG-ROLL", params
+    assert params.get("template_code") == PT_FEATURE_BUILD_CODE, params
+    assert params.get("feature_set_id") == resolve_lag_roll_feature_set_id(), params
     print("  [ok] runtime preview")
 
 
@@ -126,7 +136,7 @@ def test_node_options() -> None:
 
 def test_planned_template_create_blocked() -> None:
     body = {
-        "template_id": "PT-RETRAINING",
+        "template_id": PT_RETRAINING_ID,
         "pipeline_name": f"R8-planned-{uuid.uuid4().hex[:6]}",
     }
     resp = api("POST", "/pipeline-definitions", body, expect_fail=True)
@@ -157,6 +167,7 @@ def main() -> int:
         test_airflow_list_unchanged,
     ]
     print("THERMOps pipeline builder tests (R8)")
+    ensure_test_pipeline_templates()
     failed = 0
     pipeline_id: str | None = None
     for fn in tests:

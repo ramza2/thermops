@@ -699,7 +699,9 @@ async def run_drift_detection(db: AsyncSession, params: DriftCheckParams) -> dic
         baseline_start, baseline_end, current_start, current_end = _default_periods()
 
     site_ids = params.site_ids
-    feature_set_id = params.feature_set_id or "FS-TPL-LAG-ROLL"
+    if not params.feature_set_id:
+        raise ValueError("feature_set_id가 필요합니다. Drift 점검 전 Feature Set을 지정하세요.")
+    feature_set_id = params.feature_set_id
 
     performance = await detect_performance_drift(
         db, mv.model_version_id, site_ids, current_start, current_end, thresholds

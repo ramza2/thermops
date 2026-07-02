@@ -10,9 +10,20 @@ import urllib.error
 import urllib.parse
 import urllib.request
 import uuid
+from pathlib import Path
+
+_SCRIPTS = Path(__file__).resolve().parent
+if str(_SCRIPTS) not in sys.path:
+    sys.path.insert(0, str(_SCRIPTS))
+from test_fixtures import (
+    FS_LAG_ROLL_ID,
+    ensure_csv_ingested,
+    ensure_feature_dataset_built,
+    ensure_test_platform,
+)
 
 API_BASE = os.environ.get("THERMOOPS_API_BASE", "http://localhost:8000/api/v1")
-TPL_FEATURE_SET_ID = os.environ.get("THERMOOPS_FEATURE_SET_ID", "FS-TPL-LAG-ROLL")
+TPL_FEATURE_SET_ID = os.environ.get("THERMOOPS_FEATURE_SET_ID", FS_LAG_ROLL_ID)
 TEST_MARKER = "THERMOps test: legacy replace"
 
 
@@ -172,6 +183,8 @@ def test_tpl_build_success() -> None:
 def main() -> int:
     print(f"THERMOps feature set legacy replace test ({API_BASE})")
     try:
+        ensure_test_platform()
+        ensure_csv_ingested(api)
         test_dry_run_mapping()
         test_apply_updates_features()
         test_duplicate_removal()

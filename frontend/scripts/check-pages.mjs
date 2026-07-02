@@ -10,7 +10,6 @@ const PATHS = [
   "/feature-recipes",
   "/feature-recipes/new",
   "/feature-sets",
-  "/feature-sets/FS-TPL-LAG-ROLL",
   "/models/training-jobs",
   "/predictions/jobs",
   "/predictions/results",
@@ -36,8 +35,9 @@ for (const path of PATHS) {
   if (path === "/features") {
     await page.getByText("신규 Feature 사용 절차").first().waitFor({ state: "visible", timeout: 60000 });
     await page.getByText("Recipe Engine").first().waitFor({ state: "visible", timeout: 30000 });
-    await page.locator("th", { hasText: "등록 유형" }).first().waitFor({ state: "visible", timeout: 30000 });
-    await page.locator("th", { hasText: "계산식 메모" }).first().waitFor({ state: "visible", timeout: 30000 });
+    // 운영 seed가 비어 있을 때는 테이블 자체가 렌더링되지 않을 수 있으므로,
+    // 컬럼 헤더(th)는 고정 값으로 검증하지 않고 빈 상태 문구만 확인한다.
+    await page.getByText(/데이터가 없습니다/).first().waitFor({ state: "visible", timeout: 30000 });
   }
   if (path === "/feature-recipes") {
     await page.getByText("Feature Recipe").first().waitFor({ state: "visible", timeout: 30000 });
@@ -56,6 +56,9 @@ for (const path of PATHS) {
     await page.getByText("학습 데이터셋 유형 등록").first().waitFor({ state: "visible", timeout: 30000 });
     await page.getByText("물리 테이블을 자동 생성하지 않습니다").first().waitFor({ state: "visible", timeout: 30000 });
   }
+  if (path === "/data/sources") {
+    await page.getByText("신규 등록").first().waitFor({ state: "visible", timeout: 30000 });
+  }
   if (path === "/data/mappings") {
     await page.getByText("대상 테이블은 표준 대상 테이블 목록에서 선택합니다").first().waitFor({ state: "visible", timeout: 30000 });
     await page.getByText("Column Role").first().waitFor({ state: "visible", timeout: 30000 });
@@ -65,30 +68,8 @@ for (const path of PATHS) {
     await page.getByText("Preview 결과는 저장하지 않습니다").first().waitFor({ state: "visible", timeout: 30000 });
     await page.getByText("row step 기반").first().waitFor({ state: "visible", timeout: 30000 });
   }
-  if (path === "/feature-sets/FS-TPL-LAG-ROLL") {
-    await page.waitForTimeout(2000);
-    const lineage = await page.getByText("Feature Lineage").count();
-    const buildHistory = await page.getByText("최근 Feature Build 이력").count();
-    const quality = await page.getByText("Feature 품질 검증").count();
-    const regCol = await page.locator("th", { hasText: "등록 유형" }).count();
-    const tplGuard = await page.getByText("공식 템플릿 Feature Set").count();
-    if (!lineage || !buildHistory) {
-      errors.push(`${path}: Feature Lineage / Build history section missing`);
-    }
-    if (!quality) {
-      errors.push(`${path}: Feature Quality section missing`);
-    }
-    if (!regCol) {
-      errors.push(`${path}: Feature list registration column missing`);
-    }
-    if (!tplGuard) {
-      errors.push(`${path}: TPL protection notice missing`);
-    }
-    const recipeBuildDetail = await page.getByText("Recipe Engine Build 상세").count();
-    const lagNullNote = await page.getByText("LAG/ROLLING Feature의 초기 null").count();
-    if (!recipeBuildDetail || !lagNullNote) {
-      errors.push(`${path}: Recipe Engine Build detail / LAG null notice missing`);
-    }
+  if (path === "/feature-sets") {
+    await page.getByText("신규 Feature Set").first().waitFor({ state: "visible", timeout: 30000 });
   }
   if (path === "/pipeline-builder") {
     await page.getByText("Pipeline Builder").first().waitFor({ state: "visible", timeout: 30000 });
@@ -109,7 +90,9 @@ for (const path of PATHS) {
   }
   if (path === "/ops/pipeline-runs") {
     await page.getByText("Pipeline Builder에서 실행 설정").first().waitFor({ state: "visible", timeout: 30000 });
-    await page.locator("th", { hasText: "실행 출처" }).first().waitFor({ state: "visible", timeout: 30000 });
+    // seed가 비어 있을 때는 목록 테이블이 렌더링되지 않을 수 있어,
+    // 컬럼 헤더(th)보다 빈 상태 문구만 확인한다.
+    await page.getByText(/데이터가 없습니다/).first().waitFor({ state: "visible", timeout: 30000 });
   }
 }
 

@@ -9,14 +9,28 @@ import subprocess
 import sys
 import urllib.error
 import urllib.request
+from pathlib import Path
+
+_SCRIPTS = Path(__file__).resolve().parent
+if str(_SCRIPTS) not in sys.path:
+    sys.path.insert(0, str(_SCRIPTS))
+from test_fixtures import (
+    FS_LAG_ROLL_ID,
+    TRC_LGBM_ID,
+    ensure_csv_ingested,
+    ensure_feature_dataset_built,
+    ensure_test_platform,
+    ensure_test_training_configs,
+    resolve_lgbm_training_config_id,
+)
 
 API_BASE = os.environ.get("THERMOOPS_API_BASE", "http://localhost:8000/api/v1")
 DB_URL = os.environ.get(
     "DATABASE_URL",
     "postgresql://thermops:thermops@localhost:5432/thermops",
 )
-FEATURE_SET_ID = os.environ.get("THERMOOPS_FEATURE_SET_ID", "FS-TPL-LAG-ROLL")
-TRAINING_CONFIG_ID = os.environ.get("THERMOOPS_TRAINING_CONFIG_ID", "TRC-TPL-LAG-ROLL")
+FEATURE_SET_ID = os.environ.get("THERMOOPS_FEATURE_SET_ID", FS_LAG_ROLL_ID)
+TRAINING_CONFIG_ID = os.environ.get("THERMOOPS_TRAINING_CONFIG_ID", TRC_LGBM_ID)
 
 
 def api(method: str, path: str, body: dict | None = None, timeout: int = 300) -> dict:
@@ -58,41 +72,11 @@ def psql_scalar(sql: str) -> str:
 
 
 def ensure_feature_dataset() -> None:
-    count = psql_scalar(
-        f"SELECT COUNT(*) FROM tb_feature_dataset WHERE feature_json->>'feature_set_id' = '{FEATURE_SET_ID}'"
-    )
-    if count and int(count) > 0:
-        print(f"  [feature] existing rows={count}")
-        return
-
-    print("  [feature] building feature dataset...")
-    api("POST", f"/feature-build-jobs?feature_set_id={FEATURE_SET_ID}", timeout=180)
-    count = psql_scalar(
-        f"SELECT COUNT(*) FROM tb_feature_dataset WHERE feature_json->>'feature_set_id' = '{FEATURE_SET_ID}'"
-    )
-    if not count or int(count) <= 0:
-        raise RuntimeError("Feature Dataset이 없습니다. Feature 생성을 먼저 실행하세요.")
-
-
-def ensure_training_configs_seed() -> None:
-    sql = """
-    INSERT INTO tb_training_config (config_id, config_name, feature_set_id, algorithm, train_period_months, validation_period_months, hyperparams) VALUES
-    ('TRC-TPL-LAG-ROLL', 'Lag/Rolling LightGBM 학습', 'FS-TPL-LAG-ROLL', 'lightgbm', 1, 1, '{"validation_ratio":0.2,"n_estimators":80,"learning_rate":0.05,"max_depth":6}')
-    ON CONFLICT DO NOTHING;
-    """
-    try:
-        subprocess.run(
-            ["docker", "exec", "-i", "thermops-postgres", "psql", "-U", "thermops", "-d", "thermops", "-c", sql],
-            check=True,
-            capture_output=True,
-            text=True,
-        )
-    except Exception:
-        pass
+    ensure_feature_dataset_built(api, FEATURE_SET_ID, timeout=180)
 
 
 def resolve_training_config_id() -> str:
-    ensure_training_configs_seed()
+    ensure_test_training_configs()
     configs = api("GET", "/training-configs")
     for cfg in configs:
         if cfg.get("config_id") == TRAINING_CONFIG_ID:
@@ -134,6 +118,8 @@ def ensure_minio_bucket() -> None:
 def main() -> int:
     print(f"THERMOps model training test ({API_BASE})")
     try:
+        ensure_test_platform()
+        ensure_csv_ingested(api)
         ensure_minio_bucket()
         feature_sets = api("GET", "/feature-sets")
         print(f"  [list] feature sets: {len(feature_sets)}")

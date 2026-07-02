@@ -174,18 +174,21 @@ docker compose -f docker-compose.traefik.yml --env-file .env.deploy exec backend
 
 또는 호스트에서 `THERMOPS_DEPLOY_ENV=clean python scripts/reset_clean_deploy.py --yes` (DB 접근 가능 시)
 
-### 6.3 Clean seed에 포함되는 것
+### 6.3 Clean seed에 포함되는 것 (R9-S2-0)
 
-| 유지 | 비움 (clean seed에 없음) |
+| 유지 (운영 seed) | 비움 (사용자 등록) |
 |------|--------------------------|
-| 지사·기상권역·공통코드 | 데이터 소스·매핑 (UI/API에서 등록) |
-| 표준 데이터셋·파이프라인 템플릿 | 적재 데이터 (`tb_heat_demand_actual`, `tb_weather_observation`) |
-| Feature 정의·Feature Set 템플릿 | Feature 생성 결과 (`tb_feature_dataset`) |
-| Training Config 템플릿 (LGBM/CatBoost/2-Stage) | 학습·모델·Registry |
-| 시스템 설정·캘린더 | 예측·매칭·성능 지표 |
-| | 파이프라인·Drift·재학습 후보·품질 이력 |
+| 공통코드 (`tb_common_code`) | 데이터 소스·매핑 |
+| 시스템 설정 (`tb_system_config`) | 표준 데이터셋·표준 컬럼 |
+| | Feature·Feature Set·Feature Recipe |
+| | Dataset Version·Feature Build 결과 |
+| | 학습 설정·모델·Registry·예측·Drift |
+| | Pipeline Template·Pipeline Definition |
+| | 지사·기상권역·캘린더·적재 데이터 |
 
-Demo 데이터가 필요하면 `db/init/02_seed_demo.sql`을 별도 스크립트로 적용 (운영 배포 기본 아님).
+**데모/test seed 없음:** `02_seed_demo.sql`은 제거되었습니다. `data/samples/` CSV는 테스트 fixture용이며 DB init에 사용되지 않습니다.
+
+기존 볼륨에 PoC seed가 남아 있으면 `docker compose down -v` 후 재기동하거나, `scripts/reset_clean_deploy.py`로 정리합니다.
 
 ---
 
@@ -207,10 +210,12 @@ Demo 데이터가 필요하면 `db/init/02_seed_demo.sql`을 별도 스크립트
 Clean 배포 직후 UI에서 확인할 수 있는 상태:
 
 1. **데이터 소스**: 등록된 소스 없음 — `/data/sources`에서 CSV·API·DB 소스 등록 후 매핑·적재
-2. **Feature Set**: `FS-TPL-LAG-ROLL` 등 템플릿 존재, Feature 생성 이력 없음
-3. **학습 설정**: `TRC-TPL-LAG-ROLL`, `TRC-TPL-CATBOOST`, `TRC-TPL-TWO-STAGE-CATBOOST` 존재, 학습 작업 없음
-4. **Registry / 예측 / Drift / 파이프라인**: 빈 목록
+2. **표준 데이터셋**: 등록된 유형 없음 — `/standard-datasets`에서 등록 (물리 테이블 생성 Wizard는 R9-S2-1 후속)
+3. **Feature Set / Recipe**: 빈 목록 — 사용자가 구성
+4. **학습 / Registry / 예측 / Drift / 파이프라인**: 빈 목록
 5. **대시보드**: 예측 이력 없음, Champion 모델 없음
+
+회귀 테스트·로컬 검증 시에는 `scripts/test_fixtures.py`가 `TEST-*` ID로 테스트 플랫폼 데이터를 런타임 생성합니다.
 
 → [THERMOps_사용자가이드_근거자료.md](./THERMOps_사용자가이드_근거자료.md) §3 실습 시나리오대로 진행
 

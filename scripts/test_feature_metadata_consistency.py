@@ -14,6 +14,15 @@ import ast
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+_SCRIPTS = Path(__file__).resolve().parent
+if str(_SCRIPTS) not in sys.path:
+    sys.path.insert(0, str(_SCRIPTS))
+from test_fixtures import (
+    FS_COMFORT_ID,
+    FS_LAG_ROLL_ID,
+    FS_TWO_STAGE_ID,
+    ensure_test_platform,
+)
 
 API_BASE = os.environ.get("THERMOOPS_API_BASE", "http://localhost:8000/api/v1")
 DB_URL = os.environ.get(
@@ -47,9 +56,9 @@ FORBIDDEN_IN_TPL = frozenset({
 })
 
 TPL_SETS = (
-    "FS-TPL-LAG-ROLL",
-    "FS-TPL-COMFORT",
-    "FS-TPL-TWO-STAGE",
+    FS_LAG_ROLL_ID,
+    FS_COMFORT_ID,
+    FS_TWO_STAGE_ID,
 )
 
 
@@ -158,7 +167,7 @@ def assert_keys_in_json(sample: dict, keys: list[str], context: str) -> None:
 
 def verify_feature_json_samples(by_id: dict[str, list[str]]) -> None:
     # LAG-ROLL: build or reuse
-    lag_roll = "FS-TPL-LAG-ROLL"
+    lag_roll = FS_LAG_ROLL_ID
     sample = sample_feature_json(lag_roll)
     if not sample or not all(k in sample for k in ("demand_lag_24h", "demand_ma_168h")):
         dsv = ensure_feature_build(lag_roll)
@@ -170,7 +179,7 @@ def verify_feature_json_samples(by_id: dict[str, list[str]]) -> None:
     )
 
     # TWO-STAGE: temperature_diff + comfort
-    two_stage = "FS-TPL-TWO-STAGE"
+    two_stage = FS_TWO_STAGE_ID
     sample_ts = sample_feature_json(two_stage)
     if not sample_ts or "temperature_diff_24h" not in sample_ts:
         dsv = ensure_feature_build(two_stage)
@@ -183,16 +192,17 @@ def verify_feature_json_samples(by_id: dict[str, list[str]]) -> None:
     )
 
     # COMFORT set list includes HDD/CDD even if TWO-STAGE already built
-    comfort_names = by_id.get("FS-TPL-COMFORT", [])
+    comfort_names = by_id.get(FS_COMFORT_ID, [])
     for name in ("heating_degree_days", "cooling_degree_days"):
         if name not in comfort_names:
-            raise RuntimeError(f"FS-TPL-COMFORT missing {name} in features list")
-    print("  [set] FS-TPL-COMFORT includes heating_degree_days, cooling_degree_days")
+            raise RuntimeError(f"{FS_COMFORT_ID} missing {name} in features list")
+    print(f"  [set] {FS_COMFORT_ID} includes heating_degree_days, cooling_degree_days")
 
 
 def main() -> int:
     print(f"THERMOps feature metadata consistency test ({API_BASE})")
     try:
+        ensure_test_platform()
         check_ml_computed_features()
 
         sets = api("GET", "/feature-sets")

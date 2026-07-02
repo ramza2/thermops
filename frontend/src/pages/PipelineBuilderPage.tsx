@@ -152,6 +152,7 @@ function PipelineBuilderList() {
         </p>
       </div>
       <DataTable
+        emptyMessage="등록된 Pipeline Definition이 없습니다. 새 Pipeline 만들기로 시작하세요."
         columns={[
           { key: "pipeline_name", header: "Pipeline 이름" },
           { key: "template_name", header: "Template" },

@@ -16,7 +16,12 @@ from uuid import uuid4
 _SCRIPTS = Path(__file__).resolve().parent
 if str(_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS))
-from test_fixtures import resolve_heat_mapping_id
+from test_fixtures import (
+    FS_TWO_STAGE_ID,
+    ensure_test_platform,
+    resolve_heat_mapping_id,
+    resolve_two_stage_feature_set_id,
+)
 
 API_BASE = os.environ.get("THERMOOPS_API_BASE", "http://localhost:8000/api/v1")
 HEAT_MAPPING_ID = ""
@@ -267,7 +272,7 @@ def test_lineage_template_metadata() -> None:
 
 def test_code_only_backward_compat() -> None:
     sets = api("GET", "/feature-sets")
-    fsid = "FS-TPL-TWO-STAGE"
+    fsid = resolve_two_stage_feature_set_id()
     for fs in sets:
         if fs.get("feature_set_id") == fsid or fs.get("feature_set_name") == "Two-Stage Ready Feature Set":
             fsid = fs["feature_set_id"]
@@ -282,6 +287,7 @@ def test_code_only_backward_compat() -> None:
 def main() -> int:
     global HEAT_MAPPING_ID
     print("test_feature_recipe_build_diagnostics.py")
+    ensure_test_platform()
     HEAT_MAPPING_ID = resolve_heat_mapping_id(api)
     print(f"  [fixture] heat mapping={HEAT_MAPPING_ID}")
     try:
