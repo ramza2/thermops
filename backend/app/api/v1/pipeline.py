@@ -7,6 +7,7 @@ from app.core.response import accepted, ok, paged
 from app.models.entities import PipelineRun
 from app.schemas.api import PipelineRunStatusUpdate, PipelineTrigger
 from app.services.airflow_client import AirflowClientError
+from app.services.pipeline_execution_service import attach_pipeline_metadata_to_runs
 from app.services.pipeline_service import (
     list_pipelines,
     retry_pipeline,
@@ -65,6 +66,7 @@ async def list_pipeline_runs(
             warning = await sync_run_from_airflow(db, r)
         items.append(run_dict(r, warning))
 
+    items = await attach_pipeline_metadata_to_runs(db, items)
     start = (page - 1) * size
     return paged(items[start:start + size], page, size, len(items))
 
@@ -81,7 +83,9 @@ async def get_pipeline_run(
     warning = None
     if sync_airflow and r.run_status in ("QUEUED", "RUNNING"):
         warning = await sync_run_from_airflow(db, r)
-    return ok(run_dict(r, warning))
+    data = run_dict(r, warning)
+    enriched = await attach_pipeline_metadata_to_runs(db, [data])
+    return ok(enriched[0] if enriched else data)
 
 
 @router.post("/pipeline-runs/{run_id}/status")

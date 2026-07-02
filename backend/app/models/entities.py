@@ -536,6 +536,29 @@ class PipelineDefinitionVersion(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime)
 
 
+class PipelineRunLink(Base):
+    __tablename__ = "tb_pipeline_run_link"
+    link_id: Mapped[str] = mapped_column(String(50), primary_key=True)
+    pipeline_id: Mapped[str] = mapped_column(String(50))
+    template_id: Mapped[str] = mapped_column(String(50))
+    pipeline_run_id: Mapped[str] = mapped_column(String(80))
+    airflow_dag_id: Mapped[str | None] = mapped_column(String(200))
+    airflow_run_id: Mapped[str | None] = mapped_column(String(250))
+    run_source: Mapped[str] = mapped_column(String(50), default="PIPELINE_DEFINITION")
+    run_status: Mapped[str] = mapped_column(String(50), default="REQUESTED")
+    runtime_params_snapshot: Mapped[dict | None] = mapped_column(JSONB)
+    node_config_snapshot: Mapped[dict | None] = mapped_column(JSONB)
+    validation_snapshot: Mapped[dict | None] = mapped_column(JSONB)
+    trigger_response_json: Mapped[dict | None] = mapped_column(JSONB)
+    error_message: Mapped[str | None] = mapped_column(Text)
+    requested_by: Mapped[str | None] = mapped_column(String(100))
+    requested_at: Mapped[datetime] = mapped_column(DateTime)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime)
+    created_at: Mapped[datetime] = mapped_column(DateTime)
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime)
+
+
 class CommonCode(Base):
     __tablename__ = "tb_common_code"
     code_group: Mapped[str] = mapped_column(String(50), primary_key=True)

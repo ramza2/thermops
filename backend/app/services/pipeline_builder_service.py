@@ -810,5 +810,5 @@ async def runtime_preview(db: AsyncSession, pipeline_id: str) -> dict[str, Any]:
         "airflow_dag_id": item.get("airflow_dag_id"),
         "template_code": item.get("template_code"),
         "runtime_params": params,
-        "note": "R8에서는 preview만 제공하며 실제 Airflow 실행은 연결하지 않습니다.",
+        "note": "Runtime Preview입니다. R9부터 POST .../run 으로 Airflow 실행을 연계할 수 있습니다.",
     }

@@ -9,11 +9,12 @@ import { Modal } from "@/components/Modal";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Pagination, LoadingState, ErrorState } from "@/components/Pagination";
 import { DateRangePicker, defaultDateRange } from "@/components/DateRangePicker";
-import { SearchPanel } from "@/components/SearchPanel";
+import { SearchPanel, SelectInput } from "@/components/SearchPanel";
 import { useToast } from "@/hooks/useToast";
 import { useRole } from "@/hooks/useRole";
 import { PermissionDeniedModal } from "@/components/PermissionDeniedModal";
 import { PageHeader } from "@/layouts/MainLayout";
+import { pipelineRunSourceLabel } from "@/utils/pipelineBuilderFormat";
 
 interface PipelineRun {
   pipeline_run_id: string;
@@ -29,6 +30,12 @@ interface PipelineRun {
   message: string | null;
   result_summary?: Record<string, unknown> | null;
   sync_warning?: string;
+  run_source?: string;
+  pipeline_definition_id?: string;
+  pipeline_name_from_definition?: string;
+  template_code?: string;
+  template_name?: string;
+  runtime_params_snapshot?: Record<string, unknown> | null;
 }
 
 interface Pipeline {
@@ -65,6 +72,7 @@ export default function PipelineRunsPage() {
   const [dateRange, setDateRange] = useState(defaultDateRange(14));
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [templateByDag, setTemplateByDag] = useState<Record<string, string>>({});
+  const [runSourceFilter, setRunSourceFilter] = useState("");
 
   useEffect(() => {
     getPipelineTemplates({ active_only: true })
@@ -79,10 +87,14 @@ export default function PipelineRunsPage() {
   }, []);
 
   const filterByDate = (rows: PipelineRun[]) => {
-    if (!dateRange.from && !dateRange.to) return rows;
+    let filtered = rows;
+    if (runSourceFilter) {
+      filtered = filtered.filter((r) => (r.run_source || "DIRECT_DAG") === runSourceFilter);
+    }
+    if (!dateRange.from && !dateRange.to) return filtered;
     const from = dateRange.from ? new Date(`${dateRange.from}T00:00:00`) : null;
     const to = dateRange.to ? new Date(`${dateRange.to}T23:59:59`) : null;
-    return rows.filter((r) => {
+    return filtered.filter((r) => {
       const started = new Date(r.started_at);
       if (from && started < from) return false;
       if (to && started > to) return false;
@@ -118,7 +130,7 @@ export default function PipelineRunsPage() {
     } finally {
       setLoading(false);
     }
-  }, [dateRange, page]);
+  }, [dateRange, page, runSourceFilter]);
 
   useEffect(() => { load(page); }, []);
 
@@ -242,9 +254,23 @@ export default function PipelineRunsPage() {
             colSpan: 2,
             element: <DateRangePicker from={dateRange.from} to={dateRange.to} onChange={(from, to) => setDateRange({ from, to })} />,
           },
+          {
+            label: "실행 출처",
+            element: (
+              <SelectInput
+                value={runSourceFilter}
+                onChange={setRunSourceFilter}
+                options={[
+                  { value: "", label: "전체" },
+                  { value: "PIPELINE_DEFINITION", label: "Pipeline Definition" },
+                  { value: "DIRECT_DAG", label: "수동 DAG" },
+                ]}
+              />
+            ),
+          },
         ]}
         onSearch={() => applyFilter(1)}
-        onReset={() => { setDateRange(defaultDateRange(14)); applyFilter(1); }}
+        onReset={() => { setDateRange(defaultDateRange(14)); setRunSourceFilter(""); applyFilter(1); }}
       />
 
       <DataTable
@@ -252,6 +278,21 @@ export default function PipelineRunsPage() {
         columns={[
           { key: "pipeline_run_id", header: "Run ID" },
           { key: "pipeline_name", header: "파이프라인" },
+          {
+            key: "pipeline_definition_id",
+            header: "Pipeline",
+            render: (r) => (r.pipeline_name_from_definition as string) || (r.pipeline_definition_id as string) || "-",
+          },
+          {
+            key: "template_code",
+            header: "Template",
+            render: (r) => (r.template_name as string) || (r.template_code as string) || "-",
+          },
+          {
+            key: "run_source",
+            header: "실행 출처",
+            render: (r) => pipelineRunSourceLabel(String(r.run_source || "DIRECT_DAG")),
+          },
           { key: "pipeline_type", header: "유형" },
           { key: "run_status", header: "상태", render: (r) => <StatusBadge status={r.run_status as string} /> },
           {
@@ -290,6 +331,12 @@ export default function PipelineRunsPage() {
             <div><dt className="text-slate-500">Run ID</dt><dd className="font-medium">{detail.pipeline_run_id}</dd></div>
             <div><dt className="text-slate-500">Airflow dag_run_id</dt><dd className="font-medium break-all">{detail.orchestrator_run_id || "-"}</dd></div>
             <div><dt className="text-slate-500">파이프라인</dt><dd className="font-medium">{detail.pipeline_name}</dd></div>
+            {detail.pipeline_definition_id && (
+              <div><dt className="text-slate-500">Pipeline Definition</dt><dd className="font-medium">{detail.pipeline_name_from_definition || detail.pipeline_definition_id}</dd></div>
+            )}
+            {detail.run_source && (
+              <div><dt className="text-slate-500">실행 출처</dt><dd>{pipelineRunSourceLabel(detail.run_source)}</dd></div>
+            )}
             <div><dt className="text-slate-500">유형</dt><dd>{detail.pipeline_type}</dd></div>
             <div><dt className="text-slate-500">상태</dt><dd><StatusBadge status={detail.run_status} /></dd></div>
             <div><dt className="text-slate-500">시작</dt><dd>{new Date(detail.started_at).toLocaleString("ko-KR")}</dd></div>
@@ -297,6 +344,16 @@ export default function PipelineRunsPage() {
             <div className="col-span-2"><dt className="text-slate-500">메시지</dt><dd className="mt-1 text-slate-700">{detail.message || "-"}</dd></div>
             {detail.sync_warning && (
               <div className="col-span-2"><dt className="text-slate-500">동기화 경고</dt><dd className="mt-1 text-amber-600 text-xs">{detail.sync_warning}</dd></div>
+            )}
+            {detail.runtime_params_snapshot && (
+              <div className="col-span-2">
+                <dt className="text-slate-500 mb-1">Runtime Params Snapshot</dt>
+                <dd>
+                  <pre className="text-xs bg-slate-50 border rounded p-3 overflow-auto max-h-48">
+                    {JSON.stringify(detail.runtime_params_snapshot, null, 2)}
+                  </pre>
+                </dd>
+              </div>
             )}
             {detail.result_summary && (
               <div className="col-span-2">

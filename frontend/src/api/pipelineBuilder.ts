@@ -3,6 +3,9 @@ import type {
   PipelineDefinition,
   PipelineDefinitionCreateRequest,
   PipelineNodeOptions,
+  PipelineRunLink,
+  PipelineRunRequest,
+  PipelineRunResponse,
   PipelineRuntimePreview,
   PipelineTemplate,
   PipelineValidationResult,
@@ -68,4 +71,28 @@ export async function getPipelineNodeOptions(params: {
 
 export async function getPipelineRuntimePreview(pipelineId: string): Promise<PipelineRuntimePreview> {
   return postApi(`/pipeline-definitions/${encodeURIComponent(pipelineId)}/runtime-preview`);
+}
+
+export async function runPipelineDefinition(
+  pipelineId: string,
+  payload: PipelineRunRequest = {},
+): Promise<PipelineRunResponse> {
+  return postApi(`/pipeline-definitions/${encodeURIComponent(pipelineId)}/run`, payload);
+}
+
+export async function getPipelineDefinitionRuns(
+  pipelineId: string,
+  params?: { limit?: number; status?: string },
+): Promise<{ items: PipelineRunLink[]; total: number }> {
+  return fetchApi(`/pipeline-definitions/${encodeURIComponent(pipelineId)}/runs`, params);
+}
+
+export async function getPipelineRunLinks(params?: {
+  pipeline_id?: string;
+  template_id?: string;
+  airflow_dag_id?: string;
+  run_status?: string;
+  limit?: number;
+}): Promise<{ items: PipelineRunLink[]; total: number }> {
+  return fetchApi("/pipeline-run-links", params);
 }

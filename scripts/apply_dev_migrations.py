@@ -292,6 +292,10 @@ MIGRATIONS = [
         "R8 pipeline builder seed",
         _load_sql("r8_pipeline_builder_seed.sql"),
     ),
+    (
+        "R9 pipeline run link schema",
+        _load_sql("r9_pipeline_run_link_schema.sql"),
+    ),
 ]
 
 

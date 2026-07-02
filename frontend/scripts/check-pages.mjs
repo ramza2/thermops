@@ -94,10 +94,22 @@ for (const path of PATHS) {
     await page.getByText("Pipeline Builder").first().waitFor({ state: "visible", timeout: 30000 });
     await page.getByText("새 Pipeline 만들기").first().waitFor({ state: "visible", timeout: 30000 });
     await page.getByText("Flow Chart").first().waitFor({ state: "visible", timeout: 30000 });
-    await page.getByText("Airflow DAG 동적 생성").first().waitFor({ state: "visible", timeout: 30000 });
+    await page.getByText("trigger할 수 있습니다").first().waitFor({ state: "visible", timeout: 30000 });
+    const openCount = await page.getByRole("button", { name: "열기" }).count();
+    if (openCount > 0) {
+      await page.getByRole("button", { name: "열기" }).first().click();
+      await page.waitForURL(/\/pipeline-builder\/[^/]+/, { timeout: 30000 });
+      await page.getByText("노드 설정").first().waitFor({ state: "visible", timeout: 30000 });
+      await page.getByText("최근 실행 이력").first().waitFor({ state: "visible", timeout: 30000 });
+      await page.getByText("실행 전 conf 확인").first().waitFor({ state: "visible", timeout: 30000 });
+      const hasRun = (await page.getByRole("button", { name: "실행" }).count())
+        + (await page.getByText("검증 후 실행 가능").count());
+      if (!hasRun) errors.push(`${path}: 실행/검증 후 실행 가능 UI missing`);
+    }
   }
   if (path === "/ops/pipeline-runs") {
     await page.getByText("Pipeline Builder에서 실행 설정").first().waitFor({ state: "visible", timeout: 30000 });
+    await page.locator("th", { hasText: "실행 출처" }).first().waitFor({ state: "visible", timeout: 30000 });
   }
 }
 

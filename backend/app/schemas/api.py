@@ -139,6 +139,13 @@ class PipelineDefinitionValidateRequest(BaseModel):
     node_config: dict[str, dict[str, Any]] | None = None
 
 
+class PipelineDefinitionRunRequest(BaseModel):
+    requested_by: str | None = None
+    run_label: str | None = None
+    runtime_params_override: dict[str, Any] | None = None
+    dry_run: bool = False
+
+
 # Feature
 class FeatureCreate(BaseModel):
     feature_name: str

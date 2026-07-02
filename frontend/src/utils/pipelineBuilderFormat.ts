@@ -96,3 +96,52 @@ export function scheduleTypeLabel(t?: string): string {
   if (t === "CRON") return "스케줄";
   return t || "수동";
 }
+
+const RUN_STATUS_LABELS: Record<string, string> = {
+  REQUESTED: "요청됨",
+  QUEUED: "대기",
+  RUNNING: "실행 중",
+  SUCCESS: "성공",
+  FAILED: "실패",
+  CANCELLED: "취소",
+  UNKNOWN: "알 수 없음",
+  DRY_RUN: "dry-run",
+};
+
+const RUN_SOURCE_LABELS: Record<string, string> = {
+  PIPELINE_DEFINITION: "Pipeline Definition",
+  DIRECT_DAG: "수동 DAG",
+  RETRY: "재시도",
+};
+
+export function pipelineRunStatusLabel(s: string): string {
+  return RUN_STATUS_LABELS[s] || s;
+}
+
+export function pipelineRunSourceLabel(s: string): string {
+  return RUN_SOURCE_LABELS[s] || s;
+}
+
+export function pipelineRunStatusClass(s: string): string {
+  switch (s) {
+    case "SUCCESS":
+      return "bg-emerald-100 text-emerald-800 border-emerald-200";
+    case "FAILED":
+      return "bg-red-100 text-red-800 border-red-200";
+    case "RUNNING":
+    case "QUEUED":
+    case "REQUESTED":
+      return "bg-blue-100 text-blue-800 border-blue-200";
+    default:
+      return "bg-slate-100 text-slate-700 border-slate-200";
+  }
+}
+
+export function formatPipelineRunDuration(minutes: number | null | undefined): string {
+  if (minutes == null) return "-";
+  return `${minutes}분`;
+}
+
+export function formatAirflowRunId(id: string | null | undefined): string {
+  return id || "-";
+}

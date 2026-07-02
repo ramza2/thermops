@@ -191,7 +191,9 @@ flowchart LR
 
 **R7 표준 데이터셋·매핑**: `/standard-datasets`에서 학습 데이터셋 유형·표준 컬럼·Recipe/Build 연결 가능성을 관리합니다. `/data/mappings`에서는 **표준 대상 테이블 목록**에서만 선택하며 Backend allowlist 검증이 적용됩니다. 물리 테이블은 R7에서 자동 생성하지 않습니다.
 
-**R8 Pipeline Builder**: `/pipeline-builder`에서 Pipeline Template Flow Chart를 확인하고 노드별 실행 파라미터를 저장합니다. R8은 **Airflow DAG 동적 생성·실제 실행 연결 없이** Definition 저장·검증·Runtime Params Preview만 제공합니다. 수동 DAG 실행·이력은 `/ops/pipeline-runs`에서 기존과 동일하게 사용합니다.
+**R8 Pipeline Builder**: `/pipeline-builder`에서 Pipeline Template Flow Chart를 확인하고 노드별 실행 파라미터를 저장합니다.
+
+**R9 Pipeline 실행 연계**: ACTIVE/VALIDATED Pipeline Definition에서 **실행** 버튼으로 연결된 `airflow_dag_id`를 trigger합니다. 실행 이력은 `tb_pipeline_run_link`와 `/ops/pipeline-runs` metadata로 확인합니다. 기존 DAG 수동 실행은 `DIRECT_DAG`로 구분됩니다.
 
 ---
 
@@ -401,11 +403,11 @@ flowchart LR
 |------|------|
 | **화면 목적** | Pipeline Template Flow Chart 확인, 노드별 실행 파라미터 저장·검증 |
 | **주요 입력값** | Template 선택, Pipeline 이름, 노드별 data_source/mapping/feature_set 등 |
-| **주요 버튼** | **새 Pipeline 만들기**, **저장**, **검증**, **활성화**, **Runtime Preview** |
-| **버튼 클릭 시 동작** | 저장→`PUT /pipeline-definitions/{id}`. 검증→`POST .../validate`. 활성화→검증 통과 후 `POST .../activate` |
-| **호출 API** | `GET /pipeline-templates`, `GET/POST/PUT /pipeline-definitions`, `GET /pipeline-node-options`, `POST .../runtime-preview` |
-| **결과 확인 위치** | Flow Chart 노드 상태, 검증 패널, Runtime Params JSON |
-| **주의할 점** | R8은 **Airflow 실행·DAG 동적 생성 없음**. 수동 실행은 `/ops/pipeline-runs` 사용 |
+| **주요 버튼** | **새 Pipeline 만들기**, **저장**, **검증**, **활성화**, **실행**, **실행 전 conf 확인**, **Runtime Preview** |
+| **버튼 클릭 시 동작** | 저장→`PUT /pipeline-definitions/{id}`. 검증→`POST .../validate`. **실행**→`POST .../run` (Airflow trigger). dry-run→`POST .../run` `dry_run=true` |
+| **호출 API** | `GET /pipeline-templates`, `GET/POST/PUT /pipeline-definitions`, `POST .../run`, `GET .../runs`, `GET /pipeline-node-options` |
+| **결과 확인 위치** | Flow Chart 노드 상태, 검증 패널, **최근 실행 이력**, Runtime Params / conf snapshot |
+| **주의할 점** | DRAFT는 실행 불가. **Airflow DAG 동적 생성 없음**. schedule_config는 저장만 됨 |
 | **선행 작업** | 데이터소스·매핑·표준 데이터셋·Feature Set 등 노드 참조 대상 준비 |
 | **후속 작업** | (R9+) Definition 기반 실행 연계 |
 
@@ -417,7 +419,7 @@ flowchart LR
 
 | 항목 | 내용 |
 |------|------|
-| **화면 목적** | Airflow DAG 실행 상태·이력 조회, 수동 트리거·실패 재시도. **Pipeline Builder**에서 실행 설정을 구성할 수 있음(R8) |
+| **화면 목적** | Airflow DAG 실행 상태·이력 조회, 수동 트리거·실패 재시도. Pipeline Definition 실행 이력(metadata) 표시 |
 | **주요 입력값** | 실행 기간 필터(기본 14일), 파이프라인 수동 실행 시 기준일(`dateRange.to`) |
 | **주요 버튼** | 파이프라인별 **{name} 수동 실행**, **새로고침**, 행 **상세** / **재시도**(FAILED), 확인 모달 **Airflow 실행** |
 | **버튼 클릭 시 동작** | 수동 실행→`POST /pipelines/{id}/trigger`. 재시도→`POST /pipeline-runs/{id}/retry`. QUEUED/RUNNING 시 10초 자동 새로고침(옵션) |

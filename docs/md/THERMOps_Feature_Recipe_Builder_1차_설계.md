@@ -1099,7 +1099,50 @@ python scripts/test_pipeline_builder.py
 
 ### 향후 (R9/R10)
 
-- Definition 기반 Airflow trigger·run history 연결
+- ~~Definition 기반 Airflow trigger·run history 연결~~ → **R9 완료 (부록 M)**
 - Drag & Drop 노드 편집·조건부 분기
 - 스케줄 등록
+
+---
+
+## 부록 M. Phase R9 구현 완료 (Pipeline Definition 기반 Airflow 실행 연계)
+
+R9부터 Pipeline Definition은 저장된 노드 설정과 실행 파라미터를 기반으로 **기존 Airflow DAG**를 trigger할 수 있다. THERMOps는 Airflow DAG 코드를 동적으로 생성하지 않고, runtime params snapshot을 Airflow conf로 전달하여 실행 이력과 Pipeline Definition을 연결한다.
+
+### 실행 정책
+
+| 상태 | 실행 |
+|------|------|
+| DRAFT | 불가 (검증 필요) |
+| VALIDATED / ACTIVE | 가능 |
+| ARCHIVED | 불가 |
+| PLANNED Template | 불가 |
+
+실행 전 `validate_pipeline_definition` 재실행. error 시 trigger 차단, warning은 허용.
+
+### DB
+
+- `tb_pipeline_run_link`: pipeline_id, template_id, pipeline_run_id, airflow_run_id, snapshot JSON
+
+### API
+
+- `POST /pipeline-definitions/{id}/run` (`dry_run` 지원)
+- `GET /pipeline-definitions/{id}/runs`
+- `GET /pipeline-run-links`, `GET /pipeline-run-links/{id}`, `POST .../sync-status`
+- `GET /pipeline-runs` 응답에 optional pipeline metadata (`run_source`, `template_code` 등)
+
+### Airflow conf 구조
+
+`thermops_context`, `node_config`, `runtime_params`, `schedule_config`, `validation_snapshot` + legacy flat keys (`feature_set_id` 등)
+
+### R9에서 하지 않는 것
+
+- DAG 동적 생성, Drag & Drop 편집, 실제 Airflow schedule 등록
+
+### 테스트
+
+```bash
+python scripts/apply_dev_migrations.py
+python scripts/test_pipeline_execution.py
+```
 

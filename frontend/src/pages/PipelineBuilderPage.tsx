@@ -1,15 +1,17 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { Eye, Plus, Save, CheckCircle, Sparkles, Archive } from "lucide-react";
+import { Eye, Plus, Save, CheckCircle, Sparkles, Archive, Play } from "lucide-react";
 import {
   activatePipelineDefinition,
   archivePipelineDefinition,
   createPipelineDefinition,
   getPipelineDefinition,
+  getPipelineDefinitionRuns,
   getPipelineDefinitions,
   getPipelineNodeOptions,
   getPipelineRuntimePreview,
   getPipelineTemplates,
+  runPipelineDefinition,
   updatePipelineDefinition,
   validatePipelineDefinition,
 } from "@/api/pipelineBuilder";
@@ -24,12 +26,17 @@ import { PageHeader } from "@/layouts/MainLayout";
 import type {
   PipelineDefinition,
   PipelineNodeOptions,
+  PipelineRunLink,
+  PipelineRunResponse,
   PipelineTemplate,
   PipelineValidationResult,
 } from "@/types/pipelineBuilder";
 import { R8_PIPELINE_NOTE } from "@/types/pipelineBuilder";
 import {
   nodeTypeLabel,
+  pipelineRunSourceLabel,
+  pipelineRunStatusClass,
+  pipelineRunStatusLabel,
   pipelineStatusClass,
   pipelineStatusLabel,
   pipelineTypeLabel,
@@ -226,6 +233,20 @@ function PipelineBuilderDetail({ pipelineId }: { pipelineId: string }) {
   const [runtimePreview, setRuntimePreview] = useState<Record<string, unknown> | null>(null);
   const [saving, setSaving] = useState(false);
   const [validating, setValidating] = useState(false);
+  const [recentRuns, setRecentRuns] = useState<PipelineRunLink[]>([]);
+  const [runOpen, setRunOpen] = useState(false);
+  const [running, setRunning] = useState(false);
+  const [lastRunResult, setLastRunResult] = useState<PipelineRunResponse | null>(null);
+  const [dryRunConf, setDryRunConf] = useState<Record<string, unknown> | null>(null);
+
+  const loadRuns = useCallback(async () => {
+    try {
+      const res = await getPipelineDefinitionRuns(pipelineId, { limit: 10 });
+      setRecentRuns(res.items);
+    } catch {
+      setRecentRuns([]);
+    }
+  }, [pipelineId]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -236,12 +257,13 @@ function PipelineBuilderDetail({ pipelineId }: { pipelineId: string }) {
       setValidation(item.validation_result || null);
       const first = item.flow?.nodes?.[0]?.node_id;
       setSelectedNodeId((prev) => prev || first || null);
+      await loadRuns();
     } catch {
       showToast("error", "Pipeline을 불러오지 못했습니다.");
     } finally {
       setLoading(false);
     }
-  }, [pipelineId, showToast]);
+  }, [pipelineId, showToast, loadRuns]);
 
   useEffect(() => {
     void load();
@@ -334,6 +356,37 @@ function PipelineBuilderDetail({ pipelineId }: { pipelineId: string }) {
     }
   };
 
+  const canRun = pipeline?.status === "ACTIVE" || pipeline?.status === "VALIDATED";
+
+  const handleDryRun = async () => {
+    try {
+      const res = await runPipelineDefinition(pipelineId, { dry_run: true, requested_by: "operator" });
+      setDryRunConf(res.airflow_conf || null);
+      showToast("success", "실행 전 conf 확인 완료 (dry-run)");
+    } catch {
+      showToast("error", "dry-run에 실패했습니다.");
+    }
+  };
+
+  const handleRun = async () => {
+    setRunning(true);
+    try {
+      await updatePipelineDefinition(pipelineId, { node_config: nodeConfig });
+      const res = await runPipelineDefinition(pipelineId, {
+        requested_by: "operator",
+        run_label: "수동 실행",
+      });
+      setLastRunResult(res);
+      setRunOpen(false);
+      showToast("success", res.message || `실행 요청 (${res.pipeline_run_id})`);
+      void load();
+    } catch (err: unknown) {
+      showToast("error", err instanceof Error ? err.message : "실행에 실패했습니다.");
+    } finally {
+      setRunning(false);
+    }
+  };
+
   if (loading && !pipeline) return <LoadingState />;
   if (!pipeline) return <ErrorState message="Pipeline을 찾을 수 없습니다." onRetry={() => void load()} />;
 
@@ -360,11 +413,23 @@ function PipelineBuilderDetail({ pipelineId }: { pipelineId: string }) {
               검증
             </Button>
             <Button variant="secondary" onClick={() => void handleRuntimePreview()}>Runtime Preview</Button>
+            <Button variant="secondary" onClick={() => void handleDryRun()}>실행 전 conf 확인</Button>
+            {canRun ? (
+              <Button icon={<Play className="w-4 h-4" />} onClick={() => setRunOpen(true)}>실행</Button>
+            ) : (
+              <Button variant="secondary" disabled title="ACTIVE 또는 VALIDATED 상태에서 실행 가능">
+                검증 후 실행 가능
+              </Button>
+            )}
             <Button icon={<Sparkles className="w-4 h-4" />} onClick={() => void handleActivate()}>활성화</Button>
             <Button variant="ghost" icon={<Archive className="w-4 h-4" />} onClick={() => void handleArchive()}>보관</Button>
           </div>
         }
       />
+      <div className="mb-3 text-xs text-slate-600 bg-blue-50 border border-blue-200 rounded-lg p-3 space-y-1">
+        <p>이 실행은 저장된 Pipeline Definition을 기준으로 기존 Airflow DAG를 trigger합니다.</p>
+        <p>Airflow DAG 파일은 동적으로 생성되지 않습니다. schedule_config는 저장만 되며 실제 Airflow 스케줄에는 반영되지 않습니다.</p>
+      </div>
       <div className="mb-3 flex flex-wrap gap-2 text-xs">
         <span className={`px-2 py-0.5 rounded border ${pipelineStatusClass(pipeline.status)}`}>
           {pipelineStatusLabel(pipeline.status)}
@@ -448,12 +513,78 @@ function PipelineBuilderDetail({ pipelineId }: { pipelineId: string }) {
         </div>
         <div className="border rounded-lg p-4 bg-white text-xs">
           <h3 className="font-semibold text-slate-800 mb-2">실행 파라미터 미리보기 (Runtime Preview)</h3>
-          <p className="text-slate-500 mb-2">R8에서는 Airflow 실행 없이 params preview만 제공합니다.</p>
+          <p className="text-slate-500 mb-2">Runtime Params Preview · 실행 전 conf 확인(dry-run) 지원</p>
           <pre className="bg-slate-50 border rounded p-2 overflow-x-auto text-[11px] max-h-48">
-            {JSON.stringify(runtimePreview || validation?.runtime_params_preview || {}, null, 2)}
+            {JSON.stringify(dryRunConf || runtimePreview || validation?.runtime_params_preview || {}, null, 2)}
           </pre>
         </div>
       </div>
+      <div className="mt-4 border rounded-lg p-4 bg-white">
+        <h3 className="text-sm font-semibold text-slate-800 mb-2">최근 실행 이력</h3>
+        {!recentRuns.length && <p className="text-xs text-slate-400">아직 Pipeline Definition 기반 실행 이력이 없습니다.</p>}
+        {recentRuns.length > 0 && (
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="text-left text-slate-500 border-b">
+                  <th className="py-1 pr-2">Run ID</th>
+                  <th className="py-1 pr-2">Airflow</th>
+                  <th className="py-1 pr-2">상태</th>
+                  <th className="py-1 pr-2">요청 시각</th>
+                  <th className="py-1">출처</th>
+                </tr>
+              </thead>
+              <tbody>
+                {recentRuns.map((r) => (
+                  <tr key={r.link_id} className="border-b border-slate-100">
+                    <td className="py-1 pr-2 font-mono">{r.pipeline_run_id}</td>
+                    <td className="py-1 pr-2">{r.airflow_run_id || "-"}</td>
+                    <td className="py-1 pr-2">
+                      <span className={`px-1.5 py-0.5 rounded border ${pipelineRunStatusClass(r.run_status)}`}>
+                        {pipelineRunStatusLabel(r.run_status)}
+                      </span>
+                    </td>
+                    <td className="py-1 pr-2">{String(r.requested_at || "").slice(0, 19)}</td>
+                    <td className="py-1">{pipelineRunSourceLabel(r.run_source)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        {lastRunResult && (
+          <p className="text-xs text-emerald-700 mt-2">
+            최근 실행: {lastRunResult.pipeline_run_id}
+            {lastRunResult.airflow_run_id ? ` · Airflow ${lastRunResult.airflow_run_id}` : ""}
+            {" · "}
+            <Link to="/ops/pipeline-runs" className="text-blue-600 hover:underline">실행 이력 보기</Link>
+          </p>
+        )}
+      </div>
+      <Modal
+        open={runOpen}
+        title="Pipeline Definition 실행"
+        onClose={() => setRunOpen(false)}
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setRunOpen(false)}>취소</Button>
+            <Button icon={<Play className="w-4 h-4" />} onClick={() => void handleRun()} disabled={running}>
+              {running ? "실행 중..." : "Airflow 실행"}
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-2 text-sm">
+          <p><strong>{pipeline.pipeline_name}</strong> · {pipeline.template_name}</p>
+          <p className="text-slate-600">Airflow DAG: <code>{pipeline.airflow_dag_id}</code></p>
+          {validation?.warnings?.length ? (
+            <div className="text-amber-700 text-xs bg-amber-50 border border-amber-100 rounded p-2">
+              {validation.warnings.map((w, i) => <p key={i}>• {w.message}</p>)}
+            </div>
+          ) : null}
+          <p className="text-xs text-slate-500">schedule_config는 실제 스케줄 등록되지 않습니다.</p>
+        </div>
+      </Modal>
     </div>
   );
 }

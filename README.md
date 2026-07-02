@@ -286,17 +286,17 @@ curl -X POST "http://localhost:8000/api/v1/feature-build-jobs?feature_set_id=FS-
 - **R6-S1 Build 안정화**: Build 진단·Recipe별 이력·Preview/Build 비교·운영 UI 보강 — 설계서 부록 I (신규 Recipe Type 없음)
 - **R6-S2 운영 UI 마감**: Recipe 목록 Build 상태·Builder Preview/Build 비교 UI — 설계서 부록 J
 - **R7 표준 데이터셋 Builder**: 표준 대상 테이블 allowlist·학습 데이터셋 유형 관리·매핑 드롭다운 전환 — 설계서 부록 K (`/standard-datasets`, `/data/mappings`)
-- **R8 Pipeline Builder**: Pipeline Template Flow Chart·노드 설정·실행 파라미터 저장·Runtime Preview — 설계서 부록 L (`/pipeline-builder`). Airflow DAG 동적 생성·실제 실행 연결은 후속(R9+)
+- **R8 Pipeline Builder**: Pipeline Template Flow Chart·노드 설정·실행 파라미터 저장·Runtime Preview — 설계서 부록 L (`/pipeline-builder`)
+- **R9 Pipeline 실행 연계**: Pipeline Definition 기반 Airflow trigger·Run Link·이력 metadata — 설계서 부록 M. DAG 동적 생성·스케줄 등록은 후속
 
-**Pipeline Builder (R8)**
+**Pipeline Builder (R8/R9)**
 
-- `/pipeline-builder`: Template 기반 Pipeline Definition 목록·생성 (Drag & Drop 자유 편집 없음)
-- Flow Chart로 미리 정의된 노드·엣지 표시, 노드별 실행 파라미터 GUI 저장
-- 검증(DRAFT/VALIDATED/ACTIVE), Runtime Params Preview (Airflow trigger 미연동)
-- `/ops/pipeline-runs`: 기존 DAG 수동 실행·이력 유지 + Pipeline Builder 안내 링크
-- DB: `tb_pipeline_template`, `tb_pipeline_definition`, `tb_pipeline_definition_version`
-- API: `/pipeline-templates`, `/pipeline-definitions`, `/pipeline-node-options`, `/runtime-preview`
-- 테스트: `scripts/test_pipeline_builder.py`
+- `/pipeline-builder`: Template 기반 Pipeline Definition 목록·생성·Flow Chart·노드 설정
+- 검증(DRAFT/VALIDATED/ACTIVE), Runtime Preview, **R9: 실행(dry-run/실제 trigger)**
+- `/ops/pipeline-runs`: DAG 수동 실행 유지 + Pipeline Definition 실행 이력 metadata 표시
+- DB: `tb_pipeline_template`, `tb_pipeline_definition`, `tb_pipeline_definition_version`, `tb_pipeline_run_link` (R9)
+- API: `/pipeline-definitions/.../run`, `/pipeline-run-links`, 기존 `/pipelines/{id}/trigger` 유지
+- 테스트: `scripts/test_pipeline_builder.py`, `scripts/test_pipeline_execution.py`
 
 **표준 데이터셋·매핑 (R7)**
 

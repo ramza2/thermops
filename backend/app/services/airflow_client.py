@@ -68,9 +68,17 @@ class AirflowClient:
     async def unpause_dag(self, dag_id: str) -> None:
         await self._request("PATCH", f"/dags/{dag_id}", json={"is_paused": False})
 
-    async def trigger_dag(self, dag_id: str, conf: dict[str, Any] | None = None) -> dict[str, Any]:
+    async def trigger_dag(
+        self,
+        dag_id: str,
+        conf: dict[str, Any] | None = None,
+        *,
+        dag_run_id: str | None = None,
+    ) -> dict[str, Any]:
         await self.unpause_dag(dag_id)
         body: dict[str, Any] = {"conf": conf or {}}
+        if dag_run_id:
+            body["dag_run_id"] = dag_run_id
         payload = await self._request("POST", f"/dags/{dag_id}/dagRuns", json=body)
         return payload
 

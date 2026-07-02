@@ -2,8 +2,13 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.core.response import ok
-from app.schemas.api import PipelineDefinitionCreate, PipelineDefinitionUpdate, PipelineDefinitionValidateRequest
+from app.core.response import accepted, ok
+from app.schemas.api import (
+    PipelineDefinitionCreate,
+    PipelineDefinitionRunRequest,
+    PipelineDefinitionUpdate,
+    PipelineDefinitionValidateRequest,
+)
 from app.services.pipeline_builder_service import (
     activate_pipeline_definition,
     archive_pipeline_definition,
@@ -16,6 +21,13 @@ from app.services.pipeline_builder_service import (
     runtime_preview,
     update_pipeline_definition,
     validate_pipeline_definition,
+)
+from app.services.pipeline_execution_service import (
+    get_pipeline_run_link,
+    list_pipeline_definition_runs,
+    list_pipeline_run_links,
+    run_pipeline_definition,
+    sync_pipeline_run_link_status,
 )
 
 router = APIRouter(tags=["Pipeline Builder"])
@@ -160,3 +172,75 @@ async def post_runtime_preview(pipeline_id: str, db: AsyncSession = Depends(get_
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     return ok(result)
+
+
+@router.post("/pipeline-definitions/{pipeline_id}/run")
+async def post_run_pipeline_definition(
+    pipeline_id: str,
+    body: PipelineDefinitionRunRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        result = await run_pipeline_definition(db, pipeline_id, body.model_dump())
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    if body.dry_run:
+        return ok(result, message=result.get("message", "dry_run 완료"))
+    if result.get("run_status") == "FAILED":
+        return accepted(result, message=result.get("error_message", "Airflow 트리거 실패"))
+    return accepted(result, message=result.get("message", "Pipeline Definition 실행 요청이 등록되었습니다."))
+
+
+@router.get("/pipeline-definitions/{pipeline_id}/runs")
+async def get_pipeline_definition_runs(
+    pipeline_id: str,
+    limit: int = Query(default=20, ge=1, le=100),
+    status: str | None = Query(default=None),
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        items = await list_pipeline_definition_runs(db, pipeline_id, limit=limit, status=status)
+    except Exception:
+        raise HTTPException(status_code=404, detail="PIPELINE_NOT_FOUND") from None
+    return ok({"items": items, "total": len(items)})
+
+
+@router.get("/pipeline-run-links")
+async def get_pipeline_run_links(
+    pipeline_id: str | None = Query(default=None),
+    template_id: str | None = Query(default=None),
+    airflow_dag_id: str | None = Query(default=None),
+    run_status: str | None = Query(default=None),
+    limit: int = Query(default=50, ge=1, le=200),
+    db: AsyncSession = Depends(get_db),
+):
+    items = await list_pipeline_run_links(
+        db,
+        pipeline_id=pipeline_id,
+        template_id=template_id,
+        airflow_dag_id=airflow_dag_id,
+        run_status=run_status,
+        limit=limit,
+    )
+    return ok({"items": items, "total": len(items)})
+
+
+@router.get("/pipeline-run-links/{link_id}")
+async def get_pipeline_run_link_detail(link_id: str, db: AsyncSession = Depends(get_db)):
+    try:
+        item = await get_pipeline_run_link(db, link_id)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return ok(item)
+
+
+@router.post("/pipeline-run-links/{link_id}/sync-status")
+async def post_sync_pipeline_run_link(link_id: str, db: AsyncSession = Depends(get_db)):
+    try:
+        item = await sync_pipeline_run_link_status(db, link_id)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return ok(item, message="실행 상태가 동기화되었습니다.")

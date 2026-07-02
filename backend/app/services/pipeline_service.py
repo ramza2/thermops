@@ -279,7 +279,7 @@ async def trigger_pipeline(
     ptype = next(p["type"] for p in PIPELINE_DEFINITIONS if p["pipeline_id"] == pipeline_id)
     now = _utc_now()
     conf, warnings = build_dag_conf(pipeline_id, run_id, parameters, business_date)
-    result_summary: dict[str, Any] = {}
+    result_summary: dict[str, Any] = {"run_source": "DIRECT_DAG"}
     if warnings:
         result_summary["warnings"] = warnings
 
