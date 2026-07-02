@@ -208,6 +208,32 @@ def test_compare_preview_build(recipe_id: str, dsv: str) -> None:
     print("  [ok] compare-preview-build API")
 
 
+def test_compare_without_dataset_version(recipe_id: str) -> None:
+    res = api(
+        "POST",
+        f"/feature-recipes/{recipe_id}/compare-preview-build",
+        {"sample_size": 10},
+    )
+    assert res.get("recipe_id") == recipe_id, res
+    assert "comparable" in res, res
+    assert res.get("dataset_version_id") or res.get("warnings"), res
+    print("  [ok] compare-preview-build without dataset_version_id")
+
+
+def test_build_history_limit_one(recipe_id: str) -> None:
+    hist = api("GET", f"/feature-recipes/{recipe_id}/build-history?limit=1")
+    assert len(hist.get("items") or []) <= 1, hist
+    print("  [ok] build-history limit=1")
+
+
+def test_build_job_recipe_filter(recipe_id: str) -> None:
+    q = urllib.parse.urlencode({"recipe_id": recipe_id, "limit": 5})
+    jobs = api("GET", f"/feature-build-jobs?{q}")
+    items = jobs.get("items") if isinstance(jobs, dict) else jobs
+    assert isinstance(items, list), jobs
+    print("  [ok] feature-build-jobs recipe_id filter")
+
+
 def test_quality_template_coverage(dsv: str, fsid: str) -> None:
     quality = api("POST", "/feature-quality-runs", {
         "feature_set_id": fsid,
@@ -255,7 +281,10 @@ def main() -> int:
         test_unsupported_recipe_type()
         test_missing_source_column_failed()
         test_build_history_api(recipe_id, fname)
+        test_build_history_limit_one(recipe_id)
         test_compare_preview_build(recipe_id, dsv)
+        test_compare_without_dataset_version(recipe_id)
+        test_build_job_recipe_filter(recipe_id)
         test_quality_template_coverage(dsv, fsid)
         test_lineage_template_metadata()
         test_code_only_backward_compat()

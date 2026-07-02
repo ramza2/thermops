@@ -88,7 +88,7 @@ async def compare_preview_with_build(
     db: AsyncSession,
     recipe_id: str,
     *,
-    dataset_version_id: str,
+    dataset_version_id: str | None = None,
     feature_set_id: str | None = None,
     sample_size: int = 20,
 ) -> dict[str, Any]:
@@ -97,10 +97,38 @@ async def compare_preview_with_build(
     if not feature_name:
         raise ValueError("Recipe에 feature_name이 없습니다.")
 
+    resolved_dsv = dataset_version_id
+    if not resolved_dsv:
+        hist = await list_recipe_build_history(db, recipe_id, limit=1)
+        latest = (hist.get("items") or [None])[0]
+        if not latest or not latest.get("dataset_version_id"):
+            return {
+                "recipe_id": recipe_id,
+                "feature_name": feature_name,
+                "dataset_version_id": None,
+                "feature_set_id": feature_set_id,
+                "comparable": False,
+                "comparison_policy": "SAMPLE_BY_ENTITY_TIME",
+                "items": [],
+                "summary": {
+                    "sample_count": 0,
+                    "matched_count": 0,
+                    "mismatch_count": 0,
+                    "max_abs_diff": None,
+                },
+                "warnings": [
+                    "dataset_version_id가 없어 최근 Build Job을 찾을 수 없습니다. "
+                    "Feature Build를 먼저 실행하거나 dataset_version_id를 지정하세요.",
+                ],
+            }
+        resolved_dsv = str(latest["dataset_version_id"])
+        if not feature_set_id and latest.get("feature_set_id"):
+            feature_set_id = latest.get("feature_set_id")
+
     rows = (
         await db.execute(
             select(FeatureDataset)
-            .where(FeatureDataset.dataset_version_id == dataset_version_id)
+            .where(FeatureDataset.dataset_version_id == resolved_dsv)
             .order_by(FeatureDataset.site_id, FeatureDataset.feature_at.desc())
             .limit(min(sample_size * 5, 500))
         )
@@ -110,7 +138,8 @@ async def compare_preview_with_build(
         return {
             "recipe_id": recipe_id,
             "feature_name": feature_name,
-            "dataset_version_id": dataset_version_id,
+            "dataset_version_id": resolved_dsv,
+            "feature_set_id": feature_set_id,
             "comparable": False,
             "comparison_policy": "SAMPLE_BY_ENTITY_TIME",
             "items": [],
@@ -150,7 +179,7 @@ async def compare_preview_with_build(
         return {
             "recipe_id": recipe_id,
             "feature_name": feature_name,
-            "dataset_version_id": dataset_version_id,
+            "dataset_version_id": resolved_dsv,
             "feature_set_id": feature_set_id,
             "comparable": False,
             "comparison_policy": "SAMPLE_BY_ENTITY_TIME",
@@ -214,7 +243,7 @@ async def compare_preview_with_build(
     return {
         "recipe_id": recipe_id,
         "feature_name": feature_name,
-        "dataset_version_id": dataset_version_id,
+        "dataset_version_id": resolved_dsv,
         "feature_set_id": feature_set_id,
         "comparable": comparable,
         "comparison_policy": "SAMPLE_BY_ENTITY_TIME",

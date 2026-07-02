@@ -580,13 +580,24 @@ export default function FeatureSetDetailPage() {
               )}
             </div>
           )}
-          <RecipeBuildDiagnosticsPanel buildResult={buildResult} jobSummary={latestBuildJob} />
+          <RecipeBuildDiagnosticsPanel
+            buildResult={buildResult}
+            jobSummary={latestBuildJob}
+            datasetVersionId={
+              buildResult?.dataset_version_id
+              ?? buildResult?.result_summary?.dataset_version_id
+              ?? latestBuildJob?.dataset_version_id
+            }
+          />
         </div>
       )}
 
       {!buildResult && latestBuildJob && (
         <div className="mb-6">
-          <RecipeBuildDiagnosticsPanel jobSummary={latestBuildJob} />
+          <RecipeBuildDiagnosticsPanel
+            jobSummary={latestBuildJob}
+            datasetVersionId={latestBuildJob.dataset_version_id}
+          />
         </div>
       )}
 

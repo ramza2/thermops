@@ -49,6 +49,9 @@ export interface FeatureQualityIssueSample {
   computable?: boolean;
   recommended_name?: string | null;
   registration_message?: string;
+  recipe_id?: string;
+  recipe_type?: string;
+  build_supported?: boolean;
 }
 
 export interface FeatureQualityResultSummary {

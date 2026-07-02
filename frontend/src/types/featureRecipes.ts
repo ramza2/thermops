@@ -69,3 +69,68 @@ export const R5_BUILD_WARNING = R6_BUILD_INFO;
 
 export const RECIPE_PREVIEW_NO_SAVE_NOTE =
   "Preview 결과는 저장하지 않습니다. preview_summary만 Recipe에 기록됩니다.";
+
+export interface RecipeBuildHistoryItem {
+  job_id: string;
+  feature_set_id: string;
+  dataset_version_id?: string;
+  status: string;
+  template_feature_status: string;
+  started_at?: string;
+  row_count?: number;
+  null_ratio?: number;
+  warning_codes?: string[];
+  error_codes?: string[];
+  warnings?: string[];
+}
+
+export interface RecipeBuildHistoryResponse {
+  recipe_id: string;
+  feature_name: string | null;
+  latest_build_status: string;
+  items: RecipeBuildHistoryItem[];
+  total: number;
+}
+
+export interface RecipePreviewBuildCompareRequest {
+  dataset_version_id?: string | null;
+  feature_set_id?: string | null;
+  sample_size?: number;
+}
+
+export interface RecipePreviewBuildCompareItem {
+  entity_key: string;
+  time_key: string | null;
+  preview_value: unknown;
+  build_value: unknown;
+  match: boolean;
+  diff: number | null;
+}
+
+export interface RecipePreviewBuildCompareSummary {
+  sample_count: number;
+  matched_count: number;
+  mismatch_count: number;
+  max_abs_diff: number | null;
+}
+
+export interface RecipePreviewBuildCompareResponse {
+  recipe_id: string;
+  feature_name: string;
+  dataset_version_id?: string | null;
+  feature_set_id?: string | null;
+  comparable: boolean;
+  comparison_policy: string;
+  items: RecipePreviewBuildCompareItem[];
+  summary: RecipePreviewBuildCompareSummary;
+  warnings: string[];
+}
+
+export type RecipeBuildStatusBadge =
+  | "BUILD_OK"
+  | "BUILD_WARNING"
+  | "BUILD_FAILED"
+  | "BUILD_UNSUPPORTED"
+  | "BUILD_NOT_RUN"
+  | "BUILD_UNKNOWN"
+  | "BUILD_LIMITED";

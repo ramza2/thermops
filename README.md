@@ -284,6 +284,7 @@ curl -X POST "http://localhost:8000/api/v1/feature-build-jobs?feature_set_id=FS-
 - **R5 Recipe 저장·Builder**: `tb_feature_recipe` 저장·발행·Feature Set 연동 — 동일 설계서 부록 G
 - **R6 Recipe Engine Build**: PUBLISHED TEMPLATE Recipe를 Feature Build에 연결 — 설계서 부록 H (`RAW_COLUMN`/`DATE_PART`/`LAG`/`ROLLING_*` 지원)
 - **R6-S1 Build 안정화**: Build 진단·Recipe별 이력·Preview/Build 비교·운영 UI 보강 — 설계서 부록 I (신규 Recipe Type 없음)
+- **R6-S2 운영 UI 마감**: Recipe 목록 Build 상태·Builder Preview/Build 비교 UI — 설계서 부록 J
 
 **Feature Registry·Lineage UI**
 

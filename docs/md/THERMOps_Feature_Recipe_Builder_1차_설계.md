@@ -978,3 +978,33 @@ python scripts/test_feature_recipe_build_diagnostics.py
 - DIFF/RATIO/BINNING/FILL_NULL/CATEGORY_ENCODING Build 확장
 - Domain Pack, Preview/Build 이력 비교 고도화, mapping별 외부 테이블 join 확장
 
+---
+
+## 부록 J. Phase R6-S2 구현 완료 (Recipe Build 운영 UI 마감)
+
+R6-S2는 Recipe Engine Build의 **계산 범위를 확장하지 않고**, 운영자가 Recipe별 최근 Build 상태와 Preview/Build 샘플 비교 결과를 UI에서 확인할 수 있도록 마감하는 단계입니다.
+
+### UI 보강
+
+- **Feature Recipe 목록**: PUBLISHED Recipe 행별 최근 Build 상태·null%·경고/실패 요약, Preview/Build 비교 링크
+- **Recipe Builder**: Build Job 선택, **Preview/Build 비교** 버튼·결과 모달
+- **Feature Set 상세**: Recipe Engine Build 상세 패널 개선(진단 코드 도움말, Recipe/비교 링크)
+- **Feature Quality**: TEMPLATE coverage·높은 null 비율 안내, 이슈 샘플 Recipe 링크
+- **Lineage**: TEMPLATE recipe 메타데이터·source_columns 강조
+
+### Preview/Build 비교
+
+- `POST /api/v1/feature-recipes/{recipe_id}/compare-preview-build`
+- `dataset_version_id` 생략 시 최근 Build Job 1건의 dataset_version 자동 사용
+- 응답: `comparable`, `comparison_policy`, `summary`(matched/mismatch/max_abs_diff), `items`, `warnings`
+
+### R6 이전 Job 제한
+
+- `template_build_status_by_feature` 없는 Job은 build-history·진단 표시가 **제한**될 수 있음 (UI 안내)
+
+### 테스트
+
+```bash
+python scripts/test_feature_recipe_build_diagnostics.py
+```
+

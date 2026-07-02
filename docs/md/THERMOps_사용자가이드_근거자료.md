@@ -185,6 +185,8 @@ flowchart LR
 
 **R6-S1 Build 안정화**: Build `result_summary`에 Feature별 상태·진단 코드가 추가되며, Recipe별 최근 Build 이력(`GET .../build-history`)과 Preview vs Build 샘플 비교 API로 운영 검증을 보강합니다. Feature Set 상세 **Recipe Engine Build 상세**, Lineage TEMPLATE 메타데이터, Feature Quality TEMPLATE coverage를 확인합니다. LAG/ROLLING 초기 null은 이력 부족 warning으로 안내됩니다.
 
+**R6-S2 운영 UI 마감**: Recipe 목록 최근 Build 상태, Builder **Preview/Build 비교** 버튼·결과 모달, 진단 패널·Quality·Lineage UX 보강. `compare-preview-build`에서 `dataset_version_id` 생략 시 최근 Build Job 자동 선택.
+
 ---
 
 ### 2.4 `/data/quality` — 데이터 품질 점검

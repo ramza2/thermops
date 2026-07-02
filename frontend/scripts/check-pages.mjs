@@ -40,12 +40,14 @@ for (const path of PATHS) {
   if (path === "/feature-recipes") {
     await page.getByText("Feature Recipe").first().waitFor({ state: "visible", timeout: 30000 });
     await page.getByText("R6").first().waitFor({ state: "visible", timeout: 30000 });
-    await page.getByText("최근 Build 이력").first().waitFor({ state: "visible", timeout: 30000 });
+    await page.getByText("최근 Build").first().waitFor({ state: "visible", timeout: 30000 });
+    await page.getByText("Preview/Build 비교").first().waitFor({ state: "visible", timeout: 30000 });
   }
   if (path === "/feature-recipes/new") {
     await page.getByText("Feature Recipe Builder").first().waitFor({ state: "visible", timeout: 30000 });
     await page.getByText("Preview 결과는 저장하지 않습니다").first().waitFor({ state: "visible", timeout: 30000 });
     await page.getByText("R6").first().waitFor({ state: "visible", timeout: 30000 });
+    await page.getByText("Preview/Build 비교").first().waitFor({ state: "visible", timeout: 30000 });
   }
   if (path === "/data/mappings") {
     await page.getByText("Column Role").first().waitFor({ state: "visible", timeout: 30000 });

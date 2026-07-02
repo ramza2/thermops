@@ -3,6 +3,9 @@ import type {
   FeatureRecipeCreateRequest,
   FeatureRecipeListResponse,
   FeatureSetAddRecipeFeatureResult,
+  RecipeBuildHistoryResponse,
+  RecipePreviewBuildCompareRequest,
+  RecipePreviewBuildCompareResponse,
 } from "@/types/featureRecipes";
 import type { FeatureRecipePreviewResponse } from "@/types/featureRecipeTemplates";
 import { fetchApi, postApi, putApi } from "@/api/client";
@@ -76,28 +79,6 @@ export async function addRecipeFeatureToFeatureSet(
   );
 }
 
-export interface RecipeBuildHistoryItem {
-  job_id: string;
-  feature_set_id: string;
-  dataset_version_id?: string;
-  status: string;
-  template_feature_status: string;
-  started_at?: string;
-  row_count?: number;
-  null_ratio?: number;
-  warning_codes?: string[];
-  error_codes?: string[];
-  warnings?: string[];
-}
-
-export interface RecipeBuildHistoryResponse {
-  recipe_id: string;
-  feature_name: string | null;
-  latest_build_status: string;
-  items: RecipeBuildHistoryItem[];
-  total: number;
-}
-
 export async function getRecipeBuildHistory(
   recipeId: string,
   limit = 20,
@@ -110,7 +91,10 @@ export async function getRecipeBuildHistory(
 
 export async function compareRecipePreviewBuild(
   recipeId: string,
-  body: { dataset_version_id: string; feature_set_id?: string; sample_size?: number },
-): Promise<Record<string, unknown>> {
-  return postApi(`/feature-recipes/${encodeURIComponent(recipeId)}/compare-preview-build`, body);
+  body: RecipePreviewBuildCompareRequest = {},
+): Promise<RecipePreviewBuildCompareResponse> {
+  return postApi<RecipePreviewBuildCompareResponse>(
+    `/feature-recipes/${encodeURIComponent(recipeId)}/compare-preview-build`,
+    body,
+  );
 }

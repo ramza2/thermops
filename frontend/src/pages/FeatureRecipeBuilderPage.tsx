@@ -1,30 +1,39 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
+  compareRecipePreviewBuild,
   createFeatureRecipe,
   getFeatureRecipe,
   getRecipeBuildHistory,
   publishFeatureRecipe,
   updateFeatureRecipe,
-  type RecipeBuildHistoryResponse,
 } from "@/api/featureRecipes";
 import { getColumnRoles } from "@/api/featureColumnRoles";
 import { fetchApi, PagedData } from "@/api/client";
 import { getFeatureRecipeTemplates, previewFeatureRecipe, validateFeatureRecipe } from "@/api/featureRecipeTemplates";
 import { Button } from "@/components/Button";
 import { DataTable } from "@/components/DataTable";
+import { Modal } from "@/components/Modal";
+import { RecipePreviewBuildComparePanel } from "@/components/RecipePreviewBuildComparePanel";
 import { SelectInput, TextInput } from "@/components/SearchPanel";
 import { useToast } from "@/hooks/useToast";
 import { PageHeader } from "@/layouts/MainLayout";
 import type { FeatureColumnRole } from "@/types/featureColumnRoles";
-import type { FeatureRecipe } from "@/types/featureRecipes";
+import type { FeatureRecipe, RecipeBuildHistoryItem, RecipePreviewBuildCompareResponse } from "@/types/featureRecipes";
 import { R5_BUILD_WARNING, RECIPE_PREVIEW_NO_SAVE_NOTE } from "@/types/featureRecipes";
 import type { FeatureRecipePreviewResponse, RecipeTemplate } from "@/types/featureRecipeTemplates";
 import {
   BUILDER_FUTURE_TYPES,
   BUILDER_SUPPORTED_TYPES,
+  COMPARE_HELP_NOTE,
+  LEGACY_JOB_DIAGNOSTICS_NOTE,
+  formatNullRatio,
+  getRecipeBuildStatusBadgeClass,
+  getRecipeBuildStatusLabel,
+  mapTemplateFeatureStatusToBadge,
   recipeStatusClass,
   recipeStatusLabel,
+  summarizeBuildHistoryItem,
 } from "@/utils/featureRecipeFormat";
 import { RECIPE_PREVIEW_ROW_STEP_NOTE } from "@/utils/featureRecipeTemplateFormat";
 
@@ -67,7 +76,12 @@ export default function FeatureRecipeBuilderPage() {
   const [busy, setBusy] = useState("");
   const [validateResult, setValidateResult] = useState<Record<string, unknown> | null>(null);
   const [previewResult, setPreviewResult] = useState<FeatureRecipePreviewResponse | null>(null);
-  const [buildHistory, setBuildHistory] = useState<RecipeBuildHistoryResponse | null>(null);
+  const [buildHistory, setBuildHistory] = useState<Awaited<ReturnType<typeof getRecipeBuildHistory>> | null>(null);
+  const [selectedHistoryJob, setSelectedHistoryJob] = useState<RecipeBuildHistoryItem | null>(null);
+  const [compareOpen, setCompareOpen] = useState(false);
+  const [compareLoading, setCompareLoading] = useState(false);
+  const [compareError, setCompareError] = useState("");
+  const [compareResult, setCompareResult] = useState<RecipePreviewBuildCompareResponse | null>(null);
 
   const loadMappings = useCallback(async () => {
     const res = await fetchApi<PagedData<MappingItem>>("/mappings", { page: 1, size: 50 });
@@ -129,12 +143,47 @@ export default function FeatureRecipeBuilderPage() {
   useEffect(() => {
     if (!recipe?.recipe_id || recipe.status !== "PUBLISHED") {
       setBuildHistory(null);
+      setSelectedHistoryJob(null);
       return;
     }
-    void getRecipeBuildHistory(recipe.recipe_id, 5)
-      .then(setBuildHistory)
-      .catch(() => setBuildHistory(null));
+    void getRecipeBuildHistory(recipe.recipe_id, 10)
+      .then((hist) => {
+        setBuildHistory(hist);
+        setSelectedHistoryJob(hist.items[0] ?? null);
+      })
+      .catch(() => {
+        setBuildHistory(null);
+        setSelectedHistoryJob(null);
+      });
   }, [recipe?.recipe_id, recipe?.status]);
+
+  const runCompare = useCallback(async (datasetVersionId?: string | null) => {
+    if (!recipe?.recipe_id) return;
+    setCompareLoading(true);
+    setCompareError("");
+    setCompareResult(null);
+    setCompareOpen(true);
+    try {
+      const res = await compareRecipePreviewBuild(recipe.recipe_id, {
+        dataset_version_id: datasetVersionId ?? selectedHistoryJob?.dataset_version_id ?? undefined,
+        feature_set_id: selectedHistoryJob?.feature_set_id,
+        sample_size: 20,
+      });
+      setCompareResult(res);
+    } catch {
+      setCompareError("Preview/Build 비교에 실패했습니다. Build 이력과 dataset_version_id를 확인하세요.");
+    } finally {
+      setCompareLoading(false);
+    }
+  }, [recipe?.recipe_id, selectedHistoryJob]);
+
+  useEffect(() => {
+    const compareDsv = searchParams.get("compare_dsv");
+    if (compareDsv && recipe?.status === "PUBLISHED" && recipe.build_supported) {
+      setCompareOpen(true);
+      void runCompare(compareDsv);
+    }
+  }, [recipe?.recipe_id, recipe?.status, recipe?.build_supported, searchParams, runCompare]);
 
   const defaultSourceForType = useCallback((type: string, options: { value: string }[]) => {
     if (type === "DATE_PART") {
@@ -309,6 +358,7 @@ export default function FeatureRecipeBuilderPage() {
         <p>{R5_BUILD_WARNING}</p>
         <p>{RECIPE_PREVIEW_NO_SAVE_NOTE}</p>
         <p className="text-slate-500">검증·미리보기는 현재 화면 입력값을 기준으로 실행됩니다. 초안 저장 전에도 확인할 수 있습니다.</p>
+        <p className="text-slate-500">발행 후 Build 이력에서 <strong>Preview/Build 비교</strong>를 실행할 수 있습니다.</p>
         {TIME_SERIES.has(recipeType) && <p>{RECIPE_PREVIEW_ROW_STEP_NOTE}</p>}
       </div>
 
@@ -322,21 +372,63 @@ export default function FeatureRecipeBuilderPage() {
         </div>
       )}
 
-      {recipe?.status === "PUBLISHED" && buildHistory && (
-        <div className="mb-4 text-xs border border-slate-200 rounded-lg p-3 bg-white space-y-2">
-          <p className="font-medium text-slate-800">최근 Build 이력</p>
-          <p className="text-slate-600">
-            최근 상태: <strong>{buildHistory.latest_build_status}</strong>
-            {buildHistory.items.length === 0 && " (아직 Build 없음)"}
-          </p>
-          {buildHistory.items.slice(0, 3).map((item) => (
-            <div key={item.job_id} className="text-slate-600 border-t border-slate-100 pt-2">
-              <span className="font-mono">{item.job_id}</span>
-              {" · "}
-              {item.template_feature_status}
-              {item.null_ratio != null && ` · null ${(item.null_ratio * 100).toFixed(1)}%`}
+      {recipe?.status === "PUBLISHED" && (
+        <div className="mb-4 text-xs border border-slate-200 rounded-lg p-3 bg-white space-y-3">
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <div>
+              <p className="font-medium text-slate-800">최근 Build 이력</p>
+              <p className="text-slate-500 mt-1">{LEGACY_JOB_DIAGNOSTICS_NOTE}</p>
             </div>
-          ))}
+            {recipe.build_supported && (buildHistory?.items.length ?? 0) > 0 && (
+              <Button variant="secondary" disabled={compareLoading} onClick={() => void runCompare()}>
+                {compareLoading ? "비교 중..." : "Preview/Build 비교"}
+              </Button>
+            )}
+          </div>
+
+          {!buildHistory?.items.length ? (
+            <p className="text-slate-600">아직 Build 없음 — Feature Set에 추가 후 Feature 생성을 실행하세요.</p>
+          ) : (
+            <>
+              <div className="max-w-xl">
+                <label className="block text-slate-500 mb-1">Build Job 선택</label>
+                <SelectInput
+                  value={selectedHistoryJob?.job_id ?? ""}
+                  onChange={(jobId) => {
+                    const item = buildHistory.items.find((j) => j.job_id === jobId) ?? null;
+                    setSelectedHistoryJob(item);
+                  }}
+                  options={buildHistory.items.map((item) => ({
+                    value: item.job_id,
+                    label: `${item.job_id} · ${item.template_feature_status}${item.null_ratio != null ? ` · null ${formatNullRatio(item.null_ratio)}` : ""}`,
+                  }))}
+                />
+              </div>
+
+              {selectedHistoryJob && (
+                <div className="border border-slate-100 rounded p-2 space-y-1 text-slate-700">
+                  <div className="flex flex-wrap gap-2 items-center">
+                    <span className={`text-[10px] px-1 py-0.5 rounded border ${getRecipeBuildStatusBadgeClass(mapTemplateFeatureStatusToBadge(selectedHistoryJob.template_feature_status))}`}>
+                      {getRecipeBuildStatusLabel(mapTemplateFeatureStatusToBadge(selectedHistoryJob.template_feature_status))}
+                    </span>
+                    <span>Job 상태: {selectedHistoryJob.status}</span>
+                  </div>
+                  <p className="font-mono text-[10px]">{selectedHistoryJob.dataset_version_id ?? "dataset_version 없음"}</p>
+                  <p>
+                    Feature Set:{" "}
+                    {selectedHistoryJob.feature_set_id ? (
+                      <Link to={`/feature-sets/${selectedHistoryJob.feature_set_id}`} className="text-blue-600 hover:underline">
+                        {selectedHistoryJob.feature_set_id}
+                      </Link>
+                    ) : "-"}
+                  </p>
+                  <p>경고/오류: {summarizeBuildHistoryItem(selectedHistoryJob)}</p>
+                </div>
+              )}
+            </>
+          )}
+
+          <p className="text-slate-500">{COMPARE_HELP_NOTE}</p>
           <p className="text-slate-500">실패 시 Validate·Preview를 다시 실행해 Recipe 정의를 확인하세요.</p>
         </div>
       )}
@@ -494,6 +586,22 @@ export default function FeatureRecipeBuilderPage() {
           )}
         </div>
       )}
+
+      <Modal
+        open={compareOpen}
+        title="Preview/Build 비교"
+        onClose={() => setCompareOpen(false)}
+        size="lg"
+        footer={(
+          <Button variant="secondary" onClick={() => setCompareOpen(false)}>닫기</Button>
+        )}
+      >
+        <RecipePreviewBuildComparePanel
+          result={compareResult}
+          loading={compareLoading}
+          error={compareError}
+        />
+      </Modal>
     </div>
   );
 }

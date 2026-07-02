@@ -469,8 +469,12 @@ export function FeatureLineageSection({ featureSetId, buildResult }: FeatureLine
                   <p>recipe_id: <span className="font-mono">{String(recipeMeta.recipe_id)}</span></p>
                   <p>recipe_type: {String(recipeMeta.recipe_type)}</p>
                   <p>params: <span className="font-mono">{JSON.stringify(recipeMeta.params)}</span></p>
-                  <p>entity_keys: {String((recipeMeta.entity_keys as string[])?.join(", "))}</p>
-                  <p>time_key: {String(recipeMeta.time_key)}</p>
+                  <p>entity_keys: {String((recipeMeta.entity_keys as string[])?.join(", ") || (row.partition_keys as string[])?.join(", "))}</p>
+                  <p>time_key: {String(recipeMeta.time_key ?? row.time_key ?? "-")}</p>
+                  <p>source_columns: {String((row.source_columns as string[])?.join(", ") || "-")}</p>
+                  {recipeMeta.recipe_status != null && (
+                    <p>source_recipe_status: {String(recipeMeta.recipe_status)}</p>
+                  )}
                   {recipeMeta.recipe_id != null && (
                     <Link to={`/feature-recipes/${String(recipeMeta.recipe_id)}`} className="text-blue-600 hover:underline">
                       Recipe 상세 보기

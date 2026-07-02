@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { ChevronDown, ChevronRight, Play, RefreshCw } from "lucide-react";
 import { fetchApi } from "@/api/client";
 import { getFeatureQualityRun, getFeatureQualityRuns, runFeatureQualityCheck } from "@/api/featureQuality";
@@ -270,9 +271,15 @@ export function FeatureQualitySection({
                 {rs.build_coverage.template_generated_feature_count ?? 0}건 · 실패{" "}
                 {rs.build_coverage.template_build_failed_feature_count ?? 0}건 · 미지원{" "}
                 {rs.build_coverage.template_build_unsupported_feature_count ?? 0}건
+                {rs.build_coverage.template_build_status_counts?.warning != null && (
+                  <span> · 경고 {rs.build_coverage.template_build_status_counts.warning}건</span>
+                )}
               </p>
               <p className="text-violet-700">
                 LAG/ROLLING Feature의 초기 null은 Recipe 계산 이력 부족 또는 원천 결측으로 발생할 수 있습니다.
+              </p>
+              <p className="text-slate-600">
+                null 비율이 높으면 이력 부족, source column 결측, time gap, entity별 row 부족을 의심하세요.
               </p>
             </div>
           )}
@@ -324,7 +331,21 @@ export function FeatureQualitySection({
               {
                 key: "null_ratio",
                 header: "null %",
-                render: (r) => formatPercent(Number(r.null_ratio)),
+                render: (r) => {
+                  const row = r as unknown as FeatureQualityFeatureResult;
+                  const ratio = Number(row.null_ratio);
+                  const isTemplate = row.registration_status === "TEMPLATE_BUILD_SUPPORTED"
+                    || row.registration_status === "TEMPLATE_PUBLISHED";
+                  const highNull = ratio >= 0.2;
+                  return (
+                    <span className={highNull && isTemplate ? "text-amber-700 font-medium" : ""}>
+                      {formatPercent(ratio)}
+                      {highNull && isTemplate && (
+                        <span className="block text-[10px] text-amber-600">이력/결측 가능</span>
+                      )}
+                    </span>
+                  );
+                },
               },
               { key: "invalid_count", header: "invalid" },
               { key: "range_violation_count", header: "범위" },
@@ -404,6 +425,16 @@ export function FeatureQualitySection({
                       <td className="py-1 pr-2">{String(s.value ?? "-")}</td>
                       <td className="py-1">
                         {String(s.registration_message || s.message)}
+                        {s.recipe_id != null && String(s.recipe_id) !== "" && (
+                          <div>
+                            <Link to={`/feature-recipes/${String(s.recipe_id)}`} className="text-blue-600 hover:underline">
+                              Recipe 상세
+                            </Link>
+                            {s.recipe_type != null && (
+                              <span className="ml-1 text-violet-700 font-mono">{String(s.recipe_type)}</span>
+                            )}
+                          </div>
+                        )}
                       </td>
                     </tr>
                   ))}

@@ -185,6 +185,12 @@ def _append_issue(
         sample["registration_status"] = registration_meta.get("registration_status")
         sample["computable"] = registration_meta.get("computable")
         sample["recommended_name"] = registration_meta.get("recommended_name")
+        if registration_meta.get("recipe_id"):
+            sample["recipe_id"] = registration_meta.get("recipe_id")
+        if registration_meta.get("recipe_type"):
+            sample["recipe_type"] = registration_meta.get("recipe_type")
+        if registration_meta.get("build_supported") is not None:
+            sample["build_supported"] = registration_meta.get("build_supported")
         ctx = quality_context_message(registration_meta, has_missing_key=issue_type == "MISSING_KEY")
         if ctx:
             sample["registration_message"] = ctx
