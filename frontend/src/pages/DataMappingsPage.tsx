@@ -881,13 +881,15 @@ export default function DataMappingsPage() {
         open={previewOpen}
         title={`변환 미리보기 - ${previewTitle}`}
         onClose={() => setPreviewOpen(false)}
-        size="lg"
+        size="xl"
         footer={<Button variant="secondary" onClick={() => setPreviewOpen(false)}>닫기</Button>}
       >
-        <DataTable
-          columns={previewRows.length ? Object.keys(previewRows[0]).map((k) => ({ key: k, header: k })) : []}
-          data={previewRows}
-        />
+        <div className="overflow-x-auto -mx-5 px-5">
+          <DataTable
+            columns={previewRows.length ? Object.keys(previewRows[0]).map((k) => ({ key: k, header: k })) : []}
+            data={previewRows}
+          />
+        </div>
       </Modal>
 
       {recipePreviewTemplate && editingId && (
