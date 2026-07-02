@@ -14,10 +14,12 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-thermops}
     volumes:
       - thermops_deploy_postgres_data:/var/lib/postgresql/data
-      # clean seed: demo 02_seed.sql 대신 02_seed_clean.sql 마운트
+      # clean seed: demo 02_seed_demo.sql 은 자동 실행하지 않음
       - ./db/init/00_airflow_db.sh:/docker-entrypoint-initdb.d/00_airflow_db.sh:ro
       - ./db/init/01_schema.sql:/docker-entrypoint-initdb.d/01_schema.sql:ro
       - ./db/init/02_seed_clean.sql:/docker-entrypoint-initdb.d/02_seed.sql:ro
+      - ./db/init/r7_standard_dataset_seed.sql:/docker-entrypoint-initdb.d/r7_standard_dataset_seed.sql:ro
+      - ./db/init/r8_pipeline_builder_seed.sql:/docker-entrypoint-initdb.d/r8_pipeline_builder_seed.sql:ro
     networks:
       - thermops_internal
     healthcheck:

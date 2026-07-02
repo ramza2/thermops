@@ -61,7 +61,7 @@ const EMPTY_FORM = {
   port: "5432",
   database: "thermops",
   schema: "public",
-  table: "external_heat_demand_sample",
+  table: "",
   username: "thermops",
   password: "thermops",
   query: "",
@@ -73,7 +73,7 @@ const EMPTY_FORM = {
   auth_type: "NONE",
   api_key_header: "",
   api_key: "",
-  file_path: "data/samples/heat_demand_sample.csv",
+  file_path: "",
   active_yn: true,
 };
 
@@ -429,7 +429,7 @@ export default function DataSourcesPage() {
       {isCsvType(form.source_type) ? (
         <div>
           <label className="block text-xs text-slate-500 mb-1">CSV 파일 경로</label>
-          <TextInput value={form.file_path} onChange={(v) => setForm({ ...form, file_path: v })} placeholder="data/samples/heat_demand_sample.csv" />
+          <TextInput value={form.file_path} onChange={(v) => setForm({ ...form, file_path: v })} placeholder="/path/to/data.csv" />
         </div>
       ) : isApiType(form.source_type) ? (
         <>

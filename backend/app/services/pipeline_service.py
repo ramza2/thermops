@@ -83,8 +83,6 @@ PIPELINE_IDS = {p["pipeline_id"] for p in PIPELINE_DEFINITIONS}
 
 DEFAULT_CONF_BY_PIPELINE: dict[str, dict[str, Any]] = {
     "data_ingestion_dag": {
-        "source_id": "DS-CSV-001",
-        "weather_source_id": "DS-CSV-002",
         "data_domain": "HEAT_DEMAND",
         "load_mode": "UPSERT",
     },
@@ -114,8 +112,6 @@ DEFAULT_CONF_BY_PIPELINE: dict[str, dict[str, Any]] = {
         "candidate_id": None,
     },
     "thermops_full_pipeline_dag": {
-        "source_id": "DS-CSV-001",
-        "weather_source_id": "DS-CSV-002",
         "feature_set_id": "FS-TPL-LAG-ROLL",
         "config_id": "TRC-TPL-LAG-ROLL",
         "model_name": "heat_demand_lightgbm",

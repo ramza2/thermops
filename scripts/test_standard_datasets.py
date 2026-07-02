@@ -10,8 +10,15 @@ import urllib.error
 import urllib.parse
 import urllib.request
 import uuid
+from pathlib import Path
+
+_SCRIPTS = Path(__file__).resolve().parent
+if str(_SCRIPTS) not in sys.path:
+    sys.path.insert(0, str(_SCRIPTS))
+from test_fixtures import resolve_heat_source_id
 
 API_BASE = os.environ.get("THERMOOPS_API_BASE", "http://localhost:8000/api/v1")
+HEAT_SOURCE_ID = ""
 
 
 def api(method: str, path: str, body: dict | None = None, expect_fail: bool = False) -> dict | list:
@@ -88,7 +95,7 @@ def test_validate_invalid() -> None:
 
 def test_mapping_create_invalid_blocked() -> None:
     body = {
-        "source_id": "DS-CSV-001",
+        "source_id": HEAT_SOURCE_ID,
         "mapping_name": f"R7-invalid-{uuid.uuid4().hex[:6]}",
         "target_table": "tb_not_allowed_table_xyz",
         "columns": [{"source_column": "a", "target_column": "b", "required_yn": False}],
@@ -101,7 +108,7 @@ def test_mapping_create_invalid_blocked() -> None:
 
 def test_mapping_create_valid() -> None:
     body = {
-        "source_id": "DS-CSV-001",
+        "source_id": HEAT_SOURCE_ID,
         "mapping_name": f"R7-valid-{uuid.uuid4().hex[:6]}",
         "target_table": "heat_demand_actual",
         "columns": [
@@ -158,6 +165,9 @@ def test_activate_missing_physical_fails() -> None:
 
 
 def main() -> int:
+    global HEAT_SOURCE_ID
+    HEAT_SOURCE_ID = resolve_heat_source_id(api)
+    print(f"  [fixture] heat source={HEAT_SOURCE_ID}")
     tests = [
         test_list_dataset_types,
         test_target_tables_active_only,

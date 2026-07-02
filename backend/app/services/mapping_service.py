@@ -6,7 +6,7 @@ from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.entities import DataMapping, DataSource, FeatureColumnRole, FeatureRecipe
@@ -309,11 +309,7 @@ async def delete_data_mapping(db: AsyncSession, mapping_id: str) -> None:
     if blockers:
         raise ValueError(blockers)
 
-    roles = (
-        await db.execute(select(FeatureColumnRole).where(FeatureColumnRole.mapping_id == mapping_id))
-    ).scalars().all()
-    for role in roles:
-        await db.delete(role)
-
+    await db.execute(delete(FeatureColumnRole).where(FeatureColumnRole.mapping_id == mapping_id))
+    await db.flush()
     await db.delete(m)
 

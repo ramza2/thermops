@@ -10,9 +10,15 @@ import urllib.error
 import urllib.parse
 import urllib.request
 import uuid
+from pathlib import Path
+
+_SCRIPTS = Path(__file__).resolve().parent
+if str(_SCRIPTS) not in sys.path:
+    sys.path.insert(0, str(_SCRIPTS))
+from test_fixtures import heat_pipeline_node_config, resolve_heat_mapping_id
 
 API_BASE = os.environ.get("THERMOOPS_API_BASE", "http://localhost:8000/api/v1")
-HEAT_MAPPING_ID = os.environ.get("THERMOOPS_HEAT_MAPPING_ID", "MAP-CSV-001")
+HEAT_MAPPING_ID = ""
 
 
 def api(method: str, path: str, body: dict | None = None) -> dict | list:
@@ -199,7 +205,10 @@ def test_ratio_readiness() -> None:
 
 
 def main() -> int:
+    global HEAT_MAPPING_ID
     print("test_feature_column_roles.py")
+    HEAT_MAPPING_ID = resolve_heat_mapping_id(api)
+    print(f"  [fixture] heat mapping={HEAT_MAPPING_ID}")
     tests = [
         test_role_codes,
         test_inference,

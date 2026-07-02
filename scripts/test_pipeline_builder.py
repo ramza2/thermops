@@ -10,6 +10,12 @@ import urllib.error
 import urllib.parse
 import urllib.request
 import uuid
+from pathlib import Path
+
+_SCRIPTS = Path(__file__).resolve().parent
+if str(_SCRIPTS) not in sys.path:
+    sys.path.insert(0, str(_SCRIPTS))
+from test_fixtures import heat_pipeline_node_config, resolve_heat_source_id
 
 API_BASE = os.environ.get("THERMOOPS_API_BASE", "http://localhost:8000/api/v1")
 
@@ -63,13 +69,7 @@ def test_create_definition() -> str:
         "template_id": "PT-FEATURE-BUILD",
         "pipeline_name": f"R8-test-{uuid.uuid4().hex[:6]}",
         "description": "R8 automated test",
-        "node_config": {
-            "DATA_SOURCE": {"data_source_id": "DS-CSV-001"},
-            "DATA_MAPPING": {"mapping_id": "MAP-CSV-001"},
-            "STANDARD_DATASET": {"dataset_type_id": "DST-HEAT-DEMAND-ACTUAL"},
-            "FEATURE_SET": {"feature_set_id": "FS-TPL-LAG-ROLL"},
-            "FEATURE_BUILD": {"feature_set_id": "FS-TPL-LAG-ROLL"},
-        },
+        "node_config": heat_pipeline_node_config(api),
     }
     data = api("POST", "/pipeline-definitions", body)
     pid = data["pipeline_id"]

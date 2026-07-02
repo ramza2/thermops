@@ -4,6 +4,7 @@ from uuid import uuid4
 import asyncio
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -20,6 +21,12 @@ from app.services.data_source_service import delete_data_source, get_data_source
 from app.services.ingestion_service import IngestionError, fail_ingestion_job, get_active_mapping, run_ingestion
 
 router = APIRouter(tags=["Data"])
+
+
+def _blockers_from_value_error(exc: ValueError) -> list[dict]:
+    if exc.args and isinstance(exc.args[0], list):
+        return exc.args[0]
+    return []
 
 
 def _http_connector_error(exc: ConnectorError) -> HTTPException:
@@ -115,8 +122,8 @@ async def delete_data_source_endpoint(source_id: str, db: AsyncSession = Depends
         await delete_data_source(db, source_id)
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
-    except ValueError as blockers:
-        items = blockers if isinstance(blockers, list) else []
+    except ValueError as exc:
+        items = _blockers_from_value_error(exc)
         message = items[0]["message"] if items else "삭제할 수 없습니다."
         raise HTTPException(
             status_code=409,
@@ -126,7 +133,16 @@ async def delete_data_source_endpoint(source_id: str, db: AsyncSession = Depends
                 "blockers": items,
                 "hint": "연결된 데이터 매핑·Recipe를 먼저 삭제하거나, 데이터 소스를 비활성화하세요.",
             },
-        ) from blockers
+        ) from exc
+    except IntegrityError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "DATA_SOURCE_IN_USE",
+                "message": "연결된 데이터 매핑 또는 참조 때문에 삭제할 수 없습니다.",
+                "hint": "데이터 매핑 화면에서 연결된 매핑을 먼저 삭제하거나, 소스를 비활성화하세요.",
+            },
+        ) from exc
     return ok(message="데이터 소스가 삭제되었습니다.")
 
 

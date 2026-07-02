@@ -9,6 +9,12 @@ import sys
 import urllib.error
 import urllib.request
 import uuid
+from pathlib import Path
+
+_SCRIPTS = Path(__file__).resolve().parent
+if str(_SCRIPTS) not in sys.path:
+    sys.path.insert(0, str(_SCRIPTS))
+from test_fixtures import heat_pipeline_node_config
 
 API_BASE = os.environ.get("THERMOOPS_API_BASE", "http://localhost:8000/api/v1")
 
@@ -42,13 +48,7 @@ def _create_runnable_pipeline() -> str:
     body = {
         "template_id": "PT-FEATURE-BUILD",
         "pipeline_name": f"R9-exec-{uuid.uuid4().hex[:6]}",
-        "node_config": {
-            "DATA_SOURCE": {"data_source_id": "DS-CSV-001"},
-            "DATA_MAPPING": {"mapping_id": "MAP-CSV-001"},
-            "STANDARD_DATASET": {"dataset_type_id": "DST-HEAT-DEMAND-ACTUAL"},
-            "FEATURE_SET": {"feature_set_id": "FS-TPL-LAG-ROLL"},
-            "FEATURE_BUILD": {"feature_set_id": "FS-TPL-LAG-ROLL"},
-        },
+        "node_config": heat_pipeline_node_config(api),
     }
     created = api("POST", "/pipeline-definitions", body)
     pid = created["pipeline_id"]
@@ -78,13 +78,7 @@ def test_draft_run_blocked() -> None:
     body = {
         "template_id": "PT-FEATURE-BUILD",
         "pipeline_name": f"R9-draft-{uuid.uuid4().hex[:6]}",
-        "node_config": {
-            "DATA_SOURCE": {"data_source_id": "DS-CSV-001"},
-            "DATA_MAPPING": {"mapping_id": "MAP-CSV-001"},
-            "STANDARD_DATASET": {"dataset_type_id": "DST-HEAT-DEMAND-ACTUAL"},
-            "FEATURE_SET": {"feature_set_id": "FS-TPL-LAG-ROLL"},
-            "FEATURE_BUILD": {"feature_set_id": "FS-TPL-LAG-ROLL"},
-        },
+        "node_config": heat_pipeline_node_config(api),
     }
     created = api("POST", "/pipeline-definitions", body)
     pid = created["pipeline_id"]

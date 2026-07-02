@@ -100,20 +100,18 @@ flowchart LR
 
 > 백엔드 API 권한 검증은 1차 범위에 포함되지 않음.
 
-### 1.4 시드 데이터 참고 ID
+### 1.4 시드·템플릿 참고 ID
 
 | 구분 | ID | 설명 |
 |------|-----|------|
-| CSV 열수요 소스 | `DS-CSV-001` | `data/samples/heat_demand_sample.csv` |
-| CSV 기상 소스 | `DS-CSV-002` | `data/samples/weather_observation_sample.csv` |
-| 열수요 매핑 | `MAP-CSV-001` | `heat_demand_actual` |
-| 기상 매핑 | `MAP-CSV-002` | `weather_observation` |
 | Feature Set | `FS-TPL-LAG-ROLL` | Lag/Rolling (기본) |
 | Feature Set | `FS-TPL-TWO-STAGE` | 2-Stage CatBoost용 |
 | 학습 설정 | `TRC-TPL-LAG-ROLL` | LightGBM |
 | 학습 설정 | `TRC-TPL-CATBOOST` | CatBoost |
 | 학습 설정 | `TRC-TPL-TWO-STAGE-CATBOOST` | 2-Stage CatBoost |
 | 모델명 | `heat_demand_lightgbm` | 기본 Champion 후보 |
+
+> **초기 설치(clean seed)** 에는 CSV/API 데이터 소스·매핑이 포함되지 않습니다. `/data/sources`에서 소스를 등록한 뒤 매핑·적재를 진행합니다. 회귀 테스트는 `scripts/test_fixtures.py`가 `data/samples/` CSV로 테스트용 소스를 런타임 생성합니다.
 
 ---
 
@@ -527,11 +525,12 @@ flowchart LR
 
 ### 3.1 CSV 데이터로 처음부터 예측 결과 확인까지
 
-**목표**: 시드 CSV 소스만으로 적재 → Feature → 학습 → 예측 → 결과 확인
+**목표**: 데이터 소스 등록 후 적재 → Feature → 학습 → 예측 → 결과 확인
 
-| 단계 | 화면 | 작업 | 참고 ID/값 |
-|------|------|------|------------|
-| 1 | `/data/sources` | `DS-CSV-001`, `DS-CSV-002` **적재 실행** (limit 1000, UPSERT) | 파일 경로는 시드에 등록됨 |
+| 단계 | 화면 | 작업 | 참고 |
+|------|------|------|------|
+| 0 | `/data/sources` | 열수요·기상 **CSV/API 소스 등록** 및 매핑 생성 | clean seed에는 소스 없음 |
+| 1 | `/data/sources` | 등록한 소스로 **적재 실행** (limit 1000, UPSERT) | CSV는 `data/samples/` 참고 |
 | 2 | `/data/quality` | **품질 점검 실행** | 점수·이력 확인 |
 | 3 | `/feature-sets/FS-TPL-LAG-ROLL` | **Feature 생성** | inserted_count 토스트 확인 |
 | 4 | `/models/training-configs` | `TRC-TPL-LAG-ROLL` **학습 실행** | 또는 기존 학습 결과 활용 |

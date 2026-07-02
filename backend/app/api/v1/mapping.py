@@ -3,6 +3,7 @@ from uuid import uuid4
 import asyncio
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -21,6 +22,12 @@ from app.services.mapping_service import (
 from app.services.standard_dataset_service import TargetTableNotAllowedError, validate_target_table_allowed
 
 router = APIRouter(prefix="/mappings", tags=["Mapping"])
+
+
+def _blockers_from_value_error(exc: ValueError) -> list[dict]:
+    if exc.args and isinstance(exc.args[0], list):
+        return exc.args[0]
+    return []
 
 
 def _mapping_dict(m: DataMapping) -> dict:
@@ -160,8 +167,8 @@ async def delete_mapping_endpoint(mapping_id: str, db: AsyncSession = Depends(ge
         await delete_data_mapping(db, mapping_id)
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
-    except ValueError as blockers:
-        items = blockers if isinstance(blockers, list) else []
+    except ValueError as exc:
+        items = _blockers_from_value_error(exc)
         message = items[0]["message"] if items else "삭제할 수 없습니다."
         raise HTTPException(
             status_code=409,
@@ -171,5 +178,14 @@ async def delete_mapping_endpoint(mapping_id: str, db: AsyncSession = Depends(ge
                 "blockers": items,
                 "hint": "연결된 Feature Recipe를 먼저 삭제·비활성화하거나 다른 매핑으로 변경하세요.",
             },
-        ) from blockers
+        ) from exc
+    except IntegrityError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "MAPPING_IN_USE",
+                "message": "연결된 Column Role 또는 다른 참조 때문에 삭제할 수 없습니다.",
+                "hint": "연결된 Feature Recipe·Column Role을 먼저 정리하세요.",
+            },
+        ) from exc
     return ok(message="데이터 매핑이 삭제되었습니다.")

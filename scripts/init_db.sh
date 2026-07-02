@@ -9,5 +9,5 @@ PGDATABASE=${PGDATABASE:-thermops}
 echo "Applying schema..."
 psql -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$PGDATABASE" -f db/init/01_schema.sql
 echo "Applying seed data..."
-psql -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$PGDATABASE" -f db/init/02_seed.sql
+psql -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$PGDATABASE" -f db/init/02_seed_clean.sql
 echo "Done."

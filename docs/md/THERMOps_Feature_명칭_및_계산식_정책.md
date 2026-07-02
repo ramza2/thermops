@@ -135,9 +135,9 @@ Legacy alias 자동 대체 기능은 기존 Feature Set에 남아 있는 과거 
 | 파일 | 명칭 체계 | 비고 |
 |------|-----------|------|
 | `db/init/02_seed_clean.sql` | **공식** (`demand_*`, `heating_degree_days` 등) | Traefik clean 배포 기준 |
-| `db/init/02_seed.sql` | **혼재** — TPL은 공식, `FS-000001`·FEAT-001/002는 레거시 | demo/시연 seed, 대규모 변경 보류 |
+| `db/init/02_seed_demo.sql` | **혼재** — TPL은 공식, `FS-000001`·FEAT-001/002는 레거시 | demo/시연 seed, 대규모 변경 보류 |
 
-`02_seed.sql`의 `FS-000001`(`lag_24h`, `rolling_mean_24h` 등)은 계산 키와 불일치하는 **구 demo**이며, clean 배포 경로에서는 사용하지 않는다.
+`02_seed_demo.sql`의 `FS-000001`(`lag_24h`, `rolling_mean_24h` 등)은 계산 키와 불일치하는 **구 demo**이며, clean 배포 경로에서는 사용하지 않는다.
 
 ## 9. 향후 확장 (별도 과제)
 

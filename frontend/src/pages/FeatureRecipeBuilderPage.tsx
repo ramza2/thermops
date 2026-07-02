@@ -59,7 +59,7 @@ export default function FeatureRecipeBuilderPage() {
   const [mappings, setMappings] = useState<MappingItem[]>([]);
   const [columnRoles, setColumnRoles] = useState<FeatureColumnRole[]>([]);
   const [recipeType, setRecipeType] = useState(searchParams.get("recipe_type") || "LAG");
-  const [mappingId, setMappingId] = useState(searchParams.get("mapping_id") || "MAP-CSV-001");
+  const [mappingId, setMappingId] = useState(searchParams.get("mapping_id") || "");
   const [sourceColumn, setSourceColumn] = useState(searchParams.get("source_column") || "heat_demand");
   const [entityKey, setEntityKey] = useState("site_id");
   const [timeKey, setTimeKey] = useState("measured_at");

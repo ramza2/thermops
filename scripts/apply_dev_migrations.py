@@ -191,36 +191,7 @@ MIGRATIONS = [
     ),
     (
         "tb_feature_column_role seed (clean demo mappings)",
-        """
-        INSERT INTO tb_feature_column_role (
-            role_id, mapping_id, data_source_id, target_table,
-            source_column, target_column, data_type, column_role,
-            inferred_role, inference_confidence, role_source, active_yn
-        ) VALUES
-        ('FCR-CSV001-SITE', 'MAP-CSV-001', 'DS-CSV-001', 'heat_demand_actual',
-         'site_id', 'site_id', 'STRING', 'ENTITY_KEY', 'ENTITY_KEY', 95.00, 'SEED', 'Y'),
-        ('FCR-CSV001-TIME', 'MAP-CSV-001', 'DS-CSV-001', 'heat_demand_actual',
-         'measured_at', 'measured_at', 'DATETIME', 'TIME_KEY', 'TIME_KEY', 95.00, 'SEED', 'Y'),
-        ('FCR-CSV001-TGT', 'MAP-CSV-001', 'DS-CSV-001', 'heat_demand_actual',
-         'heat_demand', 'heat_demand', 'NUMERIC', 'TARGET', 'TARGET', 90.00, 'SEED', 'Y'),
-        ('FCR-CSV001-SUP', 'MAP-CSV-001', 'DS-CSV-001', 'heat_demand_actual',
-         'supply_temp', 'supply_temp', 'NUMERIC', 'NUMERIC_INPUT', 'NUMERIC_INPUT', 80.00, 'SEED', 'Y'),
-        ('FCR-CSV002-AREA', 'MAP-CSV-002', 'DS-CSV-002', 'weather_observation',
-         'weather_area_id', 'weather_area_id', 'STRING', 'ENTITY_KEY', 'ENTITY_KEY', 95.00, 'SEED', 'Y'),
-        ('FCR-CSV002-TIME', 'MAP-CSV-002', 'DS-CSV-002', 'weather_observation',
-         'measured_at', 'measured_at', 'DATETIME', 'TIME_KEY', 'TIME_KEY', 95.00, 'SEED', 'Y'),
-        ('FCR-CSV002-TEMP', 'MAP-CSV-002', 'DS-CSV-002', 'weather_observation',
-         'temperature', 'temperature', 'NUMERIC', 'NUMERIC_INPUT', 'NUMERIC_INPUT', 85.00, 'SEED', 'Y'),
-        ('FCR-CSV002-HUM', 'MAP-CSV-002', 'DS-CSV-002', 'weather_observation',
-         'humidity', 'humidity', 'NUMERIC', 'NUMERIC_INPUT', 'NUMERIC_INPUT', 85.00, 'SEED', 'Y'),
-        ('FCR-CSV002-RAIN', 'MAP-CSV-002', 'DS-CSV-002', 'weather_observation',
-         'rainfall', 'rainfall', 'NUMERIC', 'NUMERIC_INPUT', 'NUMERIC_INPUT', 85.00, 'SEED', 'Y'),
-        ('FCR-CSV002-WIND', 'MAP-CSV-002', 'DS-CSV-002', 'weather_observation',
-         'wind_speed', 'wind_speed', 'NUMERIC', 'NUMERIC_INPUT', 'NUMERIC_INPUT', 85.00, 'SEED', 'Y'),
-        ('FCR-CSV002-DTYPE', 'MAP-CSV-002', 'DS-CSV-002', 'weather_observation',
-         'data_type', 'data_type', 'STRING', 'CATEGORICAL_INPUT', 'CATEGORICAL_INPUT', 75.00, 'SEED', 'Y')
-        ON CONFLICT (role_id) DO NOTHING;
-        """,
+        "-- clean seed: 데이터 소스·매핑·Column Role은 초기 설치 시 포함하지 않음 (scripts/test_fixtures.py 참고)",
     ),
     (
         "tb_feature_recipe R5 tables",

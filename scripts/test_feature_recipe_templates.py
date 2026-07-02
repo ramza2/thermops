@@ -9,10 +9,16 @@ import sys
 import urllib.error
 import urllib.parse
 import urllib.request
+from pathlib import Path
+
+_SCRIPTS = Path(__file__).resolve().parent
+if str(_SCRIPTS) not in sys.path:
+    sys.path.insert(0, str(_SCRIPTS))
+from test_fixtures import resolve_heat_mapping_id, resolve_weather_mapping_id
 
 API_BASE = os.environ.get("THERMOOPS_API_BASE", "http://localhost:8000/api/v1")
-HEAT_MAPPING_ID = os.environ.get("THERMOOPS_HEAT_MAPPING_ID", "MAP-CSV-001")
-WEATHER_MAPPING_ID = os.environ.get("THERMOOPS_WEATHER_MAPPING_ID", "MAP-CSV-002")
+HEAT_MAPPING_ID = ""
+WEATHER_MAPPING_ID = ""
 
 REQUIRED_TYPES = frozenset({
     "RAW_COLUMN",
@@ -236,7 +242,11 @@ def test_lag_unavailable_without_roles() -> None:
 
 
 def main() -> int:
+    global HEAT_MAPPING_ID, WEATHER_MAPPING_ID
     print("test_feature_recipe_templates.py")
+    HEAT_MAPPING_ID = resolve_heat_mapping_id(api)
+    WEATHER_MAPPING_ID = resolve_weather_mapping_id(api)
+    print(f"  [fixture] heat mapping={HEAT_MAPPING_ID} weather mapping={WEATHER_MAPPING_ID}")
     tests = [
         test_list_templates,
         test_get_lag_detail,

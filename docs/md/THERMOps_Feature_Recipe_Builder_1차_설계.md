@@ -698,7 +698,7 @@ Recipe 도입 후에도 **학습은 feature_name 목록 기준**을 유지한다
 
 - 테이블: `tb_feature_column_role`
 - migration: `scripts/apply_dev_migrations.py` (기존 볼륨) + `db/init/01_schema.sql` (clean deploy)
-- seed: `02_seed_clean.sql` — `MAP-CSV-001`, `MAP-CSV-002` 기본 역할
+- seed: `02_seed_clean.sql` — 마스터·템플릿만 (데이터 소스·매핑·Column Role seed 없음)
 
 ### API
 

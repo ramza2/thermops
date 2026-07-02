@@ -10,6 +10,12 @@ import time
 import urllib.error
 import urllib.request
 from base64 import b64encode
+from pathlib import Path
+
+_SCRIPTS = Path(__file__).resolve().parent
+if str(_SCRIPTS) not in sys.path:
+    sys.path.insert(0, str(_SCRIPTS))
+from test_fixtures import resolve_heat_source_id, resolve_weather_source_id
 
 API_BASE = os.environ.get("THERMOOPS_API_BASE", "http://localhost:8000/api/v1")
 AIRFLOW_BASE = os.environ.get("AIRFLOW_BASE_URL", "http://localhost:8080")
@@ -82,6 +88,9 @@ def assert_xcom_chain(summary: dict) -> None:
 def main() -> int:
     print(f"THERMOps full pipeline E2E test (timeout={POLL_TIMEOUT}s)")
     try:
+        heat_source_id = resolve_heat_source_id(api)
+        weather_source_id = resolve_weather_source_id(api)
+        print(f"  [fixture] heat source={heat_source_id} weather source={weather_source_id}")
         pipelines = api("GET", "/pipelines")
         full = next((p for p in pipelines if p.get("pipeline_id") == FULL_PIPELINE_DAG), None)
         if not full:
@@ -90,8 +99,8 @@ def main() -> int:
         trigger = api("POST", f"/pipelines/{FULL_PIPELINE_DAG}/trigger", {
             "business_date": "2026-06-20",
             "parameters": {
-                "source_id": "DS-CSV-001",
-                "weather_source_id": "DS-CSV-002",
+                "source_id": heat_source_id,
+                "weather_source_id": weather_source_id,
                 "feature_set_id": "FS-TPL-LAG-ROLL",
                 "config_id": "TRC-TPL-LAG-ROLL",
                 "model_name": "heat_demand_lightgbm",

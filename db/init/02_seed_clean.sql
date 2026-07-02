@@ -1,6 +1,6 @@
 -- THERMOps Clean Seed (마스터·템플릿만, 결과성 데이터 없음)
--- Traefik clean deployment 및 사용자 가이드 실습용
--- Demo/결과 데이터는 db/init/02_seed.sql 또는 reset 후 별도 적재
+-- 범용 MLOps 플랫폼 초기 설치용 — 데이터 소스·매핑은 UI/API에서 등록
+-- Demo/결과 데이터는 db/init/02_seed_demo.sql 또는 reset 후 별도 적재
 
 -- Sites (5 branches)
 INSERT INTO tb_site (site_id, site_name, site_type, active_yn) VALUES
@@ -46,67 +46,11 @@ INSERT INTO tb_common_code (code_group, code, code_name, sort_order) VALUES
 ('DRIFT_STATUS', 'DRIFT', '드리프트 감지', 3)
 ON CONFLICT DO NOTHING;
 
--- CSV sample data sources (실습용 등록 정보만, 적재 데이터 없음)
-INSERT INTO tb_data_source (data_source_id, source_name, source_type, source_category, connection_ref, connection_info, load_cycle, active_yn) VALUES
-('DS-CSV-001', '열수요 CSV 샘플', 'CSV', 'HEAT_DEMAND', 'heat_demand_sample.csv',
- '{"file_path":"data/samples/heat_demand_sample.csv","encoding":"utf-8","delimiter":","}', 'HOURLY', 'Y'),
-('DS-CSV-002', '기상 CSV 샘플', 'CSV', 'WEATHER', 'weather_observation_sample.csv',
- '{"file_path":"data/samples/weather_observation_sample.csv","encoding":"utf-8","delimiter":","}', 'HOURLY', 'Y')
-ON CONFLICT DO NOTHING;
-
-INSERT INTO tb_data_mapping (mapping_id, source_id, mapping_name, target_table, columns) VALUES
-('MAP-CSV-001', 'DS-CSV-001', '열수요 CSV 표준 매핑', 'heat_demand_actual', '[
-  {"source_column":"site_id","target_column":"site_id","required_yn":true},
-  {"source_column":"measured_at","target_column":"measured_at","required_yn":true},
-  {"source_column":"heat_demand","target_column":"heat_demand","required_yn":true},
-  {"source_column":"supply_temp","target_column":"supply_temp","required_yn":false}
-]'),
-('MAP-CSV-002', 'DS-CSV-002', '기상 CSV 표준 매핑', 'weather_observation', '[
-  {"source_column":"weather_area_id","target_column":"weather_area_id","required_yn":true},
-  {"source_column":"measured_at","target_column":"measured_at","required_yn":true},
-  {"source_column":"data_type","target_column":"data_type","required_yn":false},
-  {"source_column":"temperature","target_column":"temperature","required_yn":false},
-  {"source_column":"humidity","target_column":"humidity","required_yn":false},
-  {"source_column":"rainfall","target_column":"rainfall","required_yn":false},
-  {"source_column":"wind_speed","target_column":"wind_speed","required_yn":false}
-]')
-ON CONFLICT DO NOTHING;
-
 -- Standard dataset types (R7)
 \ir r7_standard_dataset_seed.sql
 
 -- Pipeline templates (R8)
 \ir r8_pipeline_builder_seed.sql
-
--- Column Role preset (Feature Recipe Builder R1)
-INSERT INTO tb_feature_column_role (
-    role_id, mapping_id, data_source_id, target_table,
-    source_column, target_column, data_type, column_role,
-    inferred_role, inference_confidence, role_source, active_yn
-) VALUES
-('FCR-CSV001-SITE', 'MAP-CSV-001', 'DS-CSV-001', 'heat_demand_actual',
- 'site_id', 'site_id', 'STRING', 'ENTITY_KEY', 'ENTITY_KEY', 95.00, 'SEED', 'Y'),
-('FCR-CSV001-TIME', 'MAP-CSV-001', 'DS-CSV-001', 'heat_demand_actual',
- 'measured_at', 'measured_at', 'DATETIME', 'TIME_KEY', 'TIME_KEY', 95.00, 'SEED', 'Y'),
-('FCR-CSV001-TGT', 'MAP-CSV-001', 'DS-CSV-001', 'heat_demand_actual',
- 'heat_demand', 'heat_demand', 'NUMERIC', 'TARGET', 'TARGET', 90.00, 'SEED', 'Y'),
-('FCR-CSV001-SUP', 'MAP-CSV-001', 'DS-CSV-001', 'heat_demand_actual',
- 'supply_temp', 'supply_temp', 'NUMERIC', 'NUMERIC_INPUT', 'NUMERIC_INPUT', 80.00, 'SEED', 'Y'),
-('FCR-CSV002-AREA', 'MAP-CSV-002', 'DS-CSV-002', 'weather_observation',
- 'weather_area_id', 'weather_area_id', 'STRING', 'ENTITY_KEY', 'ENTITY_KEY', 95.00, 'SEED', 'Y'),
-('FCR-CSV002-TIME', 'MAP-CSV-002', 'DS-CSV-002', 'weather_observation',
- 'measured_at', 'measured_at', 'DATETIME', 'TIME_KEY', 'TIME_KEY', 95.00, 'SEED', 'Y'),
-('FCR-CSV002-TEMP', 'MAP-CSV-002', 'DS-CSV-002', 'weather_observation',
- 'temperature', 'temperature', 'NUMERIC', 'NUMERIC_INPUT', 'NUMERIC_INPUT', 85.00, 'SEED', 'Y'),
-('FCR-CSV002-HUM', 'MAP-CSV-002', 'DS-CSV-002', 'weather_observation',
- 'humidity', 'humidity', 'NUMERIC', 'NUMERIC_INPUT', 'NUMERIC_INPUT', 85.00, 'SEED', 'Y'),
-('FCR-CSV002-RAIN', 'MAP-CSV-002', 'DS-CSV-002', 'weather_observation',
- 'rainfall', 'rainfall', 'NUMERIC', 'NUMERIC_INPUT', 'NUMERIC_INPUT', 85.00, 'SEED', 'Y'),
-('FCR-CSV002-WIND', 'MAP-CSV-002', 'DS-CSV-002', 'weather_observation',
- 'wind_speed', 'wind_speed', 'NUMERIC', 'NUMERIC_INPUT', 'NUMERIC_INPUT', 85.00, 'SEED', 'Y'),
-('FCR-CSV002-DTYPE', 'MAP-CSV-002', 'DS-CSV-002', 'weather_observation',
- 'data_type', 'data_type', 'STRING', 'CATEGORICAL_INPUT', 'CATEGORICAL_INPUT', 75.00, 'SEED', 'Y')
-ON CONFLICT (role_id) DO NOTHING;
 
 -- Calendar (Feature 생성·실습용 기준 데이터)
 INSERT INTO tb_calendar (calendar_date, day_of_week, is_weekend, is_holiday, holiday_name, season)

@@ -8,5 +8,6 @@ from ml.data_loader import get_db_url  # noqa: E402
 
 if __name__ == "__main__":
     print(f"DB URL: {get_db_url()}")
-    print("Seed data is loaded via db/init/02_seed.sql on PostgreSQL init.")
+    print("Clean seed is loaded via db/init/02_seed_clean.sql on PostgreSQL init.")
+    print("Optional demo data: db/init/02_seed_demo.sql (not applied automatically).")
     print("Use scripts/init_db.sh to re-apply schema and seed manually.")
