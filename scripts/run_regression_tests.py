@@ -125,6 +125,12 @@ def _build_registry() -> list[TestCase]:
             timeout_seconds=120,
         ),
         _python_test(
+            "test_standard_datasets.py",
+            groups=["connector", "model", "full"],
+            description="표준 데이터셋 유형 / 매핑 allowlist (R7)",
+            timeout_seconds=180,
+        ),
+        _python_test(
             "test_feature_recipe_build.py",
             groups=["model", "full"],
             description="Recipe Engine Feature Build (R6)",

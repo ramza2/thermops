@@ -144,6 +144,47 @@ class FeatureColumnRole(Base):
     updated_at: Mapped[datetime | None] = mapped_column(DateTime)
 
 
+class StandardDatasetType(Base):
+    __tablename__ = "tb_standard_dataset_type"
+    dataset_type_id: Mapped[str] = mapped_column(String(50), primary_key=True)
+    dataset_type_code: Mapped[str] = mapped_column(String(80))
+    dataset_type_name: Mapped[str] = mapped_column(String(200))
+    description: Mapped[str | None] = mapped_column(Text)
+    domain: Mapped[str | None] = mapped_column(String(80))
+    category: Mapped[str | None] = mapped_column(String(80))
+    target_table: Mapped[str] = mapped_column(String(120))
+    physical_table_yn: Mapped[str] = mapped_column(String(1), default="Y")
+    physical_table_exists_yn: Mapped[str] = mapped_column(String(1), default="Y")
+    build_supported_yn: Mapped[str] = mapped_column(String(1), default="N")
+    recipe_supported_yn: Mapped[str] = mapped_column(String(1), default="N")
+    mapping_supported_yn: Mapped[str] = mapped_column(String(1), default="Y")
+    status: Mapped[str] = mapped_column(String(30), default="ACTIVE")
+    owner: Mapped[str | None] = mapped_column(String(100))
+    active_yn: Mapped[str] = mapped_column(String(1), default="Y")
+    created_at: Mapped[datetime] = mapped_column(DateTime)
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime)
+
+
+class StandardDatasetColumn(Base):
+    __tablename__ = "tb_standard_dataset_column"
+    column_id: Mapped[str] = mapped_column(String(50), primary_key=True)
+    dataset_type_id: Mapped[str] = mapped_column(String(50))
+    column_name: Mapped[str] = mapped_column(String(120))
+    display_name: Mapped[str | None] = mapped_column(String(200))
+    data_type: Mapped[str] = mapped_column(String(80))
+    nullable_yn: Mapped[str] = mapped_column(String(1), default="Y")
+    required_yn: Mapped[str] = mapped_column(String(1), default="N")
+    primary_key_yn: Mapped[str] = mapped_column(String(1), default="N")
+    default_column_role: Mapped[str | None] = mapped_column(String(50))
+    role_required_yn: Mapped[str] = mapped_column(String(1), default="N")
+    description: Mapped[str | None] = mapped_column(Text)
+    example_value: Mapped[str | None] = mapped_column(String(500))
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    active_yn: Mapped[str] = mapped_column(String(1), default="Y")
+    created_at: Mapped[datetime] = mapped_column(DateTime)
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime)
+
+
 class FeatureRecipe(Base):
     __tablename__ = "tb_feature_recipe"
     recipe_id: Mapped[str] = mapped_column(String(50), primary_key=True)

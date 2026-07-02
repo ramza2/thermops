@@ -15,6 +15,7 @@ from app.api.v1 import (
     pipeline,
     prediction,
     sample_external,
+    standard_dataset,
     system,
     training,
 )
@@ -42,6 +43,7 @@ app.include_router(common.router, prefix=api_prefix)
 app.include_router(data.router, prefix=api_prefix)
 app.include_router(sample_external.router, prefix=api_prefix)
 app.include_router(mapping.router, prefix=api_prefix)
+app.include_router(standard_dataset.router, prefix=api_prefix)
 app.include_router(feature.router, prefix=api_prefix)
 app.include_router(feature_column_role.router, prefix=api_prefix)
 app.include_router(feature_recipe.router, prefix=api_prefix)

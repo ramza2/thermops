@@ -67,6 +67,54 @@ class MappingUpdate(BaseModel):
     columns: list[MappingColumn] | None = None
 
 
+class StandardDatasetColumnInput(BaseModel):
+    column_id: str | None = None
+    column_name: str
+    display_name: str | None = None
+    data_type: str = "STRING"
+    required: bool = False
+    primary_key: bool = False
+    default_column_role: str | None = None
+    role_required: bool = False
+    description: str | None = None
+    example_value: str | None = None
+    sort_order: int | None = None
+
+
+class StandardDatasetTypeCreate(BaseModel):
+    dataset_type_id: str | None = None
+    dataset_type_code: str
+    dataset_type_name: str
+    description: str | None = None
+    domain: str | None = None
+    category: str | None = None
+    target_table: str
+    status: str = "DRAFT"
+    owner: str | None = None
+    physical_table_yn: bool = True
+    build_supported: bool = False
+    recipe_supported: bool = False
+    mapping_supported: bool = False
+    columns: list[StandardDatasetColumnInput] = []
+
+
+class StandardDatasetTypeUpdate(BaseModel):
+    dataset_type_name: str | None = None
+    description: str | None = None
+    domain: str | None = None
+    category: str | None = None
+    target_table: str | None = None
+    owner: str | None = None
+    build_supported: bool | None = None
+    recipe_supported: bool | None = None
+    mapping_supported: bool | None = None
+    columns: list[StandardDatasetColumnInput] | None = None
+
+
+class ValidateTargetTableRequest(BaseModel):
+    target_table: str
+
+
 # Feature
 class FeatureCreate(BaseModel):
     feature_name: str

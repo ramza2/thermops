@@ -72,6 +72,9 @@ INSERT INTO tb_data_mapping (mapping_id, source_id, mapping_name, target_table, 
 ]')
 ON CONFLICT DO NOTHING;
 
+-- Standard dataset types (R7)
+\ir r7_standard_dataset_seed.sql
+
 -- Column Role preset (Feature Recipe Builder R1)
 INSERT INTO tb_feature_column_role (
     role_id, mapping_id, data_source_id, target_table,

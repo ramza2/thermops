@@ -52,8 +52,9 @@ flowchart LR
 | 순서 | 업무 | 주요 화면 | 주요 API/파이프라인 | 비고 |
 |------|------|-----------|---------------------|------|
 | 1 | 데이터소스 등록 | `/data/sources` | `POST /data-sources` | CSV, PostgreSQL, REST API 지원 |
-| 2 | 스키마 탐색 | `/data/mappings` (등록 모달) | `GET /data-sources/{id}/discover-schema` | 매핑 등록 시 소스 컬럼 자동 탐색 |
-| 3 | 데이터 매핑 | `/data/mappings` | `POST/PUT /mappings`, `POST .../validate`, `POST .../preview` | 원천→표준 테이블 컬럼 매핑 |
+| 2 | 표준 데이터셋 유형 (R7) | `/standard-datasets` | `GET /standard-dataset-types`, `POST ...` (DRAFT) | 신규 도메인·표준 컬럼 정의 (물리 테이블 자동 생성 없음) |
+| 3 | 스키마 탐색 | `/data/mappings` (등록 모달) | `GET /data-sources/{id}/discover-schema` | 매핑 등록 시 소스 컬럼 자동 탐색 |
+| 4 | 데이터 매핑 | `/data/mappings` | `POST/PUT /mappings`, `GET /standard-target-tables` | 표준 대상 테이블 선택 + allowlist 검증 |
 | 4 | 적재 실행 | `/data/sources` | `POST /ingestion-jobs?source_id=...` | UI 수동 적재 또는 `data_ingestion_dag` |
 | 5 | 품질 점검 | `/data/quality` | `POST /data-quality/checks` | `data_quality_dag` |
 | 6 | Feature 정의 | `/features` | `POST /features` | 개별 Feature 메타 등록 |
@@ -164,12 +165,12 @@ flowchart LR
 | 항목 | 내용 |
 |------|------|
 | **화면 목적** | 원천 컬럼과 표준 스키마(대상 테이블) 간 매핑 규칙 및 **Column Role(컬럼 역할)** 관리 |
-| **주요 입력값** | 데이터 소스, 매핑명, 대상 테이블(기본 `heat_demand_actual`), 컬럼 매핑(원천→표준), 컬럼 역할(드롭다운) |
-| **주요 버튼** | **신규 매핑**, **수정**, **검증**, **미리보기**, 모달 내 **스키마 탐색**, **추천 역할 적용**, **역할 검증**, **컬럼 역할 저장**, **매핑 저장** |
+| **주요 입력값** | 데이터 소스, 매핑명, **표준 대상 테이블(드롭다운 선택)**, 컬럼 매핑(원천→표준 컬럼 드롭다운), 컬럼 역할 |
+| **주요 버튼** | **신규 매핑**, **수정**, **검증**, **미리보기**, 모달 내 **스키마 탐색**, **표준 역할 적용**, **역할 검증**, **컬럼 역할 저장**, **매핑 저장** |
 | **버튼 클릭 시 동작** | 스키마 탐색→소스 필드 목록 조회 후 매핑 행 자동 추가. 추천 역할 적용→자동 추론 결과를 화면에 반영(저장 전). 컬럼 역할 저장→`PUT /feature-column-roles`. Recipe 준비도 카드 표시 |
 | **호출 API** | `GET /mappings`, `GET /feature-column-role-codes`, `GET /feature-column-roles`, `POST /feature-column-roles/infer`, `POST /feature-column-roles/validate`, `PUT /feature-column-roles`, `POST/PUT /mappings`, `POST /mappings/{id}/validate`, `POST /mappings/{id}/preview`, `GET /data-sources/{id}/discover-schema` |
 | **결과 확인 위치** | 목록(컬럼 수·상태), 검증 토스트, 미리보기 모달, Column Role 검증·Recipe 준비도 패널 |
-| **주의할 점** | **자동 추론은 제안**이며 저장해야 확정됨. Column Role은 **현재 Feature Build/학습/예측에 직접 영향 없음** (향후 Recipe Builder 전제). TIME_KEY는 1개만 허용 |
+| **주의할 점** | 대상 테이블 **자유 입력 불가**(ACTIVE 표준 테이블만). 신규 도메인은 `/standard-datasets`에서 DRAFT 설계 후 ACTIVE 전환. **자동 추론은 제안**이며 저장해야 확정 |
 | **선행 작업** | 데이터 소스 등록 |
 | **후속 작업** | 적재 실행, 품질 점검, Recipe 템플릿 확인(R2) |
 
@@ -186,6 +187,8 @@ flowchart LR
 **R6-S1 Build 안정화**: Build `result_summary`에 Feature별 상태·진단 코드가 추가되며, Recipe별 최근 Build 이력(`GET .../build-history`)과 Preview vs Build 샘플 비교 API로 운영 검증을 보강합니다. Feature Set 상세 **Recipe Engine Build 상세**, Lineage TEMPLATE 메타데이터, Feature Quality TEMPLATE coverage를 확인합니다. LAG/ROLLING 초기 null은 이력 부족 warning으로 안내됩니다.
 
 **R6-S2 운영 UI 마감**: Recipe 목록 최근 Build 상태, Builder **Preview/Build 비교** 버튼·결과 모달, 진단 패널·Quality·Lineage UX 보강. `compare-preview-build`에서 `dataset_version_id` 생략 시 최근 Build Job 자동 선택.
+
+**R7 표준 데이터셋·매핑**: `/standard-datasets`에서 학습 데이터셋 유형·표준 컬럼·Recipe/Build 연결 가능성을 관리합니다. `/data/mappings`에서는 **표준 대상 테이블 목록**에서만 선택하며 Backend allowlist 검증이 적용됩니다. 물리 테이블은 R7에서 자동 생성하지 않습니다.
 
 ---
 

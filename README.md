@@ -285,8 +285,14 @@ curl -X POST "http://localhost:8000/api/v1/feature-build-jobs?feature_set_id=FS-
 - **R6 Recipe Engine Build**: PUBLISHED TEMPLATE Recipe를 Feature Build에 연결 — 설계서 부록 H (`RAW_COLUMN`/`DATE_PART`/`LAG`/`ROLLING_*` 지원)
 - **R6-S1 Build 안정화**: Build 진단·Recipe별 이력·Preview/Build 비교·운영 UI 보강 — 설계서 부록 I (신규 Recipe Type 없음)
 - **R6-S2 운영 UI 마감**: Recipe 목록 Build 상태·Builder Preview/Build 비교 UI — 설계서 부록 J
+- **R7 표준 데이터셋 Builder**: 표준 대상 테이블 allowlist·학습 데이터셋 유형 관리·매핑 드롭다운 전환 — 설계서 부록 K (`/standard-datasets`, `/data/mappings`)
 
-**Feature Registry·Lineage UI**
+**표준 데이터셋·매핑 (R7)**
+
+- `/standard-datasets`: 학습 데이터셋 유형·표준 컬럼·Recipe/Build 연결 가능성 관리 (DRAFT/ACTIVE/PLANNED, 물리 테이블 자동 생성 없음)
+- `/data/mappings`: 대상 테이블 **자유 입력 제거** → 표준 대상 테이블 선택 + Backend allowlist 검증
+- API: `GET /standard-target-tables`, `POST /standard-dataset-types/validate-target-table`, mapping create/update 시 `INVALID_TARGET_TABLE` 검증
+
 
 - `/features`: **등록 유형** 뱃지, **신규 Feature 사용 절차** 안내, Registry 요약, **상세** 모달에서 입력 테이블·Lookback·누수 방지 등 확인
 - `/feature-sets/:id`: 포함 Feature **등록 유형** 뱃지·필터·TPL 보호, **Feature Build 이력** + **Recipe Engine Build 상세** + **Lineage** + **Feature 품질 검증**(TEMPLATE coverage·등록 상태)

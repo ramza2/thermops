@@ -10,6 +10,7 @@ import {
   validateColumnRoles,
 } from "@/api/featureColumnRoles";
 import { getFeatureRecipeTemplates } from "@/api/featureRecipeTemplates";
+import { getStandardTargetTables } from "@/api/standardDatasets";
 import { FeatureRecipePreviewModal } from "@/components/FeatureRecipePreviewModal";
 import { Button } from "@/components/Button";
 import { DataTable } from "@/components/DataTable";
@@ -46,6 +47,9 @@ import {
   templateStatusClass,
   templateStatusLabel,
 } from "@/utils/featureRecipeTemplateFormat";
+import type { StandardTargetTable } from "@/types/standardDatasets";
+import { R7_MAPPING_TARGET_NOTE } from "@/types/standardDatasets";
+import { targetTableOptionLabel } from "@/utils/standardDatasetFormat";
 
 interface MappingColumn {
   source_column: string;
@@ -71,11 +75,15 @@ interface DataSource {
 const EMPTY_FORM = {
   source_id: "",
   mapping_name: "",
-  target_table: "heat_demand_actual",
+  target_table: "",
   columns: [
     { source_column: "", target_column: "", required_yn: true },
   ] as MappingColumn[],
 };
+
+function normalizeTargetKey(table: string): string {
+  return table.toLowerCase().replace(/^tb_/, "");
+}
 
 const ROLE_EMPTY_OPTION = { value: "", label: "미지정" };
 
@@ -305,6 +313,7 @@ export default function DataMappingsPage() {
   const [templateSectionOpen, setTemplateSectionOpen] = useState(true);
   const [recipePreviewOpen, setRecipePreviewOpen] = useState(false);
   const [recipePreviewTemplate, setRecipePreviewTemplate] = useState<RecipeTemplate | null>(null);
+  const [targetTables, setTargetTables] = useState<StandardTargetTable[]>([]);
 
   const roleOptions = useMemo(
     () => [
@@ -313,6 +322,32 @@ export default function DataMappingsPage() {
     ],
     [roleCodes],
   );
+
+  const targetTableOptions = useMemo(
+    () => targetTables.map((t) => ({
+      value: t.target_table,
+      label: targetTableOptionLabel(t),
+    })),
+    [targetTables],
+  );
+
+  const selectedTargetTable = useMemo(
+    () => targetTables.find((t) => normalizeTargetKey(t.target_table) === normalizeTargetKey(form.target_table)),
+    [targetTables, form.target_table],
+  );
+
+  const standardColumnOptions = useMemo(() => {
+    const cols = selectedTargetTable?.standard_columns || [];
+    return [
+      { value: "", label: "선택" },
+      ...cols.map((c) => ({ value: c, label: c })),
+    ];
+  }, [selectedTargetTable]);
+
+  const isNonStandardTarget = useMemo(() => {
+    if (!form.target_table) return false;
+    return !targetTables.some((t) => normalizeTargetKey(t.target_table) === normalizeTargetKey(form.target_table));
+  }, [form.target_table, targetTables]);
 
   const load = async (p = page) => {
     setLoading(true);
@@ -398,6 +433,9 @@ export default function DataMappingsPage() {
     getColumnRoleCodes()
       .then((res) => setRoleCodes(res.items || []))
       .catch(() => {});
+    getStandardTargetTables()
+      .then((res) => setTargetTables(res.items || []))
+      .catch(() => {});
   }, [page]);
 
   useEffect(() => {
@@ -410,9 +448,11 @@ export default function DataMappingsPage() {
 
   const openCreate = () => {
     setEditingId(null);
+    const defaultTarget = targetTables[0]?.target_table || "heat_demand_actual";
     setForm({
       ...EMPTY_FORM,
       source_id: sources[0]?.source_id || "",
+      target_table: defaultTarget,
     });
     resetRoleState();
     setFormOpen(true);
@@ -670,6 +710,8 @@ export default function DataMappingsPage() {
       />
 
       <div className="mb-4 text-xs text-slate-600 bg-blue-50 border border-blue-200 rounded-lg p-3 space-y-1">
+        <p>{R7_MAPPING_TARGET_NOTE}</p>
+        <p>임의 테이블 생성은 지원하지 않습니다. 신규 도메인은 <Link to="/standard-datasets" className="text-blue-600 hover:underline">표준 데이터셋</Link>에서 먼저 등록하세요.</p>
         <p>{COLUMN_ROLE_HELP}</p>
         <p>
           매핑 수정 화면에서 {RECIPE_TEMPLATE_SECTION_TITLE}을 확인할 수 있습니다.
@@ -736,7 +778,21 @@ export default function DataMappingsPage() {
             </div>
             <div>
               <label className="block text-xs text-slate-500 mb-1">대상 테이블</label>
-              <TextInput value={form.target_table} onChange={(v) => setForm({ ...form, target_table: v })} />
+              <SelectInput
+                value={form.target_table}
+                onChange={(v) => setForm({ ...form, target_table: v })}
+                options={targetTableOptions.length ? targetTableOptions : [{ value: form.target_table, label: form.target_table || "선택" }]}
+              />
+              {isNonStandardTarget && (
+                <p className="text-[11px] text-amber-700 mt-1">
+                  현재 매핑은 표준 대상 테이블에 등록되어 있지 않습니다. 수정 저장하려면 표준 대상 테이블을 선택해야 합니다.
+                </p>
+              )}
+              {selectedTargetTable && (
+                <p className="text-[11px] text-slate-500 mt-1">
+                  표준 컬럼: {selectedTargetTable.standard_columns.join(", ")}
+                </p>
+              )}
             </div>
           </div>
           <div>
@@ -768,11 +824,19 @@ export default function DataMappingsPage() {
                     onChange={(v) => updateColumn(idx, "source_column", v)}
                     placeholder="원천 컬럼"
                   />
-                  <TextInput
-                    value={col.target_column}
-                    onChange={(v) => updateColumn(idx, "target_column", v)}
-                    placeholder="표준 컬럼"
-                  />
+                  {standardColumnOptions.length > 1 ? (
+                    <SelectInput
+                      value={col.target_column}
+                      onChange={(v) => updateColumn(idx, "target_column", v)}
+                      options={standardColumnOptions}
+                    />
+                  ) : (
+                    <TextInput
+                      value={col.target_column}
+                      onChange={(v) => updateColumn(idx, "target_column", v)}
+                      placeholder="표준 컬럼"
+                    />
+                  )}
                   <div className="space-y-1">
                     <SelectInput
                       value={role || ""}
@@ -830,7 +894,7 @@ export default function DataMappingsPage() {
                     disabled={roleInferring}
                     onClick={handleApplyInferred}
                   >
-                    {roleInferring ? "추론 중..." : "추천 역할 적용"}
+                    {roleInferring ? "추론 중..." : "표준 역할 적용"}
                   </Button>
                   <Button variant="secondary" icon={<CheckCircle className="w-3 h-3" />} onClick={handleValidateRoles}>
                     역할 검증

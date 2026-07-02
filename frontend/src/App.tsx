@@ -5,6 +5,7 @@ import DashboardPage from "@/pages/DashboardPage";
 import DataSourcesPage from "@/pages/DataSourcesPage";
 import DataMappingsPage from "@/pages/DataMappingsPage";
 import DataQualityPage from "@/pages/DataQualityPage";
+import StandardDatasetsPage from "@/pages/StandardDatasetsPage";
 import FeaturesPage from "@/pages/FeaturesPage";
 import FeatureSetsPage from "@/pages/FeatureSetsPage";
 import FeatureSetDetailPage from "@/pages/FeatureSetDetailPage";
@@ -32,6 +33,7 @@ export default function App() {
             <Route index element={<Navigate to="/dashboard" replace />} />
             <Route path="dashboard" element={<DashboardPage />} />
             <Route path="data/sources" element={<DataSourcesPage />} />
+            <Route path="standard-datasets" element={<StandardDatasetsPage />} />
             <Route path="data/mappings" element={<DataMappingsPage />} />
             <Route path="data/quality" element={<DataQualityPage />} />
             <Route path="features" element={<FeaturesPage />} />

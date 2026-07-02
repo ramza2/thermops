@@ -12,6 +12,13 @@ DB_URL = os.environ.get(
     "postgresql://thermops:thermops@localhost:5432/thermops",
 )
 
+
+def _load_sql(filename: str) -> str:
+    path = os.path.join(os.path.dirname(__file__), filename)
+    with open(path, encoding="utf-8") as handle:
+        return handle.read()
+
+
 MIGRATIONS = [
     (
         "tb_pipeline_run.result_summary",
@@ -268,6 +275,14 @@ MIGRATIONS = [
         CREATE INDEX IF NOT EXISTS ix_feature_recipe_mapping ON tb_feature_recipe(mapping_id) WHERE active_yn = 'Y';
         CREATE INDEX IF NOT EXISTS ix_feature_recipe_type ON tb_feature_recipe(recipe_type) WHERE active_yn = 'Y';
         """,
+    ),
+    (
+        "R7 standard dataset schema",
+        _load_sql("r7_standard_dataset_schema.sql"),
+    ),
+    (
+        "R7 standard dataset seed",
+        _load_sql("r7_standard_dataset_seed.sql"),
     ),
 ]
 

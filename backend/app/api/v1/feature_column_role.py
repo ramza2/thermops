@@ -48,12 +48,21 @@ async def get_feature_column_roles(
 
 
 @router.post("/feature-column-roles/infer")
-async def infer_feature_column_roles(body: FeatureColumnRoleInferRequest):
+async def infer_feature_column_roles(
+    body: FeatureColumnRoleInferRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    from app.services.standard_dataset_service import get_default_column_roles_for_target_table
+
     columns = [c.model_dump() for c in body.columns]
+    standard_roles: dict[str, str] = {}
+    if body.target_table:
+        standard_roles = await get_default_column_roles_for_target_table(db, body.target_table)
     items = infer_column_roles(
         columns,
         target_table=body.target_table,
         source_table=body.source_table,
+        standard_roles=standard_roles or None,
     )
     role_values = [
         {

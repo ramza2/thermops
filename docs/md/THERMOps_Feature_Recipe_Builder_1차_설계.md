@@ -1008,3 +1008,14 @@ R6-S2는 Recipe Engine Build의 **계산 범위를 확장하지 않고**, 운영
 python scripts/test_feature_recipe_build_diagnostics.py
 ```
 
+---
+
+## 부록 K. Phase R7 구현 완료 (표준 대상 테이블 / 학습 데이터셋 유형 관리)
+
+R7부터 데이터 매핑의 대상 테이블은 자유 입력이 아니라 **표준 대상 테이블 목록**에서 선택합니다. 신규 도메인은 **표준 데이터셋 유형 관리 Builder**(`/standard-datasets`)에서 DRAFT로 설계 후 ACTIVE로 전환합니다. **물리 테이블 자동 생성은 하지 않습니다.**
+
+- DB: `tb_standard_dataset_type`, `tb_standard_dataset_column`
+- API: `/standard-dataset-types`, `/standard-target-tables`, mapping allowlist 검증
+- UI: `/standard-datasets`, `/data/mappings` 드롭다운·표준 역할 적용
+- 테스트: `scripts/test_standard_datasets.py`
+

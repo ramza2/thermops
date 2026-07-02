@@ -12,6 +12,7 @@ from app.core.time import utc_now
 from app.models.entities import DataMapping, DataSource
 from app.schemas.api import MappingCreate, MappingUpdate
 from app.services.mapping_service import MappingValidationError, preview_mapping_data, validate_mapping_rules
+from app.services.standard_dataset_service import TargetTableNotAllowedError, validate_target_table_allowed
 
 router = APIRouter(prefix="/mappings", tags=["Mapping"])
 
@@ -56,6 +57,17 @@ async def list_mappings(
 
 @router.post("")
 async def create_mapping(body: MappingCreate, db: AsyncSession = Depends(get_db)):
+    try:
+        await validate_target_table_allowed(db, body.target_table)
+    except TargetTableNotAllowedError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error_code": exc.error_code,
+                "message": str(exc),
+                "allowed_tables": exc.allowed_tables,
+            },
+        ) from exc
     mapping_id = f"MAP-{uuid4().hex[:6].upper()}"
     m = DataMapping(
         mapping_id=mapping_id,
@@ -77,6 +89,17 @@ async def update_mapping(mapping_id: str, body: MappingUpdate, db: AsyncSession 
     if body.mapping_name:
         m.mapping_name = body.mapping_name
     if body.target_table:
+        try:
+            await validate_target_table_allowed(db, body.target_table)
+        except TargetTableNotAllowedError as exc:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error_code": exc.error_code,
+                    "message": str(exc),
+                    "allowed_tables": exc.allowed_tables,
+                },
+            ) from exc
         m.target_table = body.target_table
     if body.columns:
         m.columns = [c.model_dump() for c in body.columns]

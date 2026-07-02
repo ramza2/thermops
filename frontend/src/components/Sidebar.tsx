@@ -11,6 +11,7 @@ const MENU = [
   {
     label: "데이터 관리", icon: Database, children: [
       { label: "데이터 소스 관리", path: "/data/sources" },
+      { label: "표준 데이터셋", path: "/standard-datasets" },
       { label: "데이터 매핑 설정", path: "/data/mappings" },
       { label: "데이터 품질 점검", path: "/data/quality" },
     ],

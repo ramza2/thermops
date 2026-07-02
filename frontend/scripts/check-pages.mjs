@@ -4,6 +4,7 @@ const BASE = "http://127.0.0.1:5173";
 const PATHS = [
   "/dashboard",
   "/data/sources",
+  "/standard-datasets",
   "/data/mappings",
   "/features",
   "/feature-recipes",
@@ -49,7 +50,13 @@ for (const path of PATHS) {
     await page.getByText("R6").first().waitFor({ state: "visible", timeout: 30000 });
     await page.getByText("Preview/Build 비교").first().waitFor({ state: "visible", timeout: 30000 });
   }
+  if (path === "/standard-datasets") {
+    await page.getByText("표준 데이터셋").first().waitFor({ state: "visible", timeout: 30000 });
+    await page.getByText("학습 데이터셋 유형 등록").first().waitFor({ state: "visible", timeout: 30000 });
+    await page.getByText("물리 테이블을 자동 생성하지 않습니다").first().waitFor({ state: "visible", timeout: 30000 });
+  }
   if (path === "/data/mappings") {
+    await page.getByText("대상 테이블은 표준 대상 테이블 목록에서 선택합니다").first().waitFor({ state: "visible", timeout: 30000 });
     await page.getByText("Column Role").first().waitFor({ state: "visible", timeout: 30000 });
     await page.getByText("컬럼 역할").first().waitFor({ state: "visible", timeout: 30000 });
     await page.getByText("사용 가능한 Recipe 템플릿").first().waitFor({ state: "visible", timeout: 30000 });

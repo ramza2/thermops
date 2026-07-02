@@ -193,7 +193,14 @@ def _normalize_table_key(target_table: str | None) -> str:
     return target_table.lower().replace("tb_", "")
 
 
-def _preset_role(target_table: str | None, column_name: str) -> str | None:
+def _preset_role(
+    target_table: str | None,
+    column_name: str,
+    *,
+    standard_roles: dict[str, str] | None = None,
+) -> str | None:
+    if standard_roles and column_name in standard_roles:
+        return standard_roles[column_name]
     if not target_table or not column_name:
         return None
     table_key = _normalize_table_key(target_table)
@@ -218,6 +225,7 @@ def infer_column_role(
     data_type: str | None = None,
     cardinality: int | None = None,
     target_table: str | None = None,
+    standard_roles: dict[str, str] | None = None,
 ) -> tuple[str, float]:
     """단일 컬럼 role 추론. (role, confidence 0~100)."""
     col = (target_column or source_column or "").strip()
@@ -225,9 +233,13 @@ def infer_column_role(
     name = col or src
     lower = name.lower()
 
-    preset = _preset_role(target_table, col) or _preset_role(target_table, src)
+    preset = (
+        _preset_role(target_table, col, standard_roles=standard_roles)
+        or _preset_role(target_table, src, standard_roles=standard_roles)
+    )
     if preset:
-        return preset, 95.0
+        confidence = 98.0 if standard_roles and (col in standard_roles or src in standard_roles) else 95.0
+        return preset, confidence
 
     if _BOOLEAN_NAME_RE.search(lower) or (data_type and data_type.upper() in ("BOOL", "BOOLEAN")):
         return "BOOLEAN_INPUT", 85.0
@@ -285,6 +297,7 @@ def infer_column_roles(
     *,
     target_table: str | None = None,
     source_table: str | None = None,
+    standard_roles: dict[str, str] | None = None,
 ) -> list[dict[str, Any]]:
     _ = source_table
     results: list[dict[str, Any]] = []
@@ -299,6 +312,7 @@ def infer_column_roles(
             data_type=col.get("data_type"),
             cardinality=col.get("cardinality"),
             target_table=target_table,
+            standard_roles=standard_roles,
         )
         results.append({
             "source_column": src,
