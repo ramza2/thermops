@@ -28,8 +28,9 @@ export function extractApiErrorMessage(err: unknown, fallback = "요청에 실�
   const raw = (err as { response?: { data?: { detail?: unknown; message?: string } } })?.response?.data;
   if (typeof raw?.detail === "string") return raw.detail;
   if (raw?.detail && typeof raw.detail === "object") {
-    const detail = raw.detail as { message?: string; errors?: string[] };
+    const detail = raw.detail as { message?: string; errors?: string[]; hint?: string };
     if (detail.errors?.length) return detail.errors[0];
+    if (detail.message && detail.hint) return `${detail.message} ${detail.hint}`;
     if (detail.message) return detail.message;
   }
   if (typeof raw?.message === "string" && raw.message) return raw.message;

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { Plus, Plug, Trash2, Eye, Pencil, Upload } from "lucide-react";
-import { deleteApi, fetchApi, postApi, putApi, PagedData } from "@/api/client";
+import { deleteApi, extractApiErrorMessage, fetchApi, postApi, putApi, PagedData } from "@/api/client";
 import { Button } from "@/components/Button";
 import { DataTable } from "@/components/DataTable";
 import { Modal } from "@/components/Modal";
@@ -37,6 +38,19 @@ interface ConnectionTestResult {
   error_message: string | null;
   sample_row_count: number;
   columns?: string[];
+}
+
+interface DeleteBlocker {
+  code: string;
+  count?: number;
+  message: string;
+  items?: { mapping_id: string; mapping_name: string }[];
+}
+
+interface DeleteBlockersResponse {
+  source_id: string;
+  can_delete: boolean;
+  blockers: DeleteBlocker[];
 }
 
 const EMPTY_FORM = {
@@ -146,6 +160,7 @@ export default function DataSourcesPage() {
   const [error, setError] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<DataSource | null>(null);
+  const [deleteBlockers, setDeleteBlockers] = useState<DeleteBlockersResponse | null>(null);
   const [detail, setDetail] = useState<DataSource | null>(null);
   const [editTarget, setEditTarget] = useState<DataSource | null>(null);
   const [testResult, setTestResult] = useState<ConnectionTestResult | null>(null);
@@ -229,6 +244,17 @@ export default function DataSourcesPage() {
     }
   };
 
+  const openDelete = async (row: DataSource) => {
+    setDeleteTarget(row);
+    setDeleteBlockers(null);
+    try {
+      const res = await fetchApi<DeleteBlockersResponse>(`/data-sources/${row.source_id}/delete-blockers`);
+      setDeleteBlockers(res);
+    } catch {
+      setDeleteBlockers(null);
+    }
+  };
+
   const handleDelete = async () => {
     if (!deleteTarget) return;
     try {
@@ -236,8 +262,8 @@ export default function DataSourcesPage() {
       showToast("success", "데이터 소스가 삭제되었습니다.");
       setDeleteTarget(null);
       load();
-    } catch {
-      showToast("error", "삭제에 실패했습니다.");
+    } catch (err) {
+      showToast("error", extractApiErrorMessage(err, "삭제에 실패했습니다."));
     }
   };
 
@@ -514,7 +540,7 @@ export default function DataSourcesPage() {
                     onClick={() => handleIngest(row)}>
                     {ingesting === row.source_id ? "적재 중..." : "적재 실행"}
                   </Button>
-                  <Button variant="danger" icon={<Trash2 className="w-3 h-3" />} onClick={() => setDeleteTarget(row)}>삭제</Button>
+                  <Button variant="danger" icon={<Trash2 className="w-3 h-3" />} onClick={() => void openDelete(row)}>삭제</Button>
                 </div>
               );
             },
@@ -690,14 +716,26 @@ export default function DataSourcesPage() {
         )}
       </Modal>
 
-      <Modal open={!!deleteTarget} title="삭제 확인" onClose={() => setDeleteTarget(null)}
+      <Modal open={!!deleteTarget} title="삭제 확인" onClose={() => { setDeleteTarget(null); setDeleteBlockers(null); }}
         footer={<>
-          <Button variant="secondary" onClick={() => setDeleteTarget(null)}>취소</Button>
-          <Button variant="danger" onClick={handleDelete}>삭제</Button>
+          <Button variant="secondary" onClick={() => { setDeleteTarget(null); setDeleteBlockers(null); }}>취소</Button>
+          <Button variant="danger" onClick={handleDelete} disabled={deleteBlockers?.can_delete === false}>삭제</Button>
         </>}>
         <p className="text-sm text-slate-600">
           <strong>{deleteTarget?.source_name}</strong> 소스를 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.
         </p>
+        {deleteBlockers && !deleteBlockers.can_delete && (
+          <div className="mt-3 text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-3 space-y-1">
+            <p className="font-medium">아래 연결 때문에 삭제할 수 없습니다.</p>
+            {deleteBlockers.blockers.map((b) => (
+              <p key={b.code}>• {b.message}</p>
+            ))}
+            <p className="text-slate-600 pt-1">
+              <Link to="/data/mappings" className="text-blue-600 hover:underline">데이터 매핑</Link>
+              {" "}화면에서 연결된 매핑을 먼저 삭제하거나, 소스를 비활성화하세요.
+            </p>
+          </div>
+        )}
       </Modal>
     </div>
   );

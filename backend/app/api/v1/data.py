@@ -16,6 +16,7 @@ from app.services.connectors.base import ConnectorError
 from app.services.connectors.registry import get_connector
 from app.services.csv_source_service import get_csv_data_range, is_csv_source
 from app.services.data_quality_service import QualityCheckParams, run_quality_check
+from app.services.data_source_service import delete_data_source, get_data_source_delete_blockers
 from app.services.ingestion_service import IngestionError, fail_ingestion_job, get_active_mapping, run_ingestion
 
 router = APIRouter(tags=["Data"])
@@ -95,12 +96,37 @@ async def update_data_source(source_id: str, body: DataSourceUpdate, db: AsyncSe
     return ok({"source_id": source_id}, message="데이터 소스가 수정되었습니다.")
 
 
-@router.delete("/data-sources/{source_id}")
-async def delete_data_source(source_id: str, db: AsyncSession = Depends(get_db)):
+@router.get("/data-sources/{source_id}/delete-blockers")
+async def get_data_source_delete_blockers_api(source_id: str, db: AsyncSession = Depends(get_db)):
     s = (await db.execute(select(DataSource).where(DataSource.data_source_id == source_id))).scalar_one_or_none()
     if not s:
         raise HTTPException(status_code=404, detail="NOT_FOUND")
-    await db.delete(s)
+    blockers = await get_data_source_delete_blockers(db, source_id)
+    return ok({
+        "source_id": source_id,
+        "can_delete": len(blockers) == 0,
+        "blockers": blockers,
+    })
+
+
+@router.delete("/data-sources/{source_id}")
+async def delete_data_source_endpoint(source_id: str, db: AsyncSession = Depends(get_db)):
+    try:
+        await delete_data_source(db, source_id)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as blockers:
+        items = blockers if isinstance(blockers, list) else []
+        message = items[0]["message"] if items else "삭제할 수 없습니다."
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "DATA_SOURCE_IN_USE",
+                "message": message,
+                "blockers": items,
+                "hint": "연결된 데이터 매핑·Recipe를 먼저 삭제하거나, 데이터 소스를 비활성화하세요.",
+            },
+        ) from blockers
     return ok(message="데이터 소스가 삭제되었습니다.")
 
 
