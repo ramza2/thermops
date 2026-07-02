@@ -9,7 +9,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.time import to_db_datetime
-from app.models.entities import FeatureDataset, FeatureSet
+from app.models.entities import DatasetVersion, FeatureDataset, FeatureSet
 
 
 class PredictionPeriodError(ValueError):
@@ -36,12 +36,28 @@ def _feature_set_filter(feature_set_id: str):
 
 
 async def latest_dataset_version_id(db: AsyncSession, feature_set_id: str) -> str | None:
+    """Feature Set에 연결된 dataset_version 중 record_count가 가장 큰 버전을 선택한다.
+
+    최근 부분 Feature Build(짧은 기간·소량 row)가 전체 빌드보다 나중에 생성되어도
+    학습/예측에 충분한 데이터가 있는 버전을 우선한다.
+    """
     row = (
         await db.execute(
-            select(FeatureDataset.dataset_version_id)
+            select(DatasetVersion.dataset_version_id)
+            .join(
+                FeatureDataset,
+                FeatureDataset.dataset_version_id == DatasetVersion.dataset_version_id,
+            )
             .where(_feature_set_filter(feature_set_id))
-            .group_by(FeatureDataset.dataset_version_id)
-            .order_by(func.max(FeatureDataset.created_at).desc())
+            .group_by(
+                DatasetVersion.dataset_version_id,
+                DatasetVersion.record_count,
+                DatasetVersion.created_at,
+            )
+            .order_by(
+                DatasetVersion.record_count.desc().nullslast(),
+                DatasetVersion.created_at.desc(),
+            )
             .limit(1)
         )
     ).scalar_one_or_none()

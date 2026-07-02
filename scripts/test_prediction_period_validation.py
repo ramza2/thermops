@@ -9,6 +9,12 @@ import sys
 import urllib.error
 import urllib.request
 from datetime import datetime, timedelta
+from pathlib import Path
+
+_SCRIPTS = Path(__file__).resolve().parent
+if str(_SCRIPTS) not in sys.path:
+    sys.path.insert(0, str(_SCRIPTS))
+from test_http_debug import api_error_summary
 
 API_BASE = os.environ.get("THERMOOPS_API_BASE", "http://localhost:8000/api/v1")
 FEATURE_SET_ID = os.environ.get("THERMOOPS_FEATURE_SET_ID", "FS-TPL-LAG-ROLL")
@@ -33,7 +39,10 @@ def api(method: str, path: str, body: dict | None = None, timeout: int = 300) ->
 
 
 def api_data(method: str, path: str, body: dict | None = None, timeout: int = 300) -> dict:
-    payload = api(method, path, body, timeout=timeout)
+    try:
+        payload = api(method, path, body, timeout=timeout)
+    except urllib.error.HTTPError as exc:
+        raise RuntimeError(api_error_summary(method, path, exc)) from exc
     if not payload.get("success"):
         raise RuntimeError(f"API failed {path}: {payload}")
     return payload["data"]
@@ -69,13 +78,14 @@ def _dataset_range(feature_set_id: str) -> dict:
 
 
 def _feature_set_exists(feature_set_id: str) -> bool:
+    path = f"/feature-sets/{feature_set_id}"
     try:
-        api_data("GET", f"/feature-sets/{feature_set_id}")
-        return True
+        payload = api("GET", path)
+        return bool(payload.get("success"))
     except urllib.error.HTTPError as exc:
         if exc.code == 404:
             return False
-        raise
+        raise RuntimeError(api_error_summary("GET", path, exc)) from exc
 
 
 def ensure_no_dataset_feature_set() -> str:

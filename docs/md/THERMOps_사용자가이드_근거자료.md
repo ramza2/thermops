@@ -195,6 +195,8 @@ flowchart LR
 
 **R9 Pipeline 실행 연계**: ACTIVE/VALIDATED Pipeline Definition에서 **실행** 버튼으로 연결된 `airflow_dag_id`를 trigger합니다. 실행 이력은 `tb_pipeline_run_link`와 `/ops/pipeline-runs` metadata로 확인합니다. 기존 DAG 수동 실행은 `DIRECT_DAG`로 구분됩니다.
 
+**R9-S1 학습/예측 회귀 복구**: Feature Set에 여러 `dataset_version`이 있을 때 학습·예측·기간 검증 API는 **row 수(`record_count`)가 가장 큰 버전**을 사용합니다. 짧은 기간만 재빌드한 경우에도 전체 Feature Dataset 기간이 유지됩니다.
+
 ---
 
 ### 2.4 `/data/quality` — 데이터 품질 점검

@@ -288,6 +288,7 @@ curl -X POST "http://localhost:8000/api/v1/feature-build-jobs?feature_set_id=FS-
 - **R7 표준 데이터셋 Builder**: 표준 대상 테이블 allowlist·학습 데이터셋 유형 관리·매핑 드롭다운 전환 — 설계서 부록 K (`/standard-datasets`, `/data/mappings`)
 - **R8 Pipeline Builder**: Pipeline Template Flow Chart·노드 설정·실행 파라미터 저장·Runtime Preview — 설계서 부록 L (`/pipeline-builder`)
 - **R9 Pipeline 실행 연계**: Pipeline Definition 기반 Airflow trigger·Run Link·이력 metadata — 설계서 부록 M. DAG 동적 생성·스케줄 등록은 후속
+- **R9-S1 model regression 복구**: 부분 Feature Build가 최신 dataset_version으로 선택되며 학습/예측 HTTP 400이 발생하던 문제 수정 (`record_count` 최대 버전 우선). model regression **23/23 PASS** (2026-07-02)
 
 **Pipeline Builder (R8/R9)**
 

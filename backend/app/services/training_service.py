@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
-from sqlalchemy import and_, func, select
+from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
@@ -26,6 +26,7 @@ from app.models.entities import (
     TrainingJob,
 )
 from app.schemas.api import TrainingJobCreate
+from app.services.feature_dataset_service import latest_dataset_version_id
 
 
 ML_EXPERIMENT_NAME = "THERMOps_Heat_Demand_Forecasting"
@@ -85,19 +86,6 @@ async def _get_feature_set(db: AsyncSession, feature_set_id: str) -> FeatureSet:
     if not fs:
         raise ValueError(f"Feature Set을 찾을 수 없습니다: {feature_set_id}")
     return fs
-
-
-async def _latest_dataset_version_id(db: AsyncSession, feature_set_id: str) -> str | None:
-    row = (
-        await db.execute(
-            select(FeatureDataset.dataset_version_id)
-            .where(FeatureDataset.feature_json["feature_set_id"].astext == feature_set_id)
-            .group_by(FeatureDataset.dataset_version_id)
-            .order_by(func.max(FeatureDataset.created_at).desc())
-            .limit(1)
-        )
-    ).scalar_one_or_none()
-    return row
 
 
 async def _load_feature_records(
@@ -276,7 +264,7 @@ async def run_training_job(db: AsyncSession, params: TrainingJobParams) -> dict[
         fs = await _get_feature_set(db, cfg.feature_set_id)
         feature_names: list[str] = fs.features or []
 
-        dataset_version_id = await _latest_dataset_version_id(db, cfg.feature_set_id)
+        dataset_version_id = await latest_dataset_version_id(db, cfg.feature_set_id)
         if not dataset_version_id:
             raise ValueError(
                 f"Feature Set {cfg.feature_set_id}에 대한 Feature Dataset이 없습니다. "

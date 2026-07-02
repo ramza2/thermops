@@ -1146,3 +1146,29 @@ python scripts/apply_dev_migrations.py
 python scripts/test_pipeline_execution.py
 ```
 
+## 부록 N. Phase R9-S1 model regression 복구 (학습/예측 dataset_version 선택)
+
+### 증상
+
+R9 이후 model regression 3건(`test_catboost_training`, `test_prediction_period_validation`, `test_batch_prediction`)이 HTTP 400으로 실패.
+
+### 원인
+
+`latest_dataset_version_id`가 `MAX(created_at)`만으로 최신 dataset_version을 선택하여, 짧은 기간만 재빌드한 소량 버전(예: 24행)이 전체 빌드(수천 행)보다 우선되었다. Lag Feature null이 많은 소량 버전에서는 `build_feature_matrix`/`build_prediction_matrix`가 모든 행을 제외하여 `학습 데이터가 없습니다.` / `예측 입력 행이 없습니다.` 400이 발생했다.
+
+### 조치
+
+`feature_dataset_service.latest_dataset_version_id`를 `tb_dataset_version.record_count` 내림차순·`created_at` 보조 정렬로 변경. `training_service`는 동일 함수를 공유한다.
+
+### R9 영향
+
+R9 Pipeline 실행 연계와 무관. R7 이후 부분 Feature Build가 누적되면서 기존 선택 정책의 부작용이 드러난 회귀.
+
+### 테스트
+
+```bash
+python scripts/run_regression_tests.py --group model --timeout-scale 2
+```
+
+기대: **23/23 PASS**
+
