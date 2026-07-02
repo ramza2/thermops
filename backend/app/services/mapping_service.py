@@ -6,7 +6,10 @@ from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
-from app.models.entities import DataMapping, DataSource
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.models.entities import DataMapping, DataSource, FeatureColumnRole, FeatureRecipe
 
 HEAT_TARGET = "heat_demand_actual"
 WEATHER_TARGET = "weather_observation"
@@ -256,3 +259,61 @@ def normalize_row_for_insert(row: dict[str, Any], mapping: DataMapping) -> dict[
         return out
 
     raise ValueError(f"지원하지 않는 target_table: {mapping.target_table}")
+
+
+# --- 삭제·의존성 검사 ---
+
+
+async def get_mapping_delete_blockers(
+    db: AsyncSession,
+    mapping_id: str,
+) -> list[dict[str, Any]]:
+    blockers: list[dict[str, Any]] = []
+
+    recipes = (
+        await db.execute(
+            select(FeatureRecipe).where(
+                FeatureRecipe.mapping_id == mapping_id,
+                FeatureRecipe.active_yn == "Y",
+            )
+        )
+    ).scalars().all()
+    if recipes:
+        published = [r for r in recipes if r.status == "PUBLISHED"]
+        draft = [r for r in recipes if r.status != "PUBLISHED"]
+        blockers.append({
+            "code": "FEATURE_RECIPE_REFERENCES",
+            "count": len(recipes),
+            "message": (
+                f"연결된 Feature Recipe가 {len(recipes)}건 있어 삭제할 수 없습니다."
+                + (f" (발행됨 {len(published)}건)" if published else "")
+                + (f" (초안 {len(draft)}건)" if draft else "")
+            ),
+            "items": [
+                {"recipe_id": r.recipe_id, "display_name": r.display_name, "status": r.status}
+                for r in recipes[:10]
+            ],
+        })
+
+    return blockers
+
+
+async def delete_data_mapping(db: AsyncSession, mapping_id: str) -> None:
+    m = (
+        await db.execute(select(DataMapping).where(DataMapping.mapping_id == mapping_id))
+    ).scalar_one_or_none()
+    if not m:
+        raise LookupError("NOT_FOUND")
+
+    blockers = await get_mapping_delete_blockers(db, mapping_id)
+    if blockers:
+        raise ValueError(blockers)
+
+    roles = (
+        await db.execute(select(FeatureColumnRole).where(FeatureColumnRole.mapping_id == mapping_id))
+    ).scalars().all()
+    for role in roles:
+        await db.delete(role)
+
+    await db.delete(m)
+

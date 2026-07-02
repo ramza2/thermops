@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { CheckCircle, Eye, Plus, Pencil, Sparkles, Save } from "lucide-react";
-import { fetchApi, postApi, putApi, PagedData } from "@/api/client";
+import { CheckCircle, Eye, Plus, Pencil, Sparkles, Save, Trash2 } from "lucide-react";
+import { deleteApi, extractApiErrorMessage, fetchApi, postApi, putApi, PagedData } from "@/api/client";
 import {
   getColumnRoleCodes,
   getColumnRoles,
@@ -70,6 +70,19 @@ interface Mapping {
 interface DataSource {
   source_id: string;
   source_name: string;
+}
+
+interface DeleteBlocker {
+  code: string;
+  count?: number;
+  message: string;
+  items?: { recipe_id: string; display_name: string; status: string }[];
+}
+
+interface DeleteBlockersResponse {
+  mapping_id: string;
+  can_delete: boolean;
+  blockers: DeleteBlocker[];
 }
 
 const EMPTY_FORM = {
@@ -314,6 +327,8 @@ export default function DataMappingsPage() {
   const [recipePreviewOpen, setRecipePreviewOpen] = useState(false);
   const [recipePreviewTemplate, setRecipePreviewTemplate] = useState<RecipeTemplate | null>(null);
   const [targetTables, setTargetTables] = useState<StandardTargetTable[]>([]);
+  const [deleteTarget, setDeleteTarget] = useState<Mapping | null>(null);
+  const [deleteBlockers, setDeleteBlockers] = useState<DeleteBlockersResponse | null>(null);
 
   const roleOptions = useMemo(
     () => [
@@ -698,6 +713,30 @@ export default function DataMappingsPage() {
     }
   };
 
+  const openDelete = async (row: Mapping) => {
+    setDeleteTarget(row);
+    setDeleteBlockers(null);
+    try {
+      const res = await fetchApi<DeleteBlockersResponse>(`/mappings/${row.mapping_id}/delete-blockers`);
+      setDeleteBlockers(res);
+    } catch {
+      setDeleteBlockers(null);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    try {
+      await deleteApi(`/mappings/${deleteTarget.mapping_id}`);
+      showToast("success", "데이터 매핑이 삭제되었습니다.");
+      setDeleteTarget(null);
+      setDeleteBlockers(null);
+      load();
+    } catch (err) {
+      showToast("error", extractApiErrorMessage(err, "삭제에 실패했습니다."));
+    }
+  };
+
   if (loading && !items.length) return <LoadingState />;
   if (error && !items.length) return <ErrorState message={error} onRetry={() => load()} />;
 
@@ -741,6 +780,7 @@ export default function DataMappingsPage() {
                   <Button variant="ghost" icon={<Pencil className="w-3 h-3" />} onClick={() => openEdit(row)}>수정</Button>
                   <Button variant="secondary" icon={<CheckCircle className="w-3 h-3" />} onClick={() => handleValidate(row)}>검증</Button>
                   <Button variant="ghost" icon={<Eye className="w-3 h-3" />} onClick={() => handlePreview(row)}>미리보기</Button>
+                  <Button variant="ghost" icon={<Trash2 className="w-3 h-3" />} onClick={() => openDelete(row)}>삭제</Button>
                 </div>
               );
             },
@@ -969,6 +1009,34 @@ export default function DataMappingsPage() {
           columnRoles={columnRoles}
         />
       )}
+
+      <Modal
+        open={!!deleteTarget}
+        title="삭제 확인"
+        onClose={() => { setDeleteTarget(null); setDeleteBlockers(null); }}
+        footer={(
+          <>
+            <Button variant="secondary" onClick={() => { setDeleteTarget(null); setDeleteBlockers(null); }}>취소</Button>
+            <Button variant="danger" onClick={handleDelete} disabled={deleteBlockers?.can_delete === false}>삭제</Button>
+          </>
+        )}
+      >
+        <p className="text-sm text-slate-600">
+          <strong>{deleteTarget?.mapping_name}</strong> 매핑을 삭제하시겠습니까? 연결된 Column Role도 함께 삭제됩니다.
+        </p>
+        {deleteBlockers && !deleteBlockers.can_delete && (
+          <div className="mt-3 text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-3 space-y-1">
+            <p className="font-medium">아래 연결 때문에 삭제할 수 없습니다.</p>
+            {deleteBlockers.blockers.map((b) => (
+              <p key={b.code}>• {b.message}</p>
+            ))}
+            <p className="text-slate-600 pt-1">
+              <Link to="/feature-recipes" className="text-blue-600 hover:underline">Feature Recipe</Link>
+              {" "}화면에서 연결된 Recipe를 먼저 삭제·비활성화하거나 다른 매핑으로 변경하세요.
+            </p>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }

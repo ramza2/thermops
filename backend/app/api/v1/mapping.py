@@ -11,7 +11,13 @@ from app.core.response import ok, paged
 from app.core.time import utc_now
 from app.models.entities import DataMapping, DataSource
 from app.schemas.api import MappingCreate, MappingUpdate
-from app.services.mapping_service import MappingValidationError, preview_mapping_data, validate_mapping_rules
+from app.services.mapping_service import (
+    MappingValidationError,
+    delete_data_mapping,
+    get_mapping_delete_blockers,
+    preview_mapping_data,
+    validate_mapping_rules,
+)
 from app.services.standard_dataset_service import TargetTableNotAllowedError, validate_target_table_allowed
 
 router = APIRouter(prefix="/mappings", tags=["Mapping"])
@@ -135,3 +141,35 @@ async def preview_mapping(mapping_id: str, db: AsyncSession = Depends(get_db)):
         "mapping_id": mapping_id,
         "preview_rows": rows,
     })
+
+
+@router.get("/{mapping_id}/delete-blockers")
+async def get_mapping_delete_blockers_api(mapping_id: str, db: AsyncSession = Depends(get_db)):
+    await _get_mapping(db, mapping_id)
+    blockers = await get_mapping_delete_blockers(db, mapping_id)
+    return ok({
+        "mapping_id": mapping_id,
+        "can_delete": len(blockers) == 0,
+        "blockers": blockers,
+    })
+
+
+@router.delete("/{mapping_id}")
+async def delete_mapping_endpoint(mapping_id: str, db: AsyncSession = Depends(get_db)):
+    try:
+        await delete_data_mapping(db, mapping_id)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as blockers:
+        items = blockers if isinstance(blockers, list) else []
+        message = items[0]["message"] if items else "삭제할 수 없습니다."
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "MAPPING_IN_USE",
+                "message": message,
+                "blockers": items,
+                "hint": "연결된 Feature Recipe를 먼저 삭제·비활성화하거나 다른 매핑으로 변경하세요.",
+            },
+        ) from blockers
+    return ok(message="데이터 매핑이 삭제되었습니다.")
