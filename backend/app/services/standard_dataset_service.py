@@ -423,25 +423,25 @@ async def validate_target_table_allowed(
             )
         )).scalars().all()]
         raise TargetTableNotAllowedError(
-            "대상 테이블은 표준 대상 테이블 목록에서 선택해야 합니다.",
+            "적재 대상 테이블이 존재하지 않거나 사용 가능한 표준 데이터셋에 연결되어 있지 않습니다. 표준 데이터셋에서 내부 테이블을 먼저 생성하세요.",
             allowed_tables=sorted(set(allowed)),
         )
 
     if row.status != "ACTIVE":
         raise TargetTableNotAllowedError(
-            f"대상 테이블 '{target_table}'은 상태가 {row.status}이므로 매핑에 사용할 수 없습니다.",
+            f"적재 대상 테이블 '{target_table}'은 아직 사용 중(ACTIVE) 상태가 아닙니다. 표준 데이터셋 Wizard에서 검증·내부 테이블 생성을 완료하세요.",
             allowed_tables=[],
         )
     if not _yn(row.mapping_supported_yn):
         raise TargetTableNotAllowedError(
-            f"대상 테이블 '{target_table}'은 매핑 지원 대상이 아닙니다.",
+            f"적재 대상 테이블 '{target_table}'은 데이터 매핑에 사용할 수 없도록 설정되어 있습니다.",
             allowed_tables=[],
         )
 
     physical_exists = await check_physical_table_exists(db, row.target_table)
     if not physical_exists:
         raise TargetTableNotAllowedError(
-            f"대상 테이블 '{target_table}'의 물리 테이블이 존재하지 않습니다.",
+            f"적재 대상 테이블 '{target_table}'의 내부 테이블이 아직 생성되지 않았습니다. 표준 데이터셋 Wizard에서 내부 테이블을 생성하세요.",
             allowed_tables=[],
             warnings=["physical_table_missing"],
         )

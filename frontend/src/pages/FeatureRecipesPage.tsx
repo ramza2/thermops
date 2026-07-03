@@ -7,6 +7,7 @@ import { Button } from "@/components/Button";
 import { DataTable } from "@/components/DataTable";
 import { ErrorState, LoadingState } from "@/components/Pagination";
 import { PageHeader } from "@/layouts/MainLayout";
+import { EMPTY_MESSAGES, PAGE_DESCRIPTIONS, PAGE_TITLES } from "@/constants/displayLabels";
 import type { FeatureRecipe } from "@/types/featureRecipes";
 import { R6_BUILD_INFO } from "@/types/featureRecipes";
 import {
@@ -75,7 +76,7 @@ export default function FeatureRecipesPage() {
       setItems(res.items);
       void loadBuildSnapshots(res.items);
     } catch {
-      setError("Recipe 목록을 불러오지 못했습니다.");
+      setError("변수 생성 규칙 목록을 불러오지 못했습니다.");
     } finally {
       setLoading(false);
     }
@@ -96,24 +97,25 @@ export default function FeatureRecipesPage() {
   return (
     <div>
       <PageHeader
-        title="Feature Recipe"
-        description="Template 기반 Feature Recipe를 저장·검증·발행합니다."
+        title={PAGE_TITLES.featureRecipes}
+        description={PAGE_DESCRIPTIONS.featureRecipes}
         actions={(
           <Link to="/feature-recipes/new">
-            <Button icon={<Plus className="w-4 h-4" />}>Recipe 만들기</Button>
+            <Button icon={<Plus className="w-4 h-4" />}>규칙 만들기</Button>
           </Link>
         )}
       />
 
       <div className="mb-4 text-xs text-slate-600 bg-blue-50 border border-blue-200 rounded-lg p-3 space-y-1">
-        <p className="font-medium text-slate-800">Feature Recipe Builder (R5–R6-S2)</p>
+        <p className="font-medium text-slate-800">변수 생성 규칙 (R5–R6)</p>
         <p>{R6_BUILD_INFO}</p>
-        <p>목록에서 PUBLISHED Recipe의 <strong>최근 Build</strong> 상태를 확인할 수 있습니다.</p>
-        <p>상세 화면(Builder)에서 <strong>Preview/Build 비교</strong>를 실행할 수 있습니다.</p>
+        <p>목록에서 사용 가능 규칙의 <strong>최근 변수 생성</strong> 상태를 확인할 수 있습니다.</p>
+        <p>상세 화면에서 <strong>미리보기/생성 비교</strong>를 실행할 수 있습니다.</p>
         <p className="text-slate-500">{LEGACY_JOB_DIAGNOSTICS_NOTE}</p>
       </div>
 
       <DataTable
+        emptyMessage={EMPTY_MESSAGES.featureRecipes}
         columns={[
           { key: "recipe_id", header: "ID", width: "130px" },
           { key: "display_name", header: "표시명" },
@@ -128,10 +130,10 @@ export default function FeatureRecipesPage() {
               </span>
             ),
           },
-          { key: "feature_name", header: "Feature명", render: (r) => String(r.feature_name ?? "-") },
+          { key: "feature_name", header: "변수명", render: (r) => String(r.feature_name ?? "-") },
           {
             key: "build_supported",
-            header: "Build 지원",
+            header: "생성 지원",
             width: "90px",
             render: (r) => {
               const recipe = r as unknown as FeatureRecipe;
@@ -144,15 +146,15 @@ export default function FeatureRecipesPage() {
           },
           {
             key: "recent_build",
-            header: "최근 Build",
+            header: "최근 생성",
             width: "120px",
             render: (r) => {
               const recipe = r as unknown as FeatureRecipe & { _snapshot?: RecipeBuildSnapshot };
               if (recipe.status === "ARCHIVED") {
-                return <span className="text-[10px] text-slate-400">Build 대상 아님</span>;
+                return <span className="text-[10px] text-slate-400">생성 대상 아님</span>;
               }
               if (recipe.status !== "PUBLISHED") {
-                return <span className="text-[10px] text-slate-500">발행 후 Build 가능</span>;
+                return <span className="text-[10px] text-slate-500">발행 후 생성 가능</span>;
               }
               const snap = recipe._snapshot;
               if (!snap) return <span className="text-[10px] text-slate-400">조회 중...</span>;
@@ -190,14 +192,14 @@ export default function FeatureRecipesPage() {
               return (
                 <div className="flex flex-col gap-1 text-xs">
                   <Link to={`/feature-recipes/${recipe.recipe_id}`} className="text-blue-600 hover:underline">
-                    Builder
+                    상세
                   </Link>
                   {recipe.status === "PUBLISHED" && dsv && (
                     <Link
                       to={`/feature-recipes/${recipe.recipe_id}?compare_dsv=${encodeURIComponent(dsv)}`}
                       className="text-violet-700 hover:underline"
                     >
-                      Preview/Build 비교
+                      미리보기/생성 비교
                     </Link>
                   )}
                 </div>

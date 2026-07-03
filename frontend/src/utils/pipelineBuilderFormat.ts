@@ -1,35 +1,35 @@
 const TYPE_LABELS: Record<string, string> = {
   FULL_OPERATION: "전체 운영",
-  FEATURE_BUILD: "Feature Build",
+  FEATURE_BUILD: "변수 생성",
   BATCH_PREDICTION: "배치 예측",
   RETRAINING: "재학습",
 };
 
 const STATUS_LABELS: Record<string, string> = {
-  DRAFT: "초안",
-  VALIDATED: "검증됨",
-  ACTIVE: "운영",
-  ARCHIVED: "보관",
+  DRAFT: "작성 중",
+  VALIDATED: "검증 완료",
+  ACTIVE: "사용 중",
+  ARCHIVED: "보관됨",
   PLANNED: "계획",
 };
 
 const NODE_TYPE_LABELS: Record<string, string> = {
-  DATA_SOURCE: "데이터소스",
+  DATA_SOURCE: "데이터 소스",
   DATA_MAPPING: "데이터 매핑",
   STANDARD_DATASET: "표준 데이터셋",
-  FEATURE_SET: "Feature Set",
-  FEATURE_BUILD: "Feature Build",
-  FEATURE_QUALITY: "Feature 품질",
+  FEATURE_SET: "변수 구성",
+  FEATURE_BUILD: "변수 생성",
+  FEATURE_QUALITY: "변수 품질",
   MODEL_TRAINING: "모델 학습",
   MODEL_SELECTION: "모델 선택",
   BATCH_PREDICTION: "배치 예측",
   PERFORMANCE_EVAL: "성능 평가",
-  DRIFT_CHECK: "Drift 점검",
+  DRIFT_CHECK: "데이터 변화 감지",
   DATA_QUALITY: "데이터 품질",
   MONITORING: "모니터링",
   RETRAINING_CANDIDATE: "재학습 후보",
   APPROVAL: "승인",
-  MODEL_REGISTRY: "모델 Registry",
+  MODEL_REGISTRY: "모델 등록 목록",
 };
 
 export function pipelineTypeLabel(t: string): string {

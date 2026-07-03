@@ -20,6 +20,7 @@ import { Pagination, LoadingState, ErrorState } from "@/components/Pagination";
 import { SelectInput, TextInput } from "@/components/SearchPanel";
 import { useToast } from "@/hooks/useToast";
 import { PageHeader } from "@/layouts/MainLayout";
+import { EMPTY_MESSAGES, HELP_TEXTS, PAGE_DESCRIPTIONS, PAGE_TITLES } from "@/constants/displayLabels";
 import type {
   ColumnRoleCode,
   FeatureColumnRole,
@@ -164,7 +165,7 @@ function RecipeTemplatesSection({
             to={`/feature-recipes/new?mapping_id=${encodeURIComponent(mappingId)}&recipe_type=LAG`}
             className="text-blue-600 hover:underline"
           >
-            Recipe Builder에서 계속하기
+            변수 생성 규칙 작성으로 계속하기
           </Link>
         </p>
       )}
@@ -742,9 +743,9 @@ export default function DataMappingsPage() {
   return (
     <div>
       <PageHeader
-        title="데이터 매핑 설정"
-        description="원천 컬럼과 표준 스키마 간 매핑 규칙 및 Column Role을 관리합니다."
-        actions={<Button icon={<Plus className="w-4 h-4" />} onClick={openCreate}>신규 매핑</Button>}
+        title={PAGE_TITLES.dataMappings}
+        description={PAGE_DESCRIPTIONS.dataMappings}
+        actions={<Button icon={<Plus className="w-4 h-4" />} onClick={openCreate}>새 매핑</Button>}
       />
 
       <div className="mb-4 text-xs text-slate-600 bg-blue-50 border border-blue-200 rounded-lg p-3 space-y-1">
@@ -768,7 +769,7 @@ export default function DataMappingsPage() {
 
       <DataTable
         loading={loading}
-        emptyMessage="등록된 데이터 매핑이 없습니다. 표준 데이터셋 물리 테이블을 먼저 생성한 뒤 매핑을 등록하세요."
+        emptyMessage={EMPTY_MESSAGES.dataMappings}
         columns={[
           { key: "mapping_id", header: "ID", width: "120px" },
           { key: "mapping_name", header: "매핑명" },
@@ -931,7 +932,7 @@ export default function DataMappingsPage() {
               className="flex items-center justify-between w-full text-sm font-semibold text-slate-800 mb-2"
               onClick={() => setRoleSectionOpen((v) => !v)}
             >
-              Column Role
+              Column Role (컬럼 역할)
               <span className="text-xs text-slate-500">{roleSectionOpen ? "접기" : "펼치기"}</span>
             </button>
             {roleSectionOpen && (
@@ -1037,7 +1038,7 @@ export default function DataMappingsPage() {
         )}
       >
         <p className="text-sm text-slate-600">
-          <strong>{deleteTarget?.mapping_name}</strong> 매핑을 삭제하시겠습니까? 연결된 Column Role도 함께 삭제됩니다.
+          <strong>{deleteTarget?.mapping_name}</strong> 매핑을 삭제하시겠습니까? 연결된 컬럼 역할도 함께 삭제됩니다.
         </p>
         {deleteBlockers && !deleteBlockers.can_delete && (
           <div className="mt-3 text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-3 space-y-1">
@@ -1046,8 +1047,8 @@ export default function DataMappingsPage() {
               <p key={b.code}>• {b.message}</p>
             ))}
             <p className="text-slate-600 pt-1">
-              <Link to="/feature-recipes" className="text-blue-600 hover:underline">Feature Recipe</Link>
-              {" "}화면에서 연결된 Recipe를 먼저 삭제·비활성화하거나 다른 매핑으로 변경하세요.
+              <Link to="/feature-recipes" className="text-blue-600 hover:underline">변수 생성 규칙</Link>
+              {" "}화면에서 연결된 규칙을 먼저 삭제·비활성화하거나 다른 매핑으로 변경하세요.
             </p>
           </div>
         )}

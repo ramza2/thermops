@@ -8,6 +8,7 @@ import { DateRangePicker, defaultDateRange } from "@/components/DateRangePicker"
 import { Pagination, LoadingState, ErrorState } from "@/components/Pagination";
 import { useToast } from "@/hooks/useToast";
 import { PageHeader } from "@/layouts/MainLayout";
+import { PAGE_DESCRIPTIONS, PAGE_TITLES } from "@/constants/displayLabels";
 
 interface Prediction {
   site_id: string;
@@ -76,10 +77,10 @@ export default function PredictionResultsPage() {
   return (
     <div>
       <PageHeader
-        title="예측 결과 조회"
-        description="배치 예측 결과를 검색하고 다운로드합니다."
+        title={PAGE_TITLES.predictionResults}
+        description={PAGE_DESCRIPTIONS.predictionResults}
         breadcrumbs={[
-          { label: "예측 관리", path: "/predictions/jobs" },
+          { label: "모델 학습·예측", path: "/predictions/jobs" },
           { label: "예측 결과" },
         ]}
         actions={<Button variant="secondary" icon={<Download className="w-4 h-4" />} onClick={handleDownload}>엑셀 다운로드</Button>}

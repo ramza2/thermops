@@ -1,18 +1,8 @@
 import type { FeatureNameValidation, FeatureRegistrationStatus } from "@/types/featureRegistration";
 import type { FeatureRegistryItem } from "@/types/featureRegistry";
+import { FEATURE_USAGE_STEPS } from "@/constants/displayLabels";
 
-export const FEATURE_USAGE_STEPS = `신규 Feature를 학습/예측에 사용하려면 다음 단계를 완료해야 합니다.
-
-1. Feature 메타데이터 등록
-2. 코드 기반 계산 로직 구현
-3. Feature Registry 등록
-4. Feature Set에 포함
-5. Feature 생성 실행
-6. Feature 품질 검증
-7. 학습 설정에서 해당 Feature Set 사용
-
-현재 화면에서 등록하는 것은 1번 단계입니다.
-2~3번이 완료되지 않은 Feature는 자동 계산되지 않습니다.`;
+export { FEATURE_USAGE_STEPS };
 
 export function registrationStatusLabel(status: FeatureRegistrationStatus): string {
   switch (status) {
@@ -25,11 +15,11 @@ export function registrationStatusLabel(status: FeatureRegistrationStatus): stri
     case "DUPLICATE":
       return "중복";
     case "REGISTERED_IN_REGISTRY":
-      return "Registry 등록";
+      return "등록 정보 있음";
     case "TEMPLATE_PUBLISHED":
-      return "Recipe 발행";
+      return "규칙 발행됨";
     case "TEMPLATE_BUILD_SUPPORTED":
-      return "Recipe Build 지원";
+      return "규칙 생성 지원";
     default:
       return "미등록";
   }
@@ -75,22 +65,22 @@ export function validationWarnsRegistration(v: FeatureNameValidation | null): bo
 }
 
 export const TPL_FEATURE_BLOCK_MSG =
-  "공식 템플릿 Feature Set에는 계산 가능한 Registry Feature만 추가할 수 있습니다. Catalog-only 또는 Legacy Feature는 사용자 정의 Feature Set에서만 실험적으로 사용할 수 있습니다.";
+  "공식 템플릿 변수 구성에는 계산 가능한 등록 변수만 추가할 수 있습니다. 카탈로그 전용·레거시 변수는 사용자 정의 변수 구성에서만 실험적으로 사용할 수 있습니다.";
 
 export const CATALOG_ONLY_WARNING_MSG =
-  "이 Feature는 카탈로그에만 등록되어 있으며 현재 계산 로직이 없습니다. Feature 생성 시 값이 생성되지 않아 Build WARNING 또는 Feature Quality 실패가 발생할 수 있습니다.";
+  "이 변수는 카탈로그에만 등록되어 있으며 현재 계산 로직이 없습니다. 변수 생성 시 값이 생성되지 않아 경고 또는 변수 품질 검증 실패가 발생할 수 있습니다.";
 
 export const LEGACY_ALIAS_WARNING_MSG = (name: string, recommended: string) =>
-  `이 Feature명(${name})은 레거시 별칭입니다. 신규 Feature Set에는 공식명 ${recommended}을 사용하세요.`;
+  `이 변수명(${name})은 레거시 별칭입니다. 신규 변수 구성에는 공식명 ${recommended}을 사용하세요.`;
 
 export const FEATURE_QUALITY_REGISTRATION_HINT =
-  "Catalog-only 또는 Legacy Feature가 Feature Set에 포함되면 Feature Build에서 값이 생성되지 않거나 Feature Quality에서 missing key로 표시될 수 있습니다.";
+  "카탈로그 전용·레거시 변수가 변수 구성에 포함되면 변수 생성에서 값이 생성되지 않거나 변수 품질에서 누락으로 표시될 수 있습니다.";
 
 export const LEGACY_REPLACE_HINT =
-  "이 Feature Set에는 레거시 Feature명이 포함되어 있습니다. 신규 Feature Set과 학습/예측에는 공식 Feature명을 사용하는 것이 권장됩니다.";
+  "이 변수 구성에는 레거시 변수명이 포함되어 있습니다. 신규 변수 구성과 학습·예측에는 공식 변수명을 사용하는 것이 권장됩니다.";
 
 export const LEGACY_REPLACE_AFTER_HINT =
-  "공식명으로 대체한 뒤에는 Feature 생성과 Feature 품질 검증을 다시 실행하는 것이 좋습니다.";
+  "공식명으로 대체한 뒤에는 변수 생성과 변수 품질 검증을 다시 실행하는 것이 좋습니다.";
 
 export type FeatureListFilter = "all" | "computable" | "catalog_only" | "legacy";
 

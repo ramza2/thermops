@@ -8,6 +8,7 @@ import { SelectInput } from "@/components/SearchPanel";
 import { LoadingState } from "@/components/Pagination";
 import { useToast } from "@/hooks/useToast";
 import { PageHeader } from "@/layouts/MainLayout";
+import { PAGE_DESCRIPTIONS, PAGE_TITLES } from "@/constants/displayLabels";
 import {
   defaultPredictionPeriod,
   effectiveRange,
@@ -219,7 +220,7 @@ export default function PredictionJobsPage() {
 
   return (
     <div>
-      <PageHeader title="배치 예측 실행" description="학습된 모델로 Feature Dataset 기반 배치 예측을 실행합니다." />
+      <PageHeader title={PAGE_TITLES.predictionJobs} description={PAGE_DESCRIPTIONS.predictionJobs} />
 
       <div className="bg-white rounded-lg border border-slate-200 p-6 shadow-sm max-w-xl">
         <div className="space-y-4">

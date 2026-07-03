@@ -9,6 +9,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { Pagination, LoadingState, ErrorState } from "@/components/Pagination";
 import { useToast } from "@/hooks/useToast";
 import { PageHeader } from "@/layouts/MainLayout";
+import { PAGE_DESCRIPTIONS, PAGE_TITLES } from "@/constants/displayLabels";
 import {
   extractQualityCheckError,
   formatQualityTableSummary,
@@ -130,8 +131,8 @@ export default function DataQualityPage() {
   return (
     <div>
       <PageHeader
-        title="데이터 품질 점검"
-        description="데이터 적재 후 품질 규칙을 실행하고 결과를 확인합니다."
+        title={PAGE_TITLES.dataQuality}
+        description={PAGE_DESCRIPTIONS.dataQuality}
         actions={<Button icon={<Play className="w-4 h-4" />} onClick={handleRunCheck} disabled={running}>{running ? "실행 중..." : "품질 점검 실행"}</Button>}
       />
 

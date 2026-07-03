@@ -10,6 +10,7 @@ import { Pagination, LoadingState, ErrorState } from "@/components/Pagination";
 import { SelectInput, TextInput } from "@/components/SearchPanel";
 import { useToast } from "@/hooks/useToast";
 import { PageHeader } from "@/layouts/MainLayout";
+import { EMPTY_MESSAGES, MENU_GROUPS, PAGE_DESCRIPTIONS, PAGE_TITLES } from "@/constants/displayLabels";
 import {
   defaultIngestionPeriod,
   formatDisplayDateTime,
@@ -509,10 +510,10 @@ export default function DataSourcesPage() {
   return (
     <div>
       <PageHeader
-        title="데이터 소스 관리"
-        description="원천 데이터 소스를 등록하고 연결 상태를 확인합니다."
+        title={PAGE_TITLES.dataSources}
+        description={PAGE_DESCRIPTIONS.dataSources}
         breadcrumbs={[
-          { label: "데이터 관리", path: "/data/sources" },
+          { label: MENU_GROUPS.dataPrep, path: "/data/sources" },
           { label: "데이터 소스" },
         ]}
         actions={<Button icon={<Plus className="w-4 h-4" />} onClick={() => { setForm(EMPTY_FORM); setCreateOpen(true); }}>신규 등록</Button>}
@@ -520,7 +521,7 @@ export default function DataSourcesPage() {
 
       <DataTable
         loading={loading}
-        emptyMessage="등록된 데이터 소스가 없습니다. REST API, DB, CSV 소스를 신규 등록하세요."
+        emptyMessage={EMPTY_MESSAGES.dataSources}
         columns={[
           { key: "source_id", header: "ID", width: "120px" },
           { key: "source_name", header: "소스명" },

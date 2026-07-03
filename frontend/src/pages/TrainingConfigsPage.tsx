@@ -9,6 +9,7 @@ import { SelectInput, TextInput } from "@/components/SearchPanel";
 import { LoadingState, ErrorState } from "@/components/Pagination";
 import { useToast } from "@/hooks/useToast";
 import { PageHeader } from "@/layouts/MainLayout";
+import { MENU_GROUPS, PAGE_DESCRIPTIONS, PAGE_TITLES } from "@/constants/displayLabels";
 
 interface TrainingConfig {
   config_id: string;
@@ -166,10 +167,10 @@ export default function TrainingConfigsPage() {
   return (
     <div>
       <PageHeader
-        title="모델 학습 설정"
-        description="알고리즘, Feature Set, 학습 기간 등 학습 파라미터를 관리합니다."
+        title={PAGE_TITLES.trainingConfigs}
+        description={PAGE_DESCRIPTIONS.trainingConfigs}
         breadcrumbs={[
-          { label: "모델 관리", path: "/models/training-configs" },
+          { label: MENU_GROUPS.modelPredict, path: "/models/training-configs" },
           { label: "학습 설정" },
         ]}
         actions={<Button icon={<Plus className="w-4 h-4" />} onClick={() => { setForm(EMPTY); setCreateOpen(true); }}>신규 설정</Button>}

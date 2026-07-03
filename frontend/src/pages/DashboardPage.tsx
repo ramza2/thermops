@@ -11,6 +11,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { DataTable } from "@/components/DataTable";
 import { EmptyState, ErrorState, LoadingState } from "@/components/Pagination";
 import { PageHeader } from "@/layouts/MainLayout";
+import { PAGE_DESCRIPTIONS, PAGE_TITLES } from "@/constants/displayLabels";
 import {
   normalizeTrendResponse,
   trendChartSubtitle,
@@ -83,8 +84,8 @@ export default function DashboardPage() {
   return (
     <div>
       <PageHeader
-        title="대시보드"
-        description="열수요 예측 현황 및 모델 운영 상태를 한눈에 확인합니다."
+        title={PAGE_TITLES.dashboard}
+        description={PAGE_DESCRIPTIONS.dashboard}
       />
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">

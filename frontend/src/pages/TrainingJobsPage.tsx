@@ -8,6 +8,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { Pagination, LoadingState, ErrorState } from "@/components/Pagination";
 import { useToast } from "@/hooks/useToast";
 import { PageHeader } from "@/layouts/MainLayout";
+import { PAGE_DESCRIPTIONS, PAGE_TITLES } from "@/constants/displayLabels";
 
 interface TrainingJob {
   job_id: string;
@@ -80,7 +81,7 @@ export default function TrainingJobsPage() {
 
   return (
     <div>
-      <PageHeader title="모델 학습 실행" description="모델 학습 파이프라인 실행 이력과 상태를 확인합니다." />
+      <PageHeader title={PAGE_TITLES.trainingJobs} description={PAGE_DESCRIPTIONS.trainingJobs} />
 
       <DataTable
         loading={loading}

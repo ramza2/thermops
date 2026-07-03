@@ -8,6 +8,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { LoadingState, ErrorState } from "@/components/Pagination";
 import { useToast } from "@/hooks/useToast";
 import { PageHeader } from "@/layouts/MainLayout";
+import { PAGE_DESCRIPTIONS, PAGE_TITLES } from "@/constants/displayLabels";
 import { useRole } from "@/hooks/useRole";
 
 type SourceFilter = "computed" | "all" | "seed";
@@ -202,8 +203,8 @@ export default function RetrainingCandidatesPage() {
   return (
     <div>
       <PageHeader
-        title="재학습 후보 관리"
-        description="Drift·성능 저하로 자동 생성된 재학습 후보를 검토하고 승인 후 Airflow 재학습 DAG를 실행합니다."
+        title={PAGE_TITLES.retrainingCandidates}
+        description={PAGE_DESCRIPTIONS.retrainingCandidates}
       />
 
       <div className="flex flex-wrap gap-2 mb-4 items-center">

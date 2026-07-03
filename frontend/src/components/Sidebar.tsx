@@ -1,63 +1,66 @@
 import { NavLink } from "react-router-dom";
 import {
-  LayoutDashboard, Database, GitBranch, ShieldCheck, Layers, Box,
-  Settings, Play, BarChart2, Award, Zap, LineChart, AlertTriangle,
-  Activity, FileText, RefreshCw, ChevronDown, ChevronRight,
+  LayoutDashboard, Database, Layers, Box, Activity, Settings,
+  ChevronDown, ChevronRight,
 } from "lucide-react";
 import { useState } from "react";
+import { APP_TAGLINE, MENU_GROUPS } from "@/constants/displayLabels";
 
 const MENU = [
   { label: "대시보드", path: "/dashboard", icon: LayoutDashboard },
   {
-    label: "데이터 관리", icon: Database, children: [
-      { label: "데이터 소스 관리", path: "/data/sources" },
+    label: MENU_GROUPS.dataPrep, icon: Database, children: [
+      { label: "데이터 소스", path: "/data/sources" },
       { label: "표준 데이터셋", path: "/standard-datasets" },
-      { label: "데이터 매핑 설정", path: "/data/mappings" },
-      { label: "데이터 품질 점검", path: "/data/quality" },
+      { label: "데이터 매핑", path: "/data/mappings" },
+      { label: "데이터 품질", path: "/data/quality" },
     ],
   },
   {
-    label: "Feature 관리", icon: Layers, children: [
-      { label: "Feature 목록", path: "/features" },
-      { label: "Feature Recipe", path: "/feature-recipes" },
-      { label: "Feature Set 관리", path: "/feature-sets" },
+    label: MENU_GROUPS.features, icon: Layers, children: [
+      { label: "학습 변수", path: "/features" },
+      { label: "변수 생성 규칙", path: "/feature-recipes" },
+      { label: "변수 구성", path: "/feature-sets" },
     ],
   },
   {
-    label: "모델 관리", icon: Box, children: [
-      { label: "모델 학습 설정", path: "/models/training-configs" },
-      { label: "모델 학습 실행", path: "/models/training-jobs" },
+    label: MENU_GROUPS.modelPredict, icon: Box, children: [
+      { label: "학습 설정", path: "/models/training-configs" },
+      { label: "모델 학습", path: "/models/training-jobs" },
       { label: "모델 성능 비교", path: "/models/performance" },
-      { label: "모델 Registry 관리", path: "/models/registry" },
+      { label: "모델 등록 목록", path: "/models/registry" },
+      { label: "예측 작업", path: "/predictions/jobs" },
+      { label: "예측 결과", path: "/predictions/results" },
+      { label: "예측 오차 분석", path: "/predictions/errors" },
     ],
   },
   {
-    label: "예측 관리", icon: Zap, children: [
-      { label: "배치 예측 실행", path: "/predictions/jobs" },
-      { label: "예측 결과 조회", path: "/predictions/results" },
-      { label: "실제값 매칭 및 오차 분석", path: "/predictions/errors" },
-    ],
-  },
-  {
-    label: "운영 관리", icon: Activity, children: [
-      { label: "파이프라인 실행 이력", path: "/ops/pipeline-runs" },
-      { label: "Pipeline Builder", path: "/pipeline-builder" },
+    label: MENU_GROUPS.operations, icon: Activity, children: [
+      { label: "작업 흐름 구성", path: "/pipeline-builder" },
+      { label: "작업 실행 이력", path: "/ops/pipeline-runs" },
       { label: "성능 모니터링", path: "/ops/model-monitoring" },
-      { label: "드리프트 리포트", path: "/ops/drift-reports" },
-      { label: "재학습 후보 관리", path: "/ops/retraining-candidates" },
-      { label: "공통 코드/설정", path: "/system/configs" },
+      { label: "데이터 변화 리포트", path: "/ops/drift-reports" },
+      { label: "재학습 후보", path: "/ops/retraining-candidates" },
+    ],
+  },
+  {
+    label: MENU_GROUPS.system, icon: Settings, children: [
+      { label: "시스템 설정", path: "/system/configs" },
     ],
   },
 ];
 
 export function Sidebar() {
-  const [open, setOpen] = useState<Record<string, boolean>>({ "데이터 관리": true, "모델 관리": true });
+  const [open, setOpen] = useState<Record<string, boolean>>({
+    [MENU_GROUPS.dataPrep]: true,
+    [MENU_GROUPS.modelPredict]: true,
+  });
 
   return (
     <aside className="w-60 bg-sidebar text-sidebar-foreground flex flex-col shrink-0 min-h-screen">
       <div className="px-4 py-5 border-b border-white/10">
         <div className="text-lg font-bold text-white">THERMOps</div>
-        <div className="text-xs text-slate-400 mt-0.5">열수요 예측 MLOps</div>
+        <div className="text-xs text-slate-400 mt-0.5">{APP_TAGLINE}</div>
       </div>
       <nav className="flex-1 py-3 overflow-y-auto">
         {MENU.map((item) => {

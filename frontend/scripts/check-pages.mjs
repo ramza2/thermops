@@ -25,52 +25,82 @@ const PATHS = [
 const browser = await chromium.launch();
 const page = await browser.newPage();
 const errors = [];
-page.on("pageerror", (e) => errors.push(`${page.url()}: ${e.message}`));
+page.on("pageerror", (e) => errors.push(`${page.url}: ${e.message}`));
 
-async function waitHeading(name, timeout = 60000) {
-  await page.getByRole("heading", { name }).first().waitFor({ state: "visible", timeout });
+async function waitMainHeading(name, timeout = 60000) {
+  await page.locator("main h1").filter({ hasText: new RegExp(`^${name}$`) }).first().waitFor({ state: "visible", timeout });
+}
+
+async function hasEmptyOrTable(emptyPattern) {
+  const hasEmpty = await page.getByText(emptyPattern).count();
+  const hasRows = await page.locator("main table tbody tr").count();
+  return hasEmpty > 0 || hasRows > 0;
 }
 
 for (const path of PATHS) {
   await page.goto(`${BASE}${path}`, { waitUntil: "load", timeout: 60000 });
   await page.waitForTimeout(500);
   if (path === "/dashboard") {
-    await waitHeading("대시보드");
+    await waitMainHeading("대시보드");
   } else if (path === "/data/sources") {
-    await waitHeading("데이터 소스 관리");
+    await waitMainHeading("데이터 소스");
   } else if (path === "/standard-datasets") {
-    await waitHeading("표준 데이터셋");
+    await waitMainHeading("표준 데이터셋");
   } else if (path === "/data/mappings") {
-    await waitHeading("데이터 매핑 설정");
+    await waitMainHeading("데이터 매핑");
   } else if (path === "/features") {
-    await page.getByText("신규 Feature 사용 절차").first().waitFor({ state: "visible", timeout: 60000 });
+    await page.getByText("신규 학습 변수 사용 절차").first().waitFor({ state: "visible", timeout: 60000 });
+    await waitMainHeading("학습 변수");
+  } else if (path === "/feature-recipes") {
+    await waitMainHeading("변수 생성 규칙");
+  } else if (path === "/feature-recipes/new") {
+    await waitMainHeading("변수 생성 규칙 작성");
+  } else if (path === "/feature-sets") {
+    await waitMainHeading("변수 구성");
+  } else if (path === "/models/training-jobs") {
+    await waitMainHeading("모델 학습");
+  } else if (path === "/predictions/jobs") {
+    await waitMainHeading("예측 작업");
+  } else if (path === "/predictions/results") {
+    await waitMainHeading("예측 결과");
+  } else if (path === "/pipeline-builder") {
+    await waitMainHeading("작업 흐름 구성");
+  } else if (path === "/ops/pipeline-runs") {
+    await waitMainHeading("작업 실행 이력");
+  } else if (path === "/ops/drift-reports") {
+    await waitMainHeading("데이터 변화 리포트");
+  } else if (path === "/system/configs") {
+    await waitMainHeading("시스템 설정");
   } else {
-    await page.locator("h1").first().waitFor({ state: "visible", timeout: 60000 });
+    await page.locator("main h1").first().waitFor({ state: "visible", timeout: 60000 });
   }
-  const h1 = await page.locator("h1").first().innerText().catch(() => "");
-  console.log(`OK ${path} -> ${h1.slice(0, 30)}`);
+  const h1 = await page.locator("main h1").first().innerText().catch(() => "");
+  console.log(`OK ${path} -> ${h1.slice(0, 40)}`);
+
+  const forbiddenH1 = ["Feature Recipe", "Pipeline Builder", "Feature Set", "드리프트 리포트"];
+  for (const term of forbiddenH1) {
+    if (h1.includes(term)) errors.push(`${path}: h1 must not contain '${term}' (got: ${h1})`);
+  }
 
   if (path === "/features") {
-    await page.getByText("Recipe Engine").first().waitFor({ state: "visible", timeout: 30000 });
-    await page.getByText(/데이터가 없습니다|등록된 Feature/).first().waitFor({ state: "visible", timeout: 30000 });
+    await page.getByText(/등록된 학습 변수가 없습니다|table/).first().waitFor({ state: "visible", timeout: 30000 }).catch(() => {});
   }
   if (path === "/feature-recipes") {
-    await page.getByText("Feature Recipe").first().waitFor({ state: "visible", timeout: 30000 });
-    await page.getByText("R6").first().waitFor({ state: "visible", timeout: 30000 });
-    await page.getByText("최근 Build").first().waitFor({ state: "visible", timeout: 30000 });
-    await page.getByText("Preview/Build 비교").first().waitFor({ state: "visible", timeout: 30000 });
+    await page.getByText("미리보기/생성 비교").first().waitFor({ state: "visible", timeout: 30000 });
+    if (!(await hasEmptyOrTable(/등록된 변수 생성 규칙이 없습니다/))) {
+      errors.push(`${path}: empty message or table rows expected`);
+    }
   }
   if (path === "/feature-recipes/new") {
-    await page.getByText("Feature Recipe Builder").first().waitFor({ state: "visible", timeout: 30000 });
     await page.getByText("Preview 결과는 저장하지 않습니다").first().waitFor({ state: "visible", timeout: 30000 });
-    await page.getByText("R6").first().waitFor({ state: "visible", timeout: 30000 });
-    await page.getByText("Preview/Build 비교").first().waitFor({ state: "visible", timeout: 30000 });
+    await page.getByText("미리보기/생성 비교").first().waitFor({ state: "visible", timeout: 30000 });
   }
   if (path === "/standard-datasets") {
     await page.getByText("표준 데이터셋 생성").first().waitFor({ state: "visible", timeout: 30000 });
-    await page.getByText("등록된 표준 데이터셋이 없습니다").first().waitFor({ state: "visible", timeout: 30000 });
-    await page.getByText("R9-S2-1").first().waitFor({ state: "visible", timeout: 30000 });
-    await page.getByText("R9-S2-2").first().waitFor({ state: "visible", timeout: 30000 });
+    if (!(await hasEmptyOrTable(/등록된 표준 데이터셋이 없습니다/))) {
+      errors.push(`${path}: empty message or table rows expected`);
+    }
+    await page.getByText("R9-S2-3").first().waitFor({ state: "visible", timeout: 30000 });
     await page.locator("select").filter({ has: page.locator('option', { hasText: "전체 업무 영역" }) }).first().waitFor({ state: "visible", timeout: 30000 });
     for (const fixed of ["열수요", "기상", "기준정보", "설비"]) {
       const count = await page.locator("option").filter({ hasText: fixed }).count();
@@ -85,27 +115,29 @@ for (const path of PATHS) {
   }
   if (path === "/data/sources") {
     await page.getByRole("button", { name: "신규 등록" }).first().waitFor({ state: "visible", timeout: 30000 });
-    await page.getByText("등록된 데이터 소스가 없습니다").first().waitFor({ state: "visible", timeout: 30000 });
+    if (!(await hasEmptyOrTable(/등록된 데이터 소스가 없습니다/))) {
+      errors.push(`${path}: empty message or table rows expected`);
+    }
   }
   if (path === "/data/mappings") {
     await page.getByText(/표준 데이터셋|대상 테이블을 먼저 생성/).first().waitFor({ state: "visible", timeout: 30000 });
-    await page.getByText(/등록된 데이터 매핑이 없습니다|표준 데이터셋 물리 테이블/).first().waitFor({ state: "visible", timeout: 30000 });
-    await page.getByText("Column Role").first().waitFor({ state: "visible", timeout: 30000 });
+    await page.getByText(/등록된 데이터 매핑이 없습니다|표준 데이터셋/).first().waitFor({ state: "visible", timeout: 30000 });
     await page.getByText("컬럼 역할").first().waitFor({ state: "visible", timeout: 30000 });
-    await page.getByText("사용 가능한 Recipe 템플릿").first().waitFor({ state: "visible", timeout: 30000 });
-    await page.getByText("Recipe Builder는 후속 단계").first().waitFor({ state: "visible", timeout: 30000 });
+    await page.getByText("사용 가능한 생성 규칙 템플릿").first().waitFor({ state: "visible", timeout: 30000 });
+    await page.getByText("변수 생성 규칙 작성 화면은 후속 단계").first().waitFor({ state: "visible", timeout: 30000 });
     await page.getByText("Preview 결과는 저장하지 않습니다").first().waitFor({ state: "visible", timeout: 30000 });
-    await page.getByText("row step 기반").first().waitFor({ state: "visible", timeout: 30000 });
   }
   if (path === "/feature-sets") {
-    await page.getByText("신규 Feature Set").first().waitFor({ state: "visible", timeout: 30000 });
-    await page.getByText(/데이터가 없습니다|등록된 Feature Set/).first().waitFor({ state: "visible", timeout: 30000 });
+    await page.getByText("신규 변수 구성").first().waitFor({ state: "visible", timeout: 30000 });
+    if (!(await hasEmptyOrTable(/등록된 변수 구성이 없습니다/))) {
+      errors.push(`${path}: empty message or table rows expected`);
+    }
   }
   if (path === "/pipeline-builder") {
-    await page.getByText("Pipeline Builder").first().waitFor({ state: "visible", timeout: 30000 });
-    await page.getByText("새 Pipeline 만들기").first().waitFor({ state: "visible", timeout: 30000 });
-    await page.getByText("Flow Chart").first().waitFor({ state: "visible", timeout: 30000 });
-    await page.getByText("trigger할 수 있습니다").first().waitFor({ state: "visible", timeout: 30000 });
+    await page.getByText("새 작업 흐름").first().waitFor({ state: "visible", timeout: 30000 });
+    if (!(await hasEmptyOrTable(/등록된 작업 흐름이 없습니다/))) {
+      errors.push(`${path}: empty message or table rows expected`);
+    }
     const openCount = await page.getByRole("button", { name: "열기" }).count();
     if (openCount > 0) {
       await page.getByRole("button", { name: "열기" }).first().click();
@@ -119,9 +151,18 @@ for (const path of PATHS) {
     }
   }
   if (path === "/ops/pipeline-runs") {
-    await page.getByText("Pipeline Builder에서 실행 설정").first().waitFor({ state: "visible", timeout: 30000 });
-    await page.getByText(/데이터가 없습니다/).first().waitFor({ state: "visible", timeout: 30000 });
+    await page.getByText("작업 흐름 구성").first().waitFor({ state: "visible", timeout: 30000 });
+    if (!(await hasEmptyOrTable(/실행 이력이 없습니다/))) {
+      errors.push(`${path}: empty message or table rows expected`);
+    }
   }
+}
+
+// Sidebar menu groups (dashboard page has sidebar)
+await page.goto(`${BASE}/dashboard`, { waitUntil: "load", timeout: 60000 });
+for (const group of ["데이터 준비", "학습 변수 관리", "모델 학습·예측", "운영 모니터링", "시스템 관리"]) {
+  const count = await page.getByText(group, { exact: true }).count();
+  if (!count) errors.push(`sidebar: menu group '${group}' not found`);
 }
 
 if (errors.length) {

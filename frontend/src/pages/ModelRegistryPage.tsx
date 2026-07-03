@@ -8,6 +8,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { LoadingState, ErrorState } from "@/components/Pagination";
 import { useToast } from "@/hooks/useToast";
 import { PageHeader } from "@/layouts/MainLayout";
+import { PAGE_DESCRIPTIONS, PAGE_TITLES } from "@/constants/displayLabels";
 
 interface ModelSummary {
   model_name: string;
@@ -90,7 +91,7 @@ export default function ModelRegistryPage() {
 
   return (
     <div>
-      <PageHeader title="모델 Registry 관리" description="등록된 모델 버전과 운영(Champion) 모델을 관리합니다." />
+      <PageHeader title={PAGE_TITLES.modelRegistry} description={PAGE_DESCRIPTIONS.modelRegistry} />
 
       <DataTable
         columns={[

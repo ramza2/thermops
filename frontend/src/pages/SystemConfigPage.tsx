@@ -8,6 +8,7 @@ import { TextInput } from "@/components/SearchPanel";
 import { LoadingState, ErrorState } from "@/components/Pagination";
 import { useToast } from "@/hooks/useToast";
 import { PageHeader } from "@/layouts/MainLayout";
+import { MENU_GROUPS, PAGE_DESCRIPTIONS, PAGE_TITLES } from "@/constants/displayLabels";
 
 interface CommonCode {
   code_group: string;
@@ -97,11 +98,11 @@ export default function SystemConfigPage() {
   return (
     <div>
       <PageHeader
-        title="공통 코드/설정 관리"
-        description="공통 코드와 시스템 운영 설정을 조회·수정합니다."
+        title={PAGE_TITLES.systemConfig}
+        description={PAGE_DESCRIPTIONS.systemConfig}
         breadcrumbs={[
-          { label: "운영 관리", path: "/ops/pipeline-runs" },
-          { label: "공통 코드/설정" },
+          { label: MENU_GROUPS.system, path: "/system/configs" },
+          { label: "시스템 설정" },
         ]}
         actions={
           <Button

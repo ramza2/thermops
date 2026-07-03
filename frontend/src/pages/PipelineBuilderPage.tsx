@@ -23,6 +23,7 @@ import { ErrorState, LoadingState } from "@/components/Pagination";
 import { SelectInput, TextInput } from "@/components/SearchPanel";
 import { useToast } from "@/hooks/useToast";
 import { PageHeader } from "@/layouts/MainLayout";
+import { EMPTY_MESSAGES, PAGE_DESCRIPTIONS, PAGE_TITLES } from "@/constants/displayLabels";
 import type {
   PipelineDefinition,
   PipelineNodeOptions,
@@ -46,7 +47,7 @@ const FIELD_LABELS: Record<string, string> = {
   data_source_id: "데이터소스",
   mapping_id: "데이터 매핑",
   dataset_type_id: "표준 데이터셋",
-  feature_set_id: "Feature Set",
+  feature_set_id: "변수 구성",
   algorithm: "알고리즘",
   config_id: "학습 설정",
   model_name: "모델",
@@ -136,26 +137,26 @@ function PipelineBuilderList() {
   return (
     <div>
       <PageHeader
-        title="Pipeline Builder"
-        description="Pipeline Template Flow Chart와 노드별 실행 파라미터를 관리합니다."
+        title={PAGE_TITLES.pipelineBuilder}
+        description={PAGE_DESCRIPTIONS.pipelineBuilder}
         actions={
           <Button icon={<Plus className="w-4 h-4" />} onClick={() => setCreateOpen(true)}>
-            새 Pipeline 만들기
+            새 작업 흐름
           </Button>
         }
       />
       <div className="mb-4 text-xs text-slate-600 bg-amber-50 border border-amber-200 rounded-lg p-3 space-y-1">
         <p>{R8_PIPELINE_NOTE}</p>
         <p>
-          실행 이력·수동 DAG 실행은 <Link to="/ops/pipeline-runs" className="text-blue-600 hover:underline">파이프라인 실행 이력</Link>
+          실행 이력·수동 실행은 <Link to="/ops/pipeline-runs" className="text-blue-600 hover:underline">작업 실행 이력</Link>
           에서 계속 사용할 수 있습니다.
         </p>
       </div>
       <DataTable
-        emptyMessage="등록된 Pipeline Definition이 없습니다. 새 Pipeline 만들기로 시작하세요."
+        emptyMessage={EMPTY_MESSAGES.pipelineBuilder}
         columns={[
-          { key: "pipeline_name", header: "Pipeline 이름" },
-          { key: "template_name", header: "Template" },
+          { key: "pipeline_name", header: "작업 흐름명" },
+          { key: "template_name", header: "템플릿" },
           { key: "pipeline_type", header: "유형", render: (r) => pipelineTypeLabel(String(r.pipeline_type)) },
           {
             key: "status",
@@ -186,7 +187,7 @@ function PipelineBuilderList() {
       />
       <Modal
         open={createOpen}
-        title="새 Pipeline 만들기"
+        title="새 작업 흐름 만들기"
         onClose={() => setCreateOpen(false)}
         footer={
           <>
@@ -205,7 +206,7 @@ function PipelineBuilderList() {
             />
           </div>
           <div>
-            <label className="block text-xs text-slate-500 mb-1">Pipeline 이름</label>
+            <label className="block text-xs text-slate-500 mb-1">작업 흐름명</label>
             <TextInput
               value={createForm.pipeline_name}
               onChange={(v) => setCreateForm({ ...createForm, pipeline_name: v })}
@@ -428,7 +429,7 @@ function PipelineBuilderDetail({ pipelineId }: { pipelineId: string }) {
         }
       />
       <div className="mb-3 text-xs text-slate-600 bg-blue-50 border border-blue-200 rounded-lg p-3 space-y-1">
-        <p>이 실행은 저장된 Pipeline Definition을 기준으로 기존 Airflow DAG를 trigger합니다.</p>
+        <p>이 실행은 저장된 작업 흐름 정의를 기준으로 기존 Airflow DAG를 실행 요청합니다.</p>
         <p>Airflow DAG 파일은 동적으로 생성되지 않습니다. schedule_config는 저장만 되며 실제 Airflow 스케줄에는 반영되지 않습니다.</p>
       </div>
       <div className="mb-3 flex flex-wrap gap-2 text-xs">
@@ -522,7 +523,7 @@ function PipelineBuilderDetail({ pipelineId }: { pipelineId: string }) {
       </div>
       <div className="mt-4 border rounded-lg p-4 bg-white">
         <h3 className="text-sm font-semibold text-slate-800 mb-2">최근 실행 이력</h3>
-        {!recentRuns.length && <p className="text-xs text-slate-400">아직 Pipeline Definition 기반 실행 이력이 없습니다.</p>}
+        {!recentRuns.length && <p className="text-xs text-slate-400">아직 작업 흐름 정의 기반 실행 이력이 없습니다.</p>}
         {recentRuns.length > 0 && (
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
@@ -564,7 +565,7 @@ function PipelineBuilderDetail({ pipelineId }: { pipelineId: string }) {
       </div>
       <Modal
         open={runOpen}
-        title="Pipeline Definition 실행"
+        title="작업 흐름 실행"
         onClose={() => setRunOpen(false)}
         footer={
           <>

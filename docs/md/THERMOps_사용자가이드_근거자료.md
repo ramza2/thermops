@@ -190,7 +190,9 @@ flowchart LR
 
 **R9-S2-2 Dataset Metadata 분류**: `dataset_category`는 데이터 구조/성격(MASTER, FACT, TIMESERIES 등), `business_domain`·`tags`는 선택 메타데이터입니다. 업무 영역은 시스템 고정값이 아니며 clean 설치 시 seed가 없습니다. `열수요`·`기상` 등은 문서/입력 예시일 뿐 기본 옵션으로 제공하지 않습니다.
 
-**R8 Pipeline Builder**: `/pipeline-builder`에서 Pipeline Template Flow Chart를 확인하고 노드별 실행 파라미터를 저장합니다.
+**R9-S2-3 사용자 친화 용어**: 화면 메뉴·제목·빈 상태 안내는 `frontend/src/constants/displayLabels.ts` 기준 업무 용어를 사용합니다. 예: Feature→학습 변수, Feature Set→변수 구성, Feature Recipe→변수 생성 규칙, Pipeline→작업 흐름, Drift→데이터 변화 리포트. 내부 API·DB 식별자는 유지합니다.
+
+**R8 작업 흐름 구성** (구 Pipeline Builder): `/pipeline-builder`에서 작업 흐름 템플릿 Flow Chart를 확인하고 노드별 실행 파라미터를 저장합니다.
 
 **R9 Pipeline 실행 연계**: ACTIVE/VALIDATED Pipeline Definition에서 **실행** 버튼으로 연결된 `airflow_dag_id`를 trigger합니다. 실행 이력은 `tb_pipeline_run_link`와 `/ops/pipeline-runs` metadata로 확인합니다. 기존 DAG 수동 실행은 `DIRECT_DAG`로 구분됩니다.
 

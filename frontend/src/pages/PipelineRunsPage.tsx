@@ -14,6 +14,7 @@ import { useToast } from "@/hooks/useToast";
 import { useRole } from "@/hooks/useRole";
 import { PermissionDeniedModal } from "@/components/PermissionDeniedModal";
 import { PageHeader } from "@/layouts/MainLayout";
+import { EMPTY_MESSAGES, PAGE_DESCRIPTIONS, PAGE_TITLES } from "@/constants/displayLabels";
 import { pipelineRunSourceLabel } from "@/utils/pipelineBuilderFormat";
 
 interface PipelineRun {
@@ -126,7 +127,7 @@ export default function PipelineRunsPage() {
       setItems(pageItems);
       setTotalPages(tp);
     } catch {
-      setError("파이프라인 실행 이력을 불러오지 못했습니다.");
+      setError("작업 실행 이력을 불러오지 못했습니다.");
     } finally {
       setLoading(false);
     }
@@ -185,7 +186,7 @@ export default function PipelineRunsPage() {
       load(1);
       setPage(1);
     } catch {
-      showToast("error", "파이프라인 실행에 실패했습니다.");
+      showToast("error", "작업 실행에 실패했습니다.");
     } finally {
       setTriggering(false);
     }
@@ -205,11 +206,11 @@ export default function PipelineRunsPage() {
   return (
     <div>
       <PageHeader
-        title="파이프라인 실행 이력"
-        description="Airflow 파이프라인 실행 상태와 이력을 관리합니다."
+        title={PAGE_TITLES.pipelineRuns}
+        description={PAGE_DESCRIPTIONS.pipelineRuns}
         breadcrumbs={[
-          { label: "운영 관리", path: "/ops/pipeline-runs" },
-          { label: "파이프라인 실행 이력" },
+          { label: "운영 모니터링", path: "/ops/pipeline-runs" },
+          { label: "작업 실행 이력" },
         ]}
         actions={
           <Button variant="secondary" icon={<RefreshCw className="w-4 h-4" />} onClick={() => load(page)}>
@@ -219,15 +220,15 @@ export default function PipelineRunsPage() {
       />
 
       <div className="mb-4 text-xs text-slate-600 bg-blue-50 border border-blue-200 rounded-lg p-3">
-        Pipeline Builder에서 실행 설정을 구성할 수 있습니다.{" "}
+        작업 흐름 구성에서 실행 설정을 구성할 수 있습니다.{" "}
         <Link to="/pipeline-builder" className="text-blue-600 hover:underline">
-          Pipeline Builder에서 실행 설정 구성하기
+          작업 흐름 구성으로 이동
         </Link>
       </div>
 
       <div className="bg-white rounded-lg border border-slate-200 p-4 mb-4 shadow-sm">
         <div className="flex items-center justify-between mb-3">
-          <h3 className="text-sm font-semibold text-slate-800">파이프라인 목록</h3>
+          <h3 className="text-sm font-semibold text-slate-800">작업 흐름 목록</h3>
           <label className="text-xs text-slate-500 flex items-center gap-2">
             <input type="checkbox" checked={autoRefresh} onChange={(e) => setAutoRefresh(e.target.checked)} />
             실행 중 자동 새로고침 (10초)
@@ -262,7 +263,7 @@ export default function PipelineRunsPage() {
                 onChange={setRunSourceFilter}
                 options={[
                   { value: "", label: "전체" },
-                  { value: "PIPELINE_DEFINITION", label: "Pipeline Definition" },
+                  { value: "PIPELINE_DEFINITION", label: "작업 흐름 정의" },
                   { value: "DIRECT_DAG", label: "수동 DAG" },
                 ]}
               />
@@ -277,10 +278,10 @@ export default function PipelineRunsPage() {
         loading={loading}
         columns={[
           { key: "pipeline_run_id", header: "Run ID" },
-          { key: "pipeline_name", header: "파이프라인" },
+          { key: "pipeline_name", header: "작업 흐름" },
           {
             key: "pipeline_definition_id",
-            header: "Pipeline",
+            header: "정의 ID",
             render: (r) => (r.pipeline_name_from_definition as string) || (r.pipeline_definition_id as string) || "-",
           },
           {
@@ -324,15 +325,15 @@ export default function PipelineRunsPage() {
       />
       <Pagination page={page} totalPages={totalPages} onChange={(p) => { setPage(p); applyFilter(p); }} />
 
-      <Modal open={!!detail} title="파이프라인 실행 상세" onClose={() => setDetail(null)} size="lg"
+      <Modal open={!!detail} title="작업 실행 상세" onClose={() => setDetail(null)} size="lg"
         footer={<Button variant="secondary" onClick={() => setDetail(null)}>닫기</Button>}>
         {detail && (
           <dl className="grid grid-cols-2 gap-3 text-sm">
             <div><dt className="text-slate-500">Run ID</dt><dd className="font-medium">{detail.pipeline_run_id}</dd></div>
             <div><dt className="text-slate-500">Airflow dag_run_id</dt><dd className="font-medium break-all">{detail.orchestrator_run_id || "-"}</dd></div>
-            <div><dt className="text-slate-500">파이프라인</dt><dd className="font-medium">{detail.pipeline_name}</dd></div>
+            <div><dt className="text-slate-500">작업 흐름</dt><dd className="font-medium">{detail.pipeline_name}</dd></div>
             {detail.pipeline_definition_id && (
-              <div><dt className="text-slate-500">Pipeline Definition</dt><dd className="font-medium">{detail.pipeline_name_from_definition || detail.pipeline_definition_id}</dd></div>
+              <div><dt className="text-slate-500">작업 흐름 정의</dt><dd className="font-medium">{detail.pipeline_name_from_definition || detail.pipeline_definition_id}</dd></div>
             )}
             {detail.run_source && (
               <div><dt className="text-slate-500">실행 출처</dt><dd>{pipelineRunSourceLabel(detail.run_source)}</dd></div>
@@ -369,7 +370,7 @@ export default function PipelineRunsPage() {
         )}
       </Modal>
 
-      <Modal open={!!triggerTarget} title="파이프라인 수동 실행" onClose={() => setTriggerTarget(null)}
+      <Modal open={!!triggerTarget} title="작업 수동 실행" onClose={() => setTriggerTarget(null)}
         footer={<>
           <Button variant="secondary" onClick={() => setTriggerTarget(null)}>취소</Button>
           <Button icon={<Play className="w-4 h-4" />} onClick={handleTrigger} disabled={triggering}>
@@ -377,7 +378,7 @@ export default function PipelineRunsPage() {
           </Button>
         </>}>
         <p className="text-sm text-slate-600">
-          <strong>{triggerTarget?.name}</strong> 파이프라인을 Airflow로 수동 실행하시겠습니까?
+          <strong>{triggerTarget?.name}</strong> 작업 흐름을 Airflow로 수동 실행하시겠습니까?
         </p>
         {triggerTarget?.description && (
           <p className="text-xs text-slate-400 mt-1">{triggerTarget.description}</p>

@@ -12,6 +12,7 @@ import { Pagination, LoadingState, ErrorState } from "@/components/Pagination";
 import { SelectInput, TextInput } from "@/components/SearchPanel";
 import { useToast } from "@/hooks/useToast";
 import { PageHeader } from "@/layouts/MainLayout";
+import { EMPTY_MESSAGES, PAGE_DESCRIPTIONS, PAGE_TITLES } from "@/constants/displayLabels";
 import { CalcMemoText, FeatureRegistryPanel } from "@/components/FeatureRegistryPanel";
 import type { FeatureNameValidation } from "@/types/featureRegistration";
 import type { FeatureRegistryItem } from "@/types/featureRegistry";
@@ -230,20 +231,20 @@ export default function FeaturesPage() {
   return (
     <div>
       <PageHeader
-        title="Feature 목록"
-        description="모델 학습에 사용되는 Feature 메타데이터(카탈로그)를 정의합니다. 등록만으로는 값이 생성되지 않습니다."
+        title={PAGE_TITLES.features}
+        description={PAGE_DESCRIPTIONS.features}
         actions={(
           <div className="flex gap-2">
             <Link to="/feature-recipes/new">
-              <Button variant="secondary">Recipe로 Feature 만들기</Button>
+              <Button variant="secondary">규칙으로 변수 만들기</Button>
             </Link>
-            <Button icon={<Plus className="w-4 h-4" />} onClick={() => setCreateOpen(true)}>신규 Feature</Button>
+            <Button icon={<Plus className="w-4 h-4" />} onClick={() => setCreateOpen(true)}>변수 등록</Button>
           </div>
         )}
       />
 
       <div className="mb-4 text-xs text-slate-600 bg-blue-50 border border-blue-200 rounded-lg p-3 whitespace-pre-line">
-        <strong className="text-slate-800">신규 Feature 사용 절차</strong>
+        <strong className="text-slate-800">신규 학습 변수 사용 절차</strong>
         {"\n"}
         {FEATURE_USAGE_STEPS}
       </div>
@@ -251,7 +252,7 @@ export default function FeaturesPage() {
       <div className="mb-4 text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded-lg p-3 whitespace-pre-line">
         {REGISTER_INFO}
         {"\n"}
-        Recipe로 발행된 TEMPLATE Feature 중 RAW_COLUMN·DATE_PART·LAG·ROLLING은 R6 Recipe Engine Build가 지원됩니다.
+        Recipe로 발행된 템플릿 변수 중 RAW_COLUMN·DATE_PART·LAG·ROLLING은 변수 생성 엔진에서 지원됩니다.
       </div>
 
       {registryWarning && (
@@ -262,9 +263,10 @@ export default function FeaturesPage() {
 
       <DataTable
         loading={loading}
+        emptyMessage={EMPTY_MESSAGES.features}
         columns={[
           { key: "feature_id", header: "ID", width: "120px" },
-          { key: "feature_name", header: "Feature명" },
+          { key: "feature_name", header: "변수명" },
           { key: "feature_group", header: "그룹", render: (r) => String(r.feature_group || "-") },
           {
             key: "registration",
@@ -281,7 +283,7 @@ export default function FeaturesPage() {
           },
           {
             key: "registry",
-            header: "Registry",
+            header: "등록 정보",
             render: (r) => {
               const name = String(r.feature_name);
               const reg = registryMap[name];
@@ -329,7 +331,7 @@ export default function FeaturesPage() {
 
       <Modal
         open={!!detailTarget}
-        title={`Feature 상세 — ${detailTarget?.feature_name ?? ""}`}
+        title={`학습 변수 상세 — ${detailTarget?.feature_name ?? ""}`}
         onClose={() => setDetailTarget(null)}
         size="lg"
         footer={<Button variant="secondary" onClick={() => setDetailTarget(null)}>닫기</Button>}
@@ -347,7 +349,7 @@ export default function FeaturesPage() {
               <dd>{detailTarget.description || "-"}</dd>
             </dl>
             <div>
-              <h4 className="text-sm font-semibold text-slate-800 mb-2">Registry 정보</h4>
+              <h4 className="text-sm font-semibold text-slate-800 mb-2">등록 정보</h4>
               <FeatureRegistryPanel
                 registry={detailRegistry}
                 catalogCalcExpression={detailTarget.calc_expression}
@@ -363,7 +365,7 @@ export default function FeaturesPage() {
 
       <Modal
         open={createOpen}
-        title="Feature 등록"
+        title="학습 변수 등록"
         onClose={() => setCreateOpen(false)}
         footer={
           <>

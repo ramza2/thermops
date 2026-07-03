@@ -15,6 +15,7 @@ import { ErrorState, LoadingState } from "@/components/Pagination";
 import { SelectInput, TextInput } from "@/components/SearchPanel";
 import { useToast } from "@/hooks/useToast";
 import { PageHeader } from "@/layouts/MainLayout";
+import { EMPTY_MESSAGES, PAGE_DESCRIPTIONS, PAGE_TITLES, R9_S2_3_NOTE } from "@/constants/displayLabels";
 import type { StandardDatasetMetadataOptions, StandardDatasetType } from "@/types/standardDatasets";
 import { R9_DATASET_METADATA_NOTE, R9_DATASET_WIZARD_NOTE } from "@/types/standardDatasets";
 import {
@@ -42,8 +43,7 @@ const PHYSICAL_FILTER = [
   { value: "N", label: "물리 테이블 없음" },
 ];
 
-const EMPTY_MESSAGE =
-  "등록된 표준 데이터셋이 없습니다. 데이터소스 적재 대상이 될 표준 데이터셋과 내부 물리 테이블을 먼저 생성하세요.";
+const EMPTY_MESSAGE = EMPTY_MESSAGES.standardDatasets;
 
 export default function StandardDatasetsPage() {
   const { showToast } = useToast();
@@ -158,8 +158,8 @@ export default function StandardDatasetsPage() {
   return (
     <div>
       <PageHeader
-        title="표준 데이터셋"
-        description="논리 데이터셋 구조를 정의하고 Wizard로 내부 물리 테이블을 안전하게 생성합니다."
+        title={PAGE_TITLES.standardDatasets}
+        description={PAGE_DESCRIPTIONS.standardDatasets}
         actions={
           <Button icon={<Plus className="w-4 h-4" />} onClick={() => setWizardOpen(true)}>
             표준 데이터셋 생성
@@ -170,9 +170,10 @@ export default function StandardDatasetsPage() {
       <div className="mb-4 text-xs text-slate-600 bg-amber-50 border border-amber-200 rounded-lg p-3 space-y-1">
         <p>{R9_DATASET_WIZARD_NOTE}</p>
         <p>{R9_DATASET_METADATA_NOTE}</p>
+        <p>{R9_S2_3_NOTE}</p>
         <p>
-          데이터 매핑 설정은 <Link to="/data/mappings" className="text-blue-600 hover:underline">데이터 매핑 설정</Link>
-          에서 Wizard로 생성한 물리 테이블을 대상으로 연결합니다.
+          데이터 매핑은 <Link to="/data/mappings" className="text-blue-600 hover:underline">데이터 매핑</Link>
+          에서 Wizard로 생성한 내부 테이블을 대상으로 연결합니다.
         </p>
       </div>
 

@@ -9,13 +9,7 @@ const CATEGORY_LABELS: Record<string, string> = {
   CUSTOM: "사용자 정의",
 };
 
-const STATUS_LABELS: Record<string, string> = {
-  ACTIVE: "운영",
-  DRAFT: "설계",
-  PLANNED: "계획",
-  VALIDATED: "검증",
-  ARCHIVED: "보관",
-};
+import { lifecycleStatusLabel } from "@/constants/displayLabels";
 
 export function datasetCategoryLabel(code?: string | null): string {
   if (!code) return "-";
@@ -26,7 +20,7 @@ export function datasetCategoryLabel(code?: string | null): string {
 export const categoryLabel = datasetCategoryLabel;
 
 export function datasetStatusLabel(status: string): string {
-  return STATUS_LABELS[status] || status;
+  return lifecycleStatusLabel(status, status);
 }
 
 export function datasetStatusClass(status: string): string {

@@ -8,6 +8,7 @@ import { DateRangePicker, defaultDateRange } from "@/components/DateRangePicker"
 import { SearchPanel, SelectInput } from "@/components/SearchPanel";
 import { EmptyState, LoadingState, ErrorState } from "@/components/Pagination";
 import { PageHeader } from "@/layouts/MainLayout";
+import { MENU_GROUPS, PAGE_DESCRIPTIONS, PAGE_TITLES } from "@/constants/displayLabels";
 import {
   monitoringTrendChartTitle,
   normalizeTrendResponse,
@@ -164,10 +165,10 @@ export default function ModelMonitoringPage() {
   return (
     <div>
       <PageHeader
-        title="성능 모니터링"
-        description={`${perf?.model_name ?? "-"} v${perf?.model_version ?? "-"} · 운영 예측 성능 (예측값-실제값 매칭) · ${dateRange.from} ~ ${dateRange.to}`}
+        title={PAGE_TITLES.modelMonitoring}
+        description={PAGE_DESCRIPTIONS.modelMonitoring}
         breadcrumbs={[
-          { label: "운영 관리", path: "/ops/pipeline-runs" },
+          { label: MENU_GROUPS.operations, path: "/ops/pipeline-runs" },
           { label: "성능 모니터링" },
         ]}
       />

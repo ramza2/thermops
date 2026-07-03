@@ -8,6 +8,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { Pagination, LoadingState, ErrorState } from "@/components/Pagination";
 import { useToast } from "@/hooks/useToast";
 import { PageHeader } from "@/layouts/MainLayout";
+import { HELP_TEXTS, PAGE_DESCRIPTIONS, PAGE_TITLES } from "@/constants/displayLabels";
 
 type SourceFilter = "computed" | "all" | "seed";
 
@@ -150,10 +151,11 @@ export default function DriftReportsPage() {
   return (
     <div>
       <PageHeader
-        title="드리프트 리포트"
-        description="운영 성능·예측 오차·Feature 분포 Drift를 점검하고 리포트를 확인합니다."
-        actions={<Button icon={<Play className="w-4 h-4" />} onClick={handleRunCheck} disabled={running}>{running ? "실행 중..." : "드리프트 점검"}</Button>}
+        title={PAGE_TITLES.driftReports}
+        description={PAGE_DESCRIPTIONS.driftReports}
+        actions={<Button icon={<Play className="w-4 h-4" />} onClick={handleRunCheck} disabled={running}>{running ? "실행 중..." : "변화 점검"}</Button>}
       />
+      <p className="text-xs text-slate-500 mb-4">{HELP_TEXTS.drift}</p>
 
       <div className="flex flex-wrap gap-2 mb-4">
         <Button variant={sourceFilter === "computed" ? "primary" : "secondary"} onClick={() => handleFilterChange("computed")}>
@@ -214,7 +216,7 @@ export default function DriftReportsPage() {
 
       <Modal
         open={!!detail}
-        title={`Drift 리포트 — ${detail?.drift_report_id ?? ""}`}
+        title={`데이터 변화 리포트 — ${detail?.drift_report_id ?? ""}`}
         onClose={() => setDetail(null)}
         footer={<Button variant="secondary" onClick={() => setDetail(null)}>닫기</Button>}
       >

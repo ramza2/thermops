@@ -8,13 +8,13 @@ import type {
 export function recipeStatusLabel(status: FeatureRecipeStatus): string {
   switch (status) {
     case "DRAFT":
-      return "초안";
+      return "작성 중";
     case "VALIDATED":
-      return "검증됨";
+      return "검증 완료";
     case "PUBLISHED":
-      return "발행됨";
+      return "사용 가능";
     case "ARCHIVED":
-      return "보관";
+      return "보관됨";
     default:
       return status;
   }
@@ -49,8 +49,8 @@ export function recipeBuildSupportLabel(recipe: {
   build_supported?: boolean;
 }): string {
   if (recipe.status !== "PUBLISHED") return "-";
-  if (recipe.build_supported) return "Build 지원";
-  return "Build 미지원";
+  if (recipe.build_supported) return "생성 지원";
+  return "생성 미지원";
 }
 
 export function recipeBuildSupportClass(recipe: { build_supported?: boolean }): string {
@@ -89,15 +89,15 @@ export function mapTemplateFeatureStatusToBadge(status: string | undefined | nul
 export function getRecipeBuildStatusLabel(badge: RecipeBuildStatusBadge): string {
   switch (badge) {
     case "BUILD_OK":
-      return "최근 Build 성공";
+      return "최근 생성 성공";
     case "BUILD_WARNING":
-      return "최근 Build 경고";
+      return "최근 생성 경고";
     case "BUILD_FAILED":
-      return "최근 Build 실패";
+      return "최근 생성 실패";
     case "BUILD_UNSUPPORTED":
-      return "Build 미지원";
+      return "생성 미지원";
     case "BUILD_NOT_RUN":
-      return "아직 Build 없음";
+      return "아직 생성 없음";
     case "BUILD_LIMITED":
       return "진단 정보 제한";
     default:

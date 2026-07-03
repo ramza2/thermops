@@ -18,6 +18,7 @@ import { RecipePreviewBuildComparePanel } from "@/components/RecipePreviewBuildC
 import { SelectInput, TextInput } from "@/components/SearchPanel";
 import { useToast } from "@/hooks/useToast";
 import { PageHeader } from "@/layouts/MainLayout";
+import { PAGE_DESCRIPTIONS, PAGE_TITLES } from "@/constants/displayLabels";
 import type { FeatureColumnRole } from "@/types/featureColumnRoles";
 import type { FeatureRecipe, RecipeBuildHistoryItem, RecipePreviewBuildCompareResponse } from "@/types/featureRecipes";
 import { R5_BUILD_WARNING, RECIPE_PREVIEW_NO_SAVE_NOTE } from "@/types/featureRecipes";
@@ -349,8 +350,8 @@ export default function FeatureRecipeBuilderPage() {
   return (
     <div>
       <PageHeader
-        title="Feature Recipe Builder"
-        description="Template 기반 Feature Recipe를 생성·검증·미리보기·저장·발행합니다."
+        title={PAGE_TITLES.featureRecipeBuilder}
+        description={PAGE_DESCRIPTIONS.featureRecipeBuilder}
         actions={<Link to="/feature-recipes" className="text-sm text-blue-600 hover:underline">Recipe 목록</Link>}
       />
 
@@ -358,7 +359,7 @@ export default function FeatureRecipeBuilderPage() {
         <p>{R5_BUILD_WARNING}</p>
         <p>{RECIPE_PREVIEW_NO_SAVE_NOTE}</p>
         <p className="text-slate-500">검증·미리보기는 현재 화면 입력값을 기준으로 실행됩니다. 초안 저장 전에도 확인할 수 있습니다.</p>
-        <p className="text-slate-500">발행 후 Build 이력에서 <strong>Preview/Build 비교</strong>를 실행할 수 있습니다.</p>
+        <p className="text-slate-500">발행 후 생성 이력에서 <strong>미리보기/생성 비교</strong>를 실행할 수 있습니다.</p>
         {TIME_SERIES.has(recipeType) && <p>{RECIPE_PREVIEW_ROW_STEP_NOTE}</p>}
       </div>
 
@@ -381,7 +382,7 @@ export default function FeatureRecipeBuilderPage() {
             </div>
             {recipe.build_supported && (buildHistory?.items.length ?? 0) > 0 && (
               <Button variant="secondary" disabled={compareLoading} onClick={() => void runCompare()}>
-                {compareLoading ? "비교 중..." : "Preview/Build 비교"}
+                {compareLoading ? "비교 중..." : "미리보기/생성 비교"}
               </Button>
             )}
           </div>
@@ -589,7 +590,7 @@ export default function FeatureRecipeBuilderPage() {
 
       <Modal
         open={compareOpen}
-        title="Preview/Build 비교"
+        title="미리보기/생성 비교"
         onClose={() => setCompareOpen(false)}
         size="lg"
         footer={(

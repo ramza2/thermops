@@ -7,6 +7,7 @@ import { DataTable } from "@/components/DataTable";
 import { SearchPanel, SelectInput } from "@/components/SearchPanel";
 import { LoadingState, ErrorState } from "@/components/Pagination";
 import { PageHeader } from "@/layouts/MainLayout";
+import { PAGE_DESCRIPTIONS, PAGE_TITLES } from "@/constants/displayLabels";
 
 const EVAL_PREDICTION = "PREDICTION_ACTUAL_MATCH";
 const EVAL_TRAINING = "TRAINING_VALIDATION";
@@ -88,7 +89,7 @@ export default function ModelPerformancePage() {
   return (
     <div>
       <PageHeader
-        title="모델 성능 비교"
+        title={PAGE_TITLES.modelPerformance}
         description={`${data?.model_name ?? "-"} v${data?.model_version ?? "-"} · ${evalLabel} · ${data?.period.from ?? "-"} ~ ${data?.period.to ?? "-"}`}
       />
 

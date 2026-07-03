@@ -11,6 +11,7 @@ import { useToast } from "@/hooks/useToast";
 import { useRole } from "@/hooks/useRole";
 import { PermissionDeniedModal } from "@/components/PermissionDeniedModal";
 import { PageHeader } from "@/layouts/MainLayout";
+import { EMPTY_MESSAGES, PAGE_DESCRIPTIONS, PAGE_TITLES } from "@/constants/displayLabels";
 import { FeatureSet, toFeatureSetPayload } from "@/types/featureSet";
 
 const EMPTY_FORM = {
@@ -105,11 +106,11 @@ export default function FeatureSetsPage() {
   return (
     <div>
       <PageHeader
-        title="Feature Set 관리"
-        description="학습에 사용할 Feature 묶음을 구성합니다."
+        title={PAGE_TITLES.featureSets}
+        description={PAGE_DESCRIPTIONS.featureSets}
         breadcrumbs={[
-          { label: "Feature 관리", path: "/features" },
-          { label: "Feature Set" },
+          { label: "학습 변수 관리", path: "/features" },
+          { label: "변수 구성" },
         ]}
         actions={
           <Button
@@ -122,13 +123,13 @@ export default function FeatureSetsPage() {
               setCreateOpen(true);
             }}
           >
-            신규 Feature Set
+            신규 변수 구성
           </Button>
         }
       />
 
       <DataTable
-        emptyMessage="등록된 Feature Set이 없습니다. 신규 Feature Set을 구성하세요."
+        emptyMessage={EMPTY_MESSAGES.featureSets}
         columns={[
           { key: "feature_set_id", header: "ID", width: "120px" },
           { key: "feature_set_name", header: "Set명" },
@@ -162,7 +163,7 @@ export default function FeatureSetsPage() {
 
       <Modal
         open={createOpen}
-        title="Feature Set 등록"
+        title="변수 구성 등록"
         onClose={() => setCreateOpen(false)}
         footer={
           <>
@@ -173,7 +174,7 @@ export default function FeatureSetsPage() {
       >
         <div className="space-y-3">
           <div>
-            <label className="block text-xs text-slate-500 mb-1">Feature Set 명</label>
+            <label className="block text-xs text-slate-500 mb-1">변수 구성명</label>
             <TextInput value={form.feature_set_name} onChange={(v) => setForm({ ...form, feature_set_name: v })} />
           </div>
           <div>
@@ -207,7 +208,7 @@ export default function FeatureSetsPage() {
         }
       >
         <p className="text-sm text-slate-600">
-          <strong>{deleteTarget?.feature_set_name}</strong> Feature Set을 삭제하시겠습니까?
+          <strong>{deleteTarget?.feature_set_name}</strong> 변수 구성을 삭제하시겠습니까?
         </p>
       </Modal>
 

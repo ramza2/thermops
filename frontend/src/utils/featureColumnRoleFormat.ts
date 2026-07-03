@@ -53,7 +53,7 @@ export function isFeatureCandidateRole(code: string | null | undefined, codes?: 
 }
 
 export const COLUMN_ROLE_HELP =
-  "Column Role(컬럼 역할)은 Feature Recipe Builder에서 사용할 컬럼 의미입니다. 매핑 수정 화면에서 드롭다운으로 지정합니다. 현재 Feature Build·학습·예측 로직에는 직접 영향을 주지 않습니다.";
+  "컬럼 역할은 변수 생성 규칙 작성 시 각 컬럼의 의미(시간, 기준 키, 예측 대상 등)를 지정하는 선택 정보입니다. 매핑 수정 화면에서 드롭다운으로 지정합니다.";
 
 export const COLUMN_ROLE_INFERENCE_NOTE =
   "자동 추론은 제안일 뿐입니다. 역할을 확인한 뒤 「컬럼 역할 저장」으로 확정하세요.";

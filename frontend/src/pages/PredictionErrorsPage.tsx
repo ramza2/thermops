@@ -8,6 +8,7 @@ import { SearchPanel, SelectInput } from "@/components/SearchPanel";
 import { DateRangePicker, defaultDateRange } from "@/components/DateRangePicker";
 import { LoadingState, ErrorState } from "@/components/Pagination";
 import { PageHeader } from "@/layouts/MainLayout";
+import { PAGE_DESCRIPTIONS, PAGE_TITLES } from "@/constants/displayLabels";
 
 interface PredictionError {
   match_id: number;
@@ -98,7 +99,7 @@ export default function PredictionErrorsPage() {
 
   return (
     <div>
-      <PageHeader title="실제값 매칭 및 오차 분석" description="예측값과 실제값을 비교하여 오차를 분석합니다." />
+      <PageHeader title={PAGE_TITLES.predictionErrors} description={PAGE_DESCRIPTIONS.predictionErrors} />
 
       <SearchPanel
         fields={[
