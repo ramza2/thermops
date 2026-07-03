@@ -47,7 +47,14 @@ docker compose ps
 
 **첫 기동 시 참고:** Airflow 웹서버는 DB 마이그레이션 후 약 30~60초 후 `http://localhost:8080` 에 응답합니다. MLflow는 `psycopg2` 설치 후 기동됩니다.
 
-**초기 DB seed (운영):** `docker compose up` 시 `02_seed_clean.sql`만 적용됩니다. **공통코드·시스템 설정만** 포함되며, 데이터 소스·매핑·표준 데이터셋·Feature Set·모델·Pipeline Definition 등은 **비어 있는 상태**로 시작합니다. UI에서 직접 등록하세요. 회귀 테스트는 `scripts/test_fixtures.py`가 런타임에 `scripts/fixtures/test_platform_seed.sql`을 적용합니다. 완전 초기화: `docker compose down -v` 후 재기동.
+**초기 DB seed (운영):** `docker compose up` 시 `02_seed_clean.sql`만 적용됩니다. **공통코드·시스템 설정만** 포함되며, 데이터 소스·매핑·표준 데이터셋·Feature Set·모델·Pipeline Definition 등은 **비어 있는 상태**로 시작합니다. UI에서 직접 등록하세요. 회귀 테스트는 `scripts/test_fixtures.py`가 런타임에 `scripts/fixtures/test_platform_seed.sql`을 적용합니다.
+
+**완전 초기화 (clean reset, DB volume 삭제):** 환경에 따라 아래 중 하나를 사용합니다. 상세는 [Docker 완전 초기화](#docker-완전-초기화-clean-reset) 참고.
+
+| 환경 | 명령 |
+|------|------|
+| **로컬 개발** (`docker-compose.yml`) | `docker compose down -v` 후 `docker compose up -d --build` |
+| **서버 Traefik 배포** | `docker compose -f docker-compose.traefik.yml --env-file .env.deploy down -v` 후 `docker compose -f docker-compose.traefik.yml --env-file .env.deploy up -d --build` |
 
 **데모/test seed 없음:** `02_seed_demo.sql`은 제거되었습니다. `data/samples/` CSV는 테스트 fixture용 파일이며 DB init에 사용되지 않습니다.
 
@@ -211,13 +218,27 @@ python scripts/run_regression_tests.py --group model --timeout-scale 2
 
 ### Traefik 배포 서버 — 적용·검증
 
-스택 반영:
+스택 반영 (코드만 갱신, DB volume 유지):
 
 ```bash
 cd ~/thermops
 git pull
 docker compose -f docker-compose.traefik.yml --env-file .env.deploy up -d --build backend frontend
 ```
+
+**완전 초기화가 필요할 때** (PoC 잔여 데이터·clean seed 재적용·volume 초기화):
+
+```bash
+# 서버 (Traefik 배포)
+docker compose -f docker-compose.traefik.yml --env-file .env.deploy down -v
+docker compose -f docker-compose.traefik.yml --env-file .env.deploy up -d --build
+
+# 로컬 개발 (참고)
+# docker compose down -v
+# docker compose up -d --build
+```
+
+상세: [Docker 완전 초기화](#docker-완전-초기화-clean-reset) · `docs/md/THERMOps_Traefik_배포_가이드.md` §6
 
 배포 후 API 검증 (호스트에서 backend `localhost:8000` 또는 `THERMOOPS_API_BASE` 설정):
 
@@ -745,22 +766,47 @@ docker compose up -d --build frontend
 | Airflow UI 접속 불가 (연결 거부) | 웹서버 기동 대기 중 | 1분 정도 대기 후 `http://localhost:8080` 재접속 |
 | 프론트 변경이 반영되지 않음 | Vite env는 빌드/기동 시점에 주입 | `docker compose up -d --build frontend` |
 | pipeline_run result_summary 오류 | 기존 DB 볼륨에 컬럼 없음 | `python scripts/apply_dev_migrations.py` |
-| `thermops_airflow` DB 없음 | postgres 볼륨이 init 스크립트 이전에 생성됨 | `docker compose down -v` 후 `docker compose up -d --build` |
+| `thermops_airflow` DB 없음 | postgres 볼륨이 init 스크립트 이전에 생성됨 | [Docker 완전 초기화](#docker-완전-초기화-clean-reset) (로컬 또는 Traefik) |
+
+### Docker 완전 초기화 (clean reset)
+
+DB volume을 삭제하고 `02_seed_clean.sql`만 다시 적용합니다. **운영/테스트에서 쌓인 데이터가 모두 사라집니다.**
+
+**로컬 개발** (`docker-compose.yml`, 포트 5173/8000 등):
+
+```bash
+docker compose down -v
+docker compose up -d --build
+python scripts/apply_dev_migrations.py   # 기존 볼륨 마이그레이션 패턴과 동일
+```
+
+**서버 Traefik 배포** (`docker-compose.traefik.yml`, `.env.deploy` 필수):
+
+```bash
+docker compose -f docker-compose.traefik.yml --env-file .env.deploy down -v
+docker compose -f docker-compose.traefik.yml --env-file .env.deploy up -d --build
+python scripts/apply_dev_migrations.py   # 호스트에서 DB 접근 가능 시
+```
+
+검증 예 (표준 데이터셋·데이터소스 0건):
+
+```bash
+docker compose exec postgres psql -U thermops -d thermops -c \
+  "SELECT 'tb_standard_dataset_type' t, COUNT(*) FROM tb_standard_dataset_type UNION ALL SELECT 'tb_data_source', COUNT(*) FROM tb_data_source;"
+```
+
+Traefik 스택에서는 `docker compose -f docker-compose.traefik.yml --env-file .env.deploy exec postgres ...` 형태로 동일하게 실행합니다.
 
 ```powershell
-# 전체 재시작 (코드 변경 반영)
+# 일상 재시작 (volume 유지, 코드만 반영)
 docker compose up -d --build
 
 # 로그 확인
 docker compose logs -f backend
 docker compose logs -f airflow
 
-# 전체 중지
+# 전체 중지 (volume 유지)
 docker compose down
-
-# DB 포함 초기화 (스키마/시드 재적용)
-docker compose down -v
-docker compose up -d --build
 ```
 
 ### 서비스 접속 URL
@@ -875,6 +921,8 @@ clean 설치 후 **표준 데이터셋 0건**으로 시작합니다. UI **표준
 **보안 정책:** 사용자가 SQL을 직접 입력·수정해 실행하지 않습니다. `CREATE TABLE`만 metadata 기반으로 생성하며 `DROP`/`ALTER`/삭제는 지원하지 않습니다. Data Mapping 대상 테이블은 **ACTIVE + 물리 테이블 존재**한 Wizard 생성 테이블(`std_*`)입니다.
 
 **후속 Phase:** R9-S2 Dataset Version 정책 · R10 Generic REST API Connector · 외부 코드 매핑 · 데이터 적재 스케줄러
+
+**clean 설치 검증 시:** [Docker 완전 초기화](#docker-완전-초기화-clean-reset) 후 `/standard-datasets`·`/data/mappings` 빈 화면 확인 (`frontend/scripts/check-pages.mjs`).
 
 ## 설계 문서 참조
 

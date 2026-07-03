@@ -146,16 +146,29 @@ curl -sS https://thermops.openlink.kr/api/v1/sites | head
 
 `docker-compose.traefik.yml`은 Postgres init 시 **demo seed 대신** `02_seed_clean.sql`을 사용합니다.
 
+| 환경 | 최초 기동 / clean 재기동 |
+|------|--------------------------|
+| **로컬 개발** | `docker compose down -v` → `docker compose up -d --build` |
+| **서버 Traefik** | `docker compose -f docker-compose.traefik.yml --env-file .env.deploy down -v` → `docker compose -f docker-compose.traefik.yml --env-file .env.deploy up -d --build` |
+
+**서버 Traefik — 최초 clean 배포 (volume 없을 때):**
+
 ```bash
-# 최초 clean 배포 (volume 없을 때)
 docker compose -f docker-compose.traefik.yml --env-file .env.deploy up -d --build
 ```
 
-완전 초기화(모든 데이터·MLflow artifact·Airflow 이력 삭제):
+**완전 초기화 (모든 데이터·MLflow artifact·Airflow 이력 삭제):**
 
 ```bash
+# 서버 (Traefik 배포) — 운영 서버에서 이 명령을 사용
 docker compose -f docker-compose.traefik.yml --env-file .env.deploy down -v
 docker compose -f docker-compose.traefik.yml --env-file .env.deploy up -d --build
+```
+
+```bash
+# 로컬 개발 (동일 목적, compose 파일만 다름)
+docker compose down -v
+docker compose up -d --build
 ```
 
 ### 6.2 결과성 데이터만 TRUNCATE (volume 유지)
@@ -188,7 +201,7 @@ docker compose -f docker-compose.traefik.yml --env-file .env.deploy exec backend
 
 **데모/test seed 없음:** `02_seed_demo.sql`은 제거되었습니다. `data/samples/` CSV는 테스트 fixture용이며 DB init에 사용되지 않습니다.
 
-기존 볼륨에 PoC seed가 남아 있으면 `docker compose down -v` 후 재기동하거나, `scripts/reset_clean_deploy.py`로 정리합니다.
+기존 볼륨에 PoC seed가 남아 있으면 **§6.1 완전 초기화**(`down -v` 후 재기동)를 사용하거나, `scripts/reset_clean_deploy.py`로 정리합니다. 로컬은 `docker compose down -v`, 서버는 Traefik compose + `.env.deploy`를 사용합니다.
 
 ---
 
@@ -358,17 +371,21 @@ docker compose -f docker-compose.traefik.yml --env-file .env.deploy up -d --buil
 ## 13. 배포·초기화 명령 요약
 
 ```bash
-# 배포
+# 배포 (서버 Traefik)
 cp .env.deploy.example .env.deploy   # 편집
 docker compose -f docker-compose.traefik.yml --env-file .env.deploy config
 docker compose -f docker-compose.traefik.yml --env-file .env.deploy up -d --build
 
-# 로그
+# 로그 (서버)
 docker compose -f docker-compose.traefik.yml --env-file .env.deploy logs -f backend frontend
 
-# 완전 clean 재시작
+# 완전 clean 재시작 — 서버 (Traefik)
 docker compose -f docker-compose.traefik.yml --env-file .env.deploy down -v
 docker compose -f docker-compose.traefik.yml --env-file .env.deploy up -d --build
+
+# 완전 clean 재시작 — 로컬 개발 (참고)
+# docker compose down -v
+# docker compose up -d --build
 
 # 결과 데이터만 reset
 THERMOPS_DEPLOY_ENV=clean python scripts/reset_clean_deploy.py --yes
