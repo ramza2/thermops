@@ -3,19 +3,19 @@ import { Link } from "react-router-dom";
 import { Eye, Plus, Sparkles } from "lucide-react";
 import {
   activateStandardDatasetType,
-  createStandardDatasetType,
   getStandardDatasetType,
   getStandardDatasetTypes,
 } from "@/api/standardDatasets";
+import { StandardDatasetWizard } from "@/components/StandardDatasetWizard";
 import { Button } from "@/components/Button";
 import { DataTable } from "@/components/DataTable";
 import { Modal } from "@/components/Modal";
 import { ErrorState, LoadingState } from "@/components/Pagination";
-import { SelectInput, TextInput } from "@/components/SearchPanel";
+import { SelectInput } from "@/components/SearchPanel";
 import { useToast } from "@/hooks/useToast";
 import { PageHeader } from "@/layouts/MainLayout";
-import type { StandardDatasetColumnInput, StandardDatasetType } from "@/types/standardDatasets";
-import { R7_DATASET_BUILDER_NOTE } from "@/types/standardDatasets";
+import type { StandardDatasetType } from "@/types/standardDatasets";
+import { R9_DATASET_WIZARD_NOTE } from "@/types/standardDatasets";
 import {
   categoryLabel,
   datasetStatusClass,
@@ -29,8 +29,10 @@ import {
 const STATUS_FILTER = [
   { value: "", label: "전체 상태" },
   { value: "ACTIVE", label: "운영 (ACTIVE)" },
+  { value: "VALIDATED", label: "검증 (VALIDATED)" },
   { value: "DRAFT", label: "설계 (DRAFT)" },
   { value: "PLANNED", label: "계획 (PLANNED)" },
+  { value: "ARCHIVED", label: "보관 (ARCHIVED)" },
 ];
 
 const DOMAIN_FILTER = [
@@ -41,22 +43,8 @@ const DOMAIN_FILTER = [
   { value: "FACILITY", label: "설비" },
 ];
 
-const EMPTY_COLUMN: StandardDatasetColumnInput = {
-  column_name: "",
-  data_type: "STRING",
-  required: false,
-  default_column_role: "",
-};
-
-const EMPTY_CREATE = {
-  dataset_type_code: "",
-  dataset_type_name: "",
-  target_table: "",
-  domain: "MASTER",
-  category: "FACT",
-  description: "",
-  columns: [{ ...EMPTY_COLUMN }] as StandardDatasetColumnInput[],
-};
+const EMPTY_MESSAGE =
+  "등록된 표준 데이터셋이 없습니다. 데이터소스 적재 대상이 될 표준 데이터셋과 내부 물리 테이블을 먼저 생성하세요.";
 
 export default function StandardDatasetsPage() {
   const { showToast } = useToast();
@@ -67,9 +55,7 @@ export default function StandardDatasetsPage() {
   const [domainFilter, setDomainFilter] = useState("");
   const [detail, setDetail] = useState<StandardDatasetType | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
-  const [createOpen, setCreateOpen] = useState(false);
-  const [createForm, setCreateForm] = useState(EMPTY_CREATE);
-  const [saving, setSaving] = useState(false);
+  const [wizardOpen, setWizardOpen] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -108,32 +94,6 @@ export default function StandardDatasetsPage() {
     }
   };
 
-  const handleCreate = async () => {
-    if (!createForm.dataset_type_code.trim() || !createForm.dataset_type_name.trim() || !createForm.target_table.trim()) {
-      showToast("warning", "코드, 이름, 대상 테이블명을 입력하세요.");
-      return;
-    }
-    setSaving(true);
-    try {
-      const columns = createForm.columns.filter((c) => c.column_name.trim());
-      await createStandardDatasetType({
-        ...createForm,
-        dataset_type_code: createForm.dataset_type_code.toUpperCase(),
-        status: "DRAFT",
-        mapping_supported: false,
-        columns,
-      });
-      showToast("success", "학습 데이터셋 유형이 DRAFT로 등록되었습니다.");
-      setCreateOpen(false);
-      setCreateForm(EMPTY_CREATE);
-      void load();
-    } catch {
-      showToast("error", "등록에 실패했습니다.");
-    } finally {
-      setSaving(false);
-    }
-  };
-
   const handleActivate = async (id: string) => {
     try {
       await activateStandardDatasetType(id);
@@ -153,20 +113,19 @@ export default function StandardDatasetsPage() {
     <div>
       <PageHeader
         title="표준 데이터셋"
-        description="학습/운영 데이터셋 유형, 표준 대상 테이블, 컬럼 정의 및 Recipe/Build 연결 가능성을 관리합니다."
+        description="논리 데이터셋 구조를 정의하고 Wizard로 내부 물리 테이블을 안전하게 생성합니다."
         actions={
-          <Button icon={<Plus className="w-4 h-4" />} onClick={() => setCreateOpen(true)}>
-            학습 데이터셋 유형 등록
+          <Button icon={<Plus className="w-4 h-4" />} onClick={() => setWizardOpen(true)}>
+            표준 데이터셋 생성
           </Button>
         }
       />
 
       <div className="mb-4 text-xs text-slate-600 bg-amber-50 border border-amber-200 rounded-lg p-3 space-y-1">
-        <p>{R7_DATASET_BUILDER_NOTE}</p>
-        <p>신규 도메인은 DRAFT로 설계 후, 실제 테이블과 적재 로직이 준비되면 ACTIVE로 전환합니다.</p>
+        <p>{R9_DATASET_WIZARD_NOTE}</p>
         <p>
           데이터 매핑 설정은 <Link to="/data/mappings" className="text-blue-600 hover:underline">데이터 매핑 설정</Link>
-          에서 표준 대상 테이블을 선택해 연결합니다.
+          에서 Wizard로 생성한 물리 테이블을 대상으로 연결합니다.
         </p>
       </div>
 
@@ -177,10 +136,10 @@ export default function StandardDatasetsPage() {
       </div>
 
       <DataTable
+        emptyMessage={EMPTY_MESSAGE}
         columns={[
-          { key: "dataset_type_name", header: "데이터셋 유형" },
-          { key: "target_table", header: "대상 테이블" },
-          { key: "domain", header: "도메인", render: (r) => domainLabel(r.domain as string) },
+          { key: "dataset_type_name", header: "데이터셋" },
+          { key: "dataset_type_code", header: "코드" },
           { key: "category", header: "분류", render: (r) => categoryLabel(r.category as string) },
           {
             key: "status",
@@ -191,6 +150,13 @@ export default function StandardDatasetsPage() {
               </span>
             ),
           },
+          { key: "target_table", header: "물리 테이블" },
+          {
+            key: "physical_table_exists",
+            header: "물리 존재",
+            render: (r) => physicalTableLabel(!!r.physical_table_exists),
+          },
+          { key: "column_count", header: "컬럼 수", render: (r) => String(r.column_count ?? "-") },
           {
             key: "mapping_supported",
             header: "매핑",
@@ -199,29 +165,6 @@ export default function StandardDatasetsPage() {
                 {supportLabel(!!r.mapping_supported)}
               </span>
             ),
-          },
-          {
-            key: "recipe_supported",
-            header: "Recipe",
-            render: (r) => (
-              <span className={`text-[10px] px-1.5 py-0.5 rounded border ${supportBadgeClass(!!r.recipe_supported)}`}>
-                {supportLabel(!!r.recipe_supported)}
-              </span>
-            ),
-          },
-          {
-            key: "build_supported",
-            header: "Build",
-            render: (r) => (
-              <span className={`text-[10px] px-1.5 py-0.5 rounded border ${supportBadgeClass(!!r.build_supported)}`}>
-                {supportLabel(!!r.build_supported)}
-              </span>
-            ),
-          },
-          {
-            key: "physical_table_exists",
-            header: "물리 테이블",
-            render: (r) => physicalTableLabel(!!r.physical_table_exists),
           },
           {
             key: "actions",
@@ -240,6 +183,12 @@ export default function StandardDatasetsPage() {
         data={items as unknown as Record<string, unknown>[]}
       />
 
+      <StandardDatasetWizard
+        open={wizardOpen}
+        onClose={() => setWizardOpen(false)}
+        onCompleted={() => void load()}
+      />
+
       <Modal
         open={detailOpen}
         title={detail?.dataset_type_name || "데이터셋 유형 상세"}
@@ -247,7 +196,7 @@ export default function StandardDatasetsPage() {
         size="xl"
         footer={
           <>
-            {detail && detail.status !== "ACTIVE" && detail.physical_table_exists && (
+            {detail && detail.status !== "ACTIVE" && detail.physical_table_exists && !detail.managed_table && (
               <Button icon={<Sparkles className="w-4 h-4" />} onClick={() => void handleActivate(detail.dataset_type_id)}>
                 ACTIVE 전환
               </Button>
@@ -265,8 +214,15 @@ export default function StandardDatasetsPage() {
               <div>분류: {categoryLabel(detail.category)}</div>
               <div>상태: {datasetStatusLabel(detail.status)}</div>
               <div>{physicalTableLabel(detail.physical_table_exists)}</div>
+              {detail.table_create_status && <div>테이블 생성: {detail.table_create_status}</div>}
             </div>
             {detail.description && <p className="text-xs text-slate-600">{detail.description}</p>}
+            {detail.table_create_sql_preview && (
+              <div>
+                <h4 className="font-semibold text-slate-800 mb-1">SQL Preview</h4>
+                <pre className="text-xs bg-slate-900 text-slate-100 p-2 rounded overflow-x-auto">{detail.table_create_sql_preview}</pre>
+              </div>
+            )}
             {detail.columns && detail.columns.length > 0 && (
               <div>
                 <h4 className="font-semibold text-slate-800 mb-2">표준 컬럼</h4>
@@ -294,12 +250,6 @@ export default function StandardDatasetsPage() {
                 </div>
               </div>
             )}
-            {detail.default_roles && Object.keys(detail.default_roles).length > 0 && (
-              <div className="text-xs">
-                <h4 className="font-semibold text-slate-800 mb-1">기본 Column Role</h4>
-                <pre className="bg-slate-50 border rounded p-2 overflow-x-auto">{JSON.stringify(detail.default_roles, null, 2)}</pre>
-              </div>
-            )}
             {detail.recipe_readiness && (
               <div>
                 <h4 className="font-semibold text-slate-800 mb-2">
@@ -309,9 +259,6 @@ export default function StandardDatasetsPage() {
                   {detail.recipe_readiness.templates.map((t) => (
                     <li key={t.recipe_type} className={t.available ? "text-emerald-700" : "text-slate-500"}>
                       {t.available ? "✓" : "○"} {t.display_name} ({t.recipe_type})
-                      {!t.available && t.missing_roles.length > 0 && (
-                        <span className="text-amber-700"> — 부족: {t.missing_roles.join(", ")}</span>
-                      )}
                     </li>
                   ))}
                 </ul>
@@ -319,83 +266,6 @@ export default function StandardDatasetsPage() {
             )}
           </div>
         )}
-      </Modal>
-
-      <Modal
-        open={createOpen}
-        title="학습 데이터셋 유형 등록"
-        onClose={() => setCreateOpen(false)}
-        size="lg"
-        footer={
-          <>
-            <Button variant="secondary" onClick={() => setCreateOpen(false)}>취소</Button>
-            <Button onClick={() => void handleCreate()} disabled={saving}>{saving ? "저장 중..." : "DRAFT 저장"}</Button>
-          </>
-        }
-      >
-        <div className="space-y-3 text-sm">
-          <p className="text-xs text-slate-500">물리 테이블은 자동 생성되지 않습니다. DRAFT로 설계 후 컬럼·역할을 정의하세요.</p>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs text-slate-500 mb-1">유형 코드</label>
-              <TextInput value={createForm.dataset_type_code} onChange={(v) => setCreateForm({ ...createForm, dataset_type_code: v })} placeholder="MY_DATASET" />
-            </div>
-            <div>
-              <label className="block text-xs text-slate-500 mb-1">유형명</label>
-              <TextInput value={createForm.dataset_type_name} onChange={(v) => setCreateForm({ ...createForm, dataset_type_name: v })} />
-            </div>
-          </div>
-          <div>
-            <label className="block text-xs text-slate-500 mb-1">대상 테이블 제안명</label>
-            <TextInput value={createForm.target_table} onChange={(v) => setCreateForm({ ...createForm, target_table: v })} placeholder="tb_my_dataset" />
-          </div>
-          <div>
-            <label className="block text-xs text-slate-500 mb-1">설명</label>
-            <TextInput value={createForm.description} onChange={(v) => setCreateForm({ ...createForm, description: v })} />
-          </div>
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <label className="text-xs text-slate-500">컬럼 정의</label>
-              <Button
-                variant="ghost"
-                onClick={() => setCreateForm({ ...createForm, columns: [...createForm.columns, { ...EMPTY_COLUMN }] })}
-              >
-                컬럼 추가
-              </Button>
-            </div>
-            {createForm.columns.map((col, idx) => (
-              <div key={idx} className="grid grid-cols-3 gap-2 mb-2">
-                <TextInput
-                  value={col.column_name}
-                  onChange={(v) => {
-                    const columns = [...createForm.columns];
-                    columns[idx] = { ...columns[idx], column_name: v };
-                    setCreateForm({ ...createForm, columns });
-                  }}
-                  placeholder="column_name"
-                />
-                <TextInput
-                  value={col.data_type || "STRING"}
-                  onChange={(v) => {
-                    const columns = [...createForm.columns];
-                    columns[idx] = { ...columns[idx], data_type: v };
-                    setCreateForm({ ...createForm, columns });
-                  }}
-                  placeholder="data_type"
-                />
-                <TextInput
-                  value={col.default_column_role || ""}
-                  onChange={(v) => {
-                    const columns = [...createForm.columns];
-                    columns[idx] = { ...columns[idx], default_column_role: v };
-                    setCreateForm({ ...createForm, columns });
-                  }}
-                  placeholder="default_column_role"
-                />
-              </div>
-            ))}
-          </div>
-        </div>
       </Modal>
     </div>
   );

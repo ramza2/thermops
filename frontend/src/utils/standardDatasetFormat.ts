@@ -21,6 +21,7 @@ const STATUS_LABELS: Record<string, string> = {
   ACTIVE: "운영",
   DRAFT: "설계",
   PLANNED: "계획",
+  VALIDATED: "검증",
   ARCHIVED: "보관",
 };
 
@@ -46,6 +47,8 @@ export function datasetStatusClass(status: string): string {
       return "bg-blue-100 text-blue-800 border-blue-200";
     case "PLANNED":
       return "bg-amber-100 text-amber-800 border-amber-200";
+    case "VALIDATED":
+      return "bg-violet-100 text-violet-800 border-violet-200";
     case "ARCHIVED":
       return "bg-slate-100 text-slate-600 border-slate-200";
     default:

@@ -108,7 +108,8 @@ LEGACY_POC_CLEANUP_SQL = """
 UPDATE tb_standard_dataset_type
 SET active_yn = 'N', status = 'ARCHIVED'
 WHERE dataset_type_id NOT LIKE 'TEST-%'
-  AND (owner = 'SEED' OR dataset_type_id LIKE 'DST-%');
+  AND dataset_type_id NOT LIKE 'SDS-%'
+  AND owner = 'SEED';
 
 UPDATE tb_pipeline_template
 SET active_yn = 'N', status = 'ARCHIVED'
@@ -315,6 +316,37 @@ def resolve_heat_source_id(api: Callable[..., Any]) -> str:
     return ensure_heat_csv_fixture(api)["source_id"]
 
 
+def create_wizard_standard_dataset(
+    api: Callable[..., Any],
+    *,
+    suffix: str | None = None,
+) -> dict[str, str]:
+    """Wizard API로 std_ 물리 테이블까지 생성. {dataset_type_id, physical_table_name, dataset_type_code}."""
+    from uuid import uuid4
+
+    tag = suffix or uuid4().hex[:8]
+    table = f"std_test_{tag}"
+    code = f"TEST_WIZ_{tag.upper()}"
+    created = api("POST", "/standard-dataset-types", {
+        "dataset_type_code": code,
+        "dataset_type_name": f"Test Wizard {tag}",
+        "target_table": table,
+        "status": "DRAFT",
+        "managed_table": True,
+        "columns": [
+            {"column_name": "row_id", "data_type": "BIGINT", "primary_key": True, "required": True},
+            {"column_name": "note", "data_type": "VARCHAR", "data_length": 200},
+        ],
+    })
+    ds_id = created["dataset_type_id"]
+    validation = api("POST", f"/standard-dataset-types/{ds_id}/validate")
+    if not validation.get("valid"):
+        raise RuntimeError(f"wizard fixture validate failed: {validation}")
+    api("POST", f"/standard-dataset-types/{ds_id}/preview-create-table")
+    api("POST", f"/standard-dataset-types/{ds_id}/create-physical-table", {"confirm": True})
+    return {"dataset_type_id": ds_id, "physical_table_name": table, "dataset_type_code": code}
+
+
 def resolve_weather_source_id(api: Callable[..., Any]) -> str:
     env = os.environ.get("THERMOOPS_WEATHER_SOURCE_ID")
     if env:
@@ -407,26 +439,47 @@ def ensure_feature_dataset_built(api: Callable[..., Any], feature_set_id: str, *
 
 def ensure_csv_ingested(api: Callable[..., Any], *, limit: str = "10000") -> None:
     """heat·weather CSV 테이블이 비어 있으면 적재."""
-    heat_count = int(psql_scalar("SELECT COUNT(*) FROM tb_heat_demand_actual") or "0")
-    if heat_count <= 0:
-        heat = ensure_heat_csv_fixture(api)
+    import time
+
+    def _ingest(source_id: str, label: str) -> None:
         params = urllib.parse.urlencode({
-            "source_id": heat["source_id"],
+            "source_id": source_id,
             "load_mode": "UPSERT",
             "limit": limit,
         })
-        result = api("POST", f"/ingestion-jobs?{params}")
-        if result.get("status") != "SUCCESS":
-            raise RuntimeError(f"heat CSV ingest failed: {result}")
+        last_exc: Exception | None = None
+        for attempt in range(5):
+            try:
+                result = api("POST", f"/ingestion-jobs?{params}")
+                if result.get("status") != "SUCCESS":
+                    raise RuntimeError(f"{label} CSV ingest failed: {result}")
+                return
+            except Exception as exc:
+                last_exc = exc
+                if attempt < 4:
+                    time.sleep(2 * (attempt + 1))
+                    continue
+                raise RuntimeError(f"{label} CSV ingest failed: {last_exc}") from last_exc
+
+    heat_count = int(psql_scalar("SELECT COUNT(*) FROM tb_heat_demand_actual") or "0")
+    if heat_count <= 0:
+        heat = ensure_heat_csv_fixture(api)
+        _ingest(heat["source_id"], "heat")
 
     weather_count = int(psql_scalar("SELECT COUNT(*) FROM tb_weather_observation") or "0")
     if weather_count <= 0:
         weather = ensure_weather_csv_fixture(api)
-        params = urllib.parse.urlencode({
-            "source_id": weather["source_id"],
-            "load_mode": "UPSERT",
-            "limit": limit,
-        })
-        result = api("POST", f"/ingestion-jobs?{params}")
-        if result.get("status") != "SUCCESS":
-            raise RuntimeError(f"weather CSV ingest failed: {result}")
+        _ingest(weather["source_id"], "weather")
+
+
+def ensure_model_regression_fixtures(
+    api: Callable[..., Any],
+    *,
+    limit: str = "10000",
+) -> dict[str, dict[str, str]]:
+    """Model/full regression 선행: test platform SQL + CSV 소스·매핑·적재 (운영 seed 미사용)."""
+    ensure_test_platform()
+    ensure_csv_ingested(api, limit=limit)
+    heat = ensure_heat_csv_fixture(api)
+    weather = ensure_weather_csv_fixture(api)
+    return {"heat": heat, "weather": weather}

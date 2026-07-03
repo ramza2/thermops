@@ -72,8 +72,12 @@ class StandardDatasetColumnInput(BaseModel):
     column_name: str
     display_name: str | None = None
     data_type: str = "STRING"
+    data_length: int | None = None
+    numeric_precision: int | None = None
+    numeric_scale: int | None = None
     required: bool = False
     primary_key: bool = False
+    unique: bool = False
     default_column_role: str | None = None
     role_required: bool = False
     description: str | None = None
@@ -92,10 +96,15 @@ class StandardDatasetTypeCreate(BaseModel):
     status: str = "DRAFT"
     owner: str | None = None
     physical_table_yn: bool = True
+    managed_table: bool = True
     build_supported: bool = False
     recipe_supported: bool = False
     mapping_supported: bool = False
     columns: list[StandardDatasetColumnInput] = []
+
+
+class CreatePhysicalTableRequest(BaseModel):
+    confirm: bool = True
 
 
 class StandardDatasetTypeUpdate(BaseModel):

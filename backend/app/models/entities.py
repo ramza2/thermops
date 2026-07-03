@@ -155,12 +155,21 @@ class StandardDatasetType(Base):
     target_table: Mapped[str] = mapped_column(String(120))
     physical_table_yn: Mapped[str] = mapped_column(String(1), default="Y")
     physical_table_exists_yn: Mapped[str] = mapped_column(String(1), default="Y")
+    physical_table_schema: Mapped[str] = mapped_column(String(63), default="public")
+    managed_table_yn: Mapped[str] = mapped_column(String(1), default="N")
+    table_create_status: Mapped[str] = mapped_column(String(30), default="NOT_CREATED")
+    table_create_sql_preview: Mapped[str | None] = mapped_column(Text)
+    table_create_error: Mapped[str | None] = mapped_column(Text)
+    physical_table_created_at: Mapped[datetime | None] = mapped_column(DateTime)
+    physical_table_created_by: Mapped[str | None] = mapped_column(String(100))
     build_supported_yn: Mapped[str] = mapped_column(String(1), default="N")
     recipe_supported_yn: Mapped[str] = mapped_column(String(1), default="N")
     mapping_supported_yn: Mapped[str] = mapped_column(String(1), default="Y")
     status: Mapped[str] = mapped_column(String(30), default="ACTIVE")
     owner: Mapped[str | None] = mapped_column(String(100))
     active_yn: Mapped[str] = mapped_column(String(1), default="Y")
+    archived_at: Mapped[datetime | None] = mapped_column(DateTime)
+    archive_reason: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime)
     updated_at: Mapped[datetime | None] = mapped_column(DateTime)
 
@@ -172,9 +181,13 @@ class StandardDatasetColumn(Base):
     column_name: Mapped[str] = mapped_column(String(120))
     display_name: Mapped[str | None] = mapped_column(String(200))
     data_type: Mapped[str] = mapped_column(String(80))
+    data_length: Mapped[int | None] = mapped_column(Integer)
+    numeric_precision: Mapped[int | None] = mapped_column(Integer)
+    numeric_scale: Mapped[int | None] = mapped_column(Integer)
     nullable_yn: Mapped[str] = mapped_column(String(1), default="Y")
     required_yn: Mapped[str] = mapped_column(String(1), default="N")
     primary_key_yn: Mapped[str] = mapped_column(String(1), default="N")
+    unique_yn: Mapped[str] = mapped_column(String(1), default="N")
     default_column_role: Mapped[str | None] = mapped_column(String(50))
     role_required_yn: Mapped[str] = mapped_column(String(1), default="N")
     description: Mapped[str | None] = mapped_column(Text)
@@ -183,6 +196,18 @@ class StandardDatasetColumn(Base):
     active_yn: Mapped[str] = mapped_column(String(1), default="Y")
     created_at: Mapped[datetime] = mapped_column(DateTime)
     updated_at: Mapped[datetime | None] = mapped_column(DateTime)
+
+
+class StandardDatasetTableCreateLog(Base):
+    __tablename__ = "tb_standard_dataset_table_create_log"
+    log_id: Mapped[str] = mapped_column(String(50), primary_key=True)
+    dataset_type_id: Mapped[str] = mapped_column(String(50))
+    action_type: Mapped[str] = mapped_column(String(30))
+    status: Mapped[str] = mapped_column(String(30))
+    sql_preview: Mapped[str | None] = mapped_column(Text)
+    error_message: Mapped[str | None] = mapped_column(Text)
+    created_by: Mapped[str | None] = mapped_column(String(100))
+    created_at: Mapped[datetime] = mapped_column(DateTime)
 
 
 class FeatureRecipe(Base):

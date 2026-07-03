@@ -48,7 +48,7 @@ import {
   templateStatusLabel,
 } from "@/utils/featureRecipeTemplateFormat";
 import type { StandardTargetTable } from "@/types/standardDatasets";
-import { R7_MAPPING_TARGET_NOTE } from "@/types/standardDatasets";
+import { R9_MAPPING_TARGET_NOTE } from "@/types/standardDatasets";
 import { targetTableOptionLabel } from "@/utils/standardDatasetFormat";
 
 interface MappingColumn {
@@ -463,11 +463,10 @@ export default function DataMappingsPage() {
 
   const openCreate = () => {
     setEditingId(null);
-    const defaultTarget = targetTables[0]?.target_table || "heat_demand_actual";
     setForm({
       ...EMPTY_FORM,
       source_id: sources[0]?.source_id || "",
-      target_table: defaultTarget,
+      target_table: targetTables[0]?.target_table || "",
     });
     resetRoleState();
     setFormOpen(true);
@@ -749,7 +748,13 @@ export default function DataMappingsPage() {
       />
 
       <div className="mb-4 text-xs text-slate-600 bg-blue-50 border border-blue-200 rounded-lg p-3 space-y-1">
-        <p>{R7_MAPPING_TARGET_NOTE}</p>
+        <p>{R9_MAPPING_TARGET_NOTE}</p>
+        {!targetTables.length && (
+          <p className="text-amber-800 font-medium">
+            표준 데이터셋 또는 대상 테이블을 먼저 생성하세요.{" "}
+            <Link to="/standard-datasets" className="text-blue-600 hover:underline">표준 데이터셋 Wizard</Link>
+          </p>
+        )}
         <p>임의 테이블 생성은 지원하지 않습니다. 신규 도메인은 <Link to="/standard-datasets" className="text-blue-600 hover:underline">표준 데이터셋</Link>에서 먼저 등록하세요.</p>
         <p>{COLUMN_ROLE_HELP}</p>
         <p>
@@ -763,6 +768,7 @@ export default function DataMappingsPage() {
 
       <DataTable
         loading={loading}
+        emptyMessage="등록된 데이터 매핑이 없습니다. 표준 데이터셋 물리 테이블을 먼저 생성한 뒤 매핑을 등록하세요."
         columns={[
           { key: "mapping_id", header: "ID", width: "120px" },
           { key: "mapping_name", header: "매핑명" },
@@ -821,8 +827,17 @@ export default function DataMappingsPage() {
               <SelectInput
                 value={form.target_table}
                 onChange={(v) => setForm({ ...form, target_table: v })}
-                options={targetTableOptions.length ? targetTableOptions : [{ value: form.target_table, label: form.target_table || "선택" }]}
+                options={
+                  targetTableOptions.length
+                    ? targetTableOptions
+                    : [{ value: "", label: "표준 데이터셋 물리 테이블을 먼저 생성하세요" }]
+                }
               />
+              {!targetTables.length && (
+                <p className="text-[11px] text-amber-700 mt-1">
+                  ACTIVE 상태의 표준 데이터셋 물리 테이블이 없습니다.
+                </p>
+              )}
               {isNonStandardTarget && (
                 <p className="text-[11px] text-amber-700 mt-1">
                   현재 매핑은 표준 대상 테이블에 등록되어 있지 않습니다. 수정 저장하려면 표준 대상 테이블을 선택해야 합니다.

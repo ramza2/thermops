@@ -186,7 +186,7 @@ flowchart LR
 
 **R6-S2 운영 UI 마감**: Recipe 목록 최근 Build 상태, Builder **Preview/Build 비교** 버튼·결과 모달, 진단 패널·Quality·Lineage UX 보강. `compare-preview-build`에서 `dataset_version_id` 생략 시 최근 Build Job 자동 선택.
 
-**R7 표준 데이터셋·매핑**: `/standard-datasets`에서 학습 데이터셋 유형·표준 컬럼·Recipe/Build 연결 가능성을 관리합니다. `/data/mappings`에서는 **표준 대상 테이블 목록**에서만 선택하며 Backend allowlist 검증이 적용됩니다. 물리 테이블은 R7에서 자동 생성하지 않습니다.
+**R9-S2-1 표준 데이터셋 Wizard**: clean 설치 후 표준 데이터셋 0건으로 시작합니다. `/standard-datasets` Wizard에서 논리 데이터셋·컬럼을 정의하고 Backend가 생성한 **SQL Preview**(읽기 전용)를 확인한 뒤 `std_` prefix 물리 테이블을 생성합니다. 사용자가 SQL을 직접 입력·실행하는 방식은 허용하지 않습니다. `/data/mappings` 대상 테이블은 **ACTIVE + 물리 테이블 존재**한 Wizard 생성 테이블만 선택 가능합니다.
 
 **R8 Pipeline Builder**: `/pipeline-builder`에서 Pipeline Template Flow Chart를 확인하고 노드별 실행 파라미터를 저장합니다.
 

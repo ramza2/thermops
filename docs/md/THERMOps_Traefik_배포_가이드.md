@@ -210,7 +210,7 @@ docker compose -f docker-compose.traefik.yml --env-file .env.deploy exec backend
 Clean 배포 직후 UI에서 확인할 수 있는 상태:
 
 1. **데이터 소스**: 등록된 소스 없음 — `/data/sources`에서 CSV·API·DB 소스 등록 후 매핑·적재
-2. **표준 데이터셋**: 등록된 유형 없음 — `/standard-datasets`에서 등록 (물리 테이블 생성 Wizard는 R9-S2-1 후속)
+2. **표준 데이터셋**: 등록된 유형 없음 — `/standard-datasets` Wizard에서 논리 정의 후 물리 테이블(`std_*`) 생성 (R9-S2-1)
 3. **Feature Set / Recipe**: 빈 목록 — 사용자가 구성
 4. **학습 / Registry / 예측 / Drift / 파이프라인**: 빈 목록
 5. **대시보드**: 예측 이력 없음, Champion 모델 없음

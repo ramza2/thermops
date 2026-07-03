@@ -147,6 +147,10 @@ MIGRATIONS = [
         _load_sql("r8_pipeline_builder_schema.sql"),
     ),
     (
+        "R9-S2-1 standard dataset physical table wizard",
+        _load_sql("r9s2_standard_dataset_wizard_schema.sql"),
+    ),
+    (
         "tb_feature_column_role",
         """
         CREATE TABLE IF NOT EXISTS tb_feature_column_role (

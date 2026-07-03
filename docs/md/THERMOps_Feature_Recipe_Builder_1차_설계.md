@@ -1012,7 +1012,7 @@ python scripts/test_feature_recipe_build_diagnostics.py
 
 ## 부록 K. Phase R7 구현 완료 (표준 대상 테이블 / 학습 데이터셋 유형 관리)
 
-R7부터 데이터 매핑의 대상 테이블은 자유 입력이 아니라 **표준 대상 테이블 목록**에서 선택합니다. 신규 도메인은 **표준 데이터셋 유형 관리 Builder**(`/standard-datasets`)에서 DRAFT로 설계 후 ACTIVE로 전환합니다. **물리 테이블 자동 생성은 하지 않습니다.**
+R9-S2-1부터 표준 데이터셋 Wizard로 `std_` prefix 내부 물리 테이블을 metadata 기반 `CREATE TABLE`로 생성합니다. SQL Preview는 Backend만 생성하며 사용자 수정·raw SQL 실행은 금지합니다. Data Mapping 대상은 ACTIVE + 물리 테이블이 존재하는 표준 데이터셋입니다.
 
 - DB: `tb_standard_dataset_type`, `tb_standard_dataset_column`
 - API: `/standard-dataset-types`, `/standard-target-tables`, mapping allowlist 검증

@@ -15,6 +15,14 @@ from app.services.feature_recipe_template_service import (
     evaluate_template_availability,
     list_template_specs,
 )
+from app.services.physical_table_service import (
+    PhysicalTableValidationError,
+    column_dict_from_row,
+    create_managed_physical_table,
+    preview_managed_physical_table,
+    suggest_physical_table_name,
+    validate_managed_dataset_definition,
+)
 
 
 class TargetTableNotAllowedError(ValueError):
@@ -40,10 +48,12 @@ def normalize_target_table_key(target_table: str | None) -> str:
 
 
 def resolve_physical_table_name(target_table: str) -> str:
+    lowered = target_table.strip().lower()
+    if lowered.startswith("std_") or lowered.startswith("stg_"):
+        return lowered
     key = normalize_target_table_key(target_table)
     if key in ("heat_demand_actual", "weather_observation"):
         return f"tb_{key}"
-    lowered = target_table.lower()
     if lowered.startswith("tb_"):
         return lowered
     return f"tb_{key}"
@@ -71,6 +81,15 @@ def _dataset_type_dict(
         "status": row.status,
         "physical_table_yn": _yn(row.physical_table_yn),
         "physical_table_exists": exists,
+        "physical_table_schema": getattr(row, "physical_table_schema", None) or "public",
+        "managed_table": _yn(getattr(row, "managed_table_yn", "N")),
+        "table_create_status": getattr(row, "table_create_status", None) or "NOT_CREATED",
+        "table_create_sql_preview": getattr(row, "table_create_sql_preview", None),
+        "table_create_error": getattr(row, "table_create_error", None),
+        "physical_table_created_at": (
+            row.physical_table_created_at.isoformat()
+            if getattr(row, "physical_table_created_at", None) else None
+        ),
         "mapping_supported": _yn(row.mapping_supported_yn),
         "recipe_supported": _yn(row.recipe_supported_yn),
         "build_supported": _yn(row.build_supported_yn),
@@ -94,9 +113,13 @@ def _column_dict(row: StandardDatasetColumn) -> dict[str, Any]:
         "column_name": row.column_name,
         "display_name": row.display_name,
         "data_type": row.data_type,
+        "data_length": getattr(row, "data_length", None),
+        "numeric_precision": getattr(row, "numeric_precision", None),
+        "numeric_scale": getattr(row, "numeric_scale", None),
         "nullable": _yn(row.nullable_yn),
         "required": _yn(row.required_yn),
         "primary_key": _yn(row.primary_key_yn),
+        "unique": _yn(getattr(row, "unique_yn", "N")),
         "default_column_role": row.default_column_role,
         "role_required": _yn(row.role_required_yn),
         "description": row.description,
@@ -118,14 +141,40 @@ def _group_default_roles(columns: list[dict[str, Any]]) -> dict[str, list[str]]:
 
 async def check_physical_table_exists(db: AsyncSession, target_table: str) -> bool:
     physical = resolve_physical_table_name(target_table)
+    schema = "public"
     result = await db.execute(
         text(
             "SELECT 1 FROM information_schema.tables "
-            "WHERE table_schema = 'public' AND table_name = :name LIMIT 1"
+            "WHERE table_schema = :schema AND table_name = :name LIMIT 1"
         ),
-        {"name": physical},
+        {"schema": schema, "name": physical},
     )
     return result.scalar() is not None
+
+
+def _column_payload_to_entity(col: dict[str, Any], dataset_type_id: str, idx: int) -> StandardDatasetColumn:
+    col_id = col.get("column_id") or f"SDC-{uuid4().hex[:8].upper()}"
+    return StandardDatasetColumn(
+        column_id=col_id,
+        dataset_type_id=dataset_type_id,
+        column_name=str(col["column_name"]).strip().lower(),
+        display_name=col.get("display_name"),
+        data_type=col.get("data_type") or "STRING",
+        data_length=col.get("data_length"),
+        numeric_precision=col.get("numeric_precision"),
+        numeric_scale=col.get("numeric_scale"),
+        nullable_yn="N" if col.get("required") or col.get("primary_key") else "Y",
+        required_yn="Y" if col.get("required") else "N",
+        primary_key_yn="Y" if col.get("primary_key") else "N",
+        unique_yn="Y" if col.get("unique") else "N",
+        default_column_role=col.get("default_column_role"),
+        role_required_yn="Y" if col.get("role_required") else "N",
+        description=col.get("description"),
+        example_value=col.get("example_value"),
+        sort_order=col.get("sort_order", idx),
+        active_yn="Y",
+        created_at=utc_now(),
+    )
 
 
 async def _load_columns(db: AsyncSession, dataset_type_id: str) -> list[dict[str, Any]]:
@@ -251,6 +300,7 @@ async def list_mapping_target_tables(
             "description": row.description,
             "build_supported": _yn(row.build_supported_yn),
             "recipe_supported": _yn(row.recipe_supported_yn),
+            "managed_table": _yn(getattr(row, "managed_table_yn", "N")),
             "standard_columns": [c["column_name"] for c in cols],
         })
     return items
@@ -357,10 +407,12 @@ async def create_standard_dataset_type(
     db: AsyncSession,
     payload: dict[str, Any],
 ) -> dict[str, Any]:
-    dataset_type_id = payload.get("dataset_type_id") or f"DST-{uuid4().hex[:8].upper()}"
-    target_table = str(payload["target_table"]).strip()
+    target_table = str(payload["target_table"]).strip().lower()
     status = (payload.get("status") or "DRAFT").upper()
-    physical_exists = await check_physical_table_exists(db, target_table)
+    managed = target_table.startswith("std_") or bool(payload.get("managed_table"))
+    id_prefix = "SDS" if managed else "DST"
+    dataset_type_id = payload.get("dataset_type_id") or f"{id_prefix}-{uuid4().hex[:8].upper()}"
+    physical_exists = await check_physical_table_exists(db, target_table) if not managed else False
     if status == "ACTIVE" and not physical_exists:
         raise ValueError("ACTIVE 전환에는 물리 테이블이 존재해야 합니다.")
 
@@ -372,8 +424,11 @@ async def create_standard_dataset_type(
         domain=(payload.get("domain") or "").upper() or None,
         category=(payload.get("category") or "").upper() or None,
         target_table=target_table,
+        physical_table_schema="public",
         physical_table_yn="Y" if payload.get("physical_table_yn", True) else "N",
         physical_table_exists_yn="Y" if physical_exists else "N",
+        managed_table_yn="Y" if managed else "N",
+        table_create_status="SUCCESS" if physical_exists else "NOT_CREATED",
         build_supported_yn="Y" if payload.get("build_supported") else "N",
         recipe_supported_yn="Y" if payload.get("recipe_supported") else "N",
         mapping_supported_yn="Y" if payload.get("mapping_supported", status == "ACTIVE") else "N",
@@ -387,24 +442,7 @@ async def create_standard_dataset_type(
 
     columns = payload.get("columns") or []
     for idx, col in enumerate(columns):
-        col_id = col.get("column_id") or f"SDC-{uuid4().hex[:8].upper()}"
-        db.add(StandardDatasetColumn(
-            column_id=col_id,
-            dataset_type_id=dataset_type_id,
-            column_name=col["column_name"],
-            display_name=col.get("display_name"),
-            data_type=col.get("data_type") or "STRING",
-            nullable_yn="N" if col.get("required") else "Y",
-            required_yn="Y" if col.get("required") else "N",
-            primary_key_yn="Y" if col.get("primary_key") else "N",
-            default_column_role=col.get("default_column_role"),
-            role_required_yn="Y" if col.get("role_required") else "N",
-            description=col.get("description"),
-            example_value=col.get("example_value"),
-            sort_order=col.get("sort_order", idx),
-            active_yn="Y",
-            created_at=utc_now(),
-        ))
+        db.add(_column_payload_to_entity(col, dataset_type_id, idx))
     await db.flush()
     return await get_standard_dataset_type(db, dataset_type_id)
 
@@ -423,6 +461,8 @@ async def update_standard_dataset_type(
         raise LookupError("DATASET_TYPE_NOT_FOUND")
     if row.status == "ARCHIVED":
         raise ValueError("ARCHIVED 데이터셋 유형은 수정할 수 없습니다.")
+    if row.status == "ACTIVE":
+        raise ValueError("ACTIVE 데이터셋 유형은 컬럼/테이블 정의를 수정할 수 없습니다. Archive 후 재등록하세요.")
 
     for field, attr in (
         ("dataset_type_name", "dataset_type_name"),
@@ -438,11 +478,14 @@ async def update_standard_dataset_type(
             setattr(row, attr, val)
 
     if "target_table" in payload and payload["target_table"]:
-        if row.status == "ACTIVE":
-            raise ValueError("ACTIVE 데이터셋 유형의 target_table은 변경할 수 없습니다.")
-        row.target_table = str(payload["target_table"]).strip()
+        if row.status in ("ACTIVE", "VALIDATED"):
+            raise ValueError("VALIDATED/ACTIVE 데이터셋 유형의 target_table은 변경할 수 없습니다.")
+        row.target_table = str(payload["target_table"]).strip().lower()
+        row.managed_table_yn = "Y" if row.target_table.startswith("std_") else "N"
         exists = await check_physical_table_exists(db, row.target_table)
         row.physical_table_exists_yn = "Y" if exists else "N"
+        if not exists:
+            row.table_create_status = "NOT_CREATED"
 
     for flag, attr in (
         ("build_supported", "build_supported_yn"),
@@ -462,24 +505,11 @@ async def update_standard_dataset_type(
             col.active_yn = "N"
             col.updated_at = utc_now()
         for idx, col in enumerate(payload["columns"] or []):
-            col_id = col.get("column_id") or f"SDC-{uuid4().hex[:8].upper()}"
-            db.add(StandardDatasetColumn(
-                column_id=col_id,
-                dataset_type_id=dataset_type_id,
-                column_name=col["column_name"],
-                display_name=col.get("display_name"),
-                data_type=col.get("data_type") or "STRING",
-                nullable_yn="N" if col.get("required") else "Y",
-                required_yn="Y" if col.get("required") else "N",
-                primary_key_yn="Y" if col.get("primary_key") else "N",
-                default_column_role=col.get("default_column_role"),
-                role_required_yn="Y" if col.get("role_required") else "N",
-                description=col.get("description"),
-                example_value=col.get("example_value"),
-                sort_order=col.get("sort_order", idx),
-                active_yn="Y",
-                created_at=utc_now(),
-            ))
+            db.add(_column_payload_to_entity(col, dataset_type_id, idx))
+        if row.status == "VALIDATED":
+            row.status = "DRAFT"
+            row.table_create_status = "NOT_CREATED"
+            row.table_create_sql_preview = None
 
     row.updated_at = utc_now()
     await db.flush()
@@ -524,6 +554,99 @@ async def archive_standard_dataset_type(db: AsyncSession, dataset_type_id: str) 
     row.status = "ARCHIVED"
     row.mapping_supported_yn = "N"
     row.active_yn = "N"
+    row.archived_at = utc_now()
+    row.archive_reason = "archived_by_user"
     row.updated_at = utc_now()
     await db.flush()
     return _dataset_type_dict(row)
+
+
+async def _get_dataset_row(db: AsyncSession, dataset_type_id: str) -> StandardDatasetType:
+    row = (
+        await db.execute(
+            select(StandardDatasetType).where(StandardDatasetType.dataset_type_id == dataset_type_id)
+        )
+    ).scalar_one_or_none()
+    if not row:
+        raise LookupError("DATASET_TYPE_NOT_FOUND")
+    return row
+
+
+async def validate_standard_dataset_definition(
+    db: AsyncSession,
+    dataset_type_id: str,
+) -> dict[str, Any]:
+    row = await _get_dataset_row(db, dataset_type_id)
+    if row.status == "ARCHIVED":
+        raise ValueError("ARCHIVED 데이터셋은 검증할 수 없습니다.")
+    col_rows = (
+        await db.execute(
+            select(StandardDatasetColumn).where(
+                StandardDatasetColumn.dataset_type_id == dataset_type_id,
+                StandardDatasetColumn.active_yn == "Y",
+            ).order_by(StandardDatasetColumn.sort_order, StandardDatasetColumn.column_name)
+        )
+    ).scalars().all()
+    col_dicts = [column_dict_from_row(c) for c in col_rows]
+
+    managed = (row.managed_table_yn or "N").upper() == "Y"
+    result = await validate_managed_dataset_definition(
+        db,
+        target_table=row.target_table,
+        schema=(row.physical_table_schema or "public"),
+        columns=col_dicts,
+        managed=managed,
+    )
+    if result["valid"] and row.status == "DRAFT":
+        row.status = "VALIDATED"
+        row.updated_at = utc_now()
+        await db.flush()
+    result["lifecycle_status"] = row.status
+    return result
+
+
+async def preview_standard_dataset_create_table(
+    db: AsyncSession,
+    dataset_type_id: str,
+) -> dict[str, Any]:
+    row = await _get_dataset_row(db, dataset_type_id)
+    col_rows = (
+        await db.execute(
+            select(StandardDatasetColumn).where(
+                StandardDatasetColumn.dataset_type_id == dataset_type_id,
+                StandardDatasetColumn.active_yn == "Y",
+            ).order_by(StandardDatasetColumn.sort_order, StandardDatasetColumn.column_name)
+        )
+    ).scalars().all()
+    col_dicts = [column_dict_from_row(c) for c in col_rows]
+    result = await preview_managed_physical_table(db, row, col_dicts)
+    result["lifecycle_status"] = row.status
+    return result
+
+
+async def create_standard_dataset_physical_table(
+    db: AsyncSession,
+    dataset_type_id: str,
+    *,
+    requested_by: str | None = None,
+) -> dict[str, Any]:
+    row = await _get_dataset_row(db, dataset_type_id)
+    col_rows = (
+        await db.execute(
+            select(StandardDatasetColumn).where(
+                StandardDatasetColumn.dataset_type_id == dataset_type_id,
+                StandardDatasetColumn.active_yn == "Y",
+            ).order_by(StandardDatasetColumn.sort_order, StandardDatasetColumn.column_name)
+        )
+    ).scalars().all()
+    col_dicts = [column_dict_from_row(c) for c in col_rows]
+    try:
+        result = await create_managed_physical_table(db, row, col_dicts, requested_by=requested_by)
+    except PhysicalTableValidationError as exc:
+        raise ValueError(exc.errors[0]["message"] if exc.errors else str(exc)) from exc
+    dataset = await get_standard_dataset_type(db, dataset_type_id, include_recipe_availability=True)
+    return {**result, "dataset_type": dataset}
+
+
+def suggest_table_name_from_code(dataset_code: str) -> str:
+    return suggest_physical_table_name(dataset_code)

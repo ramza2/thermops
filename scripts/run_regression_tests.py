@@ -90,7 +90,7 @@ def _build_registry() -> list[TestCase]:
         ),
         _python_test(
             "test_csv_ingestion.py",
-            groups=["quick", "full"],
+            groups=["quick", "model", "full"],
             description="CSV 적재",
             timeout_seconds=120,
         ),
@@ -123,6 +123,12 @@ def _build_registry() -> list[TestCase]:
             groups=["connector", "full"],
             description="Connector 오류 처리",
             timeout_seconds=120,
+        ),
+        _python_test(
+            "test_standard_dataset_table_wizard.py",
+            groups=["model", "full"],
+            description="표준 데이터셋 물리 테이블 Wizard (R9-S2-1)",
+            timeout_seconds=240,
         ),
         _python_test(
             "test_standard_datasets.py",
@@ -314,6 +320,11 @@ def _build_registry() -> list[TestCase]:
 REGISTRY = _build_registry()
 FULL_ORDER = [tc.name for tc in REGISTRY]
 
+# model 그룹: CSV fixture·적재 검증을 최우선 실행 (registry 순서 유지)
+MODEL_ORDER = [
+    "test_csv_ingestion.py",
+]
+
 
 def resolve_executable(name: str) -> str:
     if sys.platform == "win32":
@@ -343,6 +354,15 @@ def select_tests(
 ) -> list[TestCase]:
     if group == "full":
         selected_names = list(FULL_ORDER)
+    elif group == "model":
+        model_names = [tc.name for tc in REGISTRY if group in tc.groups]
+        selected_names = []
+        for name in MODEL_ORDER:
+            if name in model_names and name not in selected_names:
+                selected_names.append(name)
+        for name in model_names:
+            if name not in selected_names:
+                selected_names.append(name)
     else:
         selected_names = [tc.name for tc in REGISTRY if group in tc.groups]
 
@@ -364,6 +384,24 @@ def http_reachable(url: str, timeout: float = 3.0) -> bool:
             return 200 <= resp.status < 500
     except (urllib.error.URLError, TimeoutError, OSError):
         return False
+
+
+def wait_for_backend_ready(*, max_seconds: float = 120.0, interval: float = 2.0) -> bool:
+    """Backend health + API 응답까지 대기 (clean reset 직후 model/full regression용)."""
+    deadline = time.perf_counter() + max_seconds
+    api_probe = "http://localhost:8000/api/v1/system-configs?page=1&size=1"
+    while time.perf_counter() < deadline:
+        if not http_reachable(DEFAULT_BACKEND_HEALTH, timeout=3.0):
+            time.sleep(interval)
+            continue
+        try:
+            with urllib.request.urlopen(api_probe, timeout=5.0) as resp:
+                if resp.status == 200:
+                    return True
+        except (urllib.error.URLError, TimeoutError, OSError):
+            pass
+        time.sleep(interval)
+    return False
 
 
 def run_preflight_checks(group: str, tests: list[TestCase]) -> list[str]:
@@ -597,6 +635,13 @@ def main() -> int:
         print("[info] Docker build check skipped (runner does not run docker build).")
 
     preflight_warnings = run_preflight_checks(selected_group, tests)
+    if selected_group in ("model", "full", "connector", "quick", "retraining", "airflow"):
+        if wait_for_backend_ready(max_seconds=120.0):
+            print("[OK] Backend ready for API tests.")
+        else:
+            msg = "Backend/API가 120초 내 준비되지 않았습니다. 일부 테스트가 실패할 수 있습니다."
+            print(f"[WARN] {msg}")
+            preflight_warnings.append(msg)
     print(f"Selected tests: {len(tests)}")
     print("")
 

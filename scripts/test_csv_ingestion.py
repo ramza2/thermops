@@ -14,7 +14,7 @@ from pathlib import Path
 _SCRIPTS = Path(__file__).resolve().parent
 if str(_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS))
-from test_fixtures import ensure_heat_csv_fixture, ensure_weather_csv_fixture
+from test_fixtures import ensure_model_regression_fixtures
 
 API_BASE = os.environ.get("THERMOOPS_API_BASE", "http://localhost:8000/api/v1")
 DB_URL = os.environ.get(
@@ -40,10 +40,9 @@ def api(method: str, path: str, body: dict | None = None) -> dict:
 
 
 def ensure_seed_records() -> tuple[dict[str, str], dict[str, str]]:
-    """테스트용 CSV 소스·매핑 확보 (clean seed에는 포함되지 않음)."""
-    heat = ensure_heat_csv_fixture(api)
-    weather = ensure_weather_csv_fixture(api)
-    return heat, weather
+    """테스트용 platform seed + CSV 소스·매핑·적재 (clean seed에는 포함되지 않음)."""
+    info = ensure_model_regression_fixtures(api, limit="1000")
+    return info["heat"], info["weather"]
 
 
 def psql_scalar(sql: str) -> str:

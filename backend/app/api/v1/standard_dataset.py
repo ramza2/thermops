@@ -4,6 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.response import ok
 from app.schemas.api import (
+    CreatePhysicalTableRequest,
     StandardDatasetTypeCreate,
     StandardDatasetTypeUpdate,
     ValidateTargetTableRequest,
@@ -12,11 +13,15 @@ from app.services.standard_dataset_service import (
     TargetTableNotAllowedError,
     activate_standard_dataset_type,
     archive_standard_dataset_type,
+    create_standard_dataset_physical_table,
     create_standard_dataset_type,
     get_standard_dataset_type,
     list_mapping_target_tables,
     list_standard_dataset_types,
+    preview_standard_dataset_create_table,
+    suggest_table_name_from_code,
     update_standard_dataset_type,
+    validate_standard_dataset_definition,
     validate_target_table_allowed,
 )
 
@@ -47,6 +52,11 @@ async def get_standard_dataset_types(
         include_planned=include_planned,
     )
     return ok({"items": items, "total": len(items)})
+
+
+@router.get("/standard-dataset-types/suggest-table-name")
+async def get_suggest_table_name(dataset_code: str = Query(..., min_length=1)):
+    return ok({"physical_table_name": suggest_table_name_from_code(dataset_code)})
 
 
 @router.get("/standard-dataset-types/{dataset_type_id}")
@@ -155,3 +165,48 @@ async def post_archive_standard_dataset_type(
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     return ok(item, message="표준 데이터셋 유형이 보관(ARCHIVED) 처리되었습니다.")
+
+
+@router.post("/standard-dataset-types/{dataset_type_id}/validate")
+async def post_validate_standard_dataset_definition(
+    dataset_type_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        result = await validate_standard_dataset_definition(db, dataset_type_id)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return ok(result)
+
+
+@router.post("/standard-dataset-types/{dataset_type_id}/preview-create-table")
+async def post_preview_create_table(
+    dataset_type_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        result = await preview_standard_dataset_create_table(db, dataset_type_id)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return ok(result)
+
+
+@router.post("/standard-dataset-types/{dataset_type_id}/create-physical-table")
+async def post_create_physical_table(
+    dataset_type_id: str,
+    body: CreatePhysicalTableRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    if not body.confirm:
+        raise HTTPException(status_code=400, detail="confirm=true가 필요합니다.")
+    try:
+        result = await create_standard_dataset_physical_table(db, dataset_type_id)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return ok(result, message="물리 테이블이 생성되었습니다.")
