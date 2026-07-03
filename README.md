@@ -224,7 +224,10 @@ python scripts/run_regression_tests.py --group model --timeout-scale 2
 cd ~/thermops
 git pull
 docker compose -f docker-compose.traefik.yml --env-file .env.deploy up -d --build backend frontend
+python3 scripts/apply_dev_migrations.py   # 기존 DB volume 유지 시 필수 (스키마 보완)
 ```
+
+**기존 volume을 유지한 채 `git pull`만 한 경우** 백엔드 코드는 갱신되어도 Postgres init 스크립트는 재실행되지 않습니다. R9-S2-1 이후 표준 데이터셋 API 등이 `500 Internal Server Error`로 실패하면 위 마이그레이션을 실행하세요.
 
 **완전 초기화가 필요할 때** (PoC 잔여 데이터·clean seed 재적용·volume 초기화):
 
@@ -766,6 +769,7 @@ docker compose up -d --build frontend
 | Airflow UI 접속 불가 (연결 거부) | 웹서버 기동 대기 중 | 1분 정도 대기 후 `http://localhost:8080` 재접속 |
 | 프론트 변경이 반영되지 않음 | Vite env는 빌드/기동 시점에 주입 | `docker compose up -d --build frontend` |
 | pipeline_run result_summary 오류 | 기존 DB 볼륨에 컬럼 없음 | `python scripts/apply_dev_migrations.py` |
+| 표준 데이터셋 목록 로드 실패 (서버만) | R9-S2-1 마이그레이션 미적용 → API 500 | Traefik 서버에서 `python3 scripts/apply_dev_migrations.py` 후 `/api/v1/standard-dataset-types` 재확인 |
 | `thermops_airflow` DB 없음 | postgres 볼륨이 init 스크립트 이전에 생성됨 | [Docker 완전 초기화](#docker-완전-초기화-clean-reset) (로컬 또는 Traefik) |
 
 ### Docker 완전 초기화 (clean reset)

@@ -112,12 +112,21 @@ CREATE TABLE IF NOT EXISTS tb_standard_dataset_type (
     target_table VARCHAR(120) NOT NULL,
     physical_table_yn CHAR(1) NOT NULL DEFAULT 'Y',
     physical_table_exists_yn CHAR(1) NOT NULL DEFAULT 'Y',
+    physical_table_schema VARCHAR(63) NOT NULL DEFAULT 'public',
+    managed_table_yn CHAR(1) NOT NULL DEFAULT 'N',
+    table_create_status VARCHAR(30) NOT NULL DEFAULT 'NOT_CREATED',
+    table_create_sql_preview TEXT,
+    table_create_error TEXT,
+    physical_table_created_at TIMESTAMP,
+    physical_table_created_by VARCHAR(100),
     build_supported_yn CHAR(1) NOT NULL DEFAULT 'N',
     recipe_supported_yn CHAR(1) NOT NULL DEFAULT 'N',
     mapping_supported_yn CHAR(1) NOT NULL DEFAULT 'Y',
     status VARCHAR(30) NOT NULL DEFAULT 'ACTIVE',
     owner VARCHAR(100),
     active_yn CHAR(1) NOT NULL DEFAULT 'Y',
+    archived_at TIMESTAMP,
+    archive_reason TEXT,
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP
 );
@@ -128,9 +137,13 @@ CREATE TABLE IF NOT EXISTS tb_standard_dataset_column (
     column_name VARCHAR(120) NOT NULL,
     display_name VARCHAR(200),
     data_type VARCHAR(80) NOT NULL,
+    data_length INTEGER,
+    numeric_precision INTEGER,
+    numeric_scale INTEGER,
     nullable_yn CHAR(1) NOT NULL DEFAULT 'Y',
     required_yn CHAR(1) NOT NULL DEFAULT 'N',
     primary_key_yn CHAR(1) NOT NULL DEFAULT 'N',
+    unique_yn CHAR(1) NOT NULL DEFAULT 'N',
     default_column_role VARCHAR(50),
     role_required_yn CHAR(1) NOT NULL DEFAULT 'N',
     description TEXT,
@@ -148,6 +161,20 @@ CREATE UNIQUE INDEX IF NOT EXISTS ux_standard_dataset_column_active
 CREATE INDEX IF NOT EXISTS ix_standard_dataset_type_target_table
     ON tb_standard_dataset_type(target_table)
     WHERE active_yn = 'Y';
+
+CREATE TABLE IF NOT EXISTS tb_standard_dataset_table_create_log (
+    log_id VARCHAR(50) PRIMARY KEY,
+    dataset_type_id VARCHAR(50) NOT NULL REFERENCES tb_standard_dataset_type(dataset_type_id),
+    action_type VARCHAR(30) NOT NULL,
+    status VARCHAR(30) NOT NULL,
+    sql_preview TEXT,
+    error_message TEXT,
+    created_by VARCHAR(100),
+    created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS ix_std_dataset_table_create_log_dataset
+    ON tb_standard_dataset_table_create_log(dataset_type_id, created_at DESC);
 
 -- Feature Recipe Builder (R5)
 CREATE TABLE IF NOT EXISTS tb_feature_recipe (
