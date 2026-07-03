@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   createPhysicalTable,
   createStandardDatasetType,
+  getStandardDatasetMetadataOptions,
   previewCreateTable,
   suggestTableName,
   updateStandardDatasetType,
@@ -11,17 +12,7 @@ import { Button } from "@/components/Button";
 import { Modal } from "@/components/Modal";
 import { SelectInput, TextInput } from "@/components/SearchPanel";
 import { useToast } from "@/hooks/useToast";
-import type { StandardDatasetColumnInput } from "@/types/standardDatasets";
-
-const CATEGORY_OPTIONS = [
-  { value: "FACT", label: "FACT" },
-  { value: "MASTER", label: "MASTER" },
-  { value: "MAPPING", label: "MAPPING" },
-  { value: "TRANSACTION", label: "TRANSACTION" },
-  { value: "TIME_SERIES", label: "TIME_SERIES" },
-  { value: "EVENT", label: "EVENT" },
-  { value: "CUSTOM", label: "CUSTOM" },
-];
+import type { DatasetCategoryOption, StandardDatasetColumnInput } from "@/types/standardDatasets";
 
 const DATA_TYPE_OPTIONS = [
   { value: "VARCHAR", label: "VARCHAR" },
@@ -68,11 +59,15 @@ export function StandardDatasetWizard({ open, onClose, onCompleted }: WizardProp
   const [step, setStep] = useState(0);
   const [saving, setSaving] = useState(false);
   const [datasetId, setDatasetId] = useState("");
+  const [categoryOptions, setCategoryOptions] = useState<DatasetCategoryOption[]>([]);
+  const [businessDomainHints, setBusinessDomainHints] = useState<string[]>([]);
   const [basic, setBasic] = useState({
     dataset_type_code: "",
     dataset_type_name: "",
     description: "",
-    category: "FACT",
+    dataset_category: "CUSTOM",
+    business_domain: "",
+    tags: "",
     target_table: "",
   });
   const [columns, setColumns] = useState<StandardDatasetColumnInput[]>([{ ...EMPTY_COL }]);
@@ -80,10 +75,36 @@ export function StandardDatasetWizard({ open, onClose, onCompleted }: WizardProp
   const [sqlPreview, setSqlPreview] = useState("");
   const [confirmCreate, setConfirmCreate] = useState(false);
 
+  useEffect(() => {
+    if (!open) return;
+    void getStandardDatasetMetadataOptions()
+      .then((opts) => {
+        setCategoryOptions(opts.dataset_categories);
+        setBusinessDomainHints(opts.business_domains);
+      })
+      .catch(() => {
+        setCategoryOptions([]);
+        setBusinessDomainHints([]);
+      });
+  }, [open]);
+
+  const categorySelectOptions = useMemo(
+    () => categoryOptions.map((c) => ({ value: c.code, label: `${c.name} (${c.code})` })),
+    [categoryOptions],
+  );
+
   const reset = () => {
     setStep(0);
     setDatasetId("");
-    setBasic({ dataset_type_code: "", dataset_type_name: "", description: "", category: "FACT", target_table: "" });
+    setBasic({
+      dataset_type_code: "",
+      dataset_type_name: "",
+      description: "",
+      dataset_category: "CUSTOM",
+      business_domain: "",
+      tags: "",
+      target_table: "",
+    });
     setColumns([{ ...EMPTY_COL }]);
     setValidation(null);
     setSqlPreview("");
@@ -93,6 +114,24 @@ export function StandardDatasetWizard({ open, onClose, onCompleted }: WizardProp
   const handleClose = () => {
     reset();
     onClose();
+  };
+
+  const buildPayload = () => {
+    const payloadCols = columns.filter((c) => c.column_name.trim());
+    const tags = basic.tags
+      .split(",")
+      .map((t) => t.trim())
+      .filter(Boolean);
+    return {
+      dataset_type_code: basic.dataset_type_code.toUpperCase(),
+      dataset_type_name: basic.dataset_type_name,
+      description: basic.description || undefined,
+      dataset_category: basic.dataset_category,
+      business_domain: basic.business_domain.trim() || undefined,
+      tags: tags.length ? tags : undefined,
+      target_table: basic.target_table,
+      columns: payloadCols,
+    };
   };
 
   const suggestName = async (code: string) => {
@@ -110,20 +149,22 @@ export function StandardDatasetWizard({ open, onClose, onCompleted }: WizardProp
       showToast("warning", "코드, 이름, 물리 테이블명을 입력하세요.");
       return null;
     }
+    if (!basic.dataset_category.trim()) {
+      showToast("warning", "데이터 분류를 선택하세요.");
+      return null;
+    }
     setSaving(true);
     try {
-      const payloadCols = columns.filter((c) => c.column_name.trim());
+      const payload = buildPayload();
       if (datasetId) {
-        await updateStandardDatasetType(datasetId, { ...basic, columns: payloadCols });
+        await updateStandardDatasetType(datasetId, payload);
         return datasetId;
       }
       const created = await createStandardDatasetType({
-        ...basic,
-        dataset_type_code: basic.dataset_type_code.toUpperCase(),
+        ...payload,
         status: "DRAFT",
         managed_table: true,
         mapping_supported: false,
-        columns: payloadCols,
       });
       setDatasetId(created.dataset_type_id);
       return created.dataset_type_id;
@@ -255,10 +296,39 @@ export function StandardDatasetWizard({ open, onClose, onCompleted }: WizardProp
               <TextInput value={basic.target_table} onChange={(v) => setBasic({ ...basic, target_table: v.toLowerCase() })} />
             </div>
             <div>
-              <label className="block text-xs text-slate-500 mb-1">category</label>
-              <SelectInput value={basic.category} onChange={(v) => setBasic({ ...basic, category: v })} options={CATEGORY_OPTIONS} />
+              <label className="block text-xs text-slate-500 mb-1" title="데이터의 업무 분야가 아니라 구조/성격을 나타냅니다.">
+                데이터 분류
+              </label>
+              <SelectInput
+                value={basic.dataset_category}
+                onChange={(v) => setBasic({ ...basic, dataset_category: v })}
+                options={categorySelectOptions.length ? categorySelectOptions : [{ value: "CUSTOM", label: "사용자 정의 (CUSTOM)" }]}
+              />
             </div>
             <div>
+              <label className="block text-xs text-slate-500 mb-1">업무 영역 (선택)</label>
+              <TextInput
+                value={basic.business_domain}
+                onChange={(v) => setBasic({ ...basic, business_domain: v })}
+                placeholder="예: 품질, 고객, 설비, 열수요"
+                list="wizard-business-domain-hints"
+              />
+              <datalist id="wizard-business-domain-hints">
+                {businessDomainHints.map((d) => (
+                  <option key={d} value={d} />
+                ))}
+              </datalist>
+              <p className="text-[10px] text-slate-400 mt-1">필수값이 아니며, 업무 영역별 검색을 위한 선택 정보입니다.</p>
+            </div>
+            <div className="col-span-2">
+              <label className="block text-xs text-slate-500 mb-1">태그 (선택, comma-separated)</label>
+              <TextInput
+                value={basic.tags}
+                onChange={(v) => setBasic({ ...basic, tags: v })}
+                placeholder="예측, 센서, 외부API"
+              />
+            </div>
+            <div className="col-span-2">
               <label className="block text-xs text-slate-500 mb-1">description</label>
               <TextInput value={basic.description} onChange={(v) => setBasic({ ...basic, description: v })} />
             </div>

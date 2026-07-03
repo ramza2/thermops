@@ -18,8 +18,10 @@ export interface StandardDatasetType {
   dataset_type_code: string;
   dataset_type_name: string;
   description?: string | null;
-  domain?: string | null;
+  dataset_category?: string | null;
   category?: string | null;
+  business_domain?: string | null;
+  tags?: string[];
   target_table: string;
   status: string;
   physical_table_yn: boolean;
@@ -37,6 +39,7 @@ export interface StandardDatasetType {
   default_roles?: Record<string, string[]>;
   columns?: StandardDatasetColumn[];
   recipe_readiness?: StandardDatasetRecipeReadiness;
+  created_at?: string | null;
 }
 
 export interface StandardTargetTable {
@@ -44,12 +47,26 @@ export interface StandardTargetTable {
   dataset_type_code: string;
   dataset_type_name: string;
   target_table: string;
-  domain?: string | null;
+  dataset_category?: string | null;
   category?: string | null;
+  business_domain?: string | null;
+  tags?: string[];
   description?: string | null;
   build_supported: boolean;
   recipe_supported: boolean;
   standard_columns: string[];
+}
+
+export interface DatasetCategoryOption {
+  code: string;
+  name: string;
+  description: string;
+}
+
+export interface StandardDatasetMetadataOptions {
+  dataset_categories: DatasetCategoryOption[];
+  business_domains: string[];
+  tags: string[];
 }
 
 export interface StandardDatasetValidation {
@@ -80,8 +97,10 @@ export interface StandardDatasetTypeCreateRequest {
   dataset_type_code: string;
   dataset_type_name: string;
   description?: string;
-  domain?: string;
+  dataset_category?: string;
   category?: string;
+  business_domain?: string;
+  tags?: string[] | string;
   target_table: string;
   status?: string;
   owner?: string;
@@ -95,8 +114,10 @@ export interface StandardDatasetTypeCreateRequest {
 export interface StandardDatasetTypeUpdateRequest {
   dataset_type_name?: string;
   description?: string;
-  domain?: string;
+  dataset_category?: string;
   category?: string;
+  business_domain?: string;
+  tags?: string[] | string;
   target_table?: string;
   owner?: string;
   build_supported?: boolean;
@@ -120,6 +141,9 @@ export interface StandardDatasetRecipeReadiness {
 
 export const R9_DATASET_WIZARD_NOTE =
   "R9-S2-1부터 clean 설치 후 표준 데이터셋은 0건으로 시작합니다. Wizard로 논리 데이터셋·컬럼을 정의한 뒤 Backend가 생성한 SQL Preview를 확인하고 내부 물리 테이블(std_ prefix)을 생성하세요. 사용자가 SQL을 직접 입력·수정해 실행하는 방식은 허용하지 않습니다.";
+
+export const R9_DATASET_METADATA_NOTE =
+  "R9-S2-2부터 데이터 분류(dataset_category)는 데이터 구조/성격을 나타내며, 업무 영역(business_domain)과 태그(tags)는 선택 메타데이터입니다. 업무 영역은 시스템 고정값이 아니라 필요 시 직접 입력합니다.";
 
 export const R7_DATASET_BUILDER_NOTE = R9_DATASET_WIZARD_NOTE;
 

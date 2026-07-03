@@ -70,8 +70,17 @@ for (const path of PATHS) {
     await page.getByText("표준 데이터셋 생성").first().waitFor({ state: "visible", timeout: 30000 });
     await page.getByText("등록된 표준 데이터셋이 없습니다").first().waitFor({ state: "visible", timeout: 30000 });
     await page.getByText("R9-S2-1").first().waitFor({ state: "visible", timeout: 30000 });
+    await page.getByText("R9-S2-2").first().waitFor({ state: "visible", timeout: 30000 });
+    await page.locator("select").filter({ has: page.locator('option', { hasText: "전체 업무 영역" }) }).first().waitFor({ state: "visible", timeout: 30000 });
+    for (const fixed of ["열수요", "기상", "기준정보", "설비"]) {
+      const count = await page.locator("option").filter({ hasText: fixed }).count();
+      if (count > 0) errors.push(`/standard-datasets: fixed domain option '${fixed}' must not appear`);
+    }
     await page.getByRole("button", { name: "표준 데이터셋 생성" }).click();
     await page.getByText("표준 데이터셋 생성 Wizard").first().waitFor({ state: "visible", timeout: 30000 });
+    await page.getByText("데이터 분류").first().waitFor({ state: "visible", timeout: 30000 });
+    await page.getByText("업무 영역").first().waitFor({ state: "visible", timeout: 30000 });
+    await page.getByText("태그").first().waitFor({ state: "visible", timeout: 30000 });
     await page.getByRole("button", { name: "닫기" }).click();
   }
   if (path === "/data/sources") {

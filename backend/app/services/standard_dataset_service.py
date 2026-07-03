@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 from uuid import uuid4
 
-from sqlalchemy import and_, or_, select, text
+from sqlalchemy import and_, func, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.time import utc_now
@@ -14,6 +14,14 @@ from app.services.feature_column_role_service import summarize_role_coverage
 from app.services.feature_recipe_template_service import (
     evaluate_template_availability,
     list_template_specs,
+)
+from app.utils.standard_dataset_metadata import (
+    dataset_category_options,
+    normalize_business_domain,
+    normalize_dataset_category,
+    normalize_tags,
+    resolve_metadata_fields,
+    tags_from_json,
 )
 from app.services.physical_table_service import (
     PhysicalTableValidationError,
@@ -68,15 +76,20 @@ def _dataset_type_dict(
     *,
     columns: list[dict[str, Any]] | None = None,
     physical_exists: bool | None = None,
+    column_count: int | None = None,
 ) -> dict[str, Any]:
     exists = physical_exists if physical_exists is not None else _yn(row.physical_table_exists_yn)
+    category = getattr(row, "category", None) or "CUSTOM"
+    tags = tags_from_json(getattr(row, "tags_json", None))
     item: dict[str, Any] = {
         "dataset_type_id": row.dataset_type_id,
         "dataset_type_code": row.dataset_type_code,
         "dataset_type_name": row.dataset_type_name,
         "description": row.description,
-        "domain": row.domain,
-        "category": row.category,
+        "dataset_category": category,
+        "category": category,
+        "business_domain": getattr(row, "business_domain", None),
+        "tags": tags,
         "target_table": row.target_table,
         "status": row.status,
         "physical_table_yn": _yn(row.physical_table_yn),
@@ -103,6 +116,8 @@ def _dataset_type_dict(
         item["column_count"] = len(columns)
         item["required_column_count"] = sum(1 for c in columns if c.get("required"))
         item["default_roles"] = _group_default_roles(columns)
+    elif column_count is not None:
+        item["column_count"] = column_count
     return item
 
 
@@ -211,12 +226,66 @@ async def get_standard_dataset_by_target_table(
     ).scalar_one_or_none()
 
 
+async def _count_columns(db: AsyncSession, dataset_type_id: str) -> int:
+    result = await db.execute(
+        select(func.count())
+        .select_from(StandardDatasetColumn)
+        .where(
+            StandardDatasetColumn.dataset_type_id == dataset_type_id,
+            StandardDatasetColumn.active_yn == "Y",
+        )
+    )
+    return int(result.scalar() or 0)
+
+
+async def list_standard_dataset_metadata_options(db: AsyncSession) -> dict[str, Any]:
+    domain_rows = (
+        await db.execute(
+            select(StandardDatasetType.business_domain)
+            .where(
+                StandardDatasetType.active_yn == "Y",
+                StandardDatasetType.business_domain.is_not(None),
+                StandardDatasetType.business_domain != "",
+            )
+            .distinct()
+            .order_by(StandardDatasetType.business_domain)
+        )
+    ).scalars().all()
+
+    tag_rows = (
+        await db.execute(
+            text(
+                """
+                SELECT DISTINCT tag
+                FROM tb_standard_dataset_type,
+                     LATERAL jsonb_array_elements_text(tags_json) AS tag
+                WHERE active_yn = 'Y'
+                  AND tags_json IS NOT NULL
+                  AND jsonb_typeof(tags_json) = 'array'
+                ORDER BY tag
+                """
+            )
+        )
+    ).all()
+
+    return {
+        "dataset_categories": dataset_category_options(),
+        "business_domains": [d for d in domain_rows if d],
+        "tags": [row[0] for row in tag_rows if row and row[0]],
+    }
+
+
 async def list_standard_dataset_types(
     db: AsyncSession,
     *,
     status: str | None = None,
     domain: str | None = None,
+    business_domain: str | None = None,
     category: str | None = None,
+    dataset_category: str | None = None,
+    tag: str | None = None,
+    keyword: str | None = None,
+    physical_table_exists_yn: str | None = None,
     mapping_supported: bool | None = None,
     recipe_supported: bool | None = None,
     build_supported: bool | None = None,
@@ -228,10 +297,29 @@ async def list_standard_dataset_types(
         q = q.where(StandardDatasetType.status == status.upper())
     elif not include_planned:
         q = q.where(StandardDatasetType.status == "ACTIVE")
-    if domain:
-        q = q.where(StandardDatasetType.domain == domain.upper())
-    if category:
-        q = q.where(StandardDatasetType.category == category.upper())
+
+    resolved_business_domain = business_domain or domain
+    if resolved_business_domain:
+        q = q.where(StandardDatasetType.business_domain == resolved_business_domain.strip())
+
+    resolved_category = dataset_category or category
+    if resolved_category:
+        q = q.where(StandardDatasetType.category == normalize_dataset_category(resolved_category))
+
+    if tag:
+        q = q.where(StandardDatasetType.tags_json.contains([tag.strip()]))
+
+    if keyword:
+        kw = f"%{keyword.strip()}%"
+        q = q.where(
+            or_(
+                StandardDatasetType.dataset_type_name.ilike(kw),
+                StandardDatasetType.dataset_type_code.ilike(kw),
+                StandardDatasetType.description.ilike(kw),
+                StandardDatasetType.business_domain.ilike(kw),
+            )
+        )
+
     if mapping_supported is not None:
         q = q.where(StandardDatasetType.mapping_supported_yn == ("Y" if mapping_supported else "N"))
     if recipe_supported is not None:
@@ -243,8 +331,20 @@ async def list_standard_dataset_types(
     items: list[dict[str, Any]] = []
     for row in rows:
         cols = await _load_columns(db, row.dataset_type_id) if include_columns else None
+        col_count = len(cols) if cols is not None else await _count_columns(db, row.dataset_type_id)
         physical_exists = await check_physical_table_exists(db, row.target_table)
-        items.append(_dataset_type_dict(row, columns=cols, physical_exists=physical_exists))
+        if physical_table_exists_yn:
+            want_exists = physical_table_exists_yn.upper() == "Y"
+            if physical_exists != want_exists:
+                continue
+        items.append(
+            _dataset_type_dict(
+                row,
+                columns=cols,
+                physical_exists=physical_exists,
+                column_count=col_count,
+            )
+        )
     return items
 
 
@@ -295,8 +395,10 @@ async def list_mapping_target_tables(
             "dataset_type_code": row.dataset_type_code,
             "dataset_type_name": row.dataset_type_name,
             "target_table": row.target_table,
-            "domain": row.domain,
+            "dataset_category": row.category,
             "category": row.category,
+            "business_domain": getattr(row, "business_domain", None),
+            "tags": tags_from_json(getattr(row, "tags_json", None)),
             "description": row.description,
             "build_supported": _yn(row.build_supported_yn),
             "recipe_supported": _yn(row.recipe_supported_yn),
@@ -416,13 +518,20 @@ async def create_standard_dataset_type(
     if status == "ACTIVE" and not physical_exists:
         raise ValueError("ACTIVE 전환에는 물리 테이블이 존재해야 합니다.")
 
+    try:
+        meta = resolve_metadata_fields(payload)
+    except ValueError as exc:
+        raise ValueError(str(exc)) from exc
+
     row = StandardDatasetType(
         dataset_type_id=dataset_type_id,
         dataset_type_code=payload["dataset_type_code"].upper(),
         dataset_type_name=payload["dataset_type_name"],
         description=payload.get("description"),
-        domain=(payload.get("domain") or "").upper() or None,
-        category=(payload.get("category") or "").upper() or None,
+        domain=None,
+        category=meta["dataset_category"],
+        business_domain=meta["business_domain"],
+        tags_json=meta["tags"],
         target_table=target_table,
         physical_table_schema="public",
         physical_table_yn="Y" if payload.get("physical_table_yn", True) else "N",
@@ -467,15 +576,21 @@ async def update_standard_dataset_type(
     for field, attr in (
         ("dataset_type_name", "dataset_type_name"),
         ("description", "description"),
-        ("domain", "domain"),
-        ("category", "category"),
         ("owner", "owner"),
     ):
         if field in payload and payload[field] is not None:
-            val = payload[field]
-            if field in ("domain", "category") and isinstance(val, str):
-                val = val.upper()
-            setattr(row, attr, val)
+            setattr(row, attr, payload[field])
+
+    if "dataset_category" in payload or "category" in payload:
+        row.category = normalize_dataset_category(
+            payload.get("dataset_category") or payload.get("category") or row.category
+        )
+    if "business_domain" in payload or "domain" in payload:
+        meta = resolve_metadata_fields(payload)
+        row.business_domain = meta["business_domain"]
+    if "tags" in payload:
+        row.tags_json = normalize_tags(payload.get("tags"))
+    row.domain = None
 
     if "target_table" in payload and payload["target_table"]:
         if row.status in ("ACTIVE", "VALIDATED"):

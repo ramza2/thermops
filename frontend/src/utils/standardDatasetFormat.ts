@@ -1,20 +1,12 @@
-const DOMAIN_LABELS: Record<string, string> = {
-  HEAT_DEMAND: "열수요",
-  WEATHER: "기상",
-  MASTER: "기준정보",
-  FACILITY: "설비",
-  COST: "원가",
-  EMISSION: "환경",
-  OPERATION: "운영",
-};
-
 const CATEGORY_LABELS: Record<string, string> = {
-  FACT: "Fact",
-  MASTER: "Master",
-  MAPPING: "Mapping",
-  CODE: "Code",
-  EVENT: "Event",
-  SENSOR: "Sensor",
+  MASTER: "기준/마스터",
+  FACT: "실적/집계",
+  TIMESERIES: "시계열",
+  EVENT: "이벤트",
+  TRANSACTION: "거래/이력",
+  LOG: "로그",
+  MAPPING: "매핑",
+  CUSTOM: "사용자 정의",
 };
 
 const STATUS_LABELS: Record<string, string> = {
@@ -25,15 +17,13 @@ const STATUS_LABELS: Record<string, string> = {
   ARCHIVED: "보관",
 };
 
-export function domainLabel(code?: string | null): string {
-  if (!code) return "-";
-  return DOMAIN_LABELS[code] || code;
-}
-
-export function categoryLabel(code?: string | null): string {
+export function datasetCategoryLabel(code?: string | null): string {
   if (!code) return "-";
   return CATEGORY_LABELS[code] || code;
 }
+
+/** @deprecated use datasetCategoryLabel */
+export const categoryLabel = datasetCategoryLabel;
 
 export function datasetStatusLabel(status: string): string {
   return STATUS_LABELS[status] || status;
@@ -70,9 +60,22 @@ export function physicalTableLabel(exists: boolean): string {
   return exists ? "물리 테이블 존재" : "물리 테이블 없음";
 }
 
+export function formatTags(tags?: string[] | null): string {
+  if (!tags?.length) return "-";
+  return tags.join(", ");
+}
+
 export function targetTableOptionLabel(item: {
   dataset_type_name: string;
   target_table: string;
+  dataset_category?: string | null;
+  category?: string | null;
+  business_domain?: string | null;
 }): string {
-  return `${item.dataset_type_name} (${item.target_table})`;
+  const category = datasetCategoryLabel(item.dataset_category || item.category);
+  const domain = item.business_domain?.trim();
+  const meta = [category, domain].filter(Boolean).join(" / ");
+  return meta
+    ? `${item.dataset_type_name} (${item.target_table} / ${meta})`
+    : `${item.dataset_type_name} (${item.target_table})`;
 }

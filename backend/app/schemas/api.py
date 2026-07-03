@@ -90,8 +90,11 @@ class StandardDatasetTypeCreate(BaseModel):
     dataset_type_code: str
     dataset_type_name: str
     description: str | None = None
-    domain: str | None = None
+    dataset_category: str = "CUSTOM"
     category: str | None = None
+    business_domain: str | None = None
+    tags: list[str] | str | None = None
+    domain: str | None = None
     target_table: str
     status: str = "DRAFT"
     owner: str | None = None
@@ -110,8 +113,11 @@ class CreatePhysicalTableRequest(BaseModel):
 class StandardDatasetTypeUpdate(BaseModel):
     dataset_type_name: str | None = None
     description: str | None = None
-    domain: str | None = None
+    dataset_category: str | None = None
     category: str | None = None
+    business_domain: str | None = None
+    tags: list[str] | str | None = None
+    domain: str | None = None
     target_table: str | None = None
     owner: str | None = None
     build_supported: bool | None = None

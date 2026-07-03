@@ -127,6 +127,8 @@ CREATE TABLE IF NOT EXISTS tb_standard_dataset_type (
     active_yn CHAR(1) NOT NULL DEFAULT 'Y',
     archived_at TIMESTAMP,
     archive_reason TEXT,
+    business_domain VARCHAR(100),
+    tags_json JSONB,
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP
 );

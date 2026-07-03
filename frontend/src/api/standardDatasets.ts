@@ -1,5 +1,6 @@
 import { fetchApi, postApi, putApi } from "@/api/client";
 import type {
+  StandardDatasetMetadataOptions,
   StandardDatasetType,
   StandardDatasetTypeCreateRequest,
   StandardDatasetTypeUpdateRequest,
@@ -7,10 +8,17 @@ import type {
   StandardTargetTable,
 } from "@/types/standardDatasets";
 
+export async function getStandardDatasetMetadataOptions(): Promise<StandardDatasetMetadataOptions> {
+  return fetchApi("/standard-datasets/metadata-options");
+}
+
 export async function getStandardDatasetTypes(params?: {
   status?: string;
-  domain?: string;
-  category?: string;
+  business_domain?: string;
+  dataset_category?: string;
+  tag?: string;
+  keyword?: string;
+  physical_table_exists_yn?: string;
   mapping_supported?: boolean;
   recipe_supported?: boolean;
   build_supported?: boolean;

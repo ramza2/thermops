@@ -42,8 +42,24 @@ export function SelectInput({ value, onChange, options }: { value: string; onCha
   );
 }
 
-export function TextInput({ value, onChange, placeholder }: { value: string; onChange: (v: string) => void; placeholder?: string }) {
+export function TextInput({
+  value,
+  onChange,
+  placeholder,
+  list,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+  list?: string;
+}) {
   return (
-    <input value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className="w-full border border-slate-200 rounded-md px-2 py-1.5 text-sm bg-slate-50" />
+    <input
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      placeholder={placeholder}
+      list={list}
+      className="w-full border border-slate-200 rounded-md px-2 py-1.5 text-sm bg-slate-50"
+    />
   );
 }

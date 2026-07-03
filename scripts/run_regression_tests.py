@@ -131,6 +131,12 @@ def _build_registry() -> list[TestCase]:
             timeout_seconds=240,
         ),
         _python_test(
+            "test_standard_dataset_metadata.py",
+            groups=["model", "full"],
+            description="표준 데이터셋 메타데이터 분류 (R9-S2-2)",
+            timeout_seconds=180,
+        ),
+        _python_test(
             "test_standard_datasets.py",
             groups=["connector", "model", "full"],
             description="표준 데이터셋 유형 / 매핑 allowlist (R7)",

@@ -151,6 +151,10 @@ MIGRATIONS = [
         _load_sql("r9s2_standard_dataset_wizard_schema.sql"),
     ),
     (
+        "R9-S2-2 standard dataset metadata classification",
+        _load_sql("r9s2_2_dataset_metadata_schema.sql"),
+    ),
+    (
         "tb_feature_column_role",
         """
         CREATE TABLE IF NOT EXISTS tb_feature_column_role (

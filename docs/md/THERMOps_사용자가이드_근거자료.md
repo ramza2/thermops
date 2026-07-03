@@ -188,6 +188,8 @@ flowchart LR
 
 **R9-S2-1 표준 데이터셋 Wizard**: clean 설치 후 표준 데이터셋 0건으로 시작합니다. `/standard-datasets` Wizard에서 논리 데이터셋·컬럼을 정의하고 Backend가 생성한 **SQL Preview**(읽기 전용)를 확인한 뒤 `std_` prefix 물리 테이블을 생성합니다. 사용자가 SQL을 직접 입력·실행하는 방식은 허용하지 않습니다. `/data/mappings` 대상 테이블은 **ACTIVE + 물리 테이블 존재**한 Wizard 생성 테이블만 선택 가능합니다.
 
+**R9-S2-2 Dataset Metadata 분류**: `dataset_category`는 데이터 구조/성격(MASTER, FACT, TIMESERIES 등), `business_domain`·`tags`는 선택 메타데이터입니다. 업무 영역은 시스템 고정값이 아니며 clean 설치 시 seed가 없습니다. `열수요`·`기상` 등은 문서/입력 예시일 뿐 기본 옵션으로 제공하지 않습니다.
+
 **R8 Pipeline Builder**: `/pipeline-builder`에서 Pipeline Template Flow Chart를 확인하고 노드별 실행 파라미터를 저장합니다.
 
 **R9 Pipeline 실행 연계**: ACTIVE/VALIDATED Pipeline Definition에서 **실행** 버튼으로 연결된 `airflow_dag_id`를 trigger합니다. 실행 이력은 `tb_pipeline_run_link`와 `/ops/pipeline-runs` metadata로 확인합니다. 기존 DAG 수동 실행은 `DIRECT_DAG`로 구분됩니다.

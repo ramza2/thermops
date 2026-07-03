@@ -928,6 +928,22 @@ clean 설치 후 **표준 데이터셋 0건**으로 시작합니다. UI **표준
 
 **clean 설치 검증 시:** [Docker 완전 초기화](#docker-완전-초기화-clean-reset) 후 `/standard-datasets`·`/data/mappings` 빈 화면 확인 (`frontend/scripts/check-pages.mjs`).
 
+### R9-S2-2 Dataset Metadata 분류 체계
+
+R9-S2-2부터 표준 데이터셋의 업무 도메인은 **시스템 고정값이 아니라** 사용자가 선택적으로 입력하는 메타데이터(`business_domain`)로 관리합니다.
+
+| 필드 | 의미 | 필수 |
+|------|------|------|
+| `dataset_category` | 데이터 구조/성격 (MASTER, FACT, TIMESERIES, …) | 권장 (기본 CUSTOM) |
+| `business_domain` | 업무 영역 (예: 품질, 고객, 설비 — **사용자 입력**) | 선택 |
+| `tags` | 검색·보조 분류 태그 배열 | 선택 |
+
+- clean 설치 시 업무 도메인 seed **0건** — 필터는 `전체 업무 영역`만 표시
+- `열수요`, `기상`, `설비`, `기준정보`는 **예시일 뿐** UI/운영 seed 기본값이 아님
+- API: `GET /standard-datasets/metadata-options` (categories=시스템 allowlist, domains/tags=등록 데이터 distinct)
+
+**후속 Phase:** R9-S2-3 사용자 친화 용어·메뉴 개선 · R9-S2 Dataset Version 정책 · R10 Generic REST API Connector
+
 ## 설계 문서 참조
 
 - `docs/md/THERMOps_API_설계서.md`

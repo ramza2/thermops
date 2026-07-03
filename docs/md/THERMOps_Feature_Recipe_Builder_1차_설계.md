@@ -1014,6 +1014,8 @@ python scripts/test_feature_recipe_build_diagnostics.py
 
 R9-S2-1부터 표준 데이터셋 Wizard로 `std_` prefix 내부 물리 테이블을 metadata 기반 `CREATE TABLE`로 생성합니다. SQL Preview는 Backend만 생성하며 사용자 수정·raw SQL 실행은 금지합니다. Data Mapping 대상은 ACTIVE + 물리 테이블이 존재하는 표준 데이터셋입니다.
 
+R9-S2-2부터 `dataset_category`(구조/성격), `business_domain`·`tags`(선택 메타데이터)로 분류합니다. 업무 영역은 시스템 고정값이 아니며 `열수요`·`기상` 등은 입력 예시일 뿐입니다.
+
 - DB: `tb_standard_dataset_type`, `tb_standard_dataset_column`
 - API: `/standard-dataset-types`, `/standard-target-tables`, mapping allowlist 검증
 - UI: `/standard-datasets`, `/data/mappings` 드롭다운·표준 역할 적용

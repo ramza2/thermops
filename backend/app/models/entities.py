@@ -152,6 +152,8 @@ class StandardDatasetType(Base):
     description: Mapped[str | None] = mapped_column(Text)
     domain: Mapped[str | None] = mapped_column(String(80))
     category: Mapped[str | None] = mapped_column(String(80))
+    business_domain: Mapped[str | None] = mapped_column(String(100))
+    tags_json: Mapped[Any | None] = mapped_column(JSONB)
     target_table: Mapped[str] = mapped_column(String(120))
     physical_table_yn: Mapped[str] = mapped_column(String(1), default="Y")
     physical_table_exists_yn: Mapped[str] = mapped_column(String(1), default="Y")

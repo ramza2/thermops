@@ -17,6 +17,7 @@ from app.services.standard_dataset_service import (
     create_standard_dataset_type,
     get_standard_dataset_type,
     list_mapping_target_tables,
+    list_standard_dataset_metadata_options,
     list_standard_dataset_types,
     preview_standard_dataset_create_table,
     suggest_table_name_from_code,
@@ -28,11 +29,21 @@ from app.services.standard_dataset_service import (
 router = APIRouter(tags=["Standard Dataset"])
 
 
+@router.get("/standard-datasets/metadata-options")
+async def get_standard_dataset_metadata_options(db: AsyncSession = Depends(get_db)):
+    return ok(await list_standard_dataset_metadata_options(db))
+
+
 @router.get("/standard-dataset-types")
 async def get_standard_dataset_types(
-    status: str | None = Query(default=None),
-    domain: str | None = Query(default=None),
-    category: str | None = Query(default=None),
+    status: str | None = Query(default=None, description="lifecycle status"),
+    domain: str | None = Query(default=None, deprecated=True),
+    business_domain: str | None = Query(default=None),
+    category: str | None = Query(default=None, deprecated=True),
+    dataset_category: str | None = Query(default=None),
+    tag: str | None = Query(default=None),
+    keyword: str | None = Query(default=None),
+    physical_table_exists_yn: str | None = Query(default=None),
     mapping_supported: bool | None = Query(default=None),
     recipe_supported: bool | None = Query(default=None),
     build_supported: bool | None = Query(default=None),
@@ -44,7 +55,12 @@ async def get_standard_dataset_types(
         db,
         status=status,
         domain=domain,
+        business_domain=business_domain,
         category=category,
+        dataset_category=dataset_category,
+        tag=tag,
+        keyword=keyword,
+        physical_table_exists_yn=physical_table_exists_yn,
         mapping_supported=mapping_supported,
         recipe_supported=recipe_supported,
         build_supported=build_supported,

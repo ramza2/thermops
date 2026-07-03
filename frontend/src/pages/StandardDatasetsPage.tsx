@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { Eye, Plus, Sparkles } from "lucide-react";
 import {
   activateStandardDatasetType,
+  getStandardDatasetMetadataOptions,
   getStandardDatasetType,
   getStandardDatasetTypes,
 } from "@/api/standardDatasets";
@@ -11,16 +12,16 @@ import { Button } from "@/components/Button";
 import { DataTable } from "@/components/DataTable";
 import { Modal } from "@/components/Modal";
 import { ErrorState, LoadingState } from "@/components/Pagination";
-import { SelectInput } from "@/components/SearchPanel";
+import { SelectInput, TextInput } from "@/components/SearchPanel";
 import { useToast } from "@/hooks/useToast";
 import { PageHeader } from "@/layouts/MainLayout";
-import type { StandardDatasetType } from "@/types/standardDatasets";
-import { R9_DATASET_WIZARD_NOTE } from "@/types/standardDatasets";
+import type { StandardDatasetMetadataOptions, StandardDatasetType } from "@/types/standardDatasets";
+import { R9_DATASET_METADATA_NOTE, R9_DATASET_WIZARD_NOTE } from "@/types/standardDatasets";
 import {
-  categoryLabel,
+  datasetCategoryLabel,
   datasetStatusClass,
   datasetStatusLabel,
-  domainLabel,
+  formatTags,
   physicalTableLabel,
   supportBadgeClass,
   supportLabel,
@@ -35,12 +36,10 @@ const STATUS_FILTER = [
   { value: "ARCHIVED", label: "보관 (ARCHIVED)" },
 ];
 
-const DOMAIN_FILTER = [
-  { value: "", label: "전체 도메인" },
-  { value: "HEAT_DEMAND", label: "열수요" },
-  { value: "WEATHER", label: "기상" },
-  { value: "MASTER", label: "기준정보" },
-  { value: "FACILITY", label: "설비" },
+const PHYSICAL_FILTER = [
+  { value: "", label: "전체 물리 테이블" },
+  { value: "Y", label: "물리 테이블 존재" },
+  { value: "N", label: "물리 테이블 없음" },
 ];
 
 const EMPTY_MESSAGE =
@@ -49,13 +48,27 @@ const EMPTY_MESSAGE =
 export default function StandardDatasetsPage() {
   const { showToast } = useToast();
   const [items, setItems] = useState<StandardDatasetType[]>([]);
+  const [metadata, setMetadata] = useState<StandardDatasetMetadataOptions | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
-  const [domainFilter, setDomainFilter] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("");
+  const [businessDomainFilter, setBusinessDomainFilter] = useState("");
+  const [tagFilter, setTagFilter] = useState("");
+  const [physicalFilter, setPhysicalFilter] = useState("");
+  const [keyword, setKeyword] = useState("");
   const [detail, setDetail] = useState<StandardDatasetType | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
   const [wizardOpen, setWizardOpen] = useState(false);
+
+  const loadMetadata = useCallback(async () => {
+    try {
+      const opts = await getStandardDatasetMetadataOptions();
+      setMetadata(opts);
+    } catch {
+      setMetadata({ dataset_categories: [], business_domains: [], tags: [] });
+    }
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -63,7 +76,11 @@ export default function StandardDatasetsPage() {
     try {
       const res = await getStandardDatasetTypes({
         status: statusFilter || undefined,
-        domain: domainFilter || undefined,
+        dataset_category: categoryFilter || undefined,
+        business_domain: businessDomainFilter || undefined,
+        tag: tagFilter || undefined,
+        keyword: keyword.trim() || undefined,
+        physical_table_exists_yn: physicalFilter || undefined,
         include_columns: false,
         include_planned: true,
       });
@@ -73,11 +90,39 @@ export default function StandardDatasetsPage() {
     } finally {
       setLoading(false);
     }
-  }, [statusFilter, domainFilter]);
+  }, [statusFilter, categoryFilter, businessDomainFilter, tagFilter, physicalFilter, keyword]);
+
+  useEffect(() => {
+    void loadMetadata();
+  }, [loadMetadata]);
 
   useEffect(() => {
     void load();
   }, [load]);
+
+  const categoryFilterOptions = useMemo(() => {
+    const opts = [{ value: "", label: "전체 데이터 분류" }];
+    for (const c of metadata?.dataset_categories || []) {
+      opts.push({ value: c.code, label: c.name });
+    }
+    return opts;
+  }, [metadata]);
+
+  const businessDomainFilterOptions = useMemo(() => {
+    const opts = [{ value: "", label: "전체 업무 영역" }];
+    for (const d of metadata?.business_domains || []) {
+      opts.push({ value: d, label: d });
+    }
+    return opts;
+  }, [metadata]);
+
+  const tagFilterOptions = useMemo(() => {
+    const opts = [{ value: "", label: "전체 태그" }];
+    for (const t of metadata?.tags || []) {
+      opts.push({ value: t, label: t });
+    }
+    return opts;
+  }, [metadata]);
 
   const filteredCount = useMemo(() => items.length, [items]);
 
@@ -100,6 +145,7 @@ export default function StandardDatasetsPage() {
       showToast("success", "ACTIVE로 전환되었습니다.");
       setDetailOpen(false);
       void load();
+      void loadMetadata();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "ACTIVE 전환에 실패했습니다.";
       showToast("error", msg);
@@ -123,6 +169,7 @@ export default function StandardDatasetsPage() {
 
       <div className="mb-4 text-xs text-slate-600 bg-amber-50 border border-amber-200 rounded-lg p-3 space-y-1">
         <p>{R9_DATASET_WIZARD_NOTE}</p>
+        <p>{R9_DATASET_METADATA_NOTE}</p>
         <p>
           데이터 매핑 설정은 <Link to="/data/mappings" className="text-blue-600 hover:underline">데이터 매핑 설정</Link>
           에서 Wizard로 생성한 물리 테이블을 대상으로 연결합니다.
@@ -130,8 +177,12 @@ export default function StandardDatasetsPage() {
       </div>
 
       <div className="flex flex-wrap gap-2 mb-4">
+        <TextInput value={keyword} onChange={setKeyword} placeholder="검색 (이름·코드·설명)" />
+        <SelectInput value={categoryFilter} onChange={setCategoryFilter} options={categoryFilterOptions} />
+        <SelectInput value={businessDomainFilter} onChange={setBusinessDomainFilter} options={businessDomainFilterOptions} />
+        <SelectInput value={tagFilter} onChange={setTagFilter} options={tagFilterOptions} />
         <SelectInput value={statusFilter} onChange={setStatusFilter} options={STATUS_FILTER} />
-        <SelectInput value={domainFilter} onChange={setDomainFilter} options={DOMAIN_FILTER} />
+        <SelectInput value={physicalFilter} onChange={setPhysicalFilter} options={PHYSICAL_FILTER} />
         <span className="text-xs text-slate-500 self-center">{filteredCount}건</span>
       </div>
 
@@ -140,7 +191,21 @@ export default function StandardDatasetsPage() {
         columns={[
           { key: "dataset_type_name", header: "데이터셋" },
           { key: "dataset_type_code", header: "코드" },
-          { key: "category", header: "분류", render: (r) => categoryLabel(r.category as string) },
+          {
+            key: "dataset_category",
+            header: "데이터 분류",
+            render: (r) => datasetCategoryLabel((r.dataset_category || r.category) as string),
+          },
+          {
+            key: "business_domain",
+            header: "업무 영역",
+            render: (r) => (r.business_domain as string) || "-",
+          },
+          {
+            key: "tags",
+            header: "태그",
+            render: (r) => formatTags(r.tags as string[] | undefined),
+          },
           {
             key: "status",
             header: "상태",
@@ -157,6 +222,11 @@ export default function StandardDatasetsPage() {
             render: (r) => physicalTableLabel(!!r.physical_table_exists),
           },
           { key: "column_count", header: "컬럼 수", render: (r) => String(r.column_count ?? "-") },
+          {
+            key: "created_at",
+            header: "생성일",
+            render: (r) => (r.created_at ? String(r.created_at).slice(0, 10) : "-"),
+          },
           {
             key: "mapping_supported",
             header: "매핑",
@@ -186,7 +256,10 @@ export default function StandardDatasetsPage() {
       <StandardDatasetWizard
         open={wizardOpen}
         onClose={() => setWizardOpen(false)}
-        onCompleted={() => void load()}
+        onCompleted={() => {
+          void load();
+          void loadMetadata();
+        }}
       />
 
       <Modal
@@ -210,8 +283,9 @@ export default function StandardDatasetsPage() {
             <div className="grid grid-cols-2 gap-2 text-xs">
               <div>코드: <strong>{detail.dataset_type_code}</strong></div>
               <div>대상 테이블: <strong>{detail.target_table}</strong></div>
-              <div>도메인: {domainLabel(detail.domain)}</div>
-              <div>분류: {categoryLabel(detail.category)}</div>
+              <div>데이터 분류: {datasetCategoryLabel(detail.dataset_category || detail.category)}</div>
+              <div>업무 영역: {detail.business_domain || "-"}</div>
+              <div>태그: {formatTags(detail.tags)}</div>
               <div>상태: {datasetStatusLabel(detail.status)}</div>
               <div>{physicalTableLabel(detail.physical_table_exists)}</div>
               {detail.table_create_status && <div>테이블 생성: {detail.table_create_status}</div>}
