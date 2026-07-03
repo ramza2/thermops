@@ -8,7 +8,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { Pagination, LoadingState, ErrorState } from "@/components/Pagination";
 import { useToast } from "@/hooks/useToast";
 import { PageHeader } from "@/layouts/MainLayout";
-import { PAGE_DESCRIPTIONS, PAGE_TITLES } from "@/constants/displayLabels";
+import { PAGE_DESCRIPTIONS, PAGE_TITLES, HELP_TEXTS } from "@/constants/displayLabels";
 
 interface TrainingJob {
   job_id: string;
@@ -82,6 +82,9 @@ export default function TrainingJobsPage() {
   return (
     <div>
       <PageHeader title={PAGE_TITLES.trainingJobs} description={PAGE_DESCRIPTIONS.trainingJobs} />
+      <p className="text-xs text-slate-600 bg-slate-50 border border-slate-100 rounded p-2 mb-4">
+        학습 데이터 버전을 지정하지 않으면 대표·학습 가능 버전을 자동 선택합니다. {HELP_TEXTS.datasetVersionPolicy}
+      </p>
 
       <DataTable
         loading={loading}

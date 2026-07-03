@@ -1178,3 +1178,45 @@ python scripts/run_regression_tests.py --group model --timeout-scale 2
 
 기대: **23/23 PASS**
 
+---
+
+## 부록 O. Phase R9-S2 Dataset Version 운영 정책 (학습 데이터 버전)
+
+R9-S2에서는 Feature Build 결과로 생성되는 학습 데이터 버전에 **역할·상태·생성 범위**를 부여하고 `dataset_version_policy_service`로 학습/예측 자동 선택을 수행한다.
+
+### 정책 요약
+
+| 구분 | 값 | 자동 선택 |
+|------|-----|-----------|
+| 역할 | PRIMARY, CANDIDATE | 가능(상태 조건 충족 시) |
+| 역할 | PARTIAL, TEMPORARY, ARCHIVED | 제외 |
+| 상태 | TRAINING_READY, SERVING_READY, BUILD_SUCCESS, BUILD_WARNING | 목적에 따라 가능 |
+| 상태 | BUILD_FAILED, ARCHIVED, PARTIAL | 제외 |
+| fallback | record_count DESC, created_at DESC | 명시적 후보 없을 때만, PARTIAL 등 제외 |
+
+### R9-S1 대비
+
+R9-S1 임시 복구(`record_count DESC`)는 **fallback**으로 `dataset_version_policy_service` 내부에 유지한다. PRIMARY·CANDIDATE 운영 정책이 우선 적용되어 최신 partial build가 자동 선택되는 회귀를 구조적으로 방지한다.
+
+### API·화면
+
+- `GET /api/v1/dataset-versions`, `POST .../set-primary`, `POST .../archive`, `POST .../selection-preview`
+- Frontend `/dataset-versions` (표시명: 학습 데이터 버전)
+
+### 테스트
+
+```bash
+python scripts/test_dataset_version_policy.py
+python scripts/run_regression_tests.py --group model --timeout-scale 2
+```
+
+---
+
+## 부록 P. Phase R10 Generic REST API Connector Builder
+
+R10에서 **데이터 준비** 흐름에 REST API 연결(API 작업)이 추가되었습니다. 외부 API 응답을 표준 데이터셋 물리 테이블에 적재할 수 있는 기반이 마련되었으나, **Feature Recipe 계산 로직·Recipe Type·ml/features.py는 변경하지 않습니다.**
+
+- Feature Build는 기존과 동일하게 학습 데이터 버전(Dataset Version)과 Feature Set/Recipe를 사용합니다.
+- API 적재 데이터는 Data Mapping·표준 데이터셋 경로를 통해 Feature Build 입력 테이블로 연결됩니다.
+- 열수요 wide-hour 변환·ASOS/Calendar 특화 적재는 R10-S3/S4에서 별도 구현 예정입니다.
+

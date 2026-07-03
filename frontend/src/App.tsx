@@ -11,6 +11,7 @@ import FeatureSetsPage from "@/pages/FeatureSetsPage";
 import FeatureSetDetailPage from "@/pages/FeatureSetDetailPage";
 import FeatureRecipesPage from "@/pages/FeatureRecipesPage";
 import FeatureRecipeBuilderPage from "@/pages/FeatureRecipeBuilderPage";
+import DatasetVersionsPage from "@/pages/DatasetVersionsPage";
 import TrainingConfigsPage from "@/pages/TrainingConfigsPage";
 import TrainingJobsPage from "@/pages/TrainingJobsPage";
 import ModelPerformancePage from "@/pages/ModelPerformancePage";
@@ -43,6 +44,7 @@ export default function App() {
             <Route path="feature-recipes/:recipeId" element={<FeatureRecipeBuilderPage />} />
             <Route path="feature-sets" element={<FeatureSetsPage />} />
             <Route path="feature-sets/:id" element={<FeatureSetDetailPage />} />
+            <Route path="dataset-versions" element={<DatasetVersionsPage />} />
             <Route path="models/training-configs" element={<TrainingConfigsPage />} />
             <Route path="models/training-jobs" element={<TrainingJobsPage />} />
             <Route path="models/performance" element={<ModelPerformancePage />} />

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { Plus, Plug, Trash2, Eye, Pencil, Upload } from "lucide-react";
 import { deleteApi, extractApiErrorMessage, fetchApi, postApi, putApi, PagedData } from "@/api/client";
+import { ApiConnectorPanel } from "@/components/ApiConnectorPanel";
 import { Button } from "@/components/Button";
 import { DataTable } from "@/components/DataTable";
 import { Modal } from "@/components/Modal";
@@ -739,6 +740,8 @@ export default function DataSourcesPage() {
           </div>
         )}
       </Modal>
+
+      <ApiConnectorPanel />
     </div>
   );
 }

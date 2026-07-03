@@ -50,10 +50,27 @@ class DatasetVersion(Base):
     __tablename__ = "tb_dataset_version"
     dataset_version_id: Mapped[str] = mapped_column(String(80), primary_key=True)
     dataset_type: Mapped[str] = mapped_column(String(30))
+    feature_set_id: Mapped[str | None] = mapped_column(String(50))
     base_start_at: Mapped[datetime | None] = mapped_column(DateTime)
     base_end_at: Mapped[datetime | None] = mapped_column(DateTime)
     feature_config_hash: Mapped[str | None] = mapped_column(String(128))
     record_count: Mapped[int | None] = mapped_column(Integer)
+    feature_count: Mapped[int | None] = mapped_column(Integer)
+    dataset_version_role: Mapped[str] = mapped_column(String(30), default="CANDIDATE")
+    dataset_version_status: Mapped[str] = mapped_column(String(30), default="BUILD_SUCCESS")
+    build_scope: Mapped[str] = mapped_column(String(30), default="UNKNOWN")
+    is_primary: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_training_ready: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_serving_ready: Mapped[bool] = mapped_column(Boolean, default=False)
+    quality_score: Mapped[float | None] = mapped_column(Numeric(10, 4))
+    coverage_ratio: Mapped[float | None] = mapped_column(Numeric(10, 6))
+    null_ratio: Mapped[float | None] = mapped_column(Numeric(10, 6))
+    build_started_at: Mapped[datetime | None] = mapped_column(DateTime)
+    build_finished_at: Mapped[datetime | None] = mapped_column(DateTime)
+    archived_at: Mapped[datetime | None] = mapped_column(DateTime)
+    archived_reason: Mapped[str | None] = mapped_column(Text)
+    selection_policy_note: Mapped[str | None] = mapped_column(Text)
+    metadata_json: Mapped[dict | None] = mapped_column(JSONB)
     created_by: Mapped[str | None] = mapped_column(String(50))
     created_at: Mapped[datetime] = mapped_column(DateTime)
 
@@ -110,6 +127,134 @@ class DataSource(Base):
     active_yn: Mapped[str] = mapped_column(String(1), default="Y")
     last_loaded_at: Mapped[datetime | None] = mapped_column(DateTime)
     created_at: Mapped[datetime] = mapped_column(DateTime)
+
+
+class ApiConnectorOperation(Base):
+    __tablename__ = "tb_api_connector_operation"
+    operation_id: Mapped[str] = mapped_column(String(50), primary_key=True)
+    data_source_id: Mapped[str] = mapped_column(String(50))
+    operation_name: Mapped[str] = mapped_column(String(200))
+    operation_description: Mapped[str | None] = mapped_column(Text)
+    http_method: Mapped[str] = mapped_column(String(10), default="GET")
+    endpoint_path: Mapped[str] = mapped_column(Text)
+    full_url_preview: Mapped[str | None] = mapped_column(Text)
+    request_content_type: Mapped[str] = mapped_column(String(50), default="QUERY")
+    response_format: Mapped[str] = mapped_column(String(20), default="JSON")
+    response_item_path: Mapped[str | None] = mapped_column(Text)
+    result_array_mode: Mapped[str] = mapped_column(String(30), default="AUTO")
+    target_table: Mapped[str | None] = mapped_column(String(100))
+    standard_dataset_id: Mapped[str | None] = mapped_column(String(50))
+    active_yn: Mapped[bool] = mapped_column(Boolean, default=True)
+    archived_at: Mapped[datetime | None] = mapped_column(DateTime)
+    metadata_json: Mapped[dict | None] = mapped_column(JSONB)
+    created_at: Mapped[datetime] = mapped_column(DateTime)
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime)
+
+
+class ApiConnectorParam(Base):
+    __tablename__ = "tb_api_connector_param"
+    param_id: Mapped[str] = mapped_column(String(50), primary_key=True)
+    operation_id: Mapped[str] = mapped_column(String(50))
+    param_name: Mapped[str] = mapped_column(String(100))
+    display_name: Mapped[str | None] = mapped_column(String(200))
+    param_location: Mapped[str] = mapped_column(String(20), default="QUERY")
+    param_type: Mapped[str] = mapped_column(String(30), default="STRING")
+    required_yn: Mapped[bool] = mapped_column(Boolean, default=False)
+    default_value: Mapped[str | None] = mapped_column(Text)
+    example_value: Mapped[str | None] = mapped_column(Text)
+    allowed_values_json: Mapped[Any | None] = mapped_column(JSONB)
+    value_source: Mapped[str] = mapped_column(String(30), default="USER_INPUT")
+    secret_key_ref: Mapped[str | None] = mapped_column(String(100))
+    encode_yn: Mapped[bool] = mapped_column(Boolean, default=True)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    active_yn: Mapped[bool] = mapped_column(Boolean, default=True)
+    metadata_json: Mapped[dict | None] = mapped_column(JSONB)
+
+
+class ApiConnectorCredential(Base):
+    __tablename__ = "tb_api_connector_credential"
+    credential_id: Mapped[str] = mapped_column(String(50), primary_key=True)
+    data_source_id: Mapped[str] = mapped_column(String(50))
+    credential_name: Mapped[str] = mapped_column(String(200), default="default")
+    credential_type: Mapped[str] = mapped_column(String(30), default="API_KEY")
+    key_location: Mapped[str] = mapped_column(String(20), default="QUERY")
+    key_name: Mapped[str] = mapped_column(String(100), default="serviceKey")
+    secret_value_encrypted: Mapped[str | None] = mapped_column(Text)
+    secret_value_masked: Mapped[str | None] = mapped_column(String(200))
+    encoding_policy: Mapped[str] = mapped_column(String(30), default="STORE_DECODED_ENCODE_ON_CALL")
+    active_yn: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime)
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime)
+
+
+class ApiConnectorPagination(Base):
+    __tablename__ = "tb_api_connector_pagination"
+    pagination_id: Mapped[str] = mapped_column(String(50), primary_key=True)
+    operation_id: Mapped[str] = mapped_column(String(50), unique=True)
+    pagination_type: Mapped[str] = mapped_column(String(30), default="NONE")
+    page_param_name: Mapped[str | None] = mapped_column(String(100))
+    size_param_name: Mapped[str | None] = mapped_column(String(100))
+    page_start: Mapped[int] = mapped_column(Integer, default=1)
+    page_size: Mapped[int] = mapped_column(Integer, default=100)
+    max_pages: Mapped[int] = mapped_column(Integer, default=1)
+    total_count_path: Mapped[str | None] = mapped_column(Text)
+    next_link_path: Mapped[str | None] = mapped_column(Text)
+    stop_condition: Mapped[str] = mapped_column(String(50), default="EMPTY_ITEMS")
+    active_yn: Mapped[bool] = mapped_column(Boolean, default=True)
+
+
+class ApiConnectorCallLog(Base):
+    __tablename__ = "tb_api_connector_call_log"
+    call_log_id: Mapped[str] = mapped_column(String(50), primary_key=True)
+    operation_id: Mapped[str] = mapped_column(String(50))
+    data_source_id: Mapped[str] = mapped_column(String(50))
+    called_at: Mapped[datetime] = mapped_column(DateTime)
+    called_by: Mapped[str | None] = mapped_column(String(100))
+    request_url_masked: Mapped[str | None] = mapped_column(Text)
+    request_params_masked: Mapped[dict | None] = mapped_column(JSONB)
+    http_status: Mapped[int | None] = mapped_column(Integer)
+    success_yn: Mapped[bool] = mapped_column(Boolean, default=False)
+    response_format: Mapped[str | None] = mapped_column(String(20))
+    response_item_count: Mapped[int] = mapped_column(Integer, default=0)
+    duration_ms: Mapped[int | None] = mapped_column(Integer)
+    error_message: Mapped[str | None] = mapped_column(Text)
+    raw_response_snapshot_id: Mapped[str | None] = mapped_column(String(50))
+    metadata_json: Mapped[dict | None] = mapped_column(JSONB)
+
+
+class ApiConnectorResponseSnapshot(Base):
+    __tablename__ = "tb_api_connector_response_snapshot"
+    snapshot_id: Mapped[str] = mapped_column(String(50), primary_key=True)
+    operation_id: Mapped[str] = mapped_column(String(50))
+    call_log_id: Mapped[str | None] = mapped_column(String(50))
+    captured_at: Mapped[datetime] = mapped_column(DateTime)
+    response_format: Mapped[str] = mapped_column(String(20), default="JSON")
+    raw_response_text: Mapped[str | None] = mapped_column(Text)
+    normalized_items_json: Mapped[Any | None] = mapped_column(JSONB)
+    item_count: Mapped[int] = mapped_column(Integer, default=0)
+    sample_only_yn: Mapped[bool] = mapped_column(Boolean, default=True)
+    metadata_json: Mapped[dict | None] = mapped_column(JSONB)
+
+
+class ApiConnectorLoadRun(Base):
+    __tablename__ = "tb_api_connector_load_run"
+    load_run_id: Mapped[str] = mapped_column(String(50), primary_key=True)
+    operation_id: Mapped[str] = mapped_column(String(50))
+    data_source_id: Mapped[str] = mapped_column(String(50))
+    target_table: Mapped[str | None] = mapped_column(String(100))
+    standard_dataset_id: Mapped[str | None] = mapped_column(String(50))
+    started_at: Mapped[datetime] = mapped_column(DateTime)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime)
+    run_status: Mapped[str] = mapped_column(String(30), default="PENDING")
+    request_params_snapshot: Mapped[dict | None] = mapped_column(JSONB)
+    request_params_masked: Mapped[dict | None] = mapped_column(JSONB)
+    inserted_count: Mapped[int] = mapped_column(Integer, default=0)
+    updated_count: Mapped[int] = mapped_column(Integer, default=0)
+    skipped_count: Mapped[int] = mapped_column(Integer, default=0)
+    error_count: Mapped[int] = mapped_column(Integer, default=0)
+    raw_snapshot_id: Mapped[str | None] = mapped_column(String(50))
+    result_summary: Mapped[dict | None] = mapped_column(JSONB)
+    error_message: Mapped[str | None] = mapped_column(Text)
 
 
 class DataMapping(Base):

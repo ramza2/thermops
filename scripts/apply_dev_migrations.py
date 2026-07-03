@@ -244,6 +244,64 @@ MIGRATIONS = [
         "R9 pipeline run link schema",
         _load_sql("r9_pipeline_run_link_schema.sql"),
     ),
+    (
+        "R9-S2 dataset version policy columns",
+        """
+        ALTER TABLE tb_dataset_version ADD COLUMN IF NOT EXISTS feature_set_id VARCHAR(50);
+        ALTER TABLE tb_dataset_version ADD COLUMN IF NOT EXISTS feature_count INTEGER;
+        ALTER TABLE tb_dataset_version ADD COLUMN IF NOT EXISTS dataset_version_role VARCHAR(30) NOT NULL DEFAULT 'CANDIDATE';
+        ALTER TABLE tb_dataset_version ADD COLUMN IF NOT EXISTS dataset_version_status VARCHAR(30) NOT NULL DEFAULT 'BUILD_SUCCESS';
+        ALTER TABLE tb_dataset_version ADD COLUMN IF NOT EXISTS build_scope VARCHAR(30) NOT NULL DEFAULT 'UNKNOWN';
+        ALTER TABLE tb_dataset_version ADD COLUMN IF NOT EXISTS is_primary BOOLEAN NOT NULL DEFAULT FALSE;
+        ALTER TABLE tb_dataset_version ADD COLUMN IF NOT EXISTS is_training_ready BOOLEAN NOT NULL DEFAULT FALSE;
+        ALTER TABLE tb_dataset_version ADD COLUMN IF NOT EXISTS is_serving_ready BOOLEAN NOT NULL DEFAULT FALSE;
+        ALTER TABLE tb_dataset_version ADD COLUMN IF NOT EXISTS quality_score NUMERIC(10,4);
+        ALTER TABLE tb_dataset_version ADD COLUMN IF NOT EXISTS coverage_ratio NUMERIC(10,6);
+        ALTER TABLE tb_dataset_version ADD COLUMN IF NOT EXISTS null_ratio NUMERIC(10,6);
+        ALTER TABLE tb_dataset_version ADD COLUMN IF NOT EXISTS build_started_at TIMESTAMP;
+        ALTER TABLE tb_dataset_version ADD COLUMN IF NOT EXISTS build_finished_at TIMESTAMP;
+        ALTER TABLE tb_dataset_version ADD COLUMN IF NOT EXISTS archived_at TIMESTAMP;
+        ALTER TABLE tb_dataset_version ADD COLUMN IF NOT EXISTS archived_reason TEXT;
+        ALTER TABLE tb_dataset_version ADD COLUMN IF NOT EXISTS selection_policy_note TEXT;
+        ALTER TABLE tb_dataset_version ADD COLUMN IF NOT EXISTS metadata_json JSONB;
+        UPDATE tb_dataset_version dv
+        SET feature_set_id = sub.fs_id
+        FROM (
+            SELECT DISTINCT ON (fd.dataset_version_id)
+                fd.dataset_version_id,
+                fd.feature_json->>'feature_set_id' AS fs_id
+            FROM tb_feature_dataset fd
+            WHERE fd.feature_json->>'feature_set_id' IS NOT NULL
+            ORDER BY fd.dataset_version_id, fd.created_at DESC
+        ) sub
+        WHERE dv.dataset_version_id = sub.dataset_version_id
+          AND (dv.feature_set_id IS NULL OR dv.feature_set_id = '');
+        UPDATE tb_dataset_version
+        SET dataset_version_role = COALESCE(NULLIF(dataset_version_role, ''), 'CANDIDATE'),
+            dataset_version_status = CASE
+                WHEN COALESCE(record_count, 0) <= 0 THEN 'BUILD_FAILED'
+                ELSE COALESCE(NULLIF(dataset_version_status, ''), 'BUILD_SUCCESS')
+            END,
+            build_scope = COALESCE(NULLIF(build_scope, ''), 'UNKNOWN'),
+            is_training_ready = CASE WHEN COALESCE(record_count, 0) > 0 THEN TRUE ELSE FALSE END,
+            is_serving_ready = CASE WHEN COALESCE(record_count, 0) > 0 THEN TRUE ELSE FALSE END
+        WHERE dataset_version_role IS NULL
+           OR dataset_version_status IS NULL
+           OR build_scope IS NULL
+           OR is_training_ready IS NULL
+           OR is_serving_ready IS NULL;
+        CREATE INDEX IF NOT EXISTS ix_dataset_version_feature_set ON tb_dataset_version(feature_set_id);
+        CREATE INDEX IF NOT EXISTS ix_dataset_version_role ON tb_dataset_version(feature_set_id, dataset_version_role);
+        CREATE INDEX IF NOT EXISTS ix_dataset_version_status ON tb_dataset_version(feature_set_id, dataset_version_status);
+        CREATE UNIQUE INDEX IF NOT EXISTS ux_dataset_version_primary
+            ON tb_dataset_version(feature_set_id)
+            WHERE is_primary = TRUE AND archived_at IS NULL;
+        """,
+    ),
+    (
+        "R10 API connector schema",
+        _load_sql("r10_api_connector_schema.sql"),
+    ),
 ]
 
 

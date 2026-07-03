@@ -297,6 +297,7 @@ class TrainingJobCreate(BaseModel):
     validation_end_at: date | None = None
     register_model_yn: bool = True
     triggered_by: str | None = None
+    dataset_version_id: str | None = None
 
 
 # Prediction
@@ -312,6 +313,7 @@ class PredictionJobCreate(BaseModel):
     model_name: str | None = None
     model_version: str | None = None
     overwrite_yn: bool = True
+    dataset_version_id: str | None = None
 
 
 class PredictionEvaluateRequest(BaseModel):
@@ -365,3 +367,104 @@ class DriftCheckCreate(BaseModel):
 class FeatureQualityRunCreate(BaseModel):
     feature_set_id: str
     dataset_version_id: str | None = None
+
+
+class DatasetVersionArchiveRequest(BaseModel):
+    reason: str | None = None
+
+
+class DatasetVersionSelectionPreviewRequest(BaseModel):
+    feature_set_id: str
+    purpose: str = "TRAINING"
+    explicit_dataset_version_id: str | None = None
+
+
+class DatasetVersionCleanupPreviewRequest(BaseModel):
+    feature_set_id: str | None = None
+    roles: list[str] | None = None
+    older_than_days: int | None = None
+    dry_run: bool = True
+
+
+class ApiConnectorOperationCreate(BaseModel):
+    data_source_id: str
+    operation_name: str
+    operation_description: str | None = None
+    http_method: str = "GET"
+    endpoint_path: str
+    request_content_type: str = "QUERY"
+    response_format: str = "JSON"
+    response_item_path: str | None = None
+    result_array_mode: str = "AUTO"
+    target_table: str | None = None
+    standard_dataset_id: str | None = None
+    metadata_json: dict[str, Any] | None = None
+
+
+class ApiConnectorOperationUpdate(BaseModel):
+    operation_name: str | None = None
+    operation_description: str | None = None
+    http_method: str | None = None
+    endpoint_path: str | None = None
+    request_content_type: str | None = None
+    response_format: str | None = None
+    response_item_path: str | None = None
+    result_array_mode: str | None = None
+    target_table: str | None = None
+    standard_dataset_id: str | None = None
+    active_yn: bool | None = None
+    metadata_json: dict[str, Any] | None = None
+
+
+class ApiConnectorParamItem(BaseModel):
+    param_id: str | None = None
+    param_name: str
+    display_name: str | None = None
+    param_location: str = "QUERY"
+    param_type: str = "STRING"
+    required_yn: bool = False
+    default_value: str | None = None
+    example_value: str | None = None
+    allowed_values_json: list[Any] | None = None
+    value_source: str = "USER_INPUT"
+    secret_key_ref: str | None = None
+    encode_yn: bool = True
+    sort_order: int = 0
+    active_yn: bool = True
+    metadata_json: dict[str, Any] | None = None
+
+
+class ApiConnectorParamsReplace(BaseModel):
+    params: list[ApiConnectorParamItem]
+
+
+class ApiConnectorCredentialUpsert(BaseModel):
+    credential_name: str | None = "default"
+    credential_type: str = "API_KEY"
+    key_location: str = "QUERY"
+    key_name: str = "serviceKey"
+    secret_value: str | None = None
+    encoding_policy: str = "STORE_DECODED_ENCODE_ON_CALL"
+    active_yn: bool = True
+
+
+class ApiConnectorPaginationUpsert(BaseModel):
+    pagination_type: str = "NONE"
+    page_param_name: str | None = None
+    size_param_name: str | None = None
+    page_start: int = 1
+    page_size: int = 100
+    max_pages: int = 1
+    total_count_path: str | None = None
+    next_link_path: str | None = None
+    stop_condition: str = "EMPTY_ITEMS"
+    active_yn: bool = True
+
+
+class ApiConnectorRuntimeParams(BaseModel):
+    runtime_params: dict[str, Any] | None = None
+
+
+class ApiConnectorLoadRunRequest(BaseModel):
+    runtime_params: dict[str, Any] | None = None
+    dry_run: bool = False

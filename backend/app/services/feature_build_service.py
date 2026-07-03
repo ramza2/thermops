@@ -38,6 +38,10 @@ from app.services.feature_registration_service import (
     analyze_feature_set_coverage,
     is_tpl_feature_set,
 )
+from app.services.dataset_version_policy_service import (
+    classify_build_scope,
+    classify_dataset_version_metadata,
+)
 
 MIN_HISTORY_HOURS = 168
 
@@ -322,10 +326,13 @@ async def run_feature_build(db: AsyncSession, params: FeatureBuildParams) -> dic
         dv = DatasetVersion(
             dataset_version_id=dataset_version_id,
             dataset_type="FEATURE",
+            feature_set_id=params.feature_set_id,
             base_start_at=start_ts,
             base_end_at=end_ts,
             feature_config_hash=_feature_config_hash(feature_names),
             record_count=0,
+            feature_count=len(feature_names),
+            build_started_at=started,
             created_by="feature_build_api",
             created_at=utc_now(),
         )
@@ -411,6 +418,58 @@ async def run_feature_build(db: AsyncSession, params: FeatureBuildParams) -> dic
             run_status = "WARNING"
         else:
             run_status = "SUCCESS"
+
+        requested = len(feature_names) or 1
+        generated = int(final_coverage.get("generated_feature_count") or 0)
+        coverage_ratio = round(generated / requested, 6) if requested else None
+        null_cells = 0
+        total_cells = 0
+        for name in feature_names:
+            if name in df.columns:
+                col = df[name]
+                null_cells += int(col.isna().sum())
+                total_cells += len(col)
+        null_ratio = round(null_cells / total_cells, 6) if total_cells else None
+        build_scope = classify_build_scope(
+            site_id=params.site_id,
+            start_at=params.start_at,
+            end_at=params.end_at,
+        )
+        meta = classify_dataset_version_metadata(
+            build_scope=build_scope,
+            record_count=inserted,
+            coverage_ratio=coverage_ratio,
+            null_ratio=null_ratio,
+            run_status=run_status,
+            feature_count=len(feature_names),
+        )
+        dv.build_scope = build_scope
+        dv.coverage_ratio = coverage_ratio
+        dv.null_ratio = null_ratio
+        dv.dataset_version_role = meta["dataset_version_role"]
+        dv.dataset_version_status = meta["dataset_version_status"]
+        dv.is_training_ready = meta["is_training_ready"]
+        dv.is_serving_ready = meta["is_serving_ready"]
+        dv.quality_score = meta["quality_score"]
+        dv.is_primary = False
+        dv.build_finished_at = finished
+        dv.metadata_json = {
+            "build_scope": build_scope,
+            "dataset_version_role": meta["dataset_version_role"],
+            "dataset_version_status": meta["dataset_version_status"],
+            "coverage_ratio": coverage_ratio,
+            "null_ratio": null_ratio,
+            "quality_score": meta["quality_score"],
+        }
+        result_summary.update({
+            "build_scope": build_scope,
+            "dataset_version_role": meta["dataset_version_role"],
+            "dataset_version_status": meta["dataset_version_status"],
+            "coverage_ratio": coverage_ratio,
+            "null_ratio": null_ratio,
+            "quality_score": meta["quality_score"],
+        })
+
         run.run_status = run_status
         run.finished_at = finished
         run.result_summary = result_summary

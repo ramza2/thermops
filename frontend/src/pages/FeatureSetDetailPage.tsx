@@ -12,6 +12,7 @@ import { SelectInput, TextInput } from "@/components/SearchPanel";
 import { LoadingState, ErrorState } from "@/components/Pagination";
 import { useToast } from "@/hooks/useToast";
 import { PageHeader } from "@/layouts/MainLayout";
+import { datasetVersionRoleLabel, datasetVersionStatusLabel } from "@/constants/displayLabels";
 import { FeatureLineageSection } from "@/components/FeatureLineageSection";
 import { FeatureQualitySection } from "@/components/FeatureQualitySection";
 import { RecipeBuildDiagnosticsPanel } from "@/components/RecipeBuildDiagnosticsPanel";
@@ -519,10 +520,17 @@ export default function FeatureSetDetailPage() {
           </p>
           {(buildResult.dataset_version_id ?? buildResult.result_summary?.dataset_version_id) && (
             <p className="text-emerald-600 text-xs">
-              Dataset Version:{" "}
+              학습 데이터 버전:{" "}
               <span className="font-mono">
                 {buildResult.dataset_version_id ?? buildResult.result_summary?.dataset_version_id}
               </span>
+              {buildResult.result_summary?.dataset_version_role && (
+                <span className="ml-2">
+                  · {datasetVersionRoleLabel(buildResult.result_summary.dataset_version_role)}
+                  {buildResult.result_summary?.dataset_version_status
+                    ? ` / ${datasetVersionStatusLabel(buildResult.result_summary.dataset_version_status)}` : ""}
+                </span>
+              )}
             </p>
           )}
           <p className="text-emerald-600 text-xs">

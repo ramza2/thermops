@@ -27,7 +27,11 @@ from app.models.entities import (
     PredictionJob,
 )
 from app.schemas.api import PredictionJobCreate
-from app.services.feature_dataset_service import latest_dataset_version_id, validate_prediction_period
+from app.services.dataset_version_policy_service import (
+    DatasetVersionPolicyError,
+    select_dataset_version_for_prediction,
+)
+from app.services.feature_dataset_service import validate_prediction_period
 
 
 class PredictionModelError(ValueError):
@@ -53,6 +57,7 @@ class PredictionJobParams:
     model_name: str | None = None
     model_version: str | None = None
     overwrite_yn: bool = True
+    dataset_version_id: str | None = None
 
 
 def _load_ml_modules():
@@ -375,6 +380,7 @@ def params_from_schema(body: PredictionJobCreate) -> PredictionJobParams:
         model_name=body.model_name,
         model_version=body.model_version,
         overwrite_yn=body.overwrite_yn,
+        dataset_version_id=body.dataset_version_id,
     )
 
 
@@ -428,11 +434,17 @@ async def run_prediction_job(db: AsyncSession, params: PredictionJobParams) -> d
         fs = await _get_feature_set(db, params.feature_set_id)
         feature_names: list[str] = fs.features or []
 
-        dataset_version_id = await latest_dataset_version_id(db, params.feature_set_id)
+        selection = await select_dataset_version_for_prediction(
+            db,
+            params.feature_set_id,
+            explicit_dataset_version_id=params.dataset_version_id,
+        )
+        dataset_version_id = selection.dataset_version_id
         if not dataset_version_id:
             raise ValueError(
-                f"Feature Set {params.feature_set_id}에 대한 Feature Dataset이 없습니다."
+                f"Feature Set {params.feature_set_id}에 사용 가능한 학습 데이터 버전이 없습니다."
             )
+        warnings.extend(selection.warnings)
 
         records = await _load_feature_records(
             db,
@@ -475,6 +487,8 @@ async def run_prediction_job(db: AsyncSession, params: PredictionJobParams) -> d
             "artifact_uri": mv.artifact_uri,
             "feature_set_id": params.feature_set_id,
             "dataset_version_id": dataset_version_id,
+            "dataset_version_selection_reason": selection.selection_reason,
+            "dataset_version_selection_warnings": selection.warnings,
             "target_start_at": params.start_at.isoformat(),
             "target_end_at": params.end_at.isoformat(),
             "site_count": site_count,

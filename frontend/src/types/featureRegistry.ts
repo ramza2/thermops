@@ -74,6 +74,12 @@ export interface FeatureBuildResult {
     lineage_count?: number;
     lineage_error?: string | null;
     dataset_version_id?: string;
+    dataset_version_role?: string;
+    dataset_version_status?: string;
+    build_scope?: string;
+    coverage_ratio?: number;
+    null_ratio?: number;
+    quality_score?: number;
     warnings?: string[];
     missing_feature_count?: number;
     missing_features?: string[];

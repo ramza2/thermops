@@ -21,6 +21,7 @@ const MENU = [
       { label: "학습 변수", path: "/features" },
       { label: "변수 생성 규칙", path: "/feature-recipes" },
       { label: "변수 구성", path: "/feature-sets" },
+      { label: "학습 데이터 버전", path: "/dataset-versions" },
     ],
   },
   {

@@ -257,6 +257,18 @@ def _build_registry() -> list[TestCase]:
             timeout_seconds=180,
         ),
         _python_test(
+            "test_dataset_version_policy.py",
+            groups=["model", "full"],
+            description="Dataset Version 운영 정책 (R9-S2)",
+            timeout_seconds=240,
+        ),
+        _python_test(
+            "test_api_connector_builder.py",
+            groups=["model", "full", "connector"],
+            description="REST API Connector Builder (R10)",
+            timeout_seconds=300,
+        ),
+        _python_test(
             "test_prediction_period_validation.py",
             groups=["model", "full"],
             description="배치 예측 기간 검증",

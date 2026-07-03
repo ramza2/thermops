@@ -8,7 +8,7 @@ import { SelectInput } from "@/components/SearchPanel";
 import { LoadingState } from "@/components/Pagination";
 import { useToast } from "@/hooks/useToast";
 import { PageHeader } from "@/layouts/MainLayout";
-import { PAGE_DESCRIPTIONS, PAGE_TITLES } from "@/constants/displayLabels";
+import { PAGE_DESCRIPTIONS, PAGE_TITLES, HELP_TEXTS } from "@/constants/displayLabels";
 import {
   defaultPredictionPeriod,
   effectiveRange,
@@ -221,6 +221,9 @@ export default function PredictionJobsPage() {
   return (
     <div>
       <PageHeader title={PAGE_TITLES.predictionJobs} description={PAGE_DESCRIPTIONS.predictionJobs} />
+      <p className="text-xs text-slate-600 bg-slate-50 border border-slate-100 rounded p-2 mb-4">
+        예측 입력 학습 데이터 버전을 지정하지 않으면 예측 사용 가능·대표 버전을 자동 선택합니다.
+      </p>
 
       <div className="bg-white rounded-lg border border-slate-200 p-6 shadow-sm max-w-xl">
         <div className="space-y-4">

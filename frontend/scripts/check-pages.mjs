@@ -10,6 +10,7 @@ const PATHS = [
   "/feature-recipes",
   "/feature-recipes/new",
   "/feature-sets",
+  "/dataset-versions",
   "/models/training-jobs",
   "/predictions/jobs",
   "/predictions/results",
@@ -57,6 +58,8 @@ for (const path of PATHS) {
     await waitMainHeading("변수 생성 규칙 작성");
   } else if (path === "/feature-sets") {
     await waitMainHeading("변수 구성");
+  } else if (path === "/dataset-versions") {
+    await waitMainHeading("학습 데이터 버전");
   } else if (path === "/models/training-jobs") {
     await waitMainHeading("모델 학습");
   } else if (path === "/predictions/jobs") {
@@ -77,7 +80,7 @@ for (const path of PATHS) {
   const h1 = await page.locator("main h1").first().innerText().catch(() => "");
   console.log(`OK ${path} -> ${h1.slice(0, 40)}`);
 
-  const forbiddenH1 = ["Feature Recipe", "Pipeline Builder", "Feature Set", "드리프트 리포트"];
+  const forbiddenH1 = ["Feature Recipe", "Pipeline Builder", "Feature Set", "드리프트 리포트", "Dataset Version"];
   for (const term of forbiddenH1) {
     if (h1.includes(term)) errors.push(`${path}: h1 must not contain '${term}' (got: ${h1})`);
   }
@@ -118,7 +121,10 @@ for (const path of PATHS) {
   }
   if (path === "/data/sources") {
     await page.getByRole("button", { name: "신규 등록" }).first().waitFor({ state: "visible", timeout: 30000 });
-    if (!(await hasEmptyOrTable(/등록된 데이터 소스가 없습니다/))) {
+    await page.getByText("REST API 연결").first().waitFor({ state: "visible", timeout: 30000 });
+    await page.getByText("Decoding 키 입력을 권장").first().waitFor({ state: "visible", timeout: 30000 });
+    await page.getByText("API 작업").first().waitFor({ state: "visible", timeout: 30000 });
+    if (!(await hasEmptyOrTable(/등록된 데이터 소스가 없습니다|등록된 REST API 작업이 없습니다/))) {
       errors.push(`${path}: empty message or table rows expected`);
     }
     if (await page.getByText(/등록된 데이터 소스가 없습니다/).count()) {
@@ -140,6 +146,22 @@ for (const path of PATHS) {
     if (!(await hasEmptyOrTable(/등록된 변수 구성이 없습니다/))) {
       errors.push(`${path}: empty message or table rows expected`);
     }
+  }
+  if (path === "/dataset-versions") {
+    await page.getByText("일부 생성 버전은 자동 학습/예측 선택에서 제외됩니다").first().waitFor({ state: "visible", timeout: 30000 });
+    await page.getByText("대표").first().waitFor({ state: "visible", timeout: 30000 });
+    await page.getByText("후보").first().waitFor({ state: "visible", timeout: 30000 });
+    await page.getByText("일부 생성").first().waitFor({ state: "visible", timeout: 30000 });
+    await page.getByText("보관됨").first().waitFor({ state: "visible", timeout: 30000 });
+    if (!(await hasEmptyOrTable(/생성된 학습 데이터 버전이 없습니다/))) {
+      errors.push(`${path}: empty message or table rows expected`);
+    }
+  }
+  if (path === "/models/training-jobs") {
+    await page.getByText(/대표·학습 가능 버전을 자동 선택/).first().waitFor({ state: "visible", timeout: 30000 });
+  }
+  if (path === "/predictions/jobs") {
+    await page.getByText(/예측 사용 가능·대표 버전을 자동 선택/).first().waitFor({ state: "visible", timeout: 30000 });
   }
   if (path === "/pipeline-builder") {
     await page.getByText("새 작업 흐름").first().waitFor({ state: "visible", timeout: 30000 });

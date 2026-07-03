@@ -9,7 +9,11 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.time import to_db_datetime
-from app.models.entities import DatasetVersion, FeatureDataset, FeatureSet
+from app.models.entities import FeatureDataset, FeatureSet
+from app.services.dataset_version_policy_service import (
+    select_dataset_version_for_prediction,
+    select_dataset_version_for_training,
+)
 
 
 class PredictionPeriodError(ValueError):
@@ -35,33 +39,23 @@ def _feature_set_filter(feature_set_id: str):
     return FeatureDataset.feature_json["feature_set_id"].astext == feature_set_id
 
 
-async def latest_dataset_version_id(db: AsyncSession, feature_set_id: str) -> str | None:
-    """Feature Set에 연결된 dataset_version 중 record_count가 가장 큰 버전을 선택한다.
-
-    최근 부분 Feature Build(짧은 기간·소량 row)가 전체 빌드보다 나중에 생성되어도
-    학습/예측에 충분한 데이터가 있는 버전을 우선한다.
-    """
-    row = (
-        await db.execute(
-            select(DatasetVersion.dataset_version_id)
-            .join(
-                FeatureDataset,
-                FeatureDataset.dataset_version_id == DatasetVersion.dataset_version_id,
-            )
-            .where(_feature_set_filter(feature_set_id))
-            .group_by(
-                DatasetVersion.dataset_version_id,
-                DatasetVersion.record_count,
-                DatasetVersion.created_at,
-            )
-            .order_by(
-                DatasetVersion.record_count.desc().nullslast(),
-                DatasetVersion.created_at.desc(),
-            )
-            .limit(1)
+async def latest_dataset_version_id(
+    db: AsyncSession,
+    feature_set_id: str,
+    *,
+    purpose: str = "TRAINING",
+    explicit_dataset_version_id: str | None = None,
+) -> str | None:
+    """운영 정책 기반 학습 데이터 버전 자동 선택. 명시적 정책 후보가 없으면 record_count fallback."""
+    if purpose == "PREDICTION":
+        result = await select_dataset_version_for_prediction(
+            db, feature_set_id, explicit_dataset_version_id=explicit_dataset_version_id
         )
-    ).scalar_one_or_none()
-    return row
+    else:
+        result = await select_dataset_version_for_training(
+            db, feature_set_id, explicit_dataset_version_id=explicit_dataset_version_id
+        )
+    return result.dataset_version_id
 
 
 async def get_feature_dataset_range(
@@ -69,15 +63,16 @@ async def get_feature_dataset_range(
     feature_set_id: str,
     *,
     site_ids: list[str] | None = None,
+    purpose: str = "TRAINING",
 ) -> dict[str, Any]:
-    """최신 dataset_version 기준 Feature Dataset 시간 범위 (DB 컬럼: feature_at)."""
+    """운영 정책으로 선택한 dataset_version 기준 Feature Dataset 시간 범위 (DB 컬럼: feature_at)."""
     fs = (
         await db.execute(select(FeatureSet).where(FeatureSet.feature_set_id == feature_set_id))
     ).scalar_one_or_none()
     if not fs:
         raise ValueError(f"Feature Set을 찾을 수 없습니다: {feature_set_id}")
 
-    dataset_version_id = await latest_dataset_version_id(db, feature_set_id)
+    dataset_version_id = await latest_dataset_version_id(db, feature_set_id, purpose=purpose)
     empty: dict[str, Any] = {
         "feature_set_id": feature_set_id,
         "exists": False,
@@ -179,7 +174,9 @@ async def validate_prediction_period(
             requested_end_at=_format_db_datetime(end_at),
         )
 
-    range_info = await get_feature_dataset_range(db, feature_set_id, site_ids=site_ids)
+    range_info = await get_feature_dataset_range(
+        db, feature_set_id, site_ids=site_ids, purpose="PREDICTION"
+    )
     if not range_info["exists"]:
         raise PredictionPeriodError(
             "NO_FEATURE_DATASET",

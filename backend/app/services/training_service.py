@@ -26,7 +26,7 @@ from app.models.entities import (
     TrainingJob,
 )
 from app.schemas.api import TrainingJobCreate
-from app.services.feature_dataset_service import latest_dataset_version_id
+from app.services.dataset_version_policy_service import select_dataset_version_for_training
 
 
 ML_EXPERIMENT_NAME = "THERMOps_Heat_Demand_Forecasting"
@@ -43,6 +43,7 @@ class TrainingJobParams:
     register_model_yn: bool = True
     triggered_by: str | None = None
     model_name_override: str | None = None
+    dataset_version_id: str | None = None
 
 
 def _load_ml_modules():
@@ -264,12 +265,18 @@ async def run_training_job(db: AsyncSession, params: TrainingJobParams) -> dict[
         fs = await _get_feature_set(db, cfg.feature_set_id)
         feature_names: list[str] = fs.features or []
 
-        dataset_version_id = await latest_dataset_version_id(db, cfg.feature_set_id)
+        selection = await select_dataset_version_for_training(
+            db,
+            cfg.feature_set_id,
+            explicit_dataset_version_id=params.dataset_version_id,
+        )
+        dataset_version_id = selection.dataset_version_id
         if not dataset_version_id:
             raise ValueError(
-                f"Feature Set {cfg.feature_set_id}에 대한 Feature Dataset이 없습니다. "
-                "먼저 Feature 생성을 실행하세요."
+                f"Feature Set {cfg.feature_set_id}에 사용 가능한 학습 데이터 버전이 없습니다. "
+                "먼저 변수 생성 작업을 실행하세요."
             )
+        warnings.extend(selection.warnings)
 
         records = await _load_feature_records(
             db,
@@ -308,6 +315,9 @@ async def run_training_job(db: AsyncSession, params: TrainingJobParams) -> dict[
             "train_count": result.train_count,
             "validation_count": result.validation_count,
             "primary_metric": result.metrics["mape"],
+            "dataset_version_id": dataset_version_id,
+            "selection_reason": selection.selection_reason,
+            "selection_warnings": selection.warnings,
         }
         for extra_key in ("stage1_validation_mape", "final_validation_mape", "residual_mae"):
             if extra_key in result.metrics:
@@ -384,6 +394,7 @@ async def run_training_job(db: AsyncSession, params: TrainingJobParams) -> dict[
             "metrics": metric_summary,
             "dataset_version_id": dataset_version_id,
             "feature_set_id": cfg.feature_set_id,
+            "selection_reason": selection.selection_reason,
             "warnings": warnings,
         }
     except Exception as exc:  # noqa: BLE001
@@ -445,4 +456,5 @@ def params_from_schema(body: TrainingJobCreate) -> TrainingJobParams:
         validation_end_at=body.validation_end_at,
         register_model_yn=body.register_model_yn,
         triggered_by=body.triggered_by,
+        dataset_version_id=body.dataset_version_id,
     )

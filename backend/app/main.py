@@ -3,9 +3,11 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import get_settings
 from app.api.v1 import (
+    api_connector,
     common,
     dashboard,
     data,
+    dataset_version,
     feature,
     feature_column_role,
     feature_recipe,
@@ -41,6 +43,7 @@ api_prefix = settings.api_prefix
 
 app.include_router(dashboard.router, prefix=api_prefix)
 app.include_router(common.router, prefix=api_prefix)
+app.include_router(api_connector.router, prefix=api_prefix)
 app.include_router(data.router, prefix=api_prefix)
 app.include_router(sample_external.router, prefix=api_prefix)
 app.include_router(mapping.router, prefix=api_prefix)
@@ -48,6 +51,7 @@ app.include_router(standard_dataset.router, prefix=api_prefix)
 app.include_router(feature.router, prefix=api_prefix)
 app.include_router(feature_column_role.router, prefix=api_prefix)
 app.include_router(feature_recipe.router, prefix=api_prefix)
+app.include_router(dataset_version.router, prefix=api_prefix)
 app.include_router(training.router, prefix=api_prefix)
 app.include_router(model.router, prefix=api_prefix)
 app.include_router(prediction.router, prefix=api_prefix)
