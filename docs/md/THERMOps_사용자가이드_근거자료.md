@@ -51,8 +51,8 @@ flowchart LR
 
 | 순서 | 업무 | 주요 화면 | 주요 API/파이프라인 | 비고 |
 |------|------|-----------|---------------------|------|
-| 1 | 데이터소스 등록 | `/data/sources` | `POST /data-sources` | CSV, PostgreSQL, REST API 지원 |
-| 2 | 표준 데이터셋 유형 (R7) | `/standard-datasets` | `GET /standard-dataset-types`, `POST ...` (DRAFT) | 신규 도메인·표준 컬럼 정의 (물리 테이블 자동 생성 없음) |
+| 1 | 표준 데이터셋 유형 (R7·R9-S2-1) | `/standard-datasets` | `GET /standard-dataset-types`, Wizard `POST ...` | 논리 구조·`std_` 내부 테이블 생성 |
+| 2 | 데이터소스 등록 | `/data/sources` | `POST /data-sources` | CSV, PostgreSQL, REST API 지원 |
 | 3 | 스키마 탐색 | `/data/mappings` (등록 모달) | `GET /data-sources/{id}/discover-schema` | 매핑 등록 시 소스 컬럼 자동 탐색 |
 | 4 | 데이터 매핑 | `/data/mappings` | `POST/PUT /mappings`, `GET /standard-target-tables` | 표준 대상 테이블 선택 + allowlist 검증 |
 | 4 | 적재 실행 | `/data/sources` | `POST /ingestion-jobs?source_id=...` | UI 수동 적재 또는 `data_ingestion_dag` |
@@ -110,7 +110,7 @@ flowchart LR
 | 학습 설정 | `TEST-TRC-CATBOOST` | CatBoost fixture |
 | 학습 설정 | `TEST-TRC-TWO-STAGE` | 2-Stage CatBoost fixture |
 
-> **초기 설치(clean seed)** 에는 데이터 소스·매핑·표준 데이터셋·Feature Set·모델·Pipeline Definition이 **포함되지 않습니다**. `/data/sources`에서 소스를 등록한 뒤 매핑·적재를 진행합니다. 회귀 테스트는 `scripts/test_fixtures.py`가 `scripts/fixtures/test_platform_seed.sql` 및 `data/samples/` CSV로 테스트용 리소스를 런타임 생성합니다.
+> **초기 설치(clean seed)** 에는 데이터 소스·매핑·표준 데이터셋·Feature Set·모델·Pipeline Definition이 **포함되지 않습니다**. **표준 데이터셋(내부 테이블) → 데이터 소스 → 데이터 매핑** 순으로 UI에서 등록한 뒤 적재·학습을 진행합니다. 회귀 테스트는 `scripts/test_fixtures.py`가 `scripts/fixtures/test_platform_seed.sql` 및 `data/samples/` CSV로 테스트용 리소스를 런타임 생성합니다.
 
 ---
 
@@ -191,6 +191,8 @@ flowchart LR
 **R9-S2-2 Dataset Metadata 분류**: `dataset_category`는 데이터 구조/성격(MASTER, FACT, TIMESERIES 등), `business_domain`·`tags`는 선택 메타데이터입니다. 업무 영역은 시스템 고정값이 아니며 clean 설치 시 seed가 없습니다. `열수요`·`기상` 등은 문서/입력 예시일 뿐 기본 옵션으로 제공하지 않습니다.
 
 **R9-S2-3 사용자 친화 용어**: 화면 메뉴·제목·빈 상태 안내는 `frontend/src/constants/displayLabels.ts` 기준 업무 용어를 사용합니다. 예: Feature→학습 변수, Feature Set→변수 구성, Feature Recipe→변수 생성 규칙, Pipeline→작업 흐름, Drift→데이터 변화 리포트. 내부 API·DB 식별자는 유지합니다.
+
+**R9-S2-3A 데이터 준비 순서**: Sidebar **데이터 준비** 그룹은 **표준 데이터셋 → 데이터 소스 → 데이터 매핑 → 데이터 품질** 순입니다. clean 설치 후에도 동일한 업무 흐름을 따릅니다.
 
 **R8 작업 흐름 구성** (구 Pipeline Builder): `/pipeline-builder`에서 작업 흐름 템플릿 Flow Chart를 확인하고 노드별 실행 파라미터를 저장합니다.
 
@@ -528,20 +530,22 @@ flowchart LR
 
 ### 3.1 CSV 데이터로 처음부터 예측 결과 확인까지
 
-**목표**: 데이터 소스 등록 후 적재 → Feature → 학습 → 예측 → 결과 확인
+**목표**: 표준 데이터셋 정의 후 데이터 소스 등록·적재 → Feature → 학습 → 예측 → 결과 확인
 
 | 단계 | 화면 | 작업 | 참고 |
 |------|------|------|------|
-| 0 | `/data/sources` | 열수요·기상 **CSV/API 소스 등록** 및 매핑 생성 | clean seed에는 소스 없음 |
-| 1 | `/data/sources` | 등록한 소스로 **적재 실행** (limit 1000, UPSERT) | CSV는 `data/samples/` 참고 |
-| 2 | `/data/quality` | **품질 점검 실행** | 점수·이력 확인 |
-| 3 | `/feature-sets/<feature_set_id>` | **Feature 생성** | inserted_count 토스트 확인 (가이드 예시: `FS-TPL-LAG-ROLL`) |
-| 4 | `/models/training-configs` | `<training_config_id>` **학습 실행** | 또는 기존 학습 결과 활용 (가이드 예시: `TRC-TPL-LAG-ROLL`) |
-| 5 | `/models/training-jobs` | 상태 `SUCCESS`·MAPE 확인 | |
-| 6 | `/models/registry` | 필요 시 **Champion 지정** | `heat_demand_lightgbm` |
-| 7 | `/predictions/jobs` | Feature Set `<feature_set_id>` 선택 → **사용 가능 기간** 확인 후 **예측 실행** (기본: 최신 24시간 자동 설정) | 모델 자동 선택 가능 (가이드 예시: `FS-TPL-LAG-ROLL`) |
-| 8 | `/predictions/results` | 기간·지사 필터 **조회** | 예측값 확인 |
-| 9 | (선택) `/ops/pipeline-runs` | `thermops_full_pipeline_dag` 수동 실행 | 일괄 검증용 |
+| 0 | `/standard-datasets` | **표준 데이터셋** 정의·내부 테이블 생성 | clean seed에는 표준 데이터셋 없음 |
+| 1 | `/data/sources` | 열수요·기상 **CSV/API 소스 등록** | |
+| 2 | `/data/mappings` | 표준 데이터셋·소스 **매핑** 생성 | |
+| 3 | `/data/sources` | 등록한 소스로 **적재 실행** (limit 1000, UPSERT) | CSV는 `data/samples/` 참고 |
+| 4 | `/data/quality` | **품질 점검 실행** | 점수·이력 확인 |
+| 5 | `/feature-sets/<feature_set_id>` | **Feature 생성** | inserted_count 토스트 확인 (가이드 예시: `FS-TPL-LAG-ROLL`) |
+| 6 | `/models/training-configs` | `<training_config_id>` **학습 실행** | 또는 기존 학습 결과 활용 (가이드 예시: `TRC-TPL-LAG-ROLL`) |
+| 7 | `/models/training-jobs` | 상태 `SUCCESS`·MAPE 확인 | |
+| 8 | `/models/registry` | 필요 시 **Champion 지정** | `heat_demand_lightgbm` |
+| 9 | `/predictions/jobs` | Feature Set `<feature_set_id>` 선택 → **사용 가능 기간** 확인 후 **예측 실행** (기본: 최신 24시간 자동 설정) | 모델 자동 선택 가능 (가이드 예시: `FS-TPL-LAG-ROLL`) |
+| 10 | `/predictions/results` | 기간·지사 필터 **조회** | 예측값 확인 |
+| 11 | (선택) `/ops/pipeline-runs` | `thermops_full_pipeline_dag` 수동 실행 | 일괄 검증용 |
 
 **대안(일괄)**: `/ops/pipeline-runs` → `thermops_full_pipeline_dag` 수동 실행 → 각 결과 화면 확인
 

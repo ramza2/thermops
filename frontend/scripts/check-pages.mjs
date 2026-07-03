@@ -100,6 +100,9 @@ for (const path of PATHS) {
     if (!(await hasEmptyOrTable(/등록된 표준 데이터셋이 없습니다/))) {
       errors.push(`${path}: empty message or table rows expected`);
     }
+    if (await page.getByText(/등록된 표준 데이터셋이 없습니다/).count()) {
+      await page.getByText("학습과 예측에 사용할 내부 데이터 구조를 먼저 정의").first().waitFor({ state: "visible", timeout: 30000 });
+    }
     await page.getByText("R9-S2-3").first().waitFor({ state: "visible", timeout: 30000 });
     await page.locator("select").filter({ has: page.locator('option', { hasText: "전체 업무 영역" }) }).first().waitFor({ state: "visible", timeout: 30000 });
     for (const fixed of ["열수요", "기상", "기준정보", "설비"]) {
@@ -118,10 +121,15 @@ for (const path of PATHS) {
     if (!(await hasEmptyOrTable(/등록된 데이터 소스가 없습니다/))) {
       errors.push(`${path}: empty message or table rows expected`);
     }
+    if (await page.getByText(/등록된 데이터 소스가 없습니다/).count()) {
+      await page.getByText("표준 데이터셋을 먼저 정의한 뒤").first().waitFor({ state: "visible", timeout: 30000 });
+    }
   }
   if (path === "/data/mappings") {
     await page.getByText(/표준 데이터셋|대상 테이블을 먼저 생성/).first().waitFor({ state: "visible", timeout: 30000 });
-    await page.getByText(/등록된 데이터 매핑이 없습니다|표준 데이터셋/).first().waitFor({ state: "visible", timeout: 30000 });
+    if (await page.getByText(/등록된 데이터 매핑이 없습니다/).count()) {
+      await page.getByText("표준 데이터셋과 데이터 소스를 만든 뒤").first().waitFor({ state: "visible", timeout: 30000 });
+    }
     await page.getByText("컬럼 역할").first().waitFor({ state: "visible", timeout: 30000 });
     await page.getByText("사용 가능한 생성 규칙 템플릿").first().waitFor({ state: "visible", timeout: 30000 });
     await page.getByText("변수 생성 규칙 작성 화면은 후속 단계").first().waitFor({ state: "visible", timeout: 30000 });
@@ -163,6 +171,19 @@ await page.goto(`${BASE}/dashboard`, { waitUntil: "load", timeout: 60000 });
 for (const group of ["데이터 준비", "학습 변수 관리", "모델 학습·예측", "운영 모니터링", "시스템 관리"]) {
   const count = await page.getByText(group, { exact: true }).count();
   if (!count) errors.push(`sidebar: menu group '${group}' not found`);
+}
+
+const DATA_PREP_ORDER = ["표준 데이터셋", "데이터 소스", "데이터 매핑", "데이터 품질"];
+const sidebarLinks = (await page.locator("aside nav a").allTextContents()).map((t) => t.trim());
+const dataPrepIndices = DATA_PREP_ORDER.map((label) => sidebarLinks.indexOf(label));
+for (const label of DATA_PREP_ORDER) {
+  if (!sidebarLinks.includes(label)) errors.push(`sidebar: data prep item '${label}' not found`);
+}
+for (let i = 1; i < dataPrepIndices.length; i++) {
+  if (dataPrepIndices[i] >= 0 && dataPrepIndices[i - 1] >= 0 && dataPrepIndices[i] <= dataPrepIndices[i - 1]) {
+    errors.push(`sidebar: data prep order must be ${DATA_PREP_ORDER.join(" → ")}`);
+    break;
+  }
 }
 
 if (errors.length) {
