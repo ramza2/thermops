@@ -1002,6 +1002,16 @@ R10에서는 외부 REST API를 **데이터 소스 + API 작업(Operation)** 단
 
 **이번 Phase 범위 외 (후속):** 열수요 wide-hour transform(R10-S3), ASOS/Calendar(R10-S4), 단기예보 Provider(R10-S5), 외부 코드 매핑(R10-S2), 스케줄러(R10-S6)
 
+### R10-S0 REST API Connector UI 고도화
+
+R10 Backend를 기반으로 **데이터 소스** 화면 **REST API 연결** 패널 UI를 고도화했습니다.
+
+- **8단계 Wizard:** 기본 정보 → 인증 정보 → 요청 파라미터 → 페이징 → 응답 데이터 경로 → 적재 대상 → 테스트 호출 → 검토 및 저장
+- **탭:** API 작업 / 호출 이력 / 적재 이력 / 원본 응답 스냅샷
+- **작업 목록:** 요청 미리보기, 테스트 호출, 적재 미리보기, 적재 실행 (target_table 미설정 시 적재 버튼 비활성)
+- **secret:** `safeJsonStringify`로 UI 표시 시 serviceKey 등 마스킹, password 입력 후 저장 즉시 state 초기화
+- **검증:** `frontend/scripts/check-pages.mjs` Wizard 라벨·버튼 문구 확인
+
 ## 설계 문서 참조
 
 - `docs/md/THERMOps_API_설계서.md`

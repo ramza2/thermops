@@ -124,6 +124,17 @@ for (const path of PATHS) {
     await page.getByText("REST API 연결").first().waitFor({ state: "visible", timeout: 30000 });
     await page.getByText("Decoding 키 입력을 권장").first().waitFor({ state: "visible", timeout: 30000 });
     await page.getByText("API 작업").first().waitFor({ state: "visible", timeout: 30000 });
+    await page.getByRole("button", { name: "새 API 작업 만들기" }).first().waitFor({ state: "visible", timeout: 30000 });
+    await page.getByRole("button", { name: "새 API 작업 만들기" }).click();
+    await page.getByText("REST API 작업 만들기").first().waitFor({ state: "visible", timeout: 30000 });
+    for (const label of ["기본 정보", "인증 정보", "요청 파라미터", "페이징 방식", "응답 데이터 경로", "적재 대상", "테스트 호출", "검토 및 저장"]) {
+      await page.getByText(label).first().waitFor({ state: "visible", timeout: 30000 });
+    }
+    await page.getByText("요청 미리보기").first().waitFor({ state: "visible", timeout: 30000 });
+    await page.getByText("테스트 호출").first().waitFor({ state: "visible", timeout: 30000 });
+    await page.getByText("적재 미리보기").first().waitFor({ state: "visible", timeout: 30000 });
+    await page.getByText("적재 실행").first().waitFor({ state: "visible", timeout: 30000 });
+    await page.getByRole("button", { name: "닫기" }).click();
     if (!(await hasEmptyOrTable(/등록된 데이터 소스가 없습니다|등록된 REST API 작업이 없습니다/))) {
       errors.push(`${path}: empty message or table rows expected`);
     }

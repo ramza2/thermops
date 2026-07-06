@@ -198,6 +198,8 @@ flowchart LR
 
 **R10 REST API Connector Builder**: 데이터 소스 화면 **REST API 연결**에서 API 작업(Operation)을 등록합니다. serviceKey는 Decoding 키 입력을 권장하며 저장 후 마스킹만 표시됩니다. 요청 파라미터·페이징·응답 데이터 경로(`response_item_path`) 설정 후 테스트 호출·적재 미리보기·적재 실행이 가능합니다. 표준 데이터셋 Wizard로 생성한 ACTIVE 물리 테이블만 적재 대상으로 허용합니다.
 
+**R10-S0 UI 고도화**: **새 API 작업 만들기** 8단계 Wizard로 기본 정보·인증·파라미터·페이징·응답 경로·적재 대상·테스트 호출·저장을 순서대로 설정합니다. 호출 이력·적재 이력·원본 응답 스냅샷 상세 보기를 지원합니다.
+
 **R8 작업 흐름 구성** (구 Pipeline Builder): `/pipeline-builder`에서 작업 흐름 템플릿 Flow Chart를 확인하고 노드별 실행 파라미터를 저장합니다.
 
 **R9 Pipeline 실행 연계**: ACTIVE/VALIDATED Pipeline Definition에서 **실행** 버튼으로 연결된 `airflow_dag_id`를 trigger합니다. 실행 이력은 `tb_pipeline_run_link`와 `/ops/pipeline-runs` metadata로 확인합니다. 기존 DAG 수동 실행은 `DIRECT_DAG`로 구분됩니다.
