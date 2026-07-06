@@ -269,6 +269,12 @@ def _build_registry() -> list[TestCase]:
             timeout_seconds=300,
         ),
         _python_test(
+            "test_prediction_entity_weather_mapping.py",
+            groups=["model", "full"],
+            description="Prediction Entity / Weather Mapping (R10-S1)",
+            timeout_seconds=240,
+        ),
+        _python_test(
             "test_prediction_period_validation.py",
             groups=["model", "full"],
             description="배치 예측 기간 검증",

@@ -12,6 +12,7 @@ const MENU = [
     label: MENU_GROUPS.dataPrep, icon: Database, children: [
       { label: "표준 데이터셋", path: "/standard-datasets" },
       { label: "데이터 소스", path: "/data/sources" },
+      { label: "예측 대상", path: "/prediction-entities" },
       { label: "데이터 매핑", path: "/data/mappings" },
       { label: "데이터 품질", path: "/data/quality" },
     ],

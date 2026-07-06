@@ -468,3 +468,98 @@ class ApiConnectorRuntimeParams(BaseModel):
 class ApiConnectorLoadRunRequest(BaseModel):
     runtime_params: dict[str, Any] | None = None
     dry_run: bool = False
+
+
+class PredictionEntityCreate(BaseModel):
+    entity_code: str
+    entity_name: str
+    entity_type: str = "SITE"
+    business_domain: str | None = None
+    description: str | None = None
+    active_yn: bool = True
+    metadata_json: dict[str, Any] | None = None
+
+
+class PredictionEntityUpdate(BaseModel):
+    entity_code: str | None = None
+    entity_name: str | None = None
+    entity_type: str | None = None
+    business_domain: str | None = None
+    description: str | None = None
+    active_yn: bool | None = None
+    metadata_json: dict[str, Any] | None = None
+
+
+class PredictionEntityLocationCreate(BaseModel):
+    address: str | None = None
+    latitude: float | None = None
+    longitude: float | None = None
+    location_source: str = "MANUAL"
+    valid_from: date | None = None
+    valid_to: date | None = None
+    active_yn: bool = True
+    metadata_json: dict[str, Any] | None = None
+
+
+class PredictionEntityLocationUpdate(BaseModel):
+    address: str | None = None
+    latitude: float | None = None
+    longitude: float | None = None
+    location_source: str | None = None
+    valid_from: date | None = None
+    valid_to: date | None = None
+    active_yn: bool | None = None
+    metadata_json: dict[str, Any] | None = None
+
+
+class WeatherForecastGridUpsert(BaseModel):
+    grid_system: str = "KMA_DFS"
+    nx: int
+    ny: int
+    grid_name: str | None = None
+    latitude: float | None = None
+    longitude: float | None = None
+    active_yn: bool = True
+    metadata_json: dict[str, Any] | None = None
+
+
+class WeatherObservationStationUpsert(BaseModel):
+    station_code: str
+    station_name: str
+    station_type: str = "ASOS"
+    latitude: float | None = None
+    longitude: float | None = None
+    address: str | None = None
+    active_yn: bool = True
+    metadata_json: dict[str, Any] | None = None
+
+
+class WeatherMappingCreate(BaseModel):
+    forecast_grid_id: str | None = None
+    station_id: str | None = None
+    mapping_type: str = "BOTH"
+    mapping_method: str = "MANUAL"
+    distance_km: float | None = None
+    priority: int = 1
+    valid_from: date | None = None
+    valid_to: date | None = None
+    active_yn: bool = True
+    metadata_json: dict[str, Any] | None = None
+
+
+class WeatherMappingUpdate(BaseModel):
+    forecast_grid_id: str | None = None
+    station_id: str | None = None
+    mapping_type: str | None = None
+    mapping_method: str | None = None
+    distance_km: float | None = None
+    priority: int | None = None
+    valid_from: date | None = None
+    valid_to: date | None = None
+    active_yn: bool | None = None
+    metadata_json: dict[str, Any] | None = None
+
+
+class LatLonToGridRequest(BaseModel):
+    latitude: float
+    longitude: float

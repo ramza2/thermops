@@ -302,6 +302,10 @@ MIGRATIONS = [
         "R10 API connector schema",
         _load_sql("r10_api_connector_schema.sql"),
     ),
+    (
+        "R10-S1 prediction entity weather mapping schema",
+        _load_sql("r10s1_prediction_entity_weather_mapping_schema.sql"),
+    ),
 ]
 
 

@@ -17,6 +17,7 @@ from app.api.v1 import (
     pipeline,
     pipeline_builder,
     prediction,
+    prediction_entity,
     sample_external,
     standard_dataset,
     system,
@@ -44,6 +45,7 @@ api_prefix = settings.api_prefix
 app.include_router(dashboard.router, prefix=api_prefix)
 app.include_router(common.router, prefix=api_prefix)
 app.include_router(api_connector.router, prefix=api_prefix)
+app.include_router(prediction_entity.router, prefix=api_prefix)
 app.include_router(data.router, prefix=api_prefix)
 app.include_router(sample_external.router, prefix=api_prefix)
 app.include_router(mapping.router, prefix=api_prefix)

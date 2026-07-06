@@ -4,6 +4,7 @@ const BASE = process.env.CHECK_PAGES_BASE || "http://localhost:5173";
 const PATHS = [
   "/dashboard",
   "/data/sources",
+  "/prediction-entities",
   "/standard-datasets",
   "/data/mappings",
   "/features",
@@ -45,6 +46,8 @@ for (const path of PATHS) {
     await waitMainHeading("대시보드");
   } else if (path === "/data/sources") {
     await waitMainHeading("데이터 소스");
+  } else if (path === "/prediction-entities") {
+    await waitMainHeading("예측 대상");
   } else if (path === "/standard-datasets") {
     await waitMainHeading("표준 데이터셋");
   } else if (path === "/data/mappings") {
@@ -141,6 +144,25 @@ for (const path of PATHS) {
     if (await page.getByText(/등록된 데이터 소스가 없습니다/).count()) {
       await page.getByText("표준 데이터셋을 먼저 정의한 뒤").first().waitFor({ state: "visible", timeout: 30000 });
     }
+    await page.getByRole("link", { name: "예측 대상" }).first().waitFor({ state: "visible", timeout: 30000 });
+  }
+  if (path === "/prediction-entities") {
+    await page.getByRole("button", { name: "예측 대상 등록" }).first().waitFor({ state: "visible", timeout: 30000 });
+    await page.getByText("단기예보 격자").first().waitFor({ state: "visible", timeout: 30000 });
+    await page.getByText("ASOS 관측소").first().waitFor({ state: "visible", timeout: 30000 });
+    await page.getByText(/nx\/ny/).first().waitFor({ state: "visible", timeout: 30000 });
+    await page.getByText(/별도로 매핑|기상 매핑/).first().waitFor({ state: "visible", timeout: 30000 });
+    if (!(await hasEmptyOrTable(/등록된 예측 대상이 없습니다/))) {
+      errors.push(`${path}: empty message or table rows expected`);
+      await page.getByText("단기예보 준비").first().waitFor({ state: "visible", timeout: 30000 });
+      await page.getByText("관측 기상 준비").first().waitFor({ state: "visible", timeout: 30000 });
+      await page.getByRole("button", { name: "상세" }).first().click();
+      await page.getByRole("button", { name: "nx/ny 계산" }).first().waitFor({ state: "visible", timeout: 30000 });
+      await page.getByRole("button", { name: "닫기" }).click();
+    }
+    if (await page.getByText(/등록된 예측 대상이 없습니다/).count()) {
+      await page.getByText("열수요 지점, 설비, 지역").first().waitFor({ state: "visible", timeout: 30000 });
+    }
   }
   if (path === "/data/mappings") {
     await page.getByText(/표준 데이터셋|대상 테이블을 먼저 생성/).first().waitFor({ state: "visible", timeout: 30000 });
@@ -160,10 +182,15 @@ for (const path of PATHS) {
   }
   if (path === "/dataset-versions") {
     await page.getByText("일부 생성 버전은 자동 학습/예측 선택에서 제외됩니다").first().waitFor({ state: "visible", timeout: 30000 });
-    await page.getByText("대표").first().waitFor({ state: "visible", timeout: 30000 });
-    await page.getByText("후보").first().waitFor({ state: "visible", timeout: 30000 });
-    await page.getByText("일부 생성").first().waitFor({ state: "visible", timeout: 30000 });
-    await page.getByText("보관됨").first().waitFor({ state: "visible", timeout: 30000 });
+    const emptyVersions = await page.getByText(/생성된 학습 데이터 버전이 없습니다/).count();
+    if (emptyVersions) {
+      await page.getByText("역할·상태 코드 참고").first().waitFor({ state: "visible", timeout: 30000 });
+    } else {
+      await page.getByText("대표").first().waitFor({ state: "visible", timeout: 30000 });
+      await page.getByText("후보").first().waitFor({ state: "visible", timeout: 30000 });
+      await page.getByText("일부 생성").first().waitFor({ state: "visible", timeout: 30000 });
+      await page.getByText("보관됨").first().waitFor({ state: "visible", timeout: 30000 });
+    }
     if (!(await hasEmptyOrTable(/생성된 학습 데이터 버전이 없습니다/))) {
       errors.push(`${path}: empty message or table rows expected`);
     }
@@ -193,7 +220,7 @@ for (const path of PATHS) {
   }
   if (path === "/ops/pipeline-runs") {
     await page.getByText("작업 흐름 구성").first().waitFor({ state: "visible", timeout: 30000 });
-    if (!(await hasEmptyOrTable(/실행 이력이 없습니다/))) {
+    if (!(await hasEmptyOrTable(/실행 이력이 없습니다|데이터가 없습니다/))) {
       errors.push(`${path}: empty message or table rows expected`);
     }
   }
@@ -206,7 +233,7 @@ for (const group of ["데이터 준비", "학습 변수 관리", "모델 학습�
   if (!count) errors.push(`sidebar: menu group '${group}' not found`);
 }
 
-const DATA_PREP_ORDER = ["표준 데이터셋", "데이터 소스", "데이터 매핑", "데이터 품질"];
+const DATA_PREP_ORDER = ["표준 데이터셋", "데이터 소스", "예측 대상", "데이터 매핑", "데이터 품질"];
 const sidebarLinks = (await page.locator("aside nav a").allTextContents()).map((t) => t.trim());
 const dataPrepIndices = DATA_PREP_ORDER.map((label) => sidebarLinks.indexOf(label));
 for (const label of DATA_PREP_ORDER) {

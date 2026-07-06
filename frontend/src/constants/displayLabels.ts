@@ -40,6 +40,7 @@ export const MENU_GROUPS = {
 export const PAGE_TITLES = {
   dashboard: "대시보드",
   dataSources: "데이터 소스",
+  predictionEntities: "예측 대상",
   standardDatasets: "표준 데이터셋",
   dataMappings: "데이터 매핑",
   dataQuality: "데이터 품질",
@@ -67,6 +68,7 @@ export const PAGE_TITLES = {
 export const PAGE_DESCRIPTIONS = {
   dashboard: "전체 운영 현황과 최근 예측·모델 상태를 한눈에 확인합니다.",
   dataSources: "학습과 예측에 사용할 원천 데이터의 위치를 등록합니다. REST API, CSV, 데이터베이스 등을 연결할 수 있습니다.",
+  predictionEntities: "예측을 수행할 지점·설비·지역 등의 기준정보와 위치, 기상 매핑을 관리합니다.",
   standardDatasets: "THERMOps 안에서 사용할 데이터 구조를 정의하고 내부 테이블을 생성합니다.",
   dataMappings: "원천 데이터의 컬럼을 내부 표준 데이터셋의 컬럼에 연결합니다.",
   dataQuality: "적재된 데이터의 결측·이상·정합성을 점검합니다.",
@@ -97,6 +99,8 @@ export const EMPTY_MESSAGES = {
     "등록된 데이터 소스가 없습니다. 표준 데이터셋을 먼저 정의한 뒤 원천 데이터 위치를 등록하면 매핑 작업을 더 쉽게 진행할 수 있습니다.",
   apiConnectorOperations:
     "등록된 REST API 작업이 없습니다. 외부 API의 endpoint와 요청 파라미터를 등록하면 표준 데이터셋으로 적재할 수 있습니다.",
+  predictionEntities:
+    "등록된 예측 대상이 없습니다. 열수요 지점, 설비, 지역 등 예측을 수행할 기준 대상을 먼저 등록하세요.",
   standardDatasets:
     "등록된 표준 데이터셋이 없습니다. 학습과 예측에 사용할 내부 데이터 구조를 먼저 정의하세요.",
   dataMappings:
@@ -140,6 +144,16 @@ export const HELP_TEXTS = {
     "인증 키는 저장 후 마스킹된 값만 표시됩니다. 호출 이력·미리보기 URL에도 원문이 노출되지 않습니다.",
   responseItemPath:
     "응답 JSON에서 row 목록이 위치한 dot 경로를 지정합니다. 예: response.body.items.item",
+  forecastGrid:
+    "단기예보 격자(nx/ny)는 기상청 단기예보 API 호출에 필요한 위치 기준입니다.",
+  observationStation:
+    "ASOS 관측소는 과거 학습용 기상 관측 데이터를 연결할 때 사용합니다.",
+  weatherMappingSplit:
+    "단기예보와 ASOS는 기준이 다르므로 각각 별도로 매핑합니다.",
+  gridCalcHint:
+    "계산 결과는 예보 격자 기준이며 실제 운영 전 검토가 필요합니다.",
+  restApiConnectorLink:
+    "기상청 단기예보 API는 예측 대상의 nx/ny가 필요합니다. REST API 연결에서 API 작업을 등록한 뒤, 후속 R10-S5에서 예측 시점에 on-demand 호출합니다.",
 } as const;
 
 export const FEATURE_USAGE_STEPS = `신규 학습 변수를 모델 학습·예측에 사용하려면 다음 단계를 완료해야 합니다.

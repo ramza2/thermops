@@ -731,6 +731,86 @@ class PipelineRunLink(Base):
     updated_at: Mapped[datetime | None] = mapped_column(DateTime)
 
 
+class PredictionEntity(Base):
+    __tablename__ = "tb_prediction_entity"
+    entity_id: Mapped[str] = mapped_column(String(50), primary_key=True)
+    entity_code: Mapped[str] = mapped_column(String(100), unique=True)
+    entity_name: Mapped[str] = mapped_column(String(200))
+    entity_type: Mapped[str] = mapped_column(String(50), default="SITE")
+    business_domain: Mapped[str | None] = mapped_column(String(100))
+    description: Mapped[str | None] = mapped_column(Text)
+    active_yn: Mapped[bool] = mapped_column(Boolean, default=True)
+    archived_at: Mapped[datetime | None] = mapped_column(DateTime)
+    metadata_json: Mapped[dict | None] = mapped_column(JSONB)
+    created_at: Mapped[datetime] = mapped_column(DateTime)
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime)
+
+
+class PredictionEntityLocation(Base):
+    __tablename__ = "tb_prediction_entity_location"
+    location_id: Mapped[str] = mapped_column(String(50), primary_key=True)
+    entity_id: Mapped[str] = mapped_column(String(50))
+    address: Mapped[str | None] = mapped_column(Text)
+    latitude: Mapped[float | None] = mapped_column(Numeric(12, 8))
+    longitude: Mapped[float | None] = mapped_column(Numeric(12, 8))
+    location_source: Mapped[str | None] = mapped_column(String(50))
+    valid_from: Mapped[date | None] = mapped_column(Date)
+    valid_to: Mapped[date | None] = mapped_column(Date)
+    active_yn: Mapped[bool] = mapped_column(Boolean, default=True)
+    metadata_json: Mapped[dict | None] = mapped_column(JSONB)
+    created_at: Mapped[datetime] = mapped_column(DateTime)
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime)
+
+
+class WeatherForecastGrid(Base):
+    __tablename__ = "tb_weather_forecast_grid"
+    forecast_grid_id: Mapped[str] = mapped_column(String(50), primary_key=True)
+    grid_system: Mapped[str] = mapped_column(String(50), default="KMA_DFS")
+    nx: Mapped[int] = mapped_column(Integer)
+    ny: Mapped[int] = mapped_column(Integer)
+    grid_name: Mapped[str | None] = mapped_column(String(200))
+    latitude: Mapped[float | None] = mapped_column(Numeric(12, 8))
+    longitude: Mapped[float | None] = mapped_column(Numeric(12, 8))
+    active_yn: Mapped[bool] = mapped_column(Boolean, default=True)
+    metadata_json: Mapped[dict | None] = mapped_column(JSONB)
+    created_at: Mapped[datetime] = mapped_column(DateTime)
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime)
+
+
+class WeatherObservationStation(Base):
+    __tablename__ = "tb_weather_observation_station"
+    station_id: Mapped[str] = mapped_column(String(50), primary_key=True)
+    station_code: Mapped[str] = mapped_column(String(50), unique=True)
+    station_name: Mapped[str] = mapped_column(String(200))
+    station_type: Mapped[str] = mapped_column(String(30), default="ASOS")
+    latitude: Mapped[float | None] = mapped_column(Numeric(12, 8))
+    longitude: Mapped[float | None] = mapped_column(Numeric(12, 8))
+    address: Mapped[str | None] = mapped_column(Text)
+    active_yn: Mapped[bool] = mapped_column(Boolean, default=True)
+    metadata_json: Mapped[dict | None] = mapped_column(JSONB)
+    created_at: Mapped[datetime] = mapped_column(DateTime)
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime)
+
+
+class PredictionEntityWeatherMapping(Base):
+    __tablename__ = "tb_prediction_entity_weather_mapping"
+    mapping_id: Mapped[str] = mapped_column(String(50), primary_key=True)
+    entity_id: Mapped[str] = mapped_column(String(50))
+    forecast_grid_id: Mapped[str | None] = mapped_column(String(50))
+    station_id: Mapped[str | None] = mapped_column(String(50))
+    mapping_type: Mapped[str] = mapped_column(String(30), default="BOTH")
+    mapping_method: Mapped[str | None] = mapped_column(String(50))
+    distance_km: Mapped[float | None] = mapped_column(Numeric(10, 3))
+    priority: Mapped[int] = mapped_column(Integer, default=1)
+    valid_from: Mapped[date | None] = mapped_column(Date)
+    valid_to: Mapped[date | None] = mapped_column(Date)
+    active_yn: Mapped[bool] = mapped_column(Boolean, default=True)
+    archived_at: Mapped[datetime | None] = mapped_column(DateTime)
+    metadata_json: Mapped[dict | None] = mapped_column(JSONB)
+    created_at: Mapped[datetime] = mapped_column(DateTime)
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime)
+
+
 class CommonCode(Base):
     __tablename__ = "tb_common_code"
     code_group: Mapped[str] = mapped_column(String(50), primary_key=True)
