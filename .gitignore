@@ -5,10 +5,12 @@ __pycache__/
 venv/
 .env
 .env.deploy
+catboost_info/
 
 # Node
 node_modules/
 frontend/dist/
+*.tsbuildinfo
 
 # IDE
 .idea/
