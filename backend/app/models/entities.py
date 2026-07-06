@@ -811,6 +811,55 @@ class PredictionEntityWeatherMapping(Base):
     updated_at: Mapped[datetime | None] = mapped_column(DateTime)
 
 
+class ExternalCodeMapping(Base):
+    __tablename__ = "tb_external_code_mapping"
+    mapping_id: Mapped[str] = mapped_column(String(50), primary_key=True)
+    source_system: Mapped[str] = mapped_column(String(100))
+    source_operation_id: Mapped[str | None] = mapped_column(String(50))
+    external_code_group: Mapped[str] = mapped_column(String(100))
+    external_code: Mapped[str] = mapped_column(String(200))
+    external_code_name: Mapped[str | None] = mapped_column(String(300))
+    external_code_description: Mapped[str | None] = mapped_column(Text)
+    target_type: Mapped[str] = mapped_column(String(50))
+    target_id: Mapped[str] = mapped_column(String(100))
+    target_display_name: Mapped[str | None] = mapped_column(String(300))
+    mapping_status: Mapped[str] = mapped_column(String(30), default="ACTIVE")
+    mapping_method: Mapped[str] = mapped_column(String(50), default="MANUAL")
+    confidence_score: Mapped[float | None] = mapped_column(Numeric(5, 4))
+    priority: Mapped[int] = mapped_column(Integer, default=1)
+    valid_from: Mapped[date | None] = mapped_column(Date)
+    valid_to: Mapped[date | None] = mapped_column(Date)
+    active_yn: Mapped[bool] = mapped_column(Boolean, default=True)
+    archived_at: Mapped[datetime | None] = mapped_column(DateTime)
+    archived_reason: Mapped[str | None] = mapped_column(Text)
+    metadata_json: Mapped[dict | None] = mapped_column(JSONB)
+    created_at: Mapped[datetime] = mapped_column(DateTime)
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime)
+
+
+class UnmappedExternalCode(Base):
+    __tablename__ = "tb_unmapped_external_code"
+    unmapped_id: Mapped[str] = mapped_column(String(50), primary_key=True)
+    source_system: Mapped[str] = mapped_column(String(100))
+    source_operation_id: Mapped[str | None] = mapped_column(String(50))
+    external_code_group: Mapped[str] = mapped_column(String(100))
+    external_code: Mapped[str] = mapped_column(String(200))
+    external_code_name: Mapped[str | None] = mapped_column(String(300))
+    first_seen_at: Mapped[datetime] = mapped_column(DateTime)
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime)
+    seen_count: Mapped[int] = mapped_column(Integer, default=1)
+    sample_payload_json: Mapped[dict | None] = mapped_column(JSONB)
+    suggested_target_type: Mapped[str | None] = mapped_column(String(50))
+    suggested_target_id: Mapped[str | None] = mapped_column(String(100))
+    suggested_target_name: Mapped[str | None] = mapped_column(String(300))
+    review_status: Mapped[str] = mapped_column(String(30), default="NEW")
+    ignored_reason: Mapped[str | None] = mapped_column(Text)
+    resolved_mapping_id: Mapped[str | None] = mapped_column(String(50))
+    metadata_json: Mapped[dict | None] = mapped_column(JSONB)
+    created_at: Mapped[datetime] = mapped_column(DateTime)
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime)
+
+
 class CommonCode(Base):
     __tablename__ = "tb_common_code"
     code_group: Mapped[str] = mapped_column(String(50), primary_key=True)

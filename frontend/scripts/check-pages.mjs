@@ -5,6 +5,7 @@ const PATHS = [
   "/dashboard",
   "/data/sources",
   "/prediction-entities",
+  "/external-code-mappings",
   "/standard-datasets",
   "/data/mappings",
   "/features",
@@ -48,6 +49,8 @@ for (const path of PATHS) {
     await waitMainHeading("데이터 소스");
   } else if (path === "/prediction-entities") {
     await waitMainHeading("예측 대상");
+  } else if (path === "/external-code-mappings") {
+    await waitMainHeading("외부 코드 매핑");
   } else if (path === "/standard-datasets") {
     await waitMainHeading("표준 데이터셋");
   } else if (path === "/data/mappings") {
@@ -164,6 +167,20 @@ for (const path of PATHS) {
       await page.getByText("열수요 지점, 설비, 지역").first().waitFor({ state: "visible", timeout: 30000 });
     }
   }
+  if (path === "/external-code-mappings") {
+    await page.getByRole("button", { name: "외부 코드 매핑 등록" }).first().waitFor({ state: "visible", timeout: 30000 });
+    await page.getByText("매핑 목록").first().waitFor({ state: "visible", timeout: 30000 });
+    await page.getByText("미매핑 코드").first().waitFor({ state: "visible", timeout: 30000 });
+    await page.getByText("코드 변환 테스트").first().waitFor({ state: "visible", timeout: 30000 });
+    await page.getByText("도움말").first().waitFor({ state: "visible", timeout: 30000 });
+    await page.getByText(/미매핑 코드는 자동으로 내부 기준정보를 만들지 않습니다/).first().waitFor({ state: "visible", timeout: 30000 });
+    if (!(await hasEmptyOrTable(/등록된 외부 코드 매핑이 없습니다/))) {
+      errors.push(`${path}: empty message or table rows expected`);
+    }
+    if (await page.getByText(/등록된 외부 코드 매핑이 없습니다/).count()) {
+      await page.getByText("지점코드·관측소코드").first().waitFor({ state: "visible", timeout: 30000 });
+    }
+  }
   if (path === "/data/mappings") {
     await page.getByText(/표준 데이터셋|대상 테이블을 먼저 생성/).first().waitFor({ state: "visible", timeout: 30000 });
     if (await page.getByText(/등록된 데이터 매핑이 없습니다/).count()) {
@@ -233,7 +250,7 @@ for (const group of ["데이터 준비", "학습 변수 관리", "모델 학습�
   if (!count) errors.push(`sidebar: menu group '${group}' not found`);
 }
 
-const DATA_PREP_ORDER = ["표준 데이터셋", "데이터 소스", "예측 대상", "데이터 매핑", "데이터 품질"];
+const DATA_PREP_ORDER = ["표준 데이터셋", "데이터 소스", "예측 대상", "외부 코드 매핑", "데이터 매핑", "데이터 품질"];
 const sidebarLinks = (await page.locator("aside nav a").allTextContents()).map((t) => t.trim());
 const dataPrepIndices = DATA_PREP_ORDER.map((label) => sidebarLinks.indexOf(label));
 for (const label of DATA_PREP_ORDER) {

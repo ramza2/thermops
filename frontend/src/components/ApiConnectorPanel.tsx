@@ -167,6 +167,7 @@ export function ApiConnectorPanel() {
       <div className="bg-blue-50 border border-blue-100 rounded p-3 mb-4 text-xs text-blue-900 space-y-1">
         <p>기상청 단기예보 API는 예측 대상의 nx/ny가 필요합니다. <a href="/prediction-entities" className="underline text-blue-700">예측 대상</a> 화면에서 지점별 기상 매핑을 먼저 등록하세요.</p>
         <p>ASOS 관측 자료는 예측 대상의 관측소 매핑 정보를 기준으로 후속 단계에서 연결됩니다.</p>
+        <p>{HELP_TEXTS.restApiConnectorExternalCodeLink}</p>
       </div>
 
       <div className="flex flex-wrap gap-2 mb-4 items-center">

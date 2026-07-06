@@ -6,6 +6,7 @@ import DataSourcesPage from "@/pages/DataSourcesPage";
 import DataMappingsPage from "@/pages/DataMappingsPage";
 import DataQualityPage from "@/pages/DataQualityPage";
 import PredictionEntitiesPage from "@/pages/PredictionEntitiesPage";
+import ExternalCodeMappingsPage from "@/pages/ExternalCodeMappingsPage";
 import StandardDatasetsPage from "@/pages/StandardDatasetsPage";
 import FeaturesPage from "@/pages/FeaturesPage";
 import FeatureSetsPage from "@/pages/FeatureSetsPage";
@@ -39,6 +40,7 @@ export default function App() {
             <Route path="standard-datasets" element={<StandardDatasetsPage />} />
             <Route path="data/mappings" element={<DataMappingsPage />} />
             <Route path="prediction-entities" element={<PredictionEntitiesPage />} />
+            <Route path="external-code-mappings" element={<ExternalCodeMappingsPage />} />
             <Route path="data/quality" element={<DataQualityPage />} />
             <Route path="features" element={<FeaturesPage />} />
             <Route path="feature-recipes" element={<FeatureRecipesPage />} />

@@ -563,3 +563,75 @@ class WeatherMappingUpdate(BaseModel):
 class LatLonToGridRequest(BaseModel):
     latitude: float
     longitude: float
+
+
+class ExternalCodeMappingCreate(BaseModel):
+    source_system: str
+    source_operation_id: str | None = None
+    external_code_group: str
+    external_code: str
+    external_code_name: str | None = None
+    external_code_description: str | None = None
+    target_type: str
+    target_id: str
+    target_display_name: str | None = None
+    mapping_status: str = "ACTIVE"
+    mapping_method: str = "MANUAL"
+    confidence_score: float | None = None
+    priority: int = 1
+    valid_from: date | None = None
+    valid_to: date | None = None
+    active_yn: bool = True
+    metadata_json: dict[str, Any] | None = None
+
+
+class ExternalCodeMappingUpdate(BaseModel):
+    source_system: str | None = None
+    source_operation_id: str | None = None
+    external_code_group: str | None = None
+    external_code: str | None = None
+    external_code_name: str | None = None
+    external_code_description: str | None = None
+    target_type: str | None = None
+    target_id: str | None = None
+    target_display_name: str | None = None
+    mapping_status: str | None = None
+    mapping_method: str | None = None
+    confidence_score: float | None = None
+    priority: int | None = None
+    valid_from: date | None = None
+    valid_to: date | None = None
+    active_yn: bool | None = None
+    metadata_json: dict[str, Any] | None = None
+
+
+class ExternalCodeResolveRequest(BaseModel):
+    source_system: str
+    external_code_group: str
+    external_code: str
+    target_type: str | None = None
+    at_date: date | None = None
+
+
+class ExternalCodeResolveBatchRequest(BaseModel):
+    items: list[ExternalCodeResolveRequest]
+
+
+class UnmappedAssignRequest(BaseModel):
+    target_type: str
+    target_id: str
+    target_display_name: str | None = None
+    mapping_method: str = "MANUAL"
+    priority: int = 1
+    valid_from: date | None = None
+    valid_to: date | None = None
+    external_code_name: str | None = None
+    metadata_json: dict[str, Any] | None = None
+
+
+class UnmappedIgnoreRequest(BaseModel):
+    ignored_reason: str | None = None
+
+
+class ArchiveMappingRequest(BaseModel):
+    archived_reason: str | None = None

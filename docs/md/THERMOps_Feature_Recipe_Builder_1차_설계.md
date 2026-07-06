@@ -1239,3 +1239,13 @@ R10-S1은 **예측 대상·위치·기상 매핑 기준정보** 관리이며 Fea
 - 단기예보 on-demand 호출(R10-S5)·ASOS 적재(R10-S4)는 후속 Phase에서 이 매핑을 참조
 - KMA 격자 변환 유틸(`latlon_to_kma_grid`)은 제안용이며 최종 저장은 사용자 확인 후 수행
 
+---
+
+## 부록 S. Phase R10-S2 External Code / Common Code Mapping
+
+R10-S2는 **외부 코드 매핑·미매핑 코드 수집·코드 변환(resolve)** 기준정보이며 Feature Recipe 계산 로직·Recipe Type·`ml/features.py`는 변경하지 않습니다.
+
+- `source_system` + `external_code_group` + `external_code` → 내부 `target_type`/`target_id` 매핑
+- 미매핑 코드는 내부 예측 대상·관측소 등을 자동 생성하지 않음
+- 열수요 API `ND_ID` → 예측 대상 연결은 R10-S3 wide-hour 변환에서 활용 예정
+

@@ -306,6 +306,10 @@ MIGRATIONS = [
         "R10-S1 prediction entity weather mapping schema",
         _load_sql("r10s1_prediction_entity_weather_mapping_schema.sql"),
     ),
+    (
+        "R10-S2 external code mapping schema",
+        _load_sql("r10s2_external_code_mapping_schema.sql"),
+    ),
 ]
 
 

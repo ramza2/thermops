@@ -24,6 +24,7 @@ from app.models.entities import (
 )
 from app.services.api_connector_http_client import build_full_url, encode_query_value, execute_http_request
 from app.services.api_connector_loader import insert_rows, preview_load_rows
+from app.services.external_code_mapping_service import scan_items_for_code_mappings
 from app.services.api_connector_parser import normalize_items, parse_response_body
 from app.services.standard_dataset_service import TargetTableNotAllowedError, validate_target_table_allowed
 from app.utils.masking import mask_params_dict, mask_secret_value, mask_url
@@ -710,7 +711,16 @@ async def load_preview(
         mapping=mapping,
         limit=10,
     )
-    return {**preview, "snapshot_id": result["snapshot_id"], "api_item_count": result["item_count"]}
+    code_scan: dict[str, Any] = {}
+    code_mappings = (op.metadata_json or {}).get("code_mappings") if op.metadata_json else None
+    if code_mappings and isinstance(code_mappings, list):
+        code_scan = await scan_items_for_code_mappings(
+            db,
+            items=result["items"],
+            code_mappings=code_mappings,
+            source_operation_id=operation_id,
+        )
+    return {**preview, "snapshot_id": result["snapshot_id"], "api_item_count": result["item_count"], **code_scan}
 
 
 async def run_load(
@@ -772,6 +782,15 @@ async def run_load(
             }
 
         mapping = await _resolve_mapping(db, op.data_source_id, op.target_table)
+        code_scan: dict[str, Any] = {}
+        code_mappings = (op.metadata_json or {}).get("code_mappings") if op.metadata_json else None
+        if code_mappings and isinstance(code_mappings, list):
+            code_scan = await scan_items_for_code_mappings(
+                db,
+                items=result["items"],
+                code_mappings=code_mappings,
+                source_operation_id=operation_id,
+            )
         counts = await insert_rows(
             db,
             target_table=op.target_table,
@@ -789,6 +808,7 @@ async def run_load(
             "api_item_count": result["item_count"],
             **counts,
             "snapshot_id": result.get("snapshot_id"),
+            **code_scan,
         }
         source = await _get_source(db, op.data_source_id)
         source.last_loaded_at = finished

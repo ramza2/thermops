@@ -275,6 +275,12 @@ def _build_registry() -> list[TestCase]:
             timeout_seconds=240,
         ),
         _python_test(
+            "test_external_code_mapping.py",
+            groups=["model", "full"],
+            description="External Code / Common Code Mapping (R10-S2)",
+            timeout_seconds=300,
+        ),
+        _python_test(
             "test_prediction_period_validation.py",
             groups=["model", "full"],
             description="배치 예측 기간 검증",
