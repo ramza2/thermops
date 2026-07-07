@@ -1117,6 +1117,30 @@ REST API Connector **load-run/load-preview**를 정기 일정으로 실행하기
 
 **후속 Phase:** 실제 worker/cron/Airflow 운영 구성 · upsert/중복 제거 고도화 · CRON parser · 알림/장애 통보
 
+### R10-S7 운영 점검 / 통합 시나리오 검증
+
+R10 계열(Connector, 표준 데이터셋, 예측 대상/기상 매핑, 외부 코드 매핑, Transform, Forecast Provider, 데이터 적재 일정)이 실제 운영 흐름에서 함께 동작하는지 **통합 시나리오 A~F**로 점검합니다. 이번 Phase는 신규 대규모 기능 개발이 아니라 **운영 검증·회귀 방지·문서 정합성** 단계입니다.
+
+- **시나리오 A:** clean 설치/빈 화면/주요 R10 테이블 0건 확인
+- **시나리오 B:** 표준 데이터셋 4종(열수요 long, ASOS, Calendar date/hour) Wizard/물리 테이블 준비
+- **시나리오 C:** 열수요 wide-hour 변환(load-preview/load-run) + 미매핑 코드 수집 검증
+- **시나리오 D:** ASOS/Calendar 변환 적재 + 월 단위 hour_generation 검증
+- **시나리오 E:** 데이터 적재 일정 run-now/run-due/retry/event + masking 검증
+- **시나리오 F:** Forecast on-demand preview/cache + prediction 연계(summary/weather input) 검증
+- **통합 테스트:** `scripts/test_r10_operational_integration.py` (mock/sample endpoint만 사용, 외부 공공 API 의존 없음)
+- **API 점검:** OpenAPI(`/openapi.json`) 기준 R10 핵심 endpoint 노출 확인
+- **Secret 정책:** serviceKey/API Key 원문 미노출(요청 미리보기, snapshot, schedule run, summary)
+- **운영 seed:** 업무 샘플 데이터 추가 없음 (clean 0건 정책 유지)
+
+**배포 전 체크리스트 (R10):**
+1. `python scripts/apply_dev_migrations.py`
+2. `python scripts/test_r10_operational_integration.py`
+3. `python scripts/run_regression_tests.py --group model --timeout-scale 2`
+4. `python scripts/run_regression_tests.py --group quick --timeout-scale 2`
+5. `cd frontend && npm run build && node scripts/check-pages.mjs`
+6. (Traefik) `docker compose -f docker-compose.traefik.yml --env-file .env.deploy down -v && docker compose -f docker-compose.traefik.yml --env-file .env.deploy up -d --build`
+
+## 설계 문서 참조
 
 - `docs/md/THERMOps_API_설계서.md`
 - `docs/md/THERMOps_DB_설계서.md`

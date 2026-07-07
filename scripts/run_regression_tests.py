@@ -305,6 +305,12 @@ def _build_registry() -> list[TestCase]:
             timeout_seconds=420,
         ),
         _python_test(
+            "test_r10_operational_integration.py",
+            groups=["full"],
+            description="R10 Operational Integration (R10-S7)",
+            timeout_seconds=900,
+        ),
+        _python_test(
             "test_prediction_period_validation.py",
             groups=["model", "full"],
             description="배치 예측 기간 검증",

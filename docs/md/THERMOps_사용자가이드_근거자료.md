@@ -206,6 +206,10 @@ flowchart LR
 
 **R10-S6 데이터 적재 일정**: `/data-load-schedules`(운영 모니터링 메뉴)에서 REST API 작업의 **load-run**을 정기 일정으로 등록합니다. **적재 일정 설정**에서 API 작업·스케줄 유형(DAILY/HOURLY 등)·**실행 파라미터 템플릿**·**적재 기간(Load Window)**·**재시도 정책**을 지정하고 **다음 실행 예정 시각**을 확인합니다. **수동 실행**(run-now)과 **실행 대상 일정** 탭의 **run-due**로 due 일정을 일괄 처리할 수 있습니다. 실제 운영에서는 cron/worker/Airflow가 `POST /api/v1/data-load-schedules/run-due`를 주기 호출하는 방식으로 연계합니다. **적재 실행 이력**에서 실패 사유·**마지막 성공 시각**·재시도 결과를 확인합니다. 단기예보 on-demand(R10-S5)는 스케줄 대상이 아닙니다. 운영 seed에 스케줄 샘플은 없습니다.
 
+**R10-S7 운영 점검 / 통합 시나리오**: 배포 전에는 아래 순서로 통합 운영 흐름을 점검합니다.  
+1) 표준 데이터셋 생성(열수요 long, ASOS, Calendar date/hour) → 2) 예측 대상/기상 매핑 등록 → 3) 외부 코드 매핑 등록 → 4) REST API 작업 등록 및 변환 설정 → 5) load-preview/load-run 검증 → 6) 데이터 적재 일정(run-now/run-due) 등록 및 실행 이력 확인 → 7) 단기예보 on-demand 입력 미리보기/캐시 확인 → 8) 예측 작업 실행 후 `forecast_input_summary`와 기상 입력 스냅샷 확인.  
+수동 적재는 즉시 1회 실행용, 정기 적재는 일정 정의 + due 실행(run-due)용입니다. 미매핑 코드는 자동 매핑되지 않으므로 `/external-code-mappings`의 **미매핑 코드**에서 검토 후 assign/ignore 처리합니다.
+
 **R9-S2 Dataset Version 운영 정책**: Feature Build로 생성되는 학습 데이터 버전에 역할·상태·생성 범위를 부여합니다. 대표 버전(`PRIMARY`)은 학습/예측 자동 선택 시 우선 사용되며, 일부 생성(`PARTIAL`)·임시(`TEMPORARY`)·보관(`ARCHIVED`)·생성 실패(`BUILD_FAILED`) 버전은 자동 선택에서 제외됩니다. 명시적 운영 후보가 없을 때만 `record_count DESC` fallback을 사용합니다(R9-S1 임시 복구 유지). 화면 `/dataset-versions`(학습 데이터 버전), API `GET/POST /api/v1/dataset-versions/*`.
 
 **R10 REST API Connector Builder**: 데이터 소스 화면 **REST API 연결**에서 API 작업(Operation)을 등록합니다. serviceKey는 Decoding 키 입력을 권장하며 저장 후 마스킹만 표시됩니다. 요청 파라미터·페이징·응답 데이터 경로·**변환 설정** 후 테스트 호출·적재 미리보기·적재 실행이 가능합니다. 표준 데이터셋 Wizard로 생성한 ACTIVE 물리 테이블만 적재 대상으로 허용합니다.

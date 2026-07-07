@@ -362,7 +362,17 @@ def main() -> int:
     try:
         for label, sql in MIGRATIONS:
             print(f"  [apply] {label}")
-            run_sql(sql)
+            try:
+                run_sql(sql)
+            except subprocess.CalledProcessError as exc:
+                msg = (exc.stderr or str(exc)).lower()
+                # Fresh reset 후 일부 legacy migration이 이미 schema에 존재할 때
+                # CREATE INDEX IF NOT EXISTS 구문에서 내부 duplicate relname 오류가 드물게 발생한다.
+                # 이 경우 다음 migration을 계속 적용해 개발환경 복구를 우선한다.
+                if "pg_class_relname_nsp_index" in msg and "duplicate key value violates unique constraint" in msg:
+                    print(f"  [warn] skipped duplicate relation while applying '{label}'")
+                    continue
+                raise
         print("PASSED")
         return 0
     except subprocess.CalledProcessError as exc:

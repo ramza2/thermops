@@ -1260,3 +1260,8 @@ R10-S5는 **예측 실행 시점 단기예보 on-demand 입력 생성·snapshot 
 ## 부록 VI. Phase R10-S6 데이터 적재 스케줄러
 
 R10-S6은 **REST API Connector load-run 정기 실행·실행 이력 관리** 단계이며 Feature Recipe 계산 로직·Recipe Type·`ml/features.py`·학습/예측 알고리즘은 변경하지 않습니다. 스케줄러는 기존 transform/load-run 파이프라인을 재사용하며, Forecast on-demand Provider(R10-S5)는 스케줄 대상에서 제외합니다.
+
+## 부록 VII. Phase R10-S7 운영 점검 / 통합 시나리오 검증
+
+R10-S7은 **운영 점검·통합 검증·회귀 방지** 단계이며 Feature Recipe 계산 로직·Recipe Type·`ml/features.py`·학습/예측 알고리즘은 변경하지 않습니다.  
+검증 범위는 Connector/Transform/Forecast Provider/데이터 적재 일정의 연계 동작과 masking·clean seed 정책 준수이며, 신규 Feature 계산 방식이나 모델 알고리즘 확장은 이번 Phase 범위가 아닙니다.
