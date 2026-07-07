@@ -20,6 +20,7 @@ export interface ApiConnectorOperation {
 export interface ApiConnectorOperationDetail extends ApiConnectorOperation {
   params?: ApiConnectorParam[];
   pagination?: ApiConnectorPagination | null;
+  transform_config?: ApiConnectorTransformConfig | null;
 }
 
 export interface ApiConnectorParam {
@@ -105,6 +106,13 @@ export interface ApiConnectorLoadPreview {
   preview_count: number;
   mapping_applied: boolean;
   api_item_count?: number;
+  raw_item_count?: number;
+  transformed_row_count?: number;
+  transform_applied?: boolean;
+  transform_summary?: Record<string, unknown> | null;
+  unmapped_codes?: Record<string, unknown>[];
+  warnings?: string[];
+  sample_rows?: Record<string, unknown>[];
   snapshot_id?: string | null;
 }
 
@@ -162,10 +170,54 @@ export const WIZARD_STEP_TITLES = [
   "요청 파라미터",
   "페이징 방식",
   "응답 데이터 경로",
+  "변환 설정",
   "적재 대상",
   "테스트 호출",
   "검토 및 저장",
 ] as const;
+
+export interface ApiConnectorTransformConfig {
+  transform_config_id?: string;
+  operation_id?: string;
+  transform_type: string;
+  transform_name?: string | null;
+  source_system?: string;
+  external_code_group?: string;
+  external_code_field?: string;
+  external_name_field?: string;
+  date_field?: string;
+  date_format?: string;
+  hour_column_prefix?: string;
+  hour_column_suffix?: string;
+  hour_start?: number;
+  hour_end?: number;
+  value_output_field?: string;
+  measured_at_output_field?: string;
+  entity_id_output_field?: string;
+  entity_code_output_field?: string;
+  external_code_output_field?: string;
+  external_name_output_field?: string;
+  timestamp_policy?: string;
+  hour_24_policy?: string;
+  unmapped_policy?: string;
+  null_value_policy?: string;
+  numeric_parse_policy?: string;
+  active_yn?: boolean;
+  policy_warnings?: string[];
+}
+
+export interface ApiConnectorTransformPreview {
+  operation_id: string;
+  target_table?: string | null;
+  raw_item_count: number;
+  transformed_row_count: number;
+  sample_rows: Record<string, unknown>[];
+  unmapped_codes?: Record<string, unknown>[];
+  warnings?: string[];
+  transform_summary?: Record<string, unknown>;
+  blocked?: boolean;
+  block_reason?: string | null;
+}
 
 export const PARAM_QUICK_ADD: { param_name: string; display_name: string; param_type: string; value_source?: string }[] = [
   { param_name: "serviceKey", display_name: "serviceKey", param_type: "SECRET", value_source: "SECRET_REF" },

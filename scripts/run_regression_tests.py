@@ -281,6 +281,12 @@ def _build_registry() -> list[TestCase]:
             timeout_seconds=300,
         ),
         _python_test(
+            "test_heat_demand_wide_hour_transform.py",
+            groups=["model", "full", "connector"],
+            description="Heat Demand wide-hour transform (R10-S3)",
+            timeout_seconds=360,
+        ),
+        _python_test(
             "test_prediction_period_validation.py",
             groups=["model", "full"],
             description="배치 예측 기간 검증",

@@ -1245,7 +1245,7 @@ R10-S1은 **예측 대상·위치·기상 매핑 기준정보** 관리이며 Fea
 
 R10-S2는 **외부 코드 매핑·미매핑 코드 수집·코드 변환(resolve)** 기준정보이며 Feature Recipe 계산 로직·Recipe Type·`ml/features.py`는 변경하지 않습니다.
 
-- `source_system` + `external_code_group` + `external_code` → 내부 `target_type`/`target_id` 매핑
-- 미매핑 코드는 내부 예측 대상·관측소 등을 자동 생성하지 않음
-- 열수요 API `ND_ID` → 예측 대상 연결은 R10-S3 wide-hour 변환에서 활용 예정
+## 부록 T. Phase R10-S3 Heat Demand wide-hour Transform
+
+R10-S3는 **열수요 API wide-hour → long format 적재 변환**이며 Feature Recipe 계산 로직·Recipe Type·`ml/features.py`는 변경하지 않습니다. 변환된 `measured_at`·`heat_demand`·`entity_id`/`site_id`는 기존 Feature Build·학습 파이프라인의 입력 데이터로 사용됩니다.
 

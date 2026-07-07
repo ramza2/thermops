@@ -12,6 +12,8 @@ import type {
   ApiConnectorResponsePreview,
   ApiConnectorSnapshot,
   ApiConnectorTestCallResult,
+  ApiConnectorTransformConfig,
+  ApiConnectorTransformPreview,
 } from "@/types/apiConnector";
 
 export function apiConnectorErrorMessage(err: unknown, fallback: string): string {
@@ -125,6 +127,26 @@ export async function runApiConnectorLoad(
   return postApi(`/api-connectors/operations/${encodeURIComponent(operationId)}/load-run`, {
     runtime_params: runtimeParams,
   });
+}
+
+export async function getApiConnectorTransformConfig(
+  operationId: string,
+): Promise<ApiConnectorTransformConfig | null> {
+  return fetchApi(`/api-connectors/operations/${encodeURIComponent(operationId)}/transform-config`);
+}
+
+export async function upsertApiConnectorTransformConfig(
+  operationId: string,
+  body: Partial<ApiConnectorTransformConfig>,
+): Promise<ApiConnectorTransformConfig> {
+  return putApi(`/api-connectors/operations/${encodeURIComponent(operationId)}/transform-config`, body);
+}
+
+export async function transformApiConnectorPreview(
+  operationId: string,
+  body: { raw_items?: Record<string, unknown>[]; runtime_params?: Record<string, string> } = {},
+): Promise<ApiConnectorTransformPreview> {
+  return postApi(`/api-connectors/operations/${encodeURIComponent(operationId)}/transform-preview`, body);
 }
 
 export async function listApiConnectorCallLogs(operationId?: string): Promise<ApiConnectorCallLog[]> {

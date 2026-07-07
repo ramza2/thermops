@@ -167,7 +167,13 @@ export const HELP_TEXTS = {
   externalCodeNoAutoCreate:
     "미매핑 코드는 자동으로 내부 기준정보를 만들지 않습니다. 검토 후 내부 대상과 연결하세요.",
   externalCodeNdIdExample:
-    "예: 열수요 API의 ND_ID를 예측 대상(PREDICTION_ENTITY)과 연결합니다.",
+    "예: 열수요 API의 ND_ID는 source_system=HEAT_DEMAND_API, external_code_group=NODE로 예측 대상(PREDICTION_ENTITY)과 연결합니다.",
+  wideHourTransform:
+    "열수요 API의 HTDND_AMNT_1HR~24HR 같은 시간대별 컬럼을 행 단위 시계열(measured_at, heat_demand)로 변환합니다.",
+  wideHourTimestampPolicy:
+    "1HR/24HR 시간 해석은 기관 API 정의에 따라 다를 수 있습니다. 운영 적용 전 01:00 시점인지 00:00~01:00 구간인지 확인하세요.",
+  wideHourUnmapped:
+    "ND_ID는 외부 코드 매핑에서 내부 예측 대상과 연결되어야 합니다. 미매핑 코드는 자동으로 예측 대상을 만들지 않습니다.",
   externalCodeStableId:
     "외부 코드가 변경되어도 내부 예측 대상 ID를 유지할 수 있도록 매핑을 사용합니다.",
 } as const;

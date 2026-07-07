@@ -62,7 +62,21 @@ async def sample_external_heat_demand(
     return ok({"items": items, "count": len(items)})
 
 
-@router.get("/sample-external/weather")
+@router.get("/sample-external/heat-demand-wide")
+async def sample_external_heat_demand_wide(
+    nd_id: str = Query(default="ND001"),
+    nd_name: str = Query(default="테스트노드"),
+    bas_ymd: str = Query(default="20260101"),
+):
+    """REST API Connector wide-hour 변환 테스트용 JSON (개발 전용)."""
+    item: dict[str, str] = {
+        "ND_ID": nd_id,
+        "ND_KORN_NM": nd_name,
+        "BAS_YMD": bas_ymd,
+    }
+    for hour in range(1, 25):
+        item[f"HTDND_AMNT_{hour}HR"] = str(round(100.0 + hour * 0.5, 1))
+    return ok({"items": [item], "count": 1})
 async def sample_external_weather(
     start_at: str | None = Query(default=None),
     end_at: str | None = Query(default=None),

@@ -470,6 +470,39 @@ class ApiConnectorLoadRunRequest(BaseModel):
     dry_run: bool = False
 
 
+class ApiConnectorTransformConfigUpsert(BaseModel):
+    transform_type: str = "NONE"
+    transform_name: str | None = None
+    source_system: str = "HEAT_DEMAND_API"
+    external_code_group: str = "NODE"
+    external_code_field: str = "ND_ID"
+    external_name_field: str = "ND_KORN_NM"
+    date_field: str = "BAS_YMD"
+    date_format: str = "YYYYMMDD"
+    hour_column_prefix: str = "HTDND_AMNT_"
+    hour_column_suffix: str = "HR"
+    hour_start: int = 1
+    hour_end: int = 24
+    value_output_field: str = "heat_demand"
+    measured_at_output_field: str = "measured_at"
+    entity_id_output_field: str = "entity_id"
+    entity_code_output_field: str = "site_id"
+    external_code_output_field: str = "external_node_id"
+    external_name_output_field: str = "external_node_name"
+    timestamp_policy: str = "HOUR_LABEL_AS_END"
+    hour_24_policy: str = "NEXT_DAY_00"
+    unmapped_policy: str = "FAIL_LOAD"
+    null_value_policy: str = "SKIP_NULL"
+    numeric_parse_policy: str = "ALLOW_COMMA"
+    active_yn: bool = True
+    metadata_json: dict[str, Any] | None = None
+
+
+class ApiConnectorTransformPreviewRequest(BaseModel):
+    raw_items: list[dict[str, Any]] | None = None
+    runtime_params: dict[str, Any] | None = None
+
+
 class PredictionEntityCreate(BaseModel):
     entity_code: str
     entity_name: str

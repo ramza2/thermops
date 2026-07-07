@@ -236,6 +236,39 @@ class ApiConnectorResponseSnapshot(Base):
     metadata_json: Mapped[dict | None] = mapped_column(JSONB)
 
 
+class ApiConnectorTransformConfig(Base):
+    __tablename__ = "tb_api_connector_transform_config"
+    transform_config_id: Mapped[str] = mapped_column(String(50), primary_key=True)
+    operation_id: Mapped[str] = mapped_column(String(50), unique=True)
+    transform_type: Mapped[str] = mapped_column(String(50), default="NONE")
+    transform_name: Mapped[str | None] = mapped_column(String(200))
+    source_system: Mapped[str] = mapped_column(String(100), default="HEAT_DEMAND_API")
+    external_code_group: Mapped[str] = mapped_column(String(100), default="NODE")
+    external_code_field: Mapped[str] = mapped_column(String(100), default="ND_ID")
+    external_name_field: Mapped[str] = mapped_column(String(100), default="ND_KORN_NM")
+    date_field: Mapped[str] = mapped_column(String(100), default="BAS_YMD")
+    date_format: Mapped[str] = mapped_column(String(50), default="YYYYMMDD")
+    hour_column_prefix: Mapped[str] = mapped_column(String(100), default="HTDND_AMNT_")
+    hour_column_suffix: Mapped[str] = mapped_column(String(50), default="HR")
+    hour_start: Mapped[int] = mapped_column(Integer, default=1)
+    hour_end: Mapped[int] = mapped_column(Integer, default=24)
+    value_output_field: Mapped[str] = mapped_column(String(100), default="heat_demand")
+    measured_at_output_field: Mapped[str] = mapped_column(String(100), default="measured_at")
+    entity_id_output_field: Mapped[str] = mapped_column(String(100), default="entity_id")
+    entity_code_output_field: Mapped[str] = mapped_column(String(100), default="site_id")
+    external_code_output_field: Mapped[str] = mapped_column(String(100), default="external_node_id")
+    external_name_output_field: Mapped[str] = mapped_column(String(100), default="external_node_name")
+    timestamp_policy: Mapped[str] = mapped_column(String(50), default="HOUR_LABEL_AS_END")
+    hour_24_policy: Mapped[str] = mapped_column(String(50), default="NEXT_DAY_00")
+    unmapped_policy: Mapped[str] = mapped_column(String(50), default="FAIL_LOAD")
+    null_value_policy: Mapped[str] = mapped_column(String(50), default="SKIP_NULL")
+    numeric_parse_policy: Mapped[str] = mapped_column(String(50), default="ALLOW_COMMA")
+    active_yn: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime)
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime)
+    metadata_json: Mapped[dict | None] = mapped_column(JSONB)
+
+
 class ApiConnectorLoadRun(Base):
     __tablename__ = "tb_api_connector_load_run"
     load_run_id: Mapped[str] = mapped_column(String(50), primary_key=True)

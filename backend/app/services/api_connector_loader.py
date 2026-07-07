@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import date, datetime
 from typing import Any
 
 from sqlalchemy import text
@@ -16,11 +17,16 @@ from app.services.standard_dataset_service import (
 )
 
 
-async def get_physical_columns(db: AsyncSession, physical_table: str) -> list[str]:
+def _table_parts(physical_table: str) -> tuple[str, str]:
     schema = "public"
     table = physical_table
     if "." in physical_table:
         schema, table = physical_table.split(".", 1)
+    return schema, table
+
+
+async def get_physical_columns(db: AsyncSession, physical_table: str) -> list[str]:
+    schema, table = _table_parts(physical_table)
     rows = (
         await db.execute(
             text(
@@ -34,6 +40,64 @@ async def get_physical_columns(db: AsyncSession, physical_table: str) -> list[st
         )
     ).all()
     return [r[0] for r in rows]
+
+
+async def get_physical_column_types(db: AsyncSession, physical_table: str) -> dict[str, str]:
+    schema, table = _table_parts(physical_table)
+    rows = (
+        await db.execute(
+            text(
+                """
+                SELECT column_name, data_type
+                FROM information_schema.columns
+                WHERE table_schema = :schema AND table_name = :table
+                ORDER BY ordinal_position
+                """
+            ),
+            {"schema": schema, "table": table},
+        )
+    ).all()
+    return {r[0]: r[1] for r in rows}
+
+
+def coerce_value_for_column(value: Any, data_type: str) -> Any:
+    if value is None or value == "":
+        return value
+    dt = (data_type or "").lower()
+    if "timestamp" in dt:
+        if isinstance(value, datetime):
+            return value.replace(tzinfo=None) if value.tzinfo else value
+        if isinstance(value, str):
+            text_val = value.strip()
+            if text_val.endswith("Z"):
+                text_val = text_val[:-1] + "+00:00"
+            parsed = datetime.fromisoformat(text_val)
+            return parsed.replace(tzinfo=None) if parsed.tzinfo else parsed
+    if dt == "date":
+        if isinstance(value, date) and not isinstance(value, datetime):
+            return value
+        if isinstance(value, str):
+            return date.fromisoformat(value[:10])
+    if dt in ("integer", "bigint", "smallint"):
+        if isinstance(value, int):
+            return value
+        if isinstance(value, str) and value.strip().lstrip("-").isdigit():
+            return int(value)
+    if any(token in dt for token in ("numeric", "decimal", "double precision", "real")):
+        if isinstance(value, (int, float)):
+            return value
+        if isinstance(value, str):
+            return float(value.replace(",", ""))
+    return value
+
+
+def _normalize_row_values(row: dict[str, Any], col_types: dict[str, str]) -> dict[str, Any]:
+    normalized: dict[str, Any] = {}
+    for col, value in row.items():
+        if value is None or value == "":
+            continue
+        normalized[col] = coerce_value_for_column(value, col_types.get(col, ""))
+    return normalized
 
 
 async def preview_load_rows(
@@ -82,15 +146,19 @@ async def insert_rows(
             allowed_tables=[],
         )
 
-    str_rows = [{k: "" if v is None else str(v) for k, v in row.items()} for row in items[:max_rows]]
+    physical = resolve_physical_table_name(target_table)
+    cols = await get_physical_columns(db, physical)
+    col_types = await get_physical_column_types(db, physical)
     if mapping and mapping.columns:
+        str_rows = [{k: "" if v is None else str(v) for k, v in row.items()} for row in items[:max_rows]]
         rows = apply_mapping(str_rows, mapping)
+        rows = [_normalize_row_values(row, col_types) for row in rows]
     else:
         rows = []
-        for raw in str_rows:
+        for raw in items[:max_rows]:
             row = {c: raw.get(c) for c in cols if c in raw and raw.get(c) not in (None, "")}
             if row:
-                rows.append(row)
+                rows.append(_normalize_row_values(row, col_types))
 
     inserted = 0
     skipped = 0

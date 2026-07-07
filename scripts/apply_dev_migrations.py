@@ -310,6 +310,10 @@ MIGRATIONS = [
         "R10-S2 external code mapping schema",
         _load_sql("r10s2_external_code_mapping_schema.sql"),
     ),
+    (
+        "R10-S3 wide hour transform schema",
+        _load_sql("r10s3_heat_demand_transform_schema.sql"),
+    ),
 ]
 
 

@@ -133,7 +133,7 @@ for (const path of PATHS) {
     await page.getByRole("button", { name: "새 API 작업 만들기" }).first().waitFor({ state: "visible", timeout: 30000 });
     await page.getByRole("button", { name: "새 API 작업 만들기" }).click();
     await page.getByText("REST API 작업 만들기").first().waitFor({ state: "visible", timeout: 30000 });
-    for (const label of ["기본 정보", "인증 정보", "요청 파라미터", "페이징 방식", "응답 데이터 경로", "적재 대상", "테스트 호출", "검토 및 저장"]) {
+    for (const label of ["기본 정보", "인증 정보", "요청 파라미터", "페이징 방식", "응답 데이터 경로", "변환 설정", "적재 대상", "테스트 호출", "검토 및 저장"]) {
       await page.getByText(label).first().waitFor({ state: "visible", timeout: 30000 });
     }
     await page.getByText("요청 미리보기").first().waitFor({ state: "visible", timeout: 30000 });

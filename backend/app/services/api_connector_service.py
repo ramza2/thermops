@@ -25,6 +25,14 @@ from app.models.entities import (
 from app.services.api_connector_http_client import build_full_url, encode_query_value, execute_http_request
 from app.services.api_connector_loader import insert_rows, preview_load_rows
 from app.services.external_code_mapping_service import scan_items_for_code_mappings
+from app.services.wide_hour_transform_service import (
+    WideHourTransformError,
+    apply_transform_if_configured,
+    get_transform_config,
+    match_target_columns,
+    preview_wide_hour_transform,
+    save_transform_config,
+)
 from app.services.api_connector_parser import normalize_items, parse_response_body
 from app.services.standard_dataset_service import TargetTableNotAllowedError, validate_target_table_allowed
 from app.utils.masking import mask_params_dict, mask_secret_value, mask_url
@@ -290,11 +298,13 @@ async def get_operation_detail(db: AsyncSession, operation_id: str) -> dict[str,
     params = await _get_params(db, operation_id)
     pagination = await _get_pagination(db, operation_id)
     credential = await _get_credential(db, op.data_source_id)
+    transform_config = await get_transform_config(db, operation_id)
     return {
         **_op_dict(op),
         "params": [_param_dict(p) for p in params],
         "pagination": _pagination_dict(pagination) if pagination else None,
         "credential": _credential_dict(credential) if credential else None,
+        "transform_config": transform_config,
     }
 
 
@@ -703,11 +713,14 @@ async def load_preview(
     if not op.target_table:
         raise ApiConnectorError("적재 대상 테이블이 설정되지 않았습니다.", error_code="MISSING_TARGET_TABLE")
     result = await _execute_operation_call(db, operation_id, runtime_params=runtime_params, sample_limit=MAX_TEST_ITEMS)
+    raw_items = result["items"]
+    transform_result = await apply_transform_if_configured(db, operation_id, raw_items, for_load=False)
+    items = transform_result["items"]
     mapping = await _resolve_mapping(db, op.data_source_id, op.target_table)
     preview = await preview_load_rows(
         db,
         target_table=op.target_table,
-        items=result["items"],
+        items=items,
         mapping=mapping,
         limit=10,
     )
@@ -716,11 +729,27 @@ async def load_preview(
     if code_mappings and isinstance(code_mappings, list):
         code_scan = await scan_items_for_code_mappings(
             db,
-            items=result["items"],
+            items=raw_items,
             code_mappings=code_mappings,
             source_operation_id=operation_id,
         )
-    return {**preview, "snapshot_id": result["snapshot_id"], "api_item_count": result["item_count"], **code_scan}
+    column_info: dict[str, Any] = {}
+    if transform_result.get("transform_applied") and items:
+        column_info = await match_target_columns(db, op.target_table, items[0])
+    return {
+        **preview,
+        "snapshot_id": result["snapshot_id"],
+        "api_item_count": result["item_count"],
+        "raw_item_count": len(raw_items),
+        "transformed_row_count": len(items) if transform_result.get("transform_applied") else preview.get("item_count"),
+        "transform_applied": transform_result.get("transform_applied", False),
+        "transform_summary": transform_result.get("transform_summary"),
+        "unmapped_codes": transform_result.get("unmapped_codes", []),
+        "warnings": transform_result.get("warnings", []),
+        "sample_rows": preview.get("preview_rows"),
+        **column_info,
+        **code_scan,
+    }
 
 
 async def run_load(
@@ -763,16 +792,24 @@ async def run_load(
         run.raw_snapshot_id = result.get("snapshot_id")
         if dry_run:
             mapping = await _resolve_mapping(db, op.data_source_id, op.target_table)
+            transform_result = await apply_transform_if_configured(
+                db, operation_id, result["items"], for_load=False
+            )
             preview = await preview_load_rows(
                 db,
                 target_table=op.target_table,
-                items=result["items"],
+                items=transform_result["items"],
                 mapping=mapping,
                 limit=10,
             )
             run.run_status = "SUCCESS"
             run.finished_at = utc_now()
-            run.result_summary = {"dry_run": True, **preview}
+            run.result_summary = {
+                "dry_run": True,
+                "transform_applied": transform_result.get("transform_applied", False),
+                "transform_summary": transform_result.get("transform_summary"),
+                **preview,
+            }
             await db.flush()
             return {
                 "load_run_id": load_id,
@@ -782,6 +819,10 @@ async def run_load(
             }
 
         mapping = await _resolve_mapping(db, op.data_source_id, op.target_table)
+        transform_result = await apply_transform_if_configured(
+            db, operation_id, result["items"], for_load=True
+        )
+        items = transform_result["items"]
         code_scan: dict[str, Any] = {}
         code_mappings = (op.metadata_json or {}).get("code_mappings") if op.metadata_json else None
         if code_mappings and isinstance(code_mappings, list):
@@ -794,7 +835,7 @@ async def run_load(
         counts = await insert_rows(
             db,
             target_table=op.target_table,
-            items=result["items"],
+            items=items,
             mapping=mapping,
             max_rows=MAX_LOAD_ITEMS,
         )
@@ -806,8 +847,12 @@ async def run_load(
         run.error_count = counts["error_count"]
         run.result_summary = {
             "api_item_count": result["item_count"],
+            "raw_item_count": len(result["items"]),
             **counts,
             "snapshot_id": result.get("snapshot_id"),
+            "transform_applied": transform_result.get("transform_applied", False),
+            "transform_summary": transform_result.get("transform_summary"),
+            "unmapped_codes": transform_result.get("unmapped_codes", []),
             **code_scan,
         }
         source = await _get_source(db, op.data_source_id)
@@ -826,7 +871,39 @@ async def run_load(
         await db.flush()
         if isinstance(exc, ApiConnectorError):
             raise
+        if isinstance(exc, WideHourTransformError):
+            raise ApiConnectorError(str(exc), error_code=exc.error_code) from exc
         raise ApiConnectorError(str(exc), error_code="LOAD_FAILED") from exc
+
+
+async def upsert_transform_config(
+    db: AsyncSession,
+    operation_id: str,
+    payload: dict[str, Any],
+) -> dict[str, Any]:
+    await _get_operation(db, operation_id)
+    return await save_transform_config(db, operation_id, payload)
+
+
+async def transform_preview(
+    db: AsyncSession,
+    operation_id: str,
+    *,
+    raw_items: list[dict[str, Any]] | None = None,
+    runtime_params: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    op = await _get_operation(db, operation_id)
+    if raw_items is None:
+        result = await _execute_operation_call(
+            db, operation_id, runtime_params=runtime_params, sample_limit=MAX_TEST_ITEMS
+        )
+        raw_items = result["items"]
+    return await preview_wide_hour_transform(
+        db,
+        operation_id=operation_id,
+        raw_items=raw_items,
+        target_table=op.target_table,
+    )
 
 
 async def list_load_runs(db: AsyncSession, *, operation_id: str | None = None) -> list[dict[str, Any]]:

@@ -10,9 +10,11 @@ import {
   requestApiConnectorPreview,
   loadApiConnectorPreview,
   runApiConnectorLoad,
+  transformApiConnectorPreview,
   updateApiConnectorOperation,
   upsertApiConnectorCredential,
   upsertApiConnectorPagination,
+  upsertApiConnectorTransformConfig,
 } from "@/api/apiConnectors";
 import { getStandardTargetTables, validateTargetTable } from "@/api/standardDatasets";
 import { Button } from "@/components/Button";
@@ -23,6 +25,7 @@ import type {
   ApiConnectorPagination,
   ApiConnectorParam,
   ApiConnectorTestCallResult,
+  ApiConnectorTransformConfig,
 } from "@/types/apiConnector";
 import { PARAM_QUICK_ADD, WIZARD_STEP_TITLES as STEP_TITLES } from "@/types/apiConnector";
 import type { StandardTargetTable } from "@/types/standardDatasets";
@@ -71,6 +74,32 @@ const DEFAULT_PAGINATION: ApiConnectorPagination = {
   stop_condition: "EMPTY_ITEMS",
 };
 
+const DEFAULT_TRANSFORM: ApiConnectorTransformConfig = {
+  transform_type: "NONE",
+  source_system: "HEAT_DEMAND_API",
+  external_code_group: "NODE",
+  external_code_field: "ND_ID",
+  external_name_field: "ND_KORN_NM",
+  date_field: "BAS_YMD",
+  date_format: "YYYYMMDD",
+  hour_column_prefix: "HTDND_AMNT_",
+  hour_column_suffix: "HR",
+  hour_start: 1,
+  hour_end: 24,
+  value_output_field: "heat_demand",
+  measured_at_output_field: "measured_at",
+  entity_id_output_field: "entity_id",
+  entity_code_output_field: "site_id",
+  external_code_output_field: "external_node_id",
+  external_name_output_field: "external_node_name",
+  timestamp_policy: "HOUR_LABEL_AS_END",
+  hour_24_policy: "NEXT_DAY_00",
+  unmapped_policy: "FAIL_LOAD",
+  null_value_policy: "SKIP_NULL",
+  numeric_parse_policy: "ALLOW_COMMA",
+  active_yn: true,
+};
+
 export function ApiConnectorOperationWizard({
   open,
   onClose,
@@ -109,11 +138,13 @@ export function ApiConnectorOperationWizard({
     sampleJson: "",
   });
   const [target, setTarget] = useState({ standard_dataset_id: "", target_table: "" });
+  const [transform, setTransform] = useState<ApiConnectorTransformConfig>({ ...DEFAULT_TRANSFORM });
   const [targetValidation, setTargetValidation] = useState<string | null>(null);
 
   const [requestPreview, setRequestPreview] = useState<Record<string, unknown> | null>(null);
   const [testResult, setTestResult] = useState<ApiConnectorTestCallResult | null>(null);
   const [loadPreviewResult, setLoadPreviewResult] = useState<Record<string, unknown> | null>(null);
+  const [transformPreviewResult, setTransformPreviewResult] = useState<Record<string, unknown> | null>(null);
   const [loadRunResult, setLoadRunResult] = useState<Record<string, unknown> | null>(null);
 
   const restSources = useMemo(
@@ -147,10 +178,12 @@ export function ApiConnectorOperationWizard({
     setPagination({ ...DEFAULT_PAGINATION });
     setResponsePath({ response_item_path: "data.items", result_array_mode: "AUTO", sampleJson: "" });
     setTarget({ standard_dataset_id: "", target_table: "" });
+    setTransform({ ...DEFAULT_TRANSFORM });
     setCredentialMasked(null);
     setRequestPreview(null);
     setTestResult(null);
     setLoadPreviewResult(null);
+    setTransformPreviewResult(null);
     setLoadRunResult(null);
     setTargetValidation(null);
   }, [editOperationId, restSources]);
@@ -189,6 +222,9 @@ export function ApiConnectorOperationWizard({
           standard_dataset_id: detail.standard_dataset_id || "",
           target_table: detail.target_table || "",
         });
+        if (detail.transform_config) {
+          setTransform({ ...DEFAULT_TRANSFORM, ...detail.transform_config });
+        }
         const cred = await getApiConnectorCredential(detail.data_source_id);
         if (cred) {
           setCredentialMasked(cred.secret_value_masked || null);
@@ -287,6 +323,7 @@ export function ApiConnectorOperationWizard({
       params.map((p, i) => ({ ...p, sort_order: i, active_yn: true })),
     );
     await upsertApiConnectorPagination(opId, pagination);
+    await upsertApiConnectorTransformConfig(opId, transform);
     return opId;
   };
 
@@ -296,7 +333,7 @@ export function ApiConnectorOperationWizard({
       showToast("warning", err);
       return;
     }
-    if (step === 5) {
+    if (step === 6) {
       setBusy(true);
       try {
         if (target.target_table) {
@@ -309,7 +346,7 @@ export function ApiConnectorOperationWizard({
           setTargetValidation(null);
         }
         await persistOperation();
-        setStep(6);
+        setStep(7);
       } catch (e) {
         showToast("error", apiConnectorErrorMessage(e, "저장에 실패했습니다."));
       } finally {
@@ -358,6 +395,23 @@ export function ApiConnectorOperationWizard({
       showToast(res.success ? "success" : "warning", res.message || `테스트 호출 완료 (${res.item_count}건)`);
     } catch (e) {
       showToast("error", apiConnectorErrorMessage(e, "테스트 호출에 실패했습니다. endpoint·파라미터·인증 정보를 확인하세요."));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleTransformPreview = async () => {
+    if (!operationId) return;
+    setBusy(true);
+    try {
+      const rawItems = localPreviewItems.length > 0 ? localPreviewItems : testResult?.sample_items;
+      const res = await transformApiConnectorPreview(
+        operationId,
+        rawItems && rawItems.length > 0 ? { raw_items: rawItems as Record<string, unknown>[] } : {},
+      );
+      setTransformPreviewResult(res as unknown as Record<string, unknown>);
+    } catch (e) {
+      showToast("error", apiConnectorErrorMessage(e, "변환 미리보기에 실패했습니다."));
     } finally {
       setBusy(false);
     }
@@ -581,7 +635,82 @@ export function ApiConnectorOperationWizard({
       case 5:
         return (
           <div className="space-y-3 text-sm">
-            <p className="text-xs text-slate-500">ACTIVE 상태이며 물리 테이블이 생성된 표준 데이터셋만 선택할 수 있습니다. pivot/unpivot 등 복잡한 변환은 후속 R10-S3/S4에서 지원됩니다.</p>
+            <h3 className="font-medium text-slate-800">열수요 wide-hour 변환</h3>
+            <p className="text-xs text-slate-500">{HELP_TEXTS.wideHourTransform}</p>
+            <p className="text-xs text-amber-800 bg-amber-50 p-2 rounded">{HELP_TEXTS.wideHourTimestampPolicy}</p>
+            <p className="text-xs text-slate-600">{HELP_TEXTS.wideHourUnmapped}</p>
+            <label className="block text-xs text-slate-500">변환 유형</label>
+            <SelectInput
+              value={transform.transform_type}
+              onChange={(v) => setTransform({ ...transform, transform_type: v })}
+              options={[
+                { value: "NONE", label: "없음" },
+                { value: "WIDE_HOUR_TO_LONG", label: "시간대별 컬럼 행 변환 (WIDE_HOUR_TO_LONG)" },
+              ]}
+            />
+            {transform.transform_type === "WIDE_HOUR_TO_LONG" && (
+              <>
+                <div className="grid grid-cols-2 gap-3">
+                  <div><label className="text-xs text-slate-500">외부 지점 코드 필드</label><TextInput value={transform.external_code_field || "ND_ID"} onChange={(v) => setTransform({ ...transform, external_code_field: v })} /></div>
+                  <div><label className="text-xs text-slate-500">외부 지점명 필드</label><TextInput value={transform.external_name_field || "ND_KORN_NM"} onChange={(v) => setTransform({ ...transform, external_name_field: v })} /></div>
+                  <div><label className="text-xs text-slate-500">날짜 필드</label><TextInput value={transform.date_field || "BAS_YMD"} onChange={(v) => setTransform({ ...transform, date_field: v })} /></div>
+                  <div><label className="text-xs text-slate-500">날짜 형식</label><TextInput value={transform.date_format || "YYYYMMDD"} onChange={(v) => setTransform({ ...transform, date_format: v })} /></div>
+                  <div><label className="text-xs text-slate-500">시간 컬럼 prefix</label><TextInput value={transform.hour_column_prefix || "HTDND_AMNT_"} onChange={(v) => setTransform({ ...transform, hour_column_prefix: v })} /></div>
+                  <div><label className="text-xs text-slate-500">시간 컬럼 suffix</label><TextInput value={transform.hour_column_suffix || "HR"} onChange={(v) => setTransform({ ...transform, hour_column_suffix: v })} /></div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs text-slate-500">시간 해석 방식</label>
+                    <SelectInput value={transform.timestamp_policy || "HOUR_LABEL_AS_END"} onChange={(v) => setTransform({ ...transform, timestamp_policy: v })} options={[
+                      { value: "HOUR_LABEL_AS_END", label: "HOUR_LABEL_AS_END (1HR→01:00)" },
+                      { value: "HOUR_LABEL_AS_START", label: "HOUR_LABEL_AS_START (1HR→00:00)" },
+                    ]} />
+                  </div>
+                  <div>
+                    <label className="text-xs text-slate-500">24시간 처리</label>
+                    <SelectInput value={transform.hour_24_policy || "NEXT_DAY_00"} onChange={(v) => setTransform({ ...transform, hour_24_policy: v })} options={[
+                      { value: "NEXT_DAY_00", label: "NEXT_DAY_00 (다음날 00:00)" },
+                      { value: "SAME_DAY_23", label: "SAME_DAY_23 (당일 23:00)" },
+                    ]} />
+                  </div>
+                  <div>
+                    <label className="text-xs text-slate-500">미매핑 처리 방식</label>
+                    <SelectInput value={transform.unmapped_policy || "FAIL_LOAD"} onChange={(v) => setTransform({ ...transform, unmapped_policy: v })} options={[
+                      { value: "FAIL_LOAD", label: "FAIL_LOAD (적재 중단)" },
+                      { value: "SKIP_UNMAPPED", label: "SKIP_UNMAPPED (해당 item skip)" },
+                      { value: "LOG_ONLY", label: "LOG_ONLY (entity 없이 변환)" },
+                    ]} />
+                  </div>
+                  <div>
+                    <label className="text-xs text-slate-500">NULL 값 처리</label>
+                    <SelectInput value={transform.null_value_policy || "SKIP_NULL"} onChange={(v) => setTransform({ ...transform, null_value_policy: v })} options={[
+                      { value: "SKIP_NULL", label: "SKIP_NULL" },
+                      { value: "INSERT_NULL", label: "INSERT_NULL" },
+                      { value: "FAIL_ON_NULL", label: "FAIL_ON_NULL" },
+                    ]} />
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Button variant="secondary" disabled={!operationId || busy} onClick={() => void handleTransformPreview()}>변환 미리보기</Button>
+                  <Button variant="ghost" onClick={() => window.open("/external-code-mappings", "_blank")}>외부 코드 매핑 화면</Button>
+                </div>
+                {transformPreviewResult && (
+                  <div className="border rounded p-2 text-xs space-y-1">
+                    <p>원본 {String(transformPreviewResult.raw_item_count)}건 → 변환 {String(transformPreviewResult.transformed_row_count)}행</p>
+                    {(transformPreviewResult.unmapped_codes as unknown[] | undefined)?.length ? (
+                      <p className="text-amber-700">미매핑 코드 {(transformPreviewResult.unmapped_codes as unknown[]).length}건</p>
+                    ) : null}
+                    <pre className="bg-slate-50 p-2 rounded max-h-32 overflow-auto">{safeJsonStringify((transformPreviewResult.sample_rows as unknown[])?.slice(0, 3))}</pre>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        );
+      case 6:
+        return (
+          <div className="space-y-3 text-sm">
+            <p className="text-xs text-slate-500">ACTIVE 상태이며 물리 테이블이 생성된 표준 데이터셋만 선택할 수 있습니다.</p>
             {targetTables.length === 0 ? (
               <p className="text-amber-700 text-xs bg-amber-50 p-2 rounded">적재 가능한 표준 데이터셋이 없습니다. 표준 데이터셋 Wizard에서 물리 테이블을 먼저 생성하세요.</p>
             ) : (
@@ -629,7 +758,7 @@ export function ApiConnectorOperationWizard({
             )}
           </div>
         );
-      case 6:
+      case 7:
         return (
           <div className="space-y-3 text-sm">
             {!operationId && <p className="text-amber-700 text-xs">이전 단계에서 저장이 완료되어야 테스트 호출이 가능합니다.</p>}
@@ -656,13 +785,14 @@ export function ApiConnectorOperationWizard({
             )}
           </div>
         );
-      case 7:
+      case 8:
         return (
           <div className="space-y-3 text-sm">
             <div className="border rounded p-3 space-y-1 text-xs">
               <p><strong>작업명:</strong> {basic.operation_name}</p>
               <p><strong>endpoint:</strong> {basic.endpoint_path}</p>
               <p><strong>응답 경로:</strong> {responsePath.response_item_path}</p>
+              <p><strong>변환:</strong> {transform.transform_type === "WIDE_HOUR_TO_LONG" ? "시간대별 컬럼 행 변환" : "없음"}</p>
               <p><strong>파라미터:</strong> {params.length}개</p>
               <p><strong>페이징:</strong> {pagination.pagination_type}</p>
               <p><strong>적재 대상:</strong> {target.target_table || "(미설정)"}</p>
@@ -674,10 +804,21 @@ export function ApiConnectorOperationWizard({
               <Button variant="secondary" disabled={!operationId || !target.target_table || busy} onClick={() => void handleLoadRun()}>적재 실행</Button>
             </div>
             {loadPreviewResult && (
-              <pre className="text-xs bg-slate-50 p-2 rounded max-h-32 overflow-auto">{safeJsonStringify(loadPreviewResult)}</pre>
+              <div className="text-xs space-y-1 border rounded p-2">
+                <p>원본 {String(loadPreviewResult.raw_item_count ?? loadPreviewResult.api_item_count ?? "-")}건 · 변환 {String(loadPreviewResult.transformed_row_count ?? loadPreviewResult.item_count ?? "-")}행</p>
+                {(loadPreviewResult.unmapped_codes as unknown[] | undefined)?.length ? (
+                  <p className="text-amber-700">미매핑 코드 {(loadPreviewResult.unmapped_codes as unknown[]).length}건 — 외부 코드 매핑을 확인하세요.</p>
+                ) : null}
+                <pre className="bg-slate-50 p-2 rounded max-h-32 overflow-auto">{safeJsonStringify(loadPreviewResult)}</pre>
+              </div>
             )}
             {loadRunResult && (
-              <p className="text-xs text-green-700">적재 완료: {String(loadRunResult.run_status)} — {String(loadRunResult.inserted_count)}건</p>
+              <div className="text-xs text-green-700 space-y-1">
+                <p>적재 완료: {String(loadRunResult.status ?? loadRunResult.run_status)} — {String(loadRunResult.inserted_count)}건</p>
+                {(loadRunResult.result_summary as Record<string, unknown> | undefined)?.transform_summary ? (
+                  <p>변환 요약: {safeJsonStringify((loadRunResult.result_summary as Record<string, unknown>).transform_summary)}</p>
+                ) : null}
+              </div>
             )}
           </div>
         );

@@ -11,6 +11,8 @@ from app.schemas.api import (
     ApiConnectorPaginationUpsert,
     ApiConnectorParamsReplace,
     ApiConnectorRuntimeParams,
+    ApiConnectorTransformConfigUpsert,
+    ApiConnectorTransformPreviewRequest,
 )
 from app.services.api_connector_service import (
     ApiConnectorError,
@@ -28,11 +30,14 @@ from app.services.api_connector_service import (
     response_preview,
     run_load,
     test_call,
+    transform_preview,
     update_operation,
     upsert_credential,
     upsert_pagination,
+    upsert_transform_config,
 )
 from app.services.standard_dataset_service import TargetTableNotAllowedError
+from app.services.wide_hour_transform_service import WideHourTransformError
 
 router = APIRouter(tags=["API Connector"])
 
@@ -216,7 +221,50 @@ async def post_load_preview(
 ):
     try:
         item = await load_preview(db, operation_id, body.runtime_params)
+    except (ApiConnectorError, WideHourTransformError) as exc:
+        code = getattr(exc, "error_code", "API_CONNECTOR_ERROR")
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return ok(item)
+
+
+@router.get("/api-connectors/operations/{operation_id}/transform-config")
+async def get_api_connector_transform_config(operation_id: str, db: AsyncSession = Depends(get_db)):
+    from app.services.wide_hour_transform_service import get_transform_config
+
+    try:
+        await get_operation_detail(db, operation_id)
     except ApiConnectorError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return ok(await get_transform_config(db, operation_id))
+
+
+@router.put("/api-connectors/operations/{operation_id}/transform-config")
+async def put_api_connector_transform_config(
+    operation_id: str,
+    body: ApiConnectorTransformConfigUpsert,
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        item = await upsert_transform_config(db, operation_id, body.model_dump(exclude_unset=True))
+    except (ApiConnectorError, WideHourTransformError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return ok(item, message="변환 설정이 저장되었습니다.")
+
+
+@router.post("/api-connectors/operations/{operation_id}/transform-preview")
+async def post_transform_preview(
+    operation_id: str,
+    body: ApiConnectorTransformPreviewRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        item = await transform_preview(
+            db,
+            operation_id,
+            raw_items=body.raw_items,
+            runtime_params=body.runtime_params,
+        )
+    except (ApiConnectorError, WideHourTransformError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return ok(item)
 
@@ -235,7 +283,7 @@ async def post_load_run(
             called_by="api",
             dry_run=body.dry_run,
         )
-    except ApiConnectorError as exc:
+    except (ApiConnectorError, WideHourTransformError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return ok(item, message="적재 실행이 완료되었습니다.")
 
