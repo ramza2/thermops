@@ -293,6 +293,12 @@ def _build_registry() -> list[TestCase]:
             timeout_seconds=420,
         ),
         _python_test(
+            "test_forecast_on_demand_provider.py",
+            groups=["model", "full"],
+            description="Forecast On-demand Input Provider (R10-S5)",
+            timeout_seconds=600,
+        ),
+        _python_test(
             "test_prediction_period_validation.py",
             groups=["model", "full"],
             description="배치 예측 기간 검증",

@@ -21,6 +21,7 @@ from app.services.prediction_service import (
     run_prediction_job,
 )
 from app.services.feature_dataset_service import PredictionPeriodError
+from app.services.forecast_input_provider_service import ForecastProviderError
 
 router = APIRouter(tags=["Prediction"])
 
@@ -32,6 +33,8 @@ async def create_prediction_job(body: PredictionJobCreate, db: AsyncSession = De
         result = await run_prediction_job(db, params)
     except PredictionModelError as exc:
         raise HTTPException(status_code=400, detail=exc.to_dict()) from exc
+    except ForecastProviderError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     except PredictionPeriodError as exc:
         raise HTTPException(status_code=400, detail=exc.to_dict()) from exc
     except ValueError as exc:

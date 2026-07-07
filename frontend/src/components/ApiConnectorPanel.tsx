@@ -165,7 +165,8 @@ export function ApiConnectorPanel() {
         {HELP_TEXTS.serviceKeyEncoding}
       </div>
       <div className="bg-blue-50 border border-blue-100 rounded p-3 mb-4 text-xs text-blue-900 space-y-1">
-        <p>기상청 단기예보 API는 예측 대상의 nx/ny가 필요합니다. <a href="/prediction-entities" className="underline text-blue-700">예측 대상</a> 화면에서 지점별 기상 매핑을 먼저 등록하세요.</p>
+        <p>기상청 단기예보 API 작업은 <a href="/predictions/jobs" className="underline text-blue-700">예측 작업</a> 화면의 단기예보 입력 생성기 설정에서 선택해 예측 실행 시 on-demand 호출됩니다. 예측 대상의 nx/ny 매핑이 필요합니다.</p>
+        <p>{HELP_TEXTS.forecastProviderHint}</p>
         <p>{HELP_TEXTS.asosStationPrerequisite}</p>
         <p>{HELP_TEXTS.calendarMultiOperationHint}</p>
         <p>{HELP_TEXTS.restApiConnectorExternalCodeLink}</p>

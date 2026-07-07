@@ -226,6 +226,7 @@ export default function PredictionEntitiesPage() {
         <p>{HELP_TEXTS.forecastGrid}</p>
         <p>{HELP_TEXTS.observationStation} R10-S4 ASOS 관측 기상 적재에서 등록된 관측소 코드를 사용합니다.</p>
         <p>{HELP_TEXTS.weatherMappingSplit}</p>
+        <p>{HELP_TEXTS.forecastEntityReadiness}</p>
         <p>{HELP_TEXTS.restApiConnectorLink}</p>
       </div>
 

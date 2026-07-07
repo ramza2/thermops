@@ -174,6 +174,8 @@ for (const path of PATHS) {
     }
     await page.getByRole("link", { name: "예측 대상" }).first().waitFor({ state: "visible", timeout: 30000 });
     await page.getByText(/Calendar\/특일 API는/).first().waitFor({ state: "visible", timeout: 30000 });
+    await page.getByText(/기상청 단기예보 API 작업은/).first().waitFor({ state: "visible", timeout: 30000 });
+    await page.getByText(/단기예보 입력 생성기/).first().waitFor({ state: "visible", timeout: 30000 });
   }
   if (path === "/prediction-entities") {
     await page.getByRole("button", { name: "예측 대상 등록" }).first().waitFor({ state: "visible", timeout: 30000 });
@@ -181,6 +183,7 @@ for (const path of PATHS) {
     await page.getByText("ASOS 관측소").first().waitFor({ state: "visible", timeout: 30000 });
     await page.getByText(/nx\/ny/).first().waitFor({ state: "visible", timeout: 30000 });
     await page.getByText(/R10-S4 ASOS 관측 기상 적재/).first().waitFor({ state: "visible", timeout: 30000 });
+    await page.getByText(/forecast_ready|단기예보 입력은/).first().waitFor({ state: "visible", timeout: 30000 });
     await page.getByText(/별도로 매핑|기상 매핑/).first().waitFor({ state: "visible", timeout: 30000 });
     if (!(await hasEmptyOrTable(/등록된 예측 대상이 없습니다/))) {
       errors.push(`${path}: empty message or table rows expected`);
@@ -244,6 +247,11 @@ for (const path of PATHS) {
   }
   if (path === "/predictions/jobs") {
     await page.getByText(/예측 사용 가능·대표 버전을 자동 선택/).first().waitFor({ state: "visible", timeout: 30000 });
+    await page.getByText("단기예보 입력").first().waitFor({ state: "visible", timeout: 30000 });
+    await page.getByText("예측 시점 단기예보 호출").first().waitFor({ state: "visible", timeout: 30000 });
+    await page.getByText("예보 발표 시각").first().waitFor({ state: "visible", timeout: 30000 });
+    await page.getByText("기상 입력 스냅샷").first().waitFor({ state: "visible", timeout: 30000 });
+    await page.getByText("단기예보 입력 미리보기").first().waitFor({ state: "visible", timeout: 30000 });
   }
   if (path === "/pipeline-builder") {
     await page.getByText("새 작업 흐름").first().waitFor({ state: "visible", timeout: 30000 });

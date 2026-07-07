@@ -309,6 +309,41 @@ async def archive_weather_mapping(db: AsyncSession, entity_id: str, mapping_id: 
     return _mapping_dict(mapping)
 
 
+async def get_entity_forecast_grid(db: AsyncSession, entity_id: str) -> dict[str, Any] | None:
+    """예측 대상의 활성 단기예보 격자(nx/ny) 조회."""
+    await _get_entity(db, entity_id)
+    mappings = (
+        await db.execute(
+            select(PredictionEntityWeatherMapping)
+            .where(
+                PredictionEntityWeatherMapping.entity_id == entity_id,
+                PredictionEntityWeatherMapping.active_yn.is_(True),
+                PredictionEntityWeatherMapping.forecast_grid_id.isnot(None),
+            )
+            .order_by(PredictionEntityWeatherMapping.priority.asc())
+        )
+    ).scalars().all()
+    for mapping in mappings:
+        grid = (
+            await db.execute(
+                select(WeatherForecastGrid).where(
+                    WeatherForecastGrid.forecast_grid_id == mapping.forecast_grid_id,
+                    WeatherForecastGrid.active_yn.is_(True),
+                )
+            )
+        ).scalar_one_or_none()
+        if grid:
+            return {
+                "entity_id": entity_id,
+                "forecast_grid_id": grid.forecast_grid_id,
+                "nx": grid.nx,
+                "ny": grid.ny,
+                "grid_name": grid.grid_name,
+                "mapping_id": mapping.mapping_id,
+            }
+    return None
+
+
 async def compute_weather_readiness(db: AsyncSession, entity_id: str) -> dict[str, Any]:
     await _get_entity(db, entity_id)
     loc = await get_active_location(db, entity_id)

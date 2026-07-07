@@ -159,7 +159,7 @@ export const HELP_TEXTS = {
   gridCalcHint:
     "계산 결과는 예보 격자 기준이며 실제 운영 전 검토가 필요합니다.",
   restApiConnectorLink:
-    "기상청 단기예보 API는 예측 대상의 nx/ny가 필요합니다. REST API 연결에서 API 작업을 등록한 뒤, 후속 R10-S5에서 예측 시점에 on-demand 호출합니다.",
+    "기상청 단기예보 API는 예측 대상의 nx/ny가 필요합니다. REST API 연결에서 API 작업을 등록한 뒤, 예측 작업 화면의 단기예보 입력 생성기 설정에서 선택해 예측 실행 시 on-demand 호출합니다.",
   restApiConnectorExternalCodeLink:
     "외부 API 응답의 지점코드, 관측소코드 등은 외부 코드 매핑 화면에서 내부 예측 대상이나 관측소와 연결할 수 있습니다.",
   externalCodeMappingIntro:
@@ -175,7 +175,13 @@ export const HELP_TEXTS = {
   wideHourUnmapped:
     "ND_ID는 외부 코드 매핑에서 내부 예측 대상과 연결되어야 합니다. 미매핑 코드는 자동으로 예측 대상을 만들지 않습니다.",
   asosWeatherTransform:
-    "ASOS 관측 기상은 과거 학습용 기상 데이터입니다. 예측 시점의 미래 기상은 후속 Forecast on-demand 단계에서 처리합니다.",
+    "ASOS 관측 기상은 과거 학습용 기상 데이터입니다. 예측 시점의 미래 기상은 단기예보 on-demand 입력으로 처리합니다.",
+  forecastOnDemand:
+    "과거 학습용 ASOS 관측과 달리, 예측 실행 시점에 기상청 단기예보 API를 호출해 미래 기상 입력을 생성합니다. 결과는 예측 작업 단위 기상 입력 스냅샷으로 저장되어 재현할 수 있습니다.",
+  forecastProviderHint:
+    "데이터 소스에 등록한 기상청 단기예보 API 작업을 선택하면 예측 실행 시 on-demand로 호출됩니다. serviceKey는 마스킹되어 표시됩니다.",
+  forecastEntityReadiness:
+    "단기예보 입력은 forecast_ready(격자 nx/ny 매핑 완료) 예측 대상만 사용할 수 있습니다. nx/ny가 없으면 예측 화면에서 단기예보 입력을 사용할 수 없습니다.",
   calendarTransform:
     "Calendar 변환은 공휴일/특일 응답을 날짜 기준정보로 정규화합니다.",
   calendarHourTransform:

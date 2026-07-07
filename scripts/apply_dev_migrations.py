@@ -318,6 +318,10 @@ MIGRATIONS = [
         "R10-S4 ASOS calendar transform schema",
         _load_sql("r10s4_asos_calendar_transform_schema.sql"),
     ),
+    (
+        "R10-S5 forecast input provider schema",
+        _load_sql("r10s5_forecast_input_provider_schema.sql"),
+    ),
 ]
 
 

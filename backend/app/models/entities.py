@@ -560,6 +560,70 @@ class PredictionJob(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime)
 
 
+class ForecastProviderConfig(Base):
+    __tablename__ = "tb_forecast_provider_config"
+    provider_config_id: Mapped[str] = mapped_column(String(50), primary_key=True)
+    provider_name: Mapped[str] = mapped_column(String(200))
+    provider_type: Mapped[str] = mapped_column(String(50), default="KMA_SHORT_FORECAST")
+    source_operation_id: Mapped[str | None] = mapped_column(String(50))
+    default_num_of_rows: Mapped[int] = mapped_column(Integer, default=1000)
+    default_data_type: Mapped[str] = mapped_column(String(20), default="JSON")
+    base_time_policy: Mapped[str] = mapped_column(String(50), default="LATEST_AVAILABLE")
+    delay_minutes: Mapped[int] = mapped_column(Integer, default=60)
+    active_yn: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime)
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime)
+    metadata_json: Mapped[dict | None] = mapped_column(JSONB)
+
+
+class ForecastInputSnapshot(Base):
+    __tablename__ = "tb_forecast_input_snapshot"
+    snapshot_id: Mapped[str] = mapped_column(String(50), primary_key=True)
+    prediction_job_id: Mapped[str | None] = mapped_column(String(80))
+    entity_id: Mapped[str | None] = mapped_column(String(50))
+    nx: Mapped[int] = mapped_column(Integer)
+    ny: Mapped[int] = mapped_column(Integer)
+    source_system: Mapped[str] = mapped_column(String(100), default="KMA_SHORT_FORECAST_API")
+    source_operation_id: Mapped[str | None] = mapped_column(String(50))
+    request_base_date: Mapped[str | None] = mapped_column(String(8))
+    request_base_time: Mapped[str | None] = mapped_column(String(4))
+    forecast_base_at: Mapped[datetime | None] = mapped_column(DateTime)
+    requested_at: Mapped[datetime] = mapped_column(DateTime)
+    cache_key: Mapped[str] = mapped_column(String(300))
+    request_params_masked: Mapped[dict | None] = mapped_column(JSONB)
+    raw_response_snapshot_id: Mapped[str | None] = mapped_column(String(50))
+    raw_response_json: Mapped[Any | None] = mapped_column(JSONB)
+    normalized_rows_json: Mapped[Any | None] = mapped_column(JSONB)
+    row_count: Mapped[int] = mapped_column(Integer, default=0)
+    cache_hit_yn: Mapped[bool] = mapped_column(Boolean, default=False)
+    success_yn: Mapped[bool] = mapped_column(Boolean, default=False)
+    error_message: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime)
+    metadata_json: Mapped[dict | None] = mapped_column(JSONB)
+
+
+class PredictionWeatherInput(Base):
+    __tablename__ = "tb_prediction_weather_input"
+    weather_input_id: Mapped[str] = mapped_column(String(50), primary_key=True)
+    prediction_job_id: Mapped[str] = mapped_column(String(80))
+    snapshot_id: Mapped[str | None] = mapped_column(String(50))
+    entity_id: Mapped[str | None] = mapped_column(String(50))
+    forecast_base_at: Mapped[datetime | None] = mapped_column(DateTime)
+    forecast_target_at: Mapped[datetime] = mapped_column(DateTime)
+    forecast_horizon_hours: Mapped[int | None] = mapped_column(Integer)
+    nx: Mapped[int | None] = mapped_column(Integer)
+    ny: Mapped[int | None] = mapped_column(Integer)
+    temperature: Mapped[float | None] = mapped_column(Numeric(10, 2))
+    humidity: Mapped[float | None] = mapped_column(Numeric(10, 2))
+    wind_speed: Mapped[float | None] = mapped_column(Numeric(10, 2))
+    precipitation: Mapped[float | None] = mapped_column(Numeric(10, 2))
+    precipitation_probability: Mapped[float | None] = mapped_column(Numeric(10, 2))
+    sky_condition: Mapped[str | None] = mapped_column(String(50))
+    precipitation_type: Mapped[str | None] = mapped_column(String(50))
+    raw_category_values_json: Mapped[dict | None] = mapped_column(JSONB)
+    created_at: Mapped[datetime] = mapped_column(DateTime)
+
+
 class HeatDemandPrediction(Base):
     __tablename__ = "tb_heat_demand_prediction"
     prediction_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)

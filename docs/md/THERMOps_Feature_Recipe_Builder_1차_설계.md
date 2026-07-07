@@ -1253,3 +1253,6 @@ R10-S3는 **열수요 API wide-hour → long format 적재 변환**이며 Featur
 
 R10-S4는 **ASOS 관측 기상·Calendar/특일 데이터 적재·정규화** 단계이며 Feature Recipe 계산 로직·Recipe Type·`ml/features.py`는 변경하지 않습니다. `std_weather_observation_hourly`·`std_calendar_date`·`std_calendar_hour` 등 표준 테이블에 적재된 값은 후속 Feature Build에서 기존과 동일한 방식으로 조인·사용됩니다.
 
+## 부록 V. Phase R10-S5 Forecast On-demand Input Provider
+
+R10-S5는 **예측 실행 시점 단기예보 on-demand 입력 생성·snapshot 저장** 단계이며 Feature Recipe 계산 로직·Recipe Type·`ml/features.py`·학습/예측 알고리즘은 변경하지 않습니다. `tb_prediction_weather_input`에 저장된 표준 기상 행은 후속 Phase에서 Feature Build 입력과 연계할 수 있으나, 이번 Phase에서는 Provider·정규화·재현성 저장까지가 범위입니다.

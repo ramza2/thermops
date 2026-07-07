@@ -32,6 +32,10 @@ from app.services.dataset_version_policy_service import (
     select_dataset_version_for_prediction,
 )
 from app.services.feature_dataset_service import validate_prediction_period
+from app.services.forecast_input_provider_service import (
+    ForecastProviderError,
+    provide_forecast_for_prediction_job,
+)
 
 
 class PredictionModelError(ValueError):
@@ -58,6 +62,13 @@ class PredictionJobParams:
     model_version: str | None = None
     overwrite_yn: bool = True
     dataset_version_id: str | None = None
+    entity_id: str | None = None
+    forecast_provider_enabled: bool = False
+    forecast_base_date: str | None = None
+    forecast_base_time: str | None = None
+    forecast_source_operation_id: str | None = None
+    forecast_cache_policy: str = "USE_CACHE"
+    weather_input_required: bool = False
 
 
 def _load_ml_modules():
@@ -381,12 +392,21 @@ def params_from_schema(body: PredictionJobCreate) -> PredictionJobParams:
         model_version=body.model_version,
         overwrite_yn=body.overwrite_yn,
         dataset_version_id=body.dataset_version_id,
+        entity_id=body.entity_id,
+        forecast_provider_enabled=body.forecast_provider_enabled,
+        forecast_base_date=body.forecast_base_date,
+        forecast_base_time=body.forecast_base_time,
+        forecast_source_operation_id=body.forecast_source_operation_id,
+        forecast_cache_policy=body.forecast_cache_policy,
+        weather_input_required=body.weather_input_required,
     )
 
 
 async def run_prediction_job(db: AsyncSession, params: PredictionJobParams) -> dict[str, Any]:
     if not params.start_at or not params.end_at:
         raise ValueError("start_at와 end_at가 필요합니다.")
+    if params.forecast_provider_enabled and not params.entity_id:
+        raise ValueError("단기예보 입력 사용 시 예측 대상(entity_id)이 필요합니다.")
     await validate_prediction_period(
         db,
         params.feature_set_id,
@@ -429,6 +449,52 @@ async def run_prediction_job(db: AsyncSession, params: PredictionJobParams) -> d
     db.add(pipeline)
     db.add(job)
     await db.flush()
+
+    forecast_input_summary: dict[str, Any] | None = None
+    if params.forecast_provider_enabled:
+        try:
+            forecast_input_summary = await provide_forecast_for_prediction_job(
+                db,
+                prediction_job_id=job_id,
+                entity_id=params.entity_id,
+                target_start_at=params.start_at,
+                target_end_at=params.end_at,
+                base_date=params.forecast_base_date,
+                base_time=params.forecast_base_time,
+                cache_policy=params.forecast_cache_policy,
+                source_operation_id=params.forecast_source_operation_id,
+                weather_input_required=params.weather_input_required,
+            )
+            if forecast_input_summary.get("failed"):
+                warnings.extend(forecast_input_summary.get("warnings") or [])
+        except ForecastProviderError as exc:
+            if params.weather_input_required:
+                finished = utc_now()
+                job.job_status = "FAILED"
+                job.finished_at = finished
+                job.error_message = str(exc)
+                job.result_summary = {
+                    "warnings": warnings,
+                    "forecast_input_summary": {"enabled": True, "failed": True, "error_message": str(exc)},
+                }
+                pipeline.run_status = "FAILED"
+                pipeline.finished_at = finished
+                pipeline.message = str(exc)[:500]
+                await db.flush()
+                return {
+                    "job_id": job_id,
+                    "pipeline_run_id": run_id,
+                    "status": "FAILED",
+                    "error_message": str(exc),
+                    "warnings": warnings,
+                }
+            warnings.append(f"단기예보 입력 생성 실패: {exc}")
+            forecast_input_summary = {
+                "enabled": True,
+                "failed": True,
+                "error_message": str(exc),
+                "warnings": [str(exc)],
+            }
 
     try:
         fs = await _get_feature_set(db, params.feature_set_id)
@@ -498,6 +564,8 @@ async def run_prediction_job(db: AsyncSession, params: PredictionJobParams) -> d
             "feature_count": len(feature_names),
             "warnings": warnings,
         }
+        if forecast_input_summary:
+            result_summary["forecast_input_summary"] = forecast_input_summary
 
         finished = utc_now()
         job.job_status = "SUCCESS"
@@ -525,6 +593,8 @@ async def run_prediction_job(db: AsyncSession, params: PredictionJobParams) -> d
         job.finished_at = finished
         job.error_message = str(exc)
         job.result_summary = {"warnings": warnings}
+        if forecast_input_summary:
+            job.result_summary["forecast_input_summary"] = forecast_input_summary
         pipeline.run_status = "FAILED"
         pipeline.finished_at = finished
         pipeline.message = str(exc)[:500]

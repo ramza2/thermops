@@ -314,6 +314,13 @@ class PredictionJobCreate(BaseModel):
     model_version: str | None = None
     overwrite_yn: bool = True
     dataset_version_id: str | None = None
+    entity_id: str | None = None
+    forecast_provider_enabled: bool = False
+    forecast_base_date: str | None = None
+    forecast_base_time: str | None = None
+    forecast_source_operation_id: str | None = None
+    forecast_cache_policy: str = "USE_CACHE"
+    weather_input_required: bool = False
 
 
 class PredictionEvaluateRequest(BaseModel):
@@ -681,3 +688,46 @@ class UnmappedIgnoreRequest(BaseModel):
 
 class ArchiveMappingRequest(BaseModel):
     archived_reason: str | None = None
+
+
+# Forecast Provider (R10-S5)
+class ForecastProviderConfigUpdate(BaseModel):
+    provider_name: str | None = None
+    provider_type: str | None = None
+    source_operation_id: str | None = None
+    default_num_of_rows: int | None = None
+    default_data_type: str | None = None
+    base_time_policy: str | None = None
+    delay_minutes: int | None = None
+    active_yn: bool | None = None
+    metadata_json: dict[str, Any] | None = None
+
+
+class ForecastResolveBaseTimeRequest(BaseModel):
+    base_date: str | None = None
+    base_time: str | None = None
+
+
+class ForecastPreviewInputRequest(BaseModel):
+    entity_id: str
+    base_date: str | None = None
+    base_time: str | None = None
+    cache_policy: str = "REFRESH"
+    target_start_at: datetime | None = None
+    target_end_at: datetime | None = None
+    source_operation_id: str | None = None
+
+
+class ForecastRequestPreviewRequest(BaseModel):
+    entity_id: str
+    base_date: str | None = None
+    base_time: str | None = None
+    source_operation_id: str | None = None
+
+
+class ForecastTestCallRequest(BaseModel):
+    entity_id: str
+    base_date: str | None = None
+    base_time: str | None = None
+    cache_policy: str = "REFRESH"
+    source_operation_id: str | None = None

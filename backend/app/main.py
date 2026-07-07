@@ -12,6 +12,7 @@ from app.api.v1 import (
     feature,
     feature_column_role,
     feature_recipe,
+    forecast_provider,
     mapping,
     model,
     monitoring,
@@ -47,6 +48,7 @@ app.include_router(dashboard.router, prefix=api_prefix)
 app.include_router(common.router, prefix=api_prefix)
 app.include_router(api_connector.router, prefix=api_prefix)
 app.include_router(prediction_entity.router, prefix=api_prefix)
+app.include_router(forecast_provider.router, prefix=api_prefix)
 app.include_router(external_code_mapping.router, prefix=api_prefix)
 app.include_router(data.router, prefix=api_prefix)
 app.include_router(sample_external.router, prefix=api_prefix)

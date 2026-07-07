@@ -2,15 +2,14 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta
 
-from fastapi import APIRouter, Query
-from sqlalchemy import select, text
+from fastapi import APIRouter, Depends, Query
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.response import ok
-from sqlalchemy.ext.asyncio import AsyncSession
-from fastapi import Depends
 
 router = APIRouter(tags=["SampleExternal"])
 
@@ -22,6 +21,40 @@ def _parse_dt(value: str | None) -> datetime | None:
     if text_val.endswith("Z"):
         text_val = text_val[:-1] + "+00:00"
     return datetime.fromisoformat(text_val).replace(tzinfo=None)
+
+
+def _kma_short_forecast_items(base_date: str, base_time: str) -> list[dict[str, str]]:
+    categories = {
+        "TMP": lambda h: str(-2 + h),
+        "REH": lambda h: str(50 + h),
+        "WSD": lambda h: str(1.5 + h * 0.1),
+        "PCP": lambda h: "강수없음" if h % 5 else "1.0",
+        "POP": lambda h: str(min(100, 10 + h * 3)),
+        "SKY": lambda h: str(1 + (h % 4)),
+        "PTY": lambda _: "0",
+    }
+    items: list[dict[str, str]] = []
+    base_h = int(base_time[:2])
+    for offset in range(1, 25):
+        fcst_h = base_h + offset
+        fcst_date = base_date
+        if fcst_h >= 24:
+            fcst_h -= 24
+            dt = datetime.strptime(base_date, "%Y%m%d") + timedelta(days=1)
+            fcst_date = dt.strftime("%Y%m%d")
+        fcst_time = f"{fcst_h:02d}00"
+        for cat, fn in categories.items():
+            items.append(
+                {
+                    "baseDate": base_date,
+                    "baseTime": base_time,
+                    "fcstDate": fcst_date,
+                    "fcstTime": fcst_time,
+                    "category": cat,
+                    "fcstValue": fn(offset),
+                }
+            )
+    return items
 
 
 @router.get("/sample-external/heat-demand")
@@ -109,6 +142,20 @@ async def sample_external_special_days(
         {"locdate": f"{sol_year}{sol_month}01", "dateName": "신정", "isHoliday": "Y"},
         {"locdate": f"{sol_year}{sol_month}05", "dateName": "소한", "isHoliday": "N", "special_day_type": "SOLAR_TERM"},
     ]
+    return ok({"items": items, "count": len(items)})
+
+
+@router.get("/sample-external/kma-short-forecast")
+async def sample_external_kma_short_forecast(
+    base_date: str = Query(default="20260101"),
+    base_time: str = Query(default="0800"),
+    nx: str = Query(default="60"),
+    ny: str = Query(default="127"),
+    numOfRows: str = Query(default="1000"),
+):
+    """REST API Connector 단기예보 변환 테스트용 JSON (개발 전용)."""
+    del numOfRows, nx, ny
+    items = _kma_short_forecast_items(base_date, base_time)
     return ok({"items": items, "count": len(items)})
 
 
