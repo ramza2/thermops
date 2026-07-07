@@ -349,6 +349,7 @@ export default function ExternalCodeMappingsPage() {
           <p>{HELP_TEXTS.externalCodeNdIdExample}</p>
           <p>{HELP_TEXTS.externalCodeStableId}</p>
           <p>{HELP_TEXTS.restApiConnectorExternalCodeLink}</p>
+          <p>{HELP_TEXTS.externalCodeStationHint}</p>
         </div>
       )}
 

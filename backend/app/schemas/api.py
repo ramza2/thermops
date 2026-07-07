@@ -496,6 +496,19 @@ class ApiConnectorTransformConfigUpsert(BaseModel):
     numeric_parse_policy: str = "ALLOW_COMMA"
     active_yn: bool = True
     metadata_json: dict[str, Any] | None = None
+    station_code_field: str = "stnId"
+    observed_at_field: str = "tm"
+    value_field_mappings_json: dict[str, Any] | None = None
+    special_day_name_field: str = "dateName"
+    special_day_type_field: str | None = None
+    default_special_day_type: str = "PUBLIC_HOLIDAY"
+    public_holiday_field: str = "isHoliday"
+    calendar_mode: str = "FULL_CALENDAR_WITH_OVERLAY"
+    calendar_year: int | None = None
+    calendar_month: int | None = None
+    hour_generation_yn: bool = False
+    station_unmapped_policy: str = "WARN_ONLY"
+    store_raw_json: bool = True
 
 
 class ApiConnectorTransformPreviewRequest(BaseModel):

@@ -98,6 +98,15 @@ const DEFAULT_TRANSFORM: ApiConnectorTransformConfig = {
   null_value_policy: "SKIP_NULL",
   numeric_parse_policy: "ALLOW_COMMA",
   active_yn: true,
+  station_code_field: "stnId",
+  observed_at_field: "tm",
+  special_day_name_field: "dateName",
+  default_special_day_type: "PUBLIC_HOLIDAY",
+  public_holiday_field: "isHoliday",
+  calendar_mode: "FULL_CALENDAR_WITH_OVERLAY",
+  hour_generation_yn: false,
+  station_unmapped_policy: "WARN_ONLY",
+  store_raw_json: true,
 };
 
 export function ApiConnectorOperationWizard({
@@ -635,21 +644,40 @@ export function ApiConnectorOperationWizard({
       case 5:
         return (
           <div className="space-y-3 text-sm">
-            <h3 className="font-medium text-slate-800">열수요 wide-hour 변환</h3>
-            <p className="text-xs text-slate-500">{HELP_TEXTS.wideHourTransform}</p>
-            <p className="text-xs text-amber-800 bg-amber-50 p-2 rounded">{HELP_TEXTS.wideHourTimestampPolicy}</p>
-            <p className="text-xs text-slate-600">{HELP_TEXTS.wideHourUnmapped}</p>
+            <h3 className="font-medium text-slate-800">변환 설정</h3>
+            <p className="text-xs text-slate-500">{HELP_TEXTS.connectorCleanSeedHint}</p>
             <label className="block text-xs text-slate-500">변환 유형</label>
             <SelectInput
               value={transform.transform_type}
-              onChange={(v) => setTransform({ ...transform, transform_type: v })}
+              onChange={(v) => {
+                const defaults: Partial<ApiConnectorTransformConfig> =
+                  v === "ASOS_HOURLY_TO_CANONICAL"
+                    ? { source_system: "KMA_ASOS_API", station_unmapped_policy: "WARN_ONLY" }
+                    : v === "CALENDAR_SPECIAL_DAY_TO_DATE" || v === "CALENDAR_DATE_TO_HOUR"
+                      ? {
+                          source_system: "KASI_SPECIAL_DAY_API",
+                          date_field: "locdate",
+                          date_format: "YYYYMMDD",
+                          calendar_mode: "FULL_CALENDAR_WITH_OVERLAY",
+                        }
+                      : v === "WIDE_HOUR_TO_LONG"
+                        ? { source_system: "HEAT_DEMAND_API" }
+                        : {};
+                setTransform({ ...transform, transform_type: v, ...defaults });
+              }}
               options={[
-                { value: "NONE", label: "없음" },
-                { value: "WIDE_HOUR_TO_LONG", label: "시간대별 컬럼 행 변환 (WIDE_HOUR_TO_LONG)" },
+                { value: "NONE", label: "변환 없음" },
+                { value: "WIDE_HOUR_TO_LONG", label: "열수요 wide-hour 변환" },
+                { value: "ASOS_HOURLY_TO_CANONICAL", label: "ASOS 관측 기상 변환" },
+                { value: "CALENDAR_SPECIAL_DAY_TO_DATE", label: "Calendar/특일 날짜 변환" },
+                { value: "CALENDAR_DATE_TO_HOUR", label: "Calendar 시간 행 생성" },
               ]}
             />
             {transform.transform_type === "WIDE_HOUR_TO_LONG" && (
               <>
+                <p className="text-xs text-slate-500">{HELP_TEXTS.wideHourTransform}</p>
+                <p className="text-xs text-amber-800 bg-amber-50 p-2 rounded">{HELP_TEXTS.wideHourTimestampPolicy}</p>
+                <p className="text-xs text-slate-600">{HELP_TEXTS.wideHourUnmapped}</p>
                 <div className="grid grid-cols-2 gap-3">
                   <div><label className="text-xs text-slate-500">외부 지점 코드 필드</label><TextInput value={transform.external_code_field || "ND_ID"} onChange={(v) => setTransform({ ...transform, external_code_field: v })} /></div>
                   <div><label className="text-xs text-slate-500">외부 지점명 필드</label><TextInput value={transform.external_name_field || "ND_KORN_NM"} onChange={(v) => setTransform({ ...transform, external_name_field: v })} /></div>
@@ -690,20 +718,97 @@ export function ApiConnectorOperationWizard({
                     ]} />
                   </div>
                 </div>
-                <div className="flex flex-wrap gap-2">
-                  <Button variant="secondary" disabled={!operationId || busy} onClick={() => void handleTransformPreview()}>변환 미리보기</Button>
-                  <Button variant="ghost" onClick={() => window.open("/external-code-mappings", "_blank")}>외부 코드 매핑 화면</Button>
-                </div>
-                {transformPreviewResult && (
-                  <div className="border rounded p-2 text-xs space-y-1">
-                    <p>원본 {String(transformPreviewResult.raw_item_count)}건 → 변환 {String(transformPreviewResult.transformed_row_count)}행</p>
-                    {(transformPreviewResult.unmapped_codes as unknown[] | undefined)?.length ? (
-                      <p className="text-amber-700">미매핑 코드 {(transformPreviewResult.unmapped_codes as unknown[]).length}건</p>
-                    ) : null}
-                    <pre className="bg-slate-50 p-2 rounded max-h-32 overflow-auto">{safeJsonStringify((transformPreviewResult.sample_rows as unknown[])?.slice(0, 3))}</pre>
-                  </div>
-                )}
               </>
+            )}
+            {transform.transform_type === "ASOS_HOURLY_TO_CANONICAL" && (
+              <>
+                <p className="text-xs text-blue-800 bg-blue-50 p-2 rounded">{HELP_TEXTS.asosWeatherTransform}</p>
+                <p className="text-xs text-slate-600">{HELP_TEXTS.asosStationPrerequisite}</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div><label className="text-xs text-slate-500">source_system</label><TextInput value={transform.source_system || "KMA_ASOS_API"} onChange={(v) => setTransform({ ...transform, source_system: v })} /></div>
+                  <div><label className="text-xs text-slate-500">station_code</label><TextInput value={transform.station_code_field || "stnId"} onChange={(v) => setTransform({ ...transform, station_code_field: v })} /></div>
+                  <div><label className="text-xs text-slate-500">observed_at</label><TextInput value={transform.observed_at_field || "tm"} onChange={(v) => setTransform({ ...transform, observed_at_field: v })} /></div>
+                  <div>
+                    <label className="text-xs text-slate-500">미등록 관측소 정책</label>
+                    <SelectInput value={transform.station_unmapped_policy || "WARN_ONLY"} onChange={(v) => setTransform({ ...transform, station_unmapped_policy: v })} options={[
+                      { value: "WARN_ONLY", label: "WARN_ONLY" },
+                      { value: "LOG_UNMAPPED", label: "LOG_UNMAPPED" },
+                      { value: "FAIL_LOAD", label: "FAIL_LOAD" },
+                    ]} />
+                  </div>
+                  <div><label className="text-xs text-slate-500">temperature (ta)</label><TextInput value={transform.value_field_mappings_json?.temperature || "ta"} onChange={(v) => setTransform({ ...transform, value_field_mappings_json: { ...(transform.value_field_mappings_json || {}), temperature: v } })} /></div>
+                  <div><label className="text-xs text-slate-500">humidity (hm)</label><TextInput value={transform.value_field_mappings_json?.humidity || "hm"} onChange={(v) => setTransform({ ...transform, value_field_mappings_json: { ...(transform.value_field_mappings_json || {}), humidity: v } })} /></div>
+                  <div><label className="text-xs text-slate-500">wind_speed (ws)</label><TextInput value={transform.value_field_mappings_json?.wind_speed || "ws"} onChange={(v) => setTransform({ ...transform, value_field_mappings_json: { ...(transform.value_field_mappings_json || {}), wind_speed: v } })} /></div>
+                  <div><label className="text-xs text-slate-500">precipitation (rn)</label><TextInput value={transform.value_field_mappings_json?.precipitation || "rn"} onChange={(v) => setTransform({ ...transform, value_field_mappings_json: { ...(transform.value_field_mappings_json || {}), precipitation: v } })} /></div>
+                </div>
+                <label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={transform.store_raw_json !== false} onChange={(e) => setTransform({ ...transform, store_raw_json: e.target.checked })} />raw_json 저장</label>
+              </>
+            )}
+            {(transform.transform_type === "CALENDAR_SPECIAL_DAY_TO_DATE" || transform.transform_type === "CALENDAR_DATE_TO_HOUR") && (
+              <>
+                <p className="text-xs text-blue-800 bg-blue-50 p-2 rounded">{HELP_TEXTS.calendarTransform}</p>
+                {transform.transform_type === "CALENDAR_DATE_TO_HOUR" && (
+                  <p className="text-xs text-slate-600">{HELP_TEXTS.calendarHourTransform}</p>
+                )}
+                <p className="text-xs text-slate-600">{HELP_TEXTS.calendarMultiOperationHint}</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div><label className="text-xs text-slate-500">source_system</label><TextInput value={transform.source_system || "KASI_SPECIAL_DAY_API"} onChange={(v) => setTransform({ ...transform, source_system: v })} /></div>
+                  <div>
+                    <label className="text-xs text-slate-500">calendar mode</label>
+                    <SelectInput value={transform.calendar_mode || "FULL_CALENDAR_WITH_OVERLAY"} onChange={(v) => setTransform({ ...transform, calendar_mode: v })} options={[
+                      { value: "SPECIAL_DAYS_ONLY", label: "SPECIAL_DAYS_ONLY" },
+                      { value: "FULL_CALENDAR_WITH_OVERLAY", label: "FULL_CALENDAR_WITH_OVERLAY" },
+                    ]} />
+                  </div>
+                  <div><label className="text-xs text-slate-500">calendar_year</label><TextInput value={String(transform.calendar_year ?? "")} onChange={(v) => setTransform({ ...transform, calendar_year: v ? Number(v) : null })} /></div>
+                  <div><label className="text-xs text-slate-500">calendar_month (선택)</label><TextInput value={String(transform.calendar_month ?? "")} onChange={(v) => setTransform({ ...transform, calendar_month: v ? Number(v) : null })} /></div>
+                  <div><label className="text-xs text-slate-500">locdate</label><TextInput value={transform.date_field || "locdate"} onChange={(v) => setTransform({ ...transform, date_field: v })} /></div>
+                  <div><label className="text-xs text-slate-500">date format</label><TextInput value={transform.date_format || "YYYYMMDD"} onChange={(v) => setTransform({ ...transform, date_format: v })} /></div>
+                  <div><label className="text-xs text-slate-500">dateName</label><TextInput value={transform.special_day_name_field || "dateName"} onChange={(v) => setTransform({ ...transform, special_day_name_field: v })} /></div>
+                  <div><label className="text-xs text-slate-500">isHoliday</label><TextInput value={transform.public_holiday_field || "isHoliday"} onChange={(v) => setTransform({ ...transform, public_holiday_field: v })} /></div>
+                  <div>
+                    <label className="text-xs text-slate-500">special_day_type (기본)</label>
+                    <SelectInput value={transform.default_special_day_type || "PUBLIC_HOLIDAY"} onChange={(v) => setTransform({ ...transform, default_special_day_type: v })} options={[
+                      { value: "PUBLIC_HOLIDAY", label: "PUBLIC_HOLIDAY" },
+                      { value: "NATIONAL_HOLIDAY", label: "NATIONAL_HOLIDAY" },
+                      { value: "ANNIVERSARY", label: "ANNIVERSARY" },
+                      { value: "SOLAR_TERM", label: "SOLAR_TERM" },
+                      { value: "MISC_SPECIAL_DAY", label: "MISC_SPECIAL_DAY" },
+                      { value: "CUSTOM", label: "CUSTOM" },
+                    ]} />
+                  </div>
+                  {transform.transform_type === "CALENDAR_DATE_TO_HOUR" && (
+                    <>
+                      <div><label className="text-xs text-slate-500">hour_start</label><TextInput value={String(transform.hour_start ?? 0)} onChange={(v) => setTransform({ ...transform, hour_start: Number(v) })} /></div>
+                      <div><label className="text-xs text-slate-500">hour_end</label><TextInput value={String(transform.hour_end ?? 23)} onChange={(v) => setTransform({ ...transform, hour_end: Number(v) })} /></div>
+                    </>
+                  )}
+                </div>
+              </>
+            )}
+            {transform.transform_type !== "NONE" && (
+              <div className="flex flex-wrap gap-2">
+                <Button variant="secondary" disabled={!operationId || busy} onClick={() => void handleTransformPreview()}>변환 미리보기</Button>
+                {transform.transform_type === "WIDE_HOUR_TO_LONG" && (
+                  <Button variant="ghost" onClick={() => window.open("/external-code-mappings", "_blank")}>외부 코드 매핑 화면</Button>
+                )}
+                {transform.transform_type === "ASOS_HOURLY_TO_CANONICAL" && (
+                  <Button variant="ghost" onClick={() => window.open("/prediction-entities", "_blank")}>ASOS 관측소 기준정보</Button>
+                )}
+              </div>
+            )}
+            {transformPreviewResult && (
+              <div className="border rounded p-2 text-xs space-y-1">
+                <p>변환 유형: {String((transformPreviewResult.transform_summary as Record<string, unknown> | undefined)?.transform_type ?? transform.transform_type)}</p>
+                <p>원본 {String(transformPreviewResult.raw_item_count)}건 → 변환 {String(transformPreviewResult.transformed_row_count)}행 · 경고 {String((transformPreviewResult.warnings as unknown[] | undefined)?.length ?? 0)}건</p>
+                {(transformPreviewResult.transform_summary as Record<string, unknown> | undefined)?.date_row_count != null && (
+                  <p>날짜 {String((transformPreviewResult.transform_summary as Record<string, unknown>).date_row_count)}행 · 시간 {String((transformPreviewResult.transform_summary as Record<string, unknown>).hour_row_count)}행</p>
+                )}
+                {(transformPreviewResult.unmapped_codes as unknown[] | undefined)?.length ? (
+                  <p className="text-amber-700">미매핑 코드 {(transformPreviewResult.unmapped_codes as unknown[]).length}건</p>
+                ) : null}
+                <pre className="bg-slate-50 p-2 rounded max-h-32 overflow-auto">{safeJsonStringify((transformPreviewResult.sample_rows as unknown[])?.slice(0, 3))}</pre>
+              </div>
             )}
           </div>
         );
@@ -792,7 +897,13 @@ export function ApiConnectorOperationWizard({
               <p><strong>작업명:</strong> {basic.operation_name}</p>
               <p><strong>endpoint:</strong> {basic.endpoint_path}</p>
               <p><strong>응답 경로:</strong> {responsePath.response_item_path}</p>
-              <p><strong>변환:</strong> {transform.transform_type === "WIDE_HOUR_TO_LONG" ? "시간대별 컬럼 행 변환" : "없음"}</p>
+              <p><strong>변환:</strong> {{
+                NONE: "없음",
+                WIDE_HOUR_TO_LONG: "열수요 wide-hour 변환",
+                ASOS_HOURLY_TO_CANONICAL: "ASOS 관측 기상 변환",
+                CALENDAR_SPECIAL_DAY_TO_DATE: "Calendar/특일 날짜 변환",
+                CALENDAR_DATE_TO_HOUR: "Calendar 시간 행 생성",
+              }[transform.transform_type] || transform.transform_type}</p>
               <p><strong>파라미터:</strong> {params.length}개</p>
               <p><strong>페이징:</strong> {pagination.pagination_type}</p>
               <p><strong>적재 대상:</strong> {target.target_table || "(미설정)"}</p>

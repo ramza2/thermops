@@ -136,6 +136,31 @@ for (const path of PATHS) {
     for (const label of ["기본 정보", "인증 정보", "요청 파라미터", "페이징 방식", "응답 데이터 경로", "변환 설정", "적재 대상", "테스트 호출", "검토 및 저장"]) {
       await page.getByText(label).first().waitFor({ state: "visible", timeout: 30000 });
     }
+    const wizard = page.locator("div").filter({ hasText: "REST API 작업 만들기" }).last();
+    const sourceSelect = wizard.locator("select").first();
+    const optionCount = await sourceSelect.locator("option").count();
+    if (optionCount > 1) {
+      await sourceSelect.selectOption({ index: 1 });
+      await wizard.locator("label", { hasText: "API 작업명" }).locator("..").locator("input").fill("check-pages-transform");
+      await wizard.locator("label", { hasText: "Endpoint Path" }).locator("..").locator("input").fill("/sample-external/asos-hourly");
+      for (let i = 0; i < 5; i += 1) {
+        await page.getByRole("button", { name: "다음" }).click();
+      }
+      await page.getByText("변환 설정").first().waitFor({ state: "visible", timeout: 30000 });
+      const transformSelect = wizard.locator("select").filter({ has: wizard.locator('option[value="ASOS_HOURLY_TO_CANONICAL"]') }).first();
+      await transformSelect.locator('option[value="ASOS_HOURLY_TO_CANONICAL"]').waitFor({ state: "attached", timeout: 30000 });
+      await transformSelect.locator('option[value="CALENDAR_SPECIAL_DAY_TO_DATE"]').waitFor({ state: "attached", timeout: 30000 });
+      await transformSelect.locator('option[value="CALENDAR_DATE_TO_HOUR"]').waitFor({ state: "attached", timeout: 30000 });
+      await transformSelect.selectOption("ASOS_HOURLY_TO_CANONICAL");
+      for (const label of ["station_code", "observed_at"]) {
+        await page.getByText(label).first().waitFor({ state: "visible", timeout: 30000 });
+      }
+      await transformSelect.selectOption("CALENDAR_SPECIAL_DAY_TO_DATE");
+      for (const label of ["locdate", "dateName", "FULL_CALENDAR_WITH_OVERLAY", "SPECIAL_DAYS_ONLY"]) {
+        await page.getByText(label).first().waitFor({ state: "visible", timeout: 30000 });
+      }
+      await page.getByText(/ASOS 관측 기상은 과거 학습용/).first().waitFor({ state: "visible", timeout: 30000 });
+    }
     await page.getByText("요청 미리보기").first().waitFor({ state: "visible", timeout: 30000 });
     await page.getByText("테스트 호출").first().waitFor({ state: "visible", timeout: 30000 });
     await page.getByText("적재 미리보기").first().waitFor({ state: "visible", timeout: 30000 });
@@ -148,12 +173,14 @@ for (const path of PATHS) {
       await page.getByText("표준 데이터셋을 먼저 정의한 뒤").first().waitFor({ state: "visible", timeout: 30000 });
     }
     await page.getByRole("link", { name: "예측 대상" }).first().waitFor({ state: "visible", timeout: 30000 });
+    await page.getByText(/Calendar\/특일 API는/).first().waitFor({ state: "visible", timeout: 30000 });
   }
   if (path === "/prediction-entities") {
     await page.getByRole("button", { name: "예측 대상 등록" }).first().waitFor({ state: "visible", timeout: 30000 });
     await page.getByText("단기예보 격자").first().waitFor({ state: "visible", timeout: 30000 });
     await page.getByText("ASOS 관측소").first().waitFor({ state: "visible", timeout: 30000 });
     await page.getByText(/nx\/ny/).first().waitFor({ state: "visible", timeout: 30000 });
+    await page.getByText(/R10-S4 ASOS 관측 기상 적재/).first().waitFor({ state: "visible", timeout: 30000 });
     await page.getByText(/별도로 매핑|기상 매핑/).first().waitFor({ state: "visible", timeout: 30000 });
     if (!(await hasEmptyOrTable(/등록된 예측 대상이 없습니다/))) {
       errors.push(`${path}: empty message or table rows expected`);

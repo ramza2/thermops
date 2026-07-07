@@ -204,6 +204,20 @@ export interface ApiConnectorTransformConfig {
   numeric_parse_policy?: string;
   active_yn?: boolean;
   policy_warnings?: string[];
+  station_code_field?: string;
+  observed_at_field?: string;
+  value_field_mappings_json?: Record<string, string> | null;
+  special_day_name_field?: string;
+  special_day_type_field?: string | null;
+  default_special_day_type?: string;
+  public_holiday_field?: string;
+  calendar_mode?: string;
+  calendar_year?: number | null;
+  calendar_month?: number | null;
+  hour_generation_yn?: boolean;
+  station_unmapped_policy?: string;
+  store_raw_json?: boolean;
+  metadata_json?: Record<string, unknown> | null;
 }
 
 export interface ApiConnectorTransformPreview {

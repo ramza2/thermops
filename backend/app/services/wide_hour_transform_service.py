@@ -17,7 +17,9 @@ from app.services.api_connector_loader import get_physical_columns
 from app.services.external_code_mapping_service import resolve_or_log_unmapped
 from app.services.standard_dataset_service import validate_target_table_allowed
 
-TRANSFORM_TYPES = frozenset({"NONE", "WIDE_HOUR_TO_LONG"})
+TRANSFORM_TYPES = frozenset(
+    {"NONE", "WIDE_HOUR_TO_LONG", "ASOS_HOURLY_TO_CANONICAL", "CALENDAR_SPECIAL_DAY_TO_DATE", "CALENDAR_DATE_TO_HOUR"}
+)
 TIMESTAMP_POLICIES = frozenset({"HOUR_LABEL_AS_END", "HOUR_LABEL_AS_START"})
 HOUR_24_POLICIES = frozenset({"NEXT_DAY_00", "SAME_DAY_23"})
 UNMAPPED_POLICIES = frozenset({"FAIL_LOAD", "SKIP_UNMAPPED", "LOG_ONLY"})
@@ -47,7 +49,62 @@ DEFAULT_WIDE_HOUR_CONFIG: dict[str, Any] = {
     "null_value_policy": "SKIP_NULL",
     "numeric_parse_policy": "ALLOW_COMMA",
     "active_yn": True,
+    "station_code_field": "stnId",
+    "observed_at_field": "tm",
+    "value_field_mappings_json": None,
+    "special_day_name_field": "dateName",
+    "special_day_type_field": None,
+    "default_special_day_type": "PUBLIC_HOLIDAY",
+    "public_holiday_field": "isHoliday",
+    "calendar_mode": "FULL_CALENDAR_WITH_OVERLAY",
+    "calendar_year": None,
+    "calendar_month": None,
+    "hour_generation_yn": False,
+    "station_unmapped_policy": "WARN_ONLY",
+    "store_raw_json": True,
 }
+
+DEFAULT_CONFIG_BY_TYPE: dict[str, dict[str, Any]] = {
+    "NONE": {"transform_type": "NONE", "active_yn": True},
+    "WIDE_HOUR_TO_LONG": DEFAULT_WIDE_HOUR_CONFIG,
+    "ASOS_HOURLY_TO_CANONICAL": {
+        **DEFAULT_WIDE_HOUR_CONFIG,
+        "transform_type": "ASOS_HOURLY_TO_CANONICAL",
+        "source_system": "KMA_ASOS_API",
+        "station_unmapped_policy": "WARN_ONLY",
+        "store_raw_json": True,
+    },
+    "CALENDAR_SPECIAL_DAY_TO_DATE": {
+        **DEFAULT_WIDE_HOUR_CONFIG,
+        "transform_type": "CALENDAR_SPECIAL_DAY_TO_DATE",
+        "source_system": "KASI_SPECIAL_DAY_API",
+        "date_field": "locdate",
+        "date_format": "YYYYMMDD",
+        "calendar_mode": "FULL_CALENDAR_WITH_OVERLAY",
+        "store_raw_json": True,
+    },
+    "CALENDAR_DATE_TO_HOUR": {
+        **DEFAULT_WIDE_HOUR_CONFIG,
+        "transform_type": "CALENDAR_DATE_TO_HOUR",
+        "source_system": "KASI_SPECIAL_DAY_API",
+        "date_field": "locdate",
+        "date_format": "YYYYMMDD",
+        "hour_start": 0,
+        "hour_end": 23,
+        "calendar_mode": "FULL_CALENDAR_WITH_OVERLAY",
+        "hour_generation_yn": True,
+        "store_raw_json": True,
+    },
+}
+
+CONFIG_FIELD_KEYS = frozenset(DEFAULT_WIDE_HOUR_CONFIG.keys()) | frozenset(
+    {
+        "transform_type",
+        "transform_name",
+        "active_yn",
+        "metadata_json",
+    }
+)
 
 
 class WideHourTransformError(ValueError):
@@ -89,6 +146,19 @@ def _config_dict(row: ApiConnectorTransformConfig) -> dict[str, Any]:
         "numeric_parse_policy": row.numeric_parse_policy,
         "active_yn": bool(row.active_yn),
         "metadata_json": row.metadata_json,
+        "station_code_field": row.station_code_field,
+        "observed_at_field": row.observed_at_field,
+        "value_field_mappings_json": row.value_field_mappings_json,
+        "special_day_name_field": row.special_day_name_field,
+        "special_day_type_field": row.special_day_type_field,
+        "default_special_day_type": row.default_special_day_type,
+        "public_holiday_field": row.public_holiday_field,
+        "calendar_mode": row.calendar_mode,
+        "calendar_year": row.calendar_year,
+        "calendar_month": row.calendar_month,
+        "hour_generation_yn": bool(row.hour_generation_yn),
+        "station_unmapped_policy": row.station_unmapped_policy,
+        "store_raw_json": bool(row.store_raw_json),
         "created_at": row.created_at.isoformat() if row.created_at else None,
         "updated_at": row.updated_at.isoformat() if row.updated_at else None,
     }
@@ -100,6 +170,8 @@ def validate_transform_config(config: dict[str, Any]) -> list[str]:
     if ttype not in TRANSFORM_TYPES:
         raise WideHourTransformError("지원하지 않는 변환 유형입니다.")
     if ttype == "NONE":
+        return warnings
+    if ttype != "WIDE_HOUR_TO_LONG":
         return warnings
     if config.get("timestamp_policy") not in TIMESTAMP_POLICIES:
         raise WideHourTransformError("시간 해석 방식(timestamp_policy)이 올바르지 않습니다.")
@@ -133,10 +205,38 @@ async def get_transform_config(db: AsyncSession, operation_id: str) -> dict[str,
     return _config_dict(row)
 
 
+def validate_connector_transform_config(config: dict[str, Any]) -> list[str]:
+    ttype = (config.get("transform_type") or "NONE").upper()
+    if ttype not in TRANSFORM_TYPES:
+        raise WideHourTransformError("지원하지 않는 변환 유형입니다.")
+    if ttype == "NONE":
+        return []
+    if ttype == "WIDE_HOUR_TO_LONG":
+        return validate_transform_config(config)
+    if ttype == "ASOS_HOURLY_TO_CANONICAL":
+        from app.services.weather_observation_transform_service import validate_asos_transform_config
+
+        return validate_asos_transform_config(config)
+    if ttype == "CALENDAR_SPECIAL_DAY_TO_DATE":
+        from app.services.calendar_transform_service import validate_calendar_transform_config
+
+        return validate_calendar_transform_config(config, hour_mode=False)
+    if ttype == "CALENDAR_DATE_TO_HOUR":
+        from app.services.calendar_transform_service import validate_calendar_transform_config
+
+        return validate_calendar_transform_config(config, hour_mode=True)
+    return []
+
+
 async def save_transform_config(db: AsyncSession, operation_id: str, payload: dict[str, Any]) -> dict[str, Any]:
-    merged = {**DEFAULT_WIDE_HOUR_CONFIG, **{k: v for k, v in payload.items() if v is not None}}
-    merged["transform_type"] = (merged.get("transform_type") or "NONE").upper()
-    warnings = validate_transform_config(merged)
+    existing = await get_transform_config(db, operation_id)
+    ttype = (payload.get("transform_type") or (existing or {}).get("transform_type") or "NONE").upper()
+    base_defaults = DEFAULT_CONFIG_BY_TYPE.get(ttype, DEFAULT_WIDE_HOUR_CONFIG)
+    if existing:
+        base_defaults = {**base_defaults, **{k: v for k, v in existing.items() if v is not None and k != "policy_warnings"}}
+    merged = {**base_defaults, **{k: v for k, v in payload.items() if v is not None}}
+    merged["transform_type"] = ttype
+    warnings = validate_connector_transform_config(merged)
     now = utc_now()
     row = (
         await db.execute(
@@ -144,49 +244,15 @@ async def save_transform_config(db: AsyncSession, operation_id: str, payload: di
         )
     ).scalar_one_or_none()
     if row:
-        for key, val in merged.items():
-            if key in DEFAULT_WIDE_HOUR_CONFIG or key in (
-                "transform_type",
-                "transform_name",
-                "active_yn",
-                "metadata_json",
-            ):
-                setattr(row, key, val)
+        for key in CONFIG_FIELD_KEYS:
+            if key in merged:
+                setattr(row, key, merged[key])
         row.updated_at = now
     else:
-        fields = {
-            k: merged[k]
-            for k in (
-                "source_system",
-                "external_code_group",
-                "external_code_field",
-                "external_name_field",
-                "date_field",
-                "date_format",
-                "hour_column_prefix",
-                "hour_column_suffix",
-                "hour_start",
-                "hour_end",
-                "value_output_field",
-                "measured_at_output_field",
-                "entity_id_output_field",
-                "entity_code_output_field",
-                "external_code_output_field",
-                "external_name_output_field",
-                "timestamp_policy",
-                "hour_24_policy",
-                "unmapped_policy",
-                "null_value_policy",
-                "numeric_parse_policy",
-            )
-        }
+        fields = {k: merged[k] for k in CONFIG_FIELD_KEYS if k in merged}
         row = ApiConnectorTransformConfig(
             transform_config_id=_new_id("ACTC"),
             operation_id=operation_id,
-            transform_type=merged["transform_type"],
-            transform_name=merged.get("transform_name"),
-            active_yn=bool(merged.get("active_yn", True)),
-            metadata_json=merged.get("metadata_json"),
             created_at=now,
             updated_at=now,
             **fields,
@@ -482,22 +548,14 @@ async def preview_wide_hour_transform(
     }
 
 
-async def apply_transform_if_configured(
+async def apply_wide_hour_transform_if_configured(
     db: AsyncSession,
     operation_id: str,
     raw_items: list[dict[str, Any]],
+    config: dict[str, Any],
     *,
     for_load: bool = False,
 ) -> dict[str, Any]:
-    config = await get_transform_config(db, operation_id)
-    if not config or config.get("transform_type") != "WIDE_HOUR_TO_LONG" or not config.get("active_yn", True):
-        return {
-            "items": raw_items,
-            "transform_applied": False,
-            "transform_summary": None,
-            "unmapped_codes": [],
-            "warnings": [],
-        }
     result = await transform_wide_hour_items(
         db, raw_items, config, source_operation_id=operation_id
     )
@@ -515,3 +573,16 @@ async def apply_transform_if_configured(
         "blocked": result.get("blocked"),
         "block_reason": result.get("block_reason"),
     }
+
+
+async def apply_transform_if_configured(
+    db: AsyncSession,
+    operation_id: str,
+    raw_items: list[dict[str, Any]],
+    *,
+    for_load: bool = False,
+) -> dict[str, Any]:
+    """Backward-compatible shim — use connector_transform_service.apply_transform_if_configured."""
+    from app.services.connector_transform_service import apply_transform_if_configured as _apply
+
+    return await _apply(db, operation_id, raw_items, for_load=for_load)

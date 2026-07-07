@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from datetime import date, datetime
 from typing import Any
 
@@ -88,6 +89,8 @@ def coerce_value_for_column(value: Any, data_type: str) -> Any:
             return value
         if isinstance(value, str):
             return float(value.replace(",", ""))
+    if "json" in dt and isinstance(value, (dict, list)):
+        return json.dumps(value, ensure_ascii=False)
     return value
 
 

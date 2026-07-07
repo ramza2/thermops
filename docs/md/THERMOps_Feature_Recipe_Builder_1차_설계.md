@@ -1249,3 +1249,7 @@ R10-S2는 **외부 코드 매핑·미매핑 코드 수집·코드 변환(resolve
 
 R10-S3는 **열수요 API wide-hour → long format 적재 변환**이며 Feature Recipe 계산 로직·Recipe Type·`ml/features.py`는 변경하지 않습니다. 변환된 `measured_at`·`heat_demand`·`entity_id`/`site_id`는 기존 Feature Build·학습 파이프라인의 입력 데이터로 사용됩니다.
 
+## 부록 U. Phase R10-S4 ASOS / Calendar Ingestion
+
+R10-S4는 **ASOS 관측 기상·Calendar/특일 데이터 적재·정규화** 단계이며 Feature Recipe 계산 로직·Recipe Type·`ml/features.py`는 변경하지 않습니다. `std_weather_observation_hourly`·`std_calendar_date`·`std_calendar_hour` 등 표준 테이블에 적재된 값은 후속 Feature Build에서 기존과 동일한 방식으로 조인·사용됩니다.
+

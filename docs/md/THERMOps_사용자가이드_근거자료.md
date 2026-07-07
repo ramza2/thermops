@@ -200,6 +200,8 @@ flowchart LR
 
 **R10-S3 열수요 wide-hour 변환**: REST API 작업 Wizard **변환 설정**에서 `HTDND_AMNT_1HR`~`24HR` 컬럼을 `measured_at`·`heat_demand` 행으로 변환합니다. 외부 코드 매핑 선행 후 **변환 미리보기**·적재 미리보기·적재 실행 순으로 확인합니다.
 
+**R10-S4 ASOS 관측 기상 / Calendar·특일 적재**: REST API 작업 Wizard **변환 설정**에서 **ASOS 관측 기상 변환**·**Calendar/특일 날짜 변환**·**Calendar 시간 행 생성**을 선택합니다. ASOS는 과거 학습용 관측값(`station_code`, `observed_at`, 기온·습도 등)을 표준 기상 행으로 정규화하며, 적재 전 **예측 대상 > ASOS 관측소** 기준정보 등록을 권장합니다. Calendar는 공휴일·24절기 등 특일 API 응답(`locdate`, `dateName`, `isHoliday`)을 `std_calendar_date` 또는 `std_calendar_hour` 형태로 변환합니다. `FULL_CALENDAR_WITH_OVERLAY` 모드는 연·월 전체 달력에 특일을 덮어씁니다. **변환 미리보기**에서 `transformed_row_count`·경고·샘플 행을 확인한 뒤 적재 미리보기·적재 실행을 수행합니다. 미래 예측용 단기예보는 R10-S5에서 on-demand 처리합니다. 운영 seed에는 ASOS/Calendar 예시가 없으므로 표준 데이터셋 Wizard와 REST API 작업을 먼저 등록합니다.
+
 **R9-S2 Dataset Version 운영 정책**: Feature Build로 생성되는 학습 데이터 버전에 역할·상태·생성 범위를 부여합니다. 대표 버전(`PRIMARY`)은 학습/예측 자동 선택 시 우선 사용되며, 일부 생성(`PARTIAL`)·임시(`TEMPORARY`)·보관(`ARCHIVED`)·생성 실패(`BUILD_FAILED`) 버전은 자동 선택에서 제외됩니다. 명시적 운영 후보가 없을 때만 `record_count DESC` fallback을 사용합니다(R9-S1 임시 복구 유지). 화면 `/dataset-versions`(학습 데이터 버전), API `GET/POST /api/v1/dataset-versions/*`.
 
 **R10 REST API Connector Builder**: 데이터 소스 화면 **REST API 연결**에서 API 작업(Operation)을 등록합니다. serviceKey는 Decoding 키 입력을 권장하며 저장 후 마스킹만 표시됩니다. 요청 파라미터·페이징·응답 데이터 경로·**변환 설정** 후 테스트 호출·적재 미리보기·적재 실행이 가능합니다. 표준 데이터셋 Wizard로 생성한 ACTIVE 물리 테이블만 적재 대상으로 허용합니다.

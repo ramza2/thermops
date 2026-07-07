@@ -25,12 +25,15 @@ from app.models.entities import (
 from app.services.api_connector_http_client import build_full_url, encode_query_value, execute_http_request
 from app.services.api_connector_loader import insert_rows, preview_load_rows
 from app.services.external_code_mapping_service import scan_items_for_code_mappings
+from app.services.connector_transform_service import (
+    TRANSFORM_ERROR_TYPES,
+    apply_transform_if_configured,
+    preview_transform,
+)
 from app.services.wide_hour_transform_service import (
     WideHourTransformError,
-    apply_transform_if_configured,
     get_transform_config,
     match_target_columns,
-    preview_wide_hour_transform,
     save_transform_config,
 )
 from app.services.api_connector_parser import normalize_items, parse_response_body
@@ -871,7 +874,7 @@ async def run_load(
         await db.flush()
         if isinstance(exc, ApiConnectorError):
             raise
-        if isinstance(exc, WideHourTransformError):
+        if isinstance(exc, TRANSFORM_ERROR_TYPES):
             raise ApiConnectorError(str(exc), error_code=exc.error_code) from exc
         raise ApiConnectorError(str(exc), error_code="LOAD_FAILED") from exc
 
@@ -898,7 +901,7 @@ async def transform_preview(
             db, operation_id, runtime_params=runtime_params, sample_limit=MAX_TEST_ITEMS
         )
         raw_items = result["items"]
-    return await preview_wide_hour_transform(
+    return await preview_transform(
         db,
         operation_id=operation_id,
         raw_items=raw_items,

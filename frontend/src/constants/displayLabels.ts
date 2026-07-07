@@ -174,6 +174,20 @@ export const HELP_TEXTS = {
     "1HR/24HR 시간 해석은 기관 API 정의에 따라 다를 수 있습니다. 운영 적용 전 01:00 시점인지 00:00~01:00 구간인지 확인하세요.",
   wideHourUnmapped:
     "ND_ID는 외부 코드 매핑에서 내부 예측 대상과 연결되어야 합니다. 미매핑 코드는 자동으로 예측 대상을 만들지 않습니다.",
+  asosWeatherTransform:
+    "ASOS 관측 기상은 과거 학습용 기상 데이터입니다. 예측 시점의 미래 기상은 후속 Forecast on-demand 단계에서 처리합니다.",
+  calendarTransform:
+    "Calendar 변환은 공휴일/특일 응답을 날짜 기준정보로 정규화합니다.",
+  calendarHourTransform:
+    "날짜 기준정보를 시간 단위(calendar_hour) 행으로 확장합니다. hour_start~hour_end 범위를 지정하세요.",
+  connectorCleanSeedHint:
+    "운영 seed에는 예시 API/데이터가 포함되지 않으므로 표준 데이터셋과 REST API 작업을 먼저 등록하세요.",
+  asosStationPrerequisite:
+    "ASOS API 적재 전 예측 대상 > ASOS 관측소 기준정보를 등록하세요. 미등록 관측소 코드는 경고 또는 적재 중단 정책을 따릅니다.",
+  calendarMultiOperationHint:
+    "Calendar/특일 API는 하나의 데이터 소스 아래 공휴일·국경일·기념일·24절기·잡절 등 여러 API 작업으로 구성할 수 있습니다.",
+  externalCodeStationHint:
+    "관측소 코드 또는 특일 유형 코드가 필요한 경우 외부 코드 매핑을 사용할 수 있습니다.",
   externalCodeStableId:
     "외부 코드가 변경되어도 내부 예측 대상 ID를 유지할 수 있도록 매핑을 사용합니다.",
 } as const;

@@ -287,6 +287,12 @@ def _build_registry() -> list[TestCase]:
             timeout_seconds=360,
         ),
         _python_test(
+            "test_asos_calendar_ingestion.py",
+            groups=["model", "full", "connector"],
+            description="ASOS / Calendar transform ingestion (R10-S4)",
+            timeout_seconds=420,
+        ),
+        _python_test(
             "test_prediction_period_validation.py",
             groups=["model", "full"],
             description="배치 예측 기간 검증",

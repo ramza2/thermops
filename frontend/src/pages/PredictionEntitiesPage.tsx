@@ -224,7 +224,7 @@ export default function PredictionEntitiesPage() {
       <PageHeader title={PAGE_TITLES.predictionEntities} description={PAGE_DESCRIPTIONS.predictionEntities} />
       <div className="bg-blue-50 border border-blue-100 rounded p-3 mb-4 text-xs text-blue-900 space-y-1">
         <p>{HELP_TEXTS.forecastGrid}</p>
-        <p>{HELP_TEXTS.observationStation}</p>
+        <p>{HELP_TEXTS.observationStation} R10-S4 ASOS 관측 기상 적재에서 등록된 관측소 코드를 사용합니다.</p>
         <p>{HELP_TEXTS.weatherMappingSplit}</p>
         <p>{HELP_TEXTS.restApiConnectorLink}</p>
       </div>
@@ -369,6 +369,7 @@ export default function PredictionEntitiesPage() {
             </div>
             <div>
               <h4 className="font-medium mb-2">ASOS 관측소 매핑</h4>
+              <p className="text-xs text-slate-500 mb-2">R10-S4 ASOS 관측 기상 적재에서 station_code 검증에 사용됩니다.</p>
               <div className="grid grid-cols-3 gap-2">
                 <TextInput value={stationForm.station_code} onChange={(v) => setStationForm({ ...stationForm, station_code: v })} />
                 <TextInput value={stationForm.station_name} onChange={(v) => setStationForm({ ...stationForm, station_name: v })} />

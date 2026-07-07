@@ -77,6 +77,42 @@ async def sample_external_heat_demand_wide(
     for hour in range(1, 25):
         item[f"HTDND_AMNT_{hour}HR"] = str(round(100.0 + hour * 0.5, 1))
     return ok({"items": [item], "count": 1})
+
+
+@router.get("/sample-external/asos-hourly")
+async def sample_external_asos_hourly(
+    stn_id: str = Query(default="108"),
+    tm: str = Query(default="2026-01-01 01:00"),
+):
+    """REST API Connector ASOS 관측 기상 변환 테스트용 JSON (개발 전용)."""
+    item = {
+        "stnId": stn_id,
+        "tm": tm,
+        "ta": "-3.2",
+        "hm": "55.0",
+        "ws": "1.8",
+        "rn": "0.0",
+        "pa": "1024.3",
+        "ss": "0.0",
+        "icsr": "0.0",
+    }
+    return ok({"items": [item], "count": 1})
+
+
+@router.get("/sample-external/special-days")
+async def sample_external_special_days(
+    sol_year: str = Query(default="2026"),
+    sol_month: str = Query(default="01"),
+):
+    """REST API Connector Calendar/특일 변환 테스트용 JSON (개발 전용)."""
+    items = [
+        {"locdate": f"{sol_year}{sol_month}01", "dateName": "신정", "isHoliday": "Y"},
+        {"locdate": f"{sol_year}{sol_month}05", "dateName": "소한", "isHoliday": "N", "special_day_type": "SOLAR_TERM"},
+    ]
+    return ok({"items": items, "count": len(items)})
+
+
+@router.get("/sample-external/weather")
 async def sample_external_weather(
     start_at: str | None = Query(default=None),
     end_at: str | None = Query(default=None),

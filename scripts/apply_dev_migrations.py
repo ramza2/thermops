@@ -314,6 +314,10 @@ MIGRATIONS = [
         "R10-S3 wide hour transform schema",
         _load_sql("r10s3_heat_demand_transform_schema.sql"),
     ),
+    (
+        "R10-S4 ASOS calendar transform schema",
+        _load_sql("r10s4_asos_calendar_transform_schema.sql"),
+    ),
 ]
 
 

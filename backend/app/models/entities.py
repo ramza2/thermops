@@ -267,6 +267,19 @@ class ApiConnectorTransformConfig(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime)
     updated_at: Mapped[datetime | None] = mapped_column(DateTime)
     metadata_json: Mapped[dict | None] = mapped_column(JSONB)
+    station_code_field: Mapped[str] = mapped_column(String(100), default="stnId")
+    observed_at_field: Mapped[str] = mapped_column(String(100), default="tm")
+    value_field_mappings_json: Mapped[Any | None] = mapped_column(JSONB)
+    special_day_name_field: Mapped[str] = mapped_column(String(100), default="dateName")
+    special_day_type_field: Mapped[str | None] = mapped_column(String(100))
+    default_special_day_type: Mapped[str] = mapped_column(String(50), default="PUBLIC_HOLIDAY")
+    public_holiday_field: Mapped[str] = mapped_column(String(100), default="isHoliday")
+    calendar_mode: Mapped[str] = mapped_column(String(50), default="FULL_CALENDAR_WITH_OVERLAY")
+    calendar_year: Mapped[int | None] = mapped_column(Integer)
+    calendar_month: Mapped[int | None] = mapped_column(Integer)
+    hour_generation_yn: Mapped[bool] = mapped_column(Boolean, default=False)
+    station_unmapped_policy: Mapped[str] = mapped_column(String(50), default="WARN_ONLY")
+    store_raw_json: Mapped[bool] = mapped_column(Boolean, default=True)
 
 
 class ApiConnectorLoadRun(Base):
