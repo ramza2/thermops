@@ -299,6 +299,12 @@ def _build_registry() -> list[TestCase]:
             timeout_seconds=600,
         ),
         _python_test(
+            "test_data_load_scheduler.py",
+            groups=["model", "full"],
+            description="Data Load Scheduler (R10-S6)",
+            timeout_seconds=420,
+        ),
+        _python_test(
             "test_prediction_period_validation.py",
             groups=["model", "full"],
             description="배치 예측 기간 검증",

@@ -322,6 +322,10 @@ MIGRATIONS = [
         "R10-S5 forecast input provider schema",
         _load_sql("r10s5_forecast_input_provider_schema.sql"),
     ),
+    (
+        "R10-S6 data load scheduler schema",
+        _load_sql("r10s6_data_load_scheduler_schema.sql"),
+    ),
 ]
 
 

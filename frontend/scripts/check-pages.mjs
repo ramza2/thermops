@@ -22,6 +22,7 @@ const PATHS = [
   "/ops/model-monitoring",
   "/ops/drift-reports",
   "/ops/retraining-candidates",
+  "/data-load-schedules",
   "/system/configs",
 ];
 
@@ -80,6 +81,8 @@ for (const path of PATHS) {
     await waitMainHeading("데이터 변화 리포트");
   } else if (path === "/system/configs") {
     await waitMainHeading("시스템 설정");
+  } else if (path === "/data-load-schedules") {
+    await waitMainHeading("데이터 적재 일정");
   } else {
     await page.locator("main h1").first().waitFor({ state: "visible", timeout: 60000 });
   }
@@ -275,6 +278,26 @@ for (const path of PATHS) {
     if (!(await hasEmptyOrTable(/실행 이력이 없습니다|데이터가 없습니다/))) {
       errors.push(`${path}: empty message or table rows expected`);
     }
+  }
+  if (path === "/data-load-schedules") {
+    await page.getByText("일정 목록", { exact: true }).waitFor({ state: "visible", timeout: 30000 });
+    await page.getByText("실행 이력", { exact: true }).waitFor({ state: "visible", timeout: 30000 });
+    await page.getByText("실행 대상 일정", { exact: true }).waitFor({ state: "visible", timeout: 30000 });
+    await page.getByText("도움말", { exact: true }).waitFor({ state: "visible", timeout: 30000 });
+    if (!(await hasEmptyOrTable(/등록된 데이터 적재 일정이 없습니다/))) {
+      errors.push(`${path}: empty message or table rows expected`);
+    }
+    await page.getByText("도움말", { exact: true }).click();
+    await page.getByText("재시도 정책").first().waitFor({ state: "visible", timeout: 30000 });
+    await page.getByText("실행 파라미터 템플릿").first().waitFor({ state: "visible", timeout: 30000 });
+    await page.getByText("실행 대상 일정", { exact: true }).click();
+    await page.getByText("run-due").first().waitFor({ state: "visible", timeout: 30000 });
+    await page.getByText("일정 목록", { exact: true }).click();
+    await page.getByRole("button", { name: "일정 등록" }).click();
+    await page.getByText("실행 파라미터 템플릿").first().waitFor({ state: "visible", timeout: 30000 });
+    await page.getByText("재시도 정책").first().waitFor({ state: "visible", timeout: 30000 });
+    await page.getByText("다음 실행 예정").first().waitFor({ state: "visible", timeout: 30000 });
+    await page.getByRole("button", { name: "취소" }).click();
   }
 }
 

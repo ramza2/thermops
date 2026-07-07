@@ -26,6 +26,7 @@ import PipelineRunsPage from "@/pages/PipelineRunsPage";
 import ModelMonitoringPage from "@/pages/ModelMonitoringPage";
 import DriftReportsPage from "@/pages/DriftReportsPage";
 import RetrainingCandidatesPage from "@/pages/RetrainingCandidatesPage";
+import DataLoadSchedulesPage from "@/pages/DataLoadSchedulesPage";
 import SystemConfigPage from "@/pages/SystemConfigPage";
 
 export default function App() {
@@ -62,6 +63,7 @@ export default function App() {
             <Route path="ops/model-monitoring" element={<ModelMonitoringPage />} />
             <Route path="ops/drift-reports" element={<DriftReportsPage />} />
             <Route path="ops/retraining-candidates" element={<RetrainingCandidatesPage />} />
+            <Route path="data-load-schedules" element={<DataLoadSchedulesPage />} />
             <Route path="system/configs" element={<SystemConfigPage />} />
           </Route>
         </Routes>

@@ -204,6 +204,8 @@ flowchart LR
 
 **R10-S5 Forecast On-demand Input Provider**: `/predictions/jobs`(예측 작업)에서 **단기예보 입력**을 켜고 `forecast_ready` 예측 대상을 선택합니다. 데이터 소스 **REST API 연결**에 등록한 **기상청 단기예보 API 작업**을 예측 시점 단기예보 입력 생성기 설정에서 연결합니다. **예보 발표 시각**은 자동 선택(최신 발표 + 지연 보정) 또는 수동 입력이며, **단기예보 입력 미리보기**로 nx/ny·표준 행·경고를 확인합니다. 예측 실행 시 호출 결과는 **기상 입력 스냅샷**(`tb_forecast_input_snapshot`)과 예측 작업별 기상 입력(`tb_prediction_weather_input`)으로 저장되어 재현할 수 있습니다. `weather_input_required`를 켜면 단기예보 실패 시 예측 작업이 중단됩니다. serviceKey 원문은 로그·화면·스냅샷에 노출되지 않습니다. 운영 seed에는 Forecast Provider·snapshot 샘플이 없습니다.
 
+**R10-S6 데이터 적재 일정**: `/data-load-schedules`(운영 모니터링 메뉴)에서 REST API 작업의 **load-run**을 정기 일정으로 등록합니다. **적재 일정 설정**에서 API 작업·스케줄 유형(DAILY/HOURLY 등)·**실행 파라미터 템플릿**·**적재 기간(Load Window)**·**재시도 정책**을 지정하고 **다음 실행 예정 시각**을 확인합니다. **수동 실행**(run-now)과 **실행 대상 일정** 탭의 **run-due**로 due 일정을 일괄 처리할 수 있습니다. 실제 운영에서는 cron/worker/Airflow가 `POST /api/v1/data-load-schedules/run-due`를 주기 호출하는 방식으로 연계합니다. **적재 실행 이력**에서 실패 사유·**마지막 성공 시각**·재시도 결과를 확인합니다. 단기예보 on-demand(R10-S5)는 스케줄 대상이 아닙니다. 운영 seed에 스케줄 샘플은 없습니다.
+
 **R9-S2 Dataset Version 운영 정책**: Feature Build로 생성되는 학습 데이터 버전에 역할·상태·생성 범위를 부여합니다. 대표 버전(`PRIMARY`)은 학습/예측 자동 선택 시 우선 사용되며, 일부 생성(`PARTIAL`)·임시(`TEMPORARY`)·보관(`ARCHIVED`)·생성 실패(`BUILD_FAILED`) 버전은 자동 선택에서 제외됩니다. 명시적 운영 후보가 없을 때만 `record_count DESC` fallback을 사용합니다(R9-S1 임시 복구 유지). 화면 `/dataset-versions`(학습 데이터 버전), API `GET/POST /api/v1/dataset-versions/*`.
 
 **R10 REST API Connector Builder**: 데이터 소스 화면 **REST API 연결**에서 API 작업(Operation)을 등록합니다. serviceKey는 Decoding 키 입력을 권장하며 저장 후 마스킹만 표시됩니다. 요청 파라미터·페이징·응답 데이터 경로·**변환 설정** 후 테스트 호출·적재 미리보기·적재 실행이 가능합니다. 표준 데이터셋 Wizard로 생성한 ACTIVE 물리 테이블만 적재 대상으로 허용합니다.

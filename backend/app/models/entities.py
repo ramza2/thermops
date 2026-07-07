@@ -624,6 +624,75 @@ class PredictionWeatherInput(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime)
 
 
+class DataLoadSchedule(Base):
+    __tablename__ = "tb_data_load_schedule"
+    schedule_id: Mapped[str] = mapped_column(String(50), primary_key=True)
+    schedule_name: Mapped[str] = mapped_column(String(200))
+    schedule_description: Mapped[str | None] = mapped_column(Text)
+    operation_id: Mapped[str] = mapped_column(String(50))
+    data_source_id: Mapped[str | None] = mapped_column(String(50))
+    schedule_type: Mapped[str] = mapped_column(String(30), default="MANUAL")
+    cron_expression: Mapped[str | None] = mapped_column(String(100))
+    timezone: Mapped[str] = mapped_column(String(50), default="Asia/Seoul")
+    start_at: Mapped[datetime | None] = mapped_column(DateTime)
+    end_at: Mapped[datetime | None] = mapped_column(DateTime)
+    active_yn: Mapped[bool] = mapped_column(Boolean, default=True)
+    run_policy: Mapped[str] = mapped_column(String(30), default="LOAD_RUN")
+    load_window_type: Mapped[str] = mapped_column(String(30), default="NONE")
+    window_offset_minutes: Mapped[int | None] = mapped_column(Integer)
+    runtime_params_template: Mapped[dict | None] = mapped_column(JSONB)
+    max_pages_override: Mapped[int | None] = mapped_column(Integer)
+    retry_enabled_yn: Mapped[bool] = mapped_column(Boolean, default=False)
+    max_retry_count: Mapped[int] = mapped_column(Integer, default=0)
+    retry_interval_minutes: Mapped[int] = mapped_column(Integer, default=10)
+    on_failure_policy: Mapped[str] = mapped_column(String(30), default="STOP")
+    last_run_at: Mapped[datetime | None] = mapped_column(DateTime)
+    last_success_at: Mapped[datetime | None] = mapped_column(DateTime)
+    last_failure_at: Mapped[datetime | None] = mapped_column(DateTime)
+    next_run_at: Mapped[datetime | None] = mapped_column(DateTime)
+    last_run_status: Mapped[str | None] = mapped_column(String(30))
+    created_at: Mapped[datetime] = mapped_column(DateTime)
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime)
+    metadata_json: Mapped[dict | None] = mapped_column(JSONB)
+
+
+class DataLoadScheduleRun(Base):
+    __tablename__ = "tb_data_load_schedule_run"
+    schedule_run_id: Mapped[str] = mapped_column(String(50), primary_key=True)
+    schedule_id: Mapped[str] = mapped_column(String(50))
+    operation_id: Mapped[str] = mapped_column(String(50))
+    api_load_run_id: Mapped[str | None] = mapped_column(String(50))
+    run_source: Mapped[str] = mapped_column(String(30), default="SCHEDULED_LOAD")
+    scheduled_for: Mapped[datetime | None] = mapped_column(DateTime)
+    started_at: Mapped[datetime] = mapped_column(DateTime)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime)
+    run_status: Mapped[str] = mapped_column(String(30), default="RUNNING")
+    attempt_no: Mapped[int] = mapped_column(Integer, default=1)
+    parent_schedule_run_id: Mapped[str | None] = mapped_column(String(50))
+    runtime_params_snapshot: Mapped[dict | None] = mapped_column(JSONB)
+    runtime_params_masked: Mapped[dict | None] = mapped_column(JSONB)
+    request_summary: Mapped[dict | None] = mapped_column(JSONB)
+    result_summary: Mapped[dict | None] = mapped_column(JSONB)
+    inserted_count: Mapped[int] = mapped_column(Integer, default=0)
+    updated_count: Mapped[int] = mapped_column(Integer, default=0)
+    skipped_count: Mapped[int] = mapped_column(Integer, default=0)
+    error_count: Mapped[int] = mapped_column(Integer, default=0)
+    error_message: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime)
+    metadata_json: Mapped[dict | None] = mapped_column(JSONB)
+
+
+class DataLoadScheduleEvent(Base):
+    __tablename__ = "tb_data_load_schedule_event"
+    event_id: Mapped[str] = mapped_column(String(50), primary_key=True)
+    schedule_id: Mapped[str] = mapped_column(String(50))
+    schedule_run_id: Mapped[str | None] = mapped_column(String(50))
+    event_type: Mapped[str] = mapped_column(String(50))
+    event_message: Mapped[str | None] = mapped_column(Text)
+    event_payload_json: Mapped[dict | None] = mapped_column(JSONB)
+    created_at: Mapped[datetime] = mapped_column(DateTime)
+
+
 class HeatDemandPrediction(Base):
     __tablename__ = "tb_heat_demand_prediction"
     prediction_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)

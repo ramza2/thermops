@@ -63,6 +63,7 @@ export const PAGE_TITLES = {
   modelMonitoring: "성능 모니터링",
   driftReports: "데이터 변화 리포트",
   retrainingCandidates: "재학습 후보",
+  dataLoadSchedules: "데이터 적재 일정",
   systemConfig: "시스템 설정",
 } as const;
 
@@ -93,6 +94,7 @@ export const PAGE_DESCRIPTIONS = {
   modelMonitoring: "운영 중인 모델의 성능 지표 추이를 모니터링합니다.",
   driftReports: "학습 당시 데이터와 최근 데이터의 분포 차이를 확인합니다.",
   retrainingCandidates: "데이터 변화·성능 저하 등으로 재학습이 필요한 후보를 관리합니다.",
+  dataLoadSchedules: "REST API 작업의 적재 실행을 정기 일정으로 등록하고 실행 이력과 실패 여부를 관리합니다.",
   systemConfig: "공통 코드와 시스템 운영 설정을 관리합니다.",
 } as const;
 
@@ -125,6 +127,8 @@ export const EMPTY_MESSAGES = {
     "등록된 예측 작업이 없습니다. 학습된 모델을 선택해 예측을 실행하세요.",
   pipelineBuilder:
     "등록된 작업 흐름이 없습니다. 데이터 적재부터 예측까지의 실행 순서를 구성하세요.",
+  dataLoadSchedules:
+    "등록된 데이터 적재 일정이 없습니다. REST API 작업을 선택해 정기 적재 일정을 등록하세요.",
   pipelineRuns: "실행 이력이 없습니다. 작업 흐름 구성에서 실행하거나 개별 작업을 실행하세요.",
   generic: "데이터가 없습니다.",
 } as const;
@@ -178,6 +182,14 @@ export const HELP_TEXTS = {
     "ASOS 관측 기상은 과거 학습용 기상 데이터입니다. 예측 시점의 미래 기상은 단기예보 on-demand 입력으로 처리합니다.",
   forecastOnDemand:
     "과거 학습용 ASOS 관측과 달리, 예측 실행 시점에 기상청 단기예보 API를 호출해 미래 기상 입력을 생성합니다. 결과는 예측 작업 단위 기상 입력 스냅샷으로 저장되어 재현할 수 있습니다.",
+  dataLoadSchedulerIntro:
+    "스케줄러는 REST API 작업의 load-run을 정해진 시간에 실행하기 위한 설정입니다. serviceKey 등 인증 정보는 REST API 연결 Credential을 사용합니다.",
+  dataLoadSchedulerHelp1:
+    "R10-S6에서는 run-due API를 제공하며, 실제 운영에서는 cron/worker/Airflow에서 이 API를 호출할 수 있습니다.",
+  dataLoadSchedulerHelp2:
+    "단기예보 on-demand 입력(R10-S5)은 스케줄 대상이 아닙니다. 예측 실행 시점 Provider로 유지됩니다.",
+  dataLoadSchedulerHelp3:
+    "스케줄 실행 이력에는 인증 키 원문이 저장되지 않으며, 실행 파라미터 템플릿만 마스킹되어 보관됩니다.",
   forecastProviderHint:
     "데이터 소스에 등록한 기상청 단기예보 API 작업을 선택하면 예측 실행 시 on-demand로 호출됩니다. serviceKey는 마스킹되어 표시됩니다.",
   forecastEntityReadiness:

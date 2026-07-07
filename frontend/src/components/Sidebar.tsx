@@ -44,6 +44,7 @@ const MENU = [
       { label: "성능 모니터링", path: "/ops/model-monitoring" },
       { label: "데이터 변화 리포트", path: "/ops/drift-reports" },
       { label: "재학습 후보", path: "/ops/retraining-candidates" },
+      { label: "데이터 적재 일정", path: "/data-load-schedules" },
     ],
   },
   {

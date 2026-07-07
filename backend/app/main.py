@@ -8,6 +8,7 @@ from app.api.v1 import (
     dashboard,
     data,
     dataset_version,
+    data_load_scheduler,
     external_code_mapping,
     feature,
     feature_column_role,
@@ -47,6 +48,7 @@ api_prefix = settings.api_prefix
 app.include_router(dashboard.router, prefix=api_prefix)
 app.include_router(common.router, prefix=api_prefix)
 app.include_router(api_connector.router, prefix=api_prefix)
+app.include_router(data_load_scheduler.router, prefix=api_prefix)
 app.include_router(prediction_entity.router, prefix=api_prefix)
 app.include_router(forecast_provider.router, prefix=api_prefix)
 app.include_router(external_code_mapping.router, prefix=api_prefix)

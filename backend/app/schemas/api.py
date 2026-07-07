@@ -731,3 +731,71 @@ class ForecastTestCallRequest(BaseModel):
     base_time: str | None = None
     cache_policy: str = "REFRESH"
     source_operation_id: str | None = None
+
+
+# Data Load Scheduler (R10-S6)
+class DataLoadScheduleCreate(BaseModel):
+    schedule_name: str
+    operation_id: str
+    schedule_description: str | None = None
+    schedule_type: str = "MANUAL"
+    cron_expression: str | None = None
+    timezone: str = "Asia/Seoul"
+    start_at: datetime | None = None
+    end_at: datetime | None = None
+    active_yn: bool = True
+    run_policy: str = "LOAD_RUN"
+    load_window_type: str = "NONE"
+    window_offset_minutes: int | None = None
+    runtime_params_template: dict[str, Any] | None = None
+    max_pages_override: int | None = None
+    retry_enabled_yn: bool = False
+    max_retry_count: int = 0
+    retry_interval_minutes: int = 10
+    on_failure_policy: str = "STOP"
+    metadata_json: dict[str, Any] | None = None
+
+
+class DataLoadScheduleUpdate(BaseModel):
+    schedule_name: str | None = None
+    schedule_description: str | None = None
+    operation_id: str | None = None
+    schedule_type: str | None = None
+    cron_expression: str | None = None
+    timezone: str | None = None
+    start_at: datetime | None = None
+    end_at: datetime | None = None
+    active_yn: bool | None = None
+    run_policy: str | None = None
+    load_window_type: str | None = None
+    window_offset_minutes: int | None = None
+    runtime_params_template: dict[str, Any] | None = None
+    max_pages_override: int | None = None
+    retry_enabled_yn: bool | None = None
+    max_retry_count: int | None = None
+    retry_interval_minutes: int | None = None
+    on_failure_policy: str | None = None
+    metadata_json: dict[str, Any] | None = None
+
+
+class DataLoadSchedulePreviewNextRunRequest(BaseModel):
+    schedule_id: str | None = None
+    schedule_type: str | None = None
+    timezone: str | None = None
+    start_at: datetime | None = None
+
+
+class DataLoadScheduleRenderParamsRequest(BaseModel):
+    schedule_id: str | None = None
+    runtime_params_template: dict[str, Any] | None = None
+    load_window_type: str | None = None
+    window_offset_minutes: int | None = None
+    manual_params: dict[str, Any] | None = None
+
+
+class DataLoadScheduleRunNowRequest(BaseModel):
+    manual_params: dict[str, Any] | None = None
+
+
+class DataLoadScheduleArchiveRequest(BaseModel):
+    archived_reason: str | None = None
