@@ -326,6 +326,10 @@ MIGRATIONS = [
         "R10-S6 data load scheduler schema",
         _load_sql("r10s6_data_load_scheduler_schema.sql"),
     ),
+    (
+        "R10-S8 upsert dedup schema",
+        _load_sql("r10s8_upsert_dedup_schema.sql"),
+    ),
 ]
 
 

@@ -305,6 +305,12 @@ def _build_registry() -> list[TestCase]:
             timeout_seconds=420,
         ),
         _python_test(
+            "test_upsert_dedup_loader.py",
+            groups=["model", "full"],
+            description="Upsert / Deduplicate Loader (R10-S8)",
+            timeout_seconds=420,
+        ),
+        _python_test(
             "test_r10_operational_integration.py",
             groups=["full"],
             description="R10 Operational Integration (R10-S7)",

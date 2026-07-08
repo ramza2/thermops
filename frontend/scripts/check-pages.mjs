@@ -163,6 +163,11 @@ for (const path of PATHS) {
         await page.getByText(label).first().waitFor({ state: "visible", timeout: 30000 });
       }
       await page.getByText(/ASOS 관측 기상은 과거 학습용/).first().waitFor({ state: "visible", timeout: 30000 });
+      await page.getByRole("button", { name: "다음" }).click();
+      await page.getByText("적재 방식").first().waitFor({ state: "visible", timeout: 30000 });
+      for (const label of ["신규 행 추가", "중복 제외", "있으면 갱신, 없으면 추가", "중복 판단 키", "중복 처리 정책", "null 값 처리"]) {
+        await page.getByText(label).first().waitFor({ state: "visible", timeout: 30000 });
+      }
     }
     await page.getByText("요청 미리보기").first().waitFor({ state: "visible", timeout: 30000 });
     await page.getByText("테스트 호출").first().waitFor({ state: "visible", timeout: 30000 });
@@ -289,6 +294,7 @@ for (const path of PATHS) {
     }
     await page.getByText("도움말", { exact: true }).click();
     await page.getByText("재시도 정책").first().waitFor({ state: "visible", timeout: 30000 });
+    await page.getByText("재실행 시 동일 키 데이터").first().waitFor({ state: "visible", timeout: 30000 });
     await page.getByText("실행 파라미터 템플릿").first().waitFor({ state: "visible", timeout: 30000 });
     await page.getByText("실행 대상 일정", { exact: true }).click();
     await page.getByText("run-due").first().waitFor({ state: "visible", timeout: 30000 });

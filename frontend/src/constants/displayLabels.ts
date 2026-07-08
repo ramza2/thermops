@@ -190,6 +190,8 @@ export const HELP_TEXTS = {
     "단기예보 on-demand 입력(R10-S5)은 스케줄 대상이 아닙니다. 예측 실행 시점 Provider로 유지됩니다.",
   dataLoadSchedulerHelp3:
     "스케줄 실행 이력에는 인증 키 원문이 저장되지 않으며, 실행 파라미터 템플릿만 마스킹되어 보관됩니다.",
+  dataLoadWriteModeHelp:
+    "적재 방식은 신규 행 추가, 중복 제외, 있으면 갱신·없으면 추가를 지원합니다. 재실행 시 동일 키는 정책에 따라 제외되거나 갱신됩니다.",
   forecastProviderHint:
     "데이터 소스에 등록한 기상청 단기예보 API 작업을 선택하면 예측 실행 시 on-demand로 호출됩니다. serviceKey는 마스킹되어 표시됩니다.",
   forecastEntityReadiness:

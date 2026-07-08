@@ -14,6 +14,7 @@ import type {
   ApiConnectorTestCallResult,
   ApiConnectorTransformConfig,
   ApiConnectorTransformPreview,
+  ApiConnectorWritePolicy,
 } from "@/types/apiConnector";
 
 export function apiConnectorErrorMessage(err: unknown, fallback: string): string {
@@ -127,6 +128,28 @@ export async function runApiConnectorLoad(
   return postApi(`/api-connectors/operations/${encodeURIComponent(operationId)}/load-run`, {
     runtime_params: runtimeParams,
   });
+}
+
+export async function getApiConnectorWritePolicy(operationId: string): Promise<ApiConnectorWritePolicy> {
+  return fetchApi(`/api-connectors/operations/${encodeURIComponent(operationId)}/write-policy`);
+}
+
+export async function upsertApiConnectorWritePolicy(
+  operationId: string,
+  body: Partial<ApiConnectorWritePolicy>,
+): Promise<ApiConnectorWritePolicy> {
+  return putApi(`/api-connectors/operations/${encodeURIComponent(operationId)}/write-policy`, body);
+}
+
+export async function validateApiConnectorWritePolicy(
+  operationId: string,
+  body: Partial<ApiConnectorWritePolicy>,
+): Promise<Record<string, unknown>> {
+  return postApi(`/api-connectors/operations/${encodeURIComponent(operationId)}/write-policy/validate`, body);
+}
+
+export async function getApiConnectorTargetTableColumns(targetTable: string): Promise<{ columns: string[] }> {
+  return fetchApi("/api-connectors/target-table-columns", { target_table: targetTable });
 }
 
 export async function getApiConnectorTransformConfig(

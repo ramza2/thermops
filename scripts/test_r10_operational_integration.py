@@ -315,12 +315,25 @@ def main() -> int:
                 ]
             },
         )
+        api(
+            "PUT",
+            f"/api-connectors/operations/{heat_op_id}/write-policy",
+            {
+                "write_mode": "UPSERT",
+                "conflict_key_columns_json": ["entity_id", "measured_at"],
+                "duplicate_within_batch_policy": "KEEP_LAST",
+                "null_update_policy": "KEEP_EXISTING",
+            },
+        )
         heat_preview = api("POST", f"/api-connectors/operations/{heat_op_id}/load-preview", {"runtime_params": {}})
         assert heat_preview.get("transform_applied") is True
         assert int(heat_preview.get("transformed_row_count") or 0) >= 24
         heat_run = api("POST", f"/api-connectors/operations/{heat_op_id}/load-run", {"runtime_params": {}})
         assert heat_run.get("status") in ("SUCCESS", "COMPLETED")
         assert int(heat_run.get("inserted_count") or 0) >= 24
+        heat_run_2 = api("POST", f"/api-connectors/operations/{heat_op_id}/load-run", {"runtime_params": {}})
+        assert int(heat_run_2.get("inserted_count") or 0) == 0
+        assert int(heat_run_2.get("updated_count") or 0) >= 0
         unmapped = api(
             "POST",
             f"/api-connectors/operations/{heat_op_id}/load-preview",

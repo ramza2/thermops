@@ -35,7 +35,10 @@ export interface DataLoadScheduleRun {
   run_status: string;
   attempt_no: number;
   inserted_count: number;
+  updated_count?: number;
   skipped_count: number;
+  skipped_duplicate_count?: number;
+  write_mode?: string;
   error_count: number;
   error_message?: string | null;
   runtime_params_masked?: Record<string, unknown> | null;

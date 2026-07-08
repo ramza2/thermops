@@ -90,6 +90,7 @@ def _run_dict(row: DataLoadScheduleRun, *, schedule_name: str | None = None) -> 
         "updated_count": row.updated_count,
         "skipped_count": row.skipped_count,
         "error_count": row.error_count,
+        "write_mode": (row.result_summary or {}).get("write_mode") if row.result_summary else None,
         "error_message": row.error_message,
         "created_at": _dt_iso(row.created_at),
         "metadata_json": row.metadata_json,
@@ -460,6 +461,7 @@ async def _execute_schedule_run(
             status = str(result.get("status") or "SUCCESS")
             run_row.api_load_run_id = result.get("load_run_id")
             run_row.inserted_count = int(result.get("inserted_count") or 0)
+            run_row.updated_count = int(result.get("updated_count") or 0)
             run_row.skipped_count = int(result.get("skipped_count") or 0)
             run_row.error_count = int(result.get("error_count") or 0)
             run_row.result_summary = result

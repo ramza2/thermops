@@ -13,6 +13,7 @@ from app.schemas.api import (
     ApiConnectorRuntimeParams,
     ApiConnectorTransformConfigUpsert,
     ApiConnectorTransformPreviewRequest,
+    ApiConnectorWritePolicyUpsert,
 )
 from app.services.api_connector_service import (
     ApiConnectorError,
@@ -35,6 +36,16 @@ from app.services.api_connector_service import (
     upsert_credential,
     upsert_pagination,
     upsert_transform_config,
+)
+from app.services.load_write_policy_service import (
+    WritePolicyError,
+    get_dedup_summary,
+    get_target_table_columns,
+    get_write_policy,
+    list_dedup_summaries,
+    list_write_policies,
+    upsert_write_policy,
+    validate_write_policy_payload,
 )
 from app.services.standard_dataset_service import TargetTableNotAllowedError
 from app.services.wide_hour_transform_service import WideHourTransformError
@@ -286,6 +297,87 @@ async def post_load_run(
     except (ApiConnectorError, WideHourTransformError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return ok(item, message="적재 실행이 완료되었습니다.")
+
+
+@router.get("/api-connectors/operations/{operation_id}/write-policy")
+async def get_operation_write_policy(operation_id: str, db: AsyncSession = Depends(get_db)):
+    try:
+        item = await get_write_policy(db, operation_id)
+    except WritePolicyError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return ok(item)
+
+
+@router.put("/api-connectors/operations/{operation_id}/write-policy")
+async def put_operation_write_policy(
+    operation_id: str,
+    body: ApiConnectorWritePolicyUpsert,
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        item = await upsert_write_policy(db, operation_id, body.model_dump(exclude_unset=True))
+    except WritePolicyError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return ok(item, message="적재 방식 정책이 저장되었습니다.")
+
+
+@router.post("/api-connectors/operations/{operation_id}/write-policy/validate")
+async def post_operation_write_policy_validate(
+    operation_id: str,
+    body: ApiConnectorWritePolicyUpsert,
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        item = await validate_write_policy_payload(db, operation_id, body.model_dump(exclude_unset=True))
+    except WritePolicyError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return ok(item)
+
+
+@router.post("/api-connectors/operations/{operation_id}/write-policy/preview-dedup")
+async def post_operation_write_policy_preview_dedup(
+    operation_id: str,
+    body: ApiConnectorRuntimeParams,
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        item = await load_preview(db, operation_id, body.runtime_params)
+    except (ApiConnectorError, WideHourTransformError, WritePolicyError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return ok(item)
+
+
+@router.get("/api-connectors/write-policies")
+async def get_api_connector_write_policies(db: AsyncSession = Depends(get_db)):
+    return ok(await list_write_policies(db))
+
+
+@router.get("/api-connectors/target-table-columns")
+async def get_api_connector_target_table_columns(
+    target_table: str = Query(...),
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        item = await get_target_table_columns(db, target_table)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return ok(item)
+
+
+@router.get("/api-connectors/dedup-summaries")
+async def get_api_connector_dedup_summaries(
+    operation_id: str | None = Query(default=None),
+    db: AsyncSession = Depends(get_db),
+):
+    return ok(await list_dedup_summaries(db, operation_id=operation_id))
+
+
+@router.get("/api-connectors/dedup-summaries/{summary_id}")
+async def get_api_connector_dedup_summary(summary_id: str, db: AsyncSession = Depends(get_db)):
+    item = await get_dedup_summary(db, summary_id)
+    if not item:
+        raise HTTPException(status_code=404, detail="NOT_FOUND")
+    return ok(item)
 
 
 @router.get("/api-connectors/load-runs")

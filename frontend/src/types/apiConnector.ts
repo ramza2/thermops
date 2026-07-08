@@ -114,6 +114,15 @@ export interface ApiConnectorLoadPreview {
   warnings?: string[];
   sample_rows?: Record<string, unknown>[];
   snapshot_id?: string | null;
+  write_mode?: string;
+  write_policy_summary?: Record<string, unknown>;
+  dedup_summary_id?: string;
+  estimated_insert_count?: number;
+  estimated_update_count?: number;
+  estimated_skip_count?: number;
+  duplicate_within_batch_count?: number;
+  existing_match_count?: number;
+  sample_conflicts?: Record<string, unknown>[];
 }
 
 export interface ApiConnectorLoadRun {
@@ -124,12 +133,31 @@ export interface ApiConnectorLoadRun {
   run_status: string;
   inserted_count: number;
   skipped_count?: number;
+  updated_count?: number;
+  unchanged_count?: number;
+  skipped_duplicate_count?: number;
+  write_mode?: string;
+  dedup_summary_id?: string;
   error_count?: number;
   started_at?: string;
   finished_at?: string;
   error_message?: string | null;
   result_summary?: Record<string, unknown> | null;
   request_params_masked?: Record<string, unknown>;
+}
+
+export interface ApiConnectorWritePolicy {
+  write_policy_id?: string;
+  operation_id: string;
+  target_table?: string | null;
+  write_mode: string;
+  conflict_key_columns_json?: string[];
+  update_columns_json?: string[];
+  exclude_update_columns_json?: string[];
+  null_update_policy?: string;
+  duplicate_within_batch_policy?: string;
+  no_conflict_key_policy?: string;
+  warnings?: string[];
 }
 
 export interface ApiConnectorCallLog {

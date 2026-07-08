@@ -12,9 +12,13 @@ import {
   runApiConnectorLoad,
   transformApiConnectorPreview,
   updateApiConnectorOperation,
+  getApiConnectorTargetTableColumns,
+  getApiConnectorWritePolicy,
   upsertApiConnectorCredential,
   upsertApiConnectorPagination,
   upsertApiConnectorTransformConfig,
+  upsertApiConnectorWritePolicy,
+  validateApiConnectorWritePolicy,
 } from "@/api/apiConnectors";
 import { getStandardTargetTables, validateTargetTable } from "@/api/standardDatasets";
 import { Button } from "@/components/Button";
@@ -26,6 +30,7 @@ import type {
   ApiConnectorParam,
   ApiConnectorTestCallResult,
   ApiConnectorTransformConfig,
+  ApiConnectorWritePolicy,
 } from "@/types/apiConnector";
 import { PARAM_QUICK_ADD, WIZARD_STEP_TITLES as STEP_TITLES } from "@/types/apiConnector";
 import type { StandardTargetTable } from "@/types/standardDatasets";
@@ -149,6 +154,17 @@ export function ApiConnectorOperationWizard({
   const [target, setTarget] = useState({ standard_dataset_id: "", target_table: "" });
   const [transform, setTransform] = useState<ApiConnectorTransformConfig>({ ...DEFAULT_TRANSFORM });
   const [targetValidation, setTargetValidation] = useState<string | null>(null);
+  const [targetColumns, setTargetColumns] = useState<string[]>([]);
+  const [writePolicy, setWritePolicy] = useState<ApiConnectorWritePolicy>({
+    operation_id: "",
+    write_mode: "INSERT_ONLY",
+    conflict_key_columns_json: [],
+    update_columns_json: [],
+    exclude_update_columns_json: [],
+    null_update_policy: "KEEP_EXISTING",
+    duplicate_within_batch_policy: "KEEP_LAST",
+    no_conflict_key_policy: "WARN_INSERT_ONLY",
+  });
 
   const [requestPreview, setRequestPreview] = useState<Record<string, unknown> | null>(null);
   const [testResult, setTestResult] = useState<ApiConnectorTestCallResult | null>(null);
@@ -195,6 +211,17 @@ export function ApiConnectorOperationWizard({
     setTransformPreviewResult(null);
     setLoadRunResult(null);
     setTargetValidation(null);
+    setTargetColumns([]);
+    setWritePolicy({
+      operation_id: editOperationId || "",
+      write_mode: "INSERT_ONLY",
+      conflict_key_columns_json: [],
+      update_columns_json: [],
+      exclude_update_columns_json: [],
+      null_update_policy: "KEEP_EXISTING",
+      duplicate_within_batch_policy: "KEEP_LAST",
+      no_conflict_key_policy: "WARN_INSERT_ONLY",
+    });
   }, [editOperationId, restSources]);
 
   useEffect(() => {
@@ -233,6 +260,22 @@ export function ApiConnectorOperationWizard({
         });
         if (detail.transform_config) {
           setTransform({ ...DEFAULT_TRANSFORM, ...detail.transform_config });
+        }
+        if (detail.target_table) {
+          const cols = await getApiConnectorTargetTableColumns(detail.target_table);
+          setTargetColumns(cols.columns || []);
+          const policy = await getApiConnectorWritePolicy(detail.operation_id);
+          setWritePolicy({
+            ...policy,
+            operation_id: detail.operation_id,
+            write_mode: policy.write_mode || "INSERT_ONLY",
+            conflict_key_columns_json: policy.conflict_key_columns_json || [],
+            update_columns_json: policy.update_columns_json || [],
+            exclude_update_columns_json: policy.exclude_update_columns_json || [],
+            null_update_policy: policy.null_update_policy || "KEEP_EXISTING",
+            duplicate_within_batch_policy: policy.duplicate_within_batch_policy || "KEEP_LAST",
+            no_conflict_key_policy: policy.no_conflict_key_policy || "WARN_INSERT_ONLY",
+          });
         }
         const cred = await getApiConnectorCredential(detail.data_source_id);
         if (cred) {
@@ -333,6 +376,10 @@ export function ApiConnectorOperationWizard({
     );
     await upsertApiConnectorPagination(opId, pagination);
     await upsertApiConnectorTransformConfig(opId, transform);
+    await upsertApiConnectorWritePolicy(opId, {
+      ...writePolicy,
+      operation_id: opId,
+    });
     return opId;
   };
 
@@ -843,6 +890,47 @@ export function ApiConnectorOperationWizard({
                 <p>컬럼: {selectedTargetMeta.standard_columns.join(", ") || "-"}</p>
               </div>
             )}
+            <div className="border rounded p-3 space-y-2">
+              <p className="text-sm font-medium">적재 방식</p>
+              <div className="grid grid-cols-2 gap-2">
+                <SelectInput value={writePolicy.write_mode} onChange={(v) => setWritePolicy({ ...writePolicy, write_mode: v })}
+                  options={[
+                    { value: "INSERT_ONLY", label: "신규 행 추가" },
+                    { value: "DEDUPLICATE", label: "중복 제외" },
+                    { value: "UPSERT", label: "있으면 갱신, 없으면 추가" },
+                  ]} />
+                <SelectInput value={writePolicy.null_update_policy || "KEEP_EXISTING"} onChange={(v) => setWritePolicy({ ...writePolicy, null_update_policy: v })}
+                  options={[
+                    { value: "KEEP_EXISTING", label: "null 값 처리: 기존값 유지" },
+                    { value: "OVERWRITE_WITH_NULL", label: "null 값 처리: null로 덮어쓰기" },
+                  ]} />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <SelectInput value={writePolicy.duplicate_within_batch_policy || "KEEP_LAST"} onChange={(v) => setWritePolicy({ ...writePolicy, duplicate_within_batch_policy: v })}
+                  options={[
+                    { value: "KEEP_LAST", label: "중복 처리 정책: 마지막 유지" },
+                    { value: "KEEP_FIRST", label: "중복 처리 정책: 처음 유지" },
+                    { value: "ERROR", label: "중복 처리 정책: 오류" },
+                  ]} />
+                <SelectInput value={writePolicy.no_conflict_key_policy || "WARN_INSERT_ONLY"} onChange={(v) => setWritePolicy({ ...writePolicy, no_conflict_key_policy: v })}
+                  options={[
+                    { value: "WARN_INSERT_ONLY", label: "키 없음: 경고 후 신규행 추가" },
+                    { value: "BLOCK_RUN", label: "키 없음: 실행 차단" },
+                  ]} />
+              </div>
+              <label className="text-xs text-slate-500">중복 판단 키(쉼표 구분)</label>
+              <TextInput
+                value={(writePolicy.conflict_key_columns_json || []).join(",")}
+                onChange={(v) => setWritePolicy({ ...writePolicy, conflict_key_columns_json: v.split(",").map((x) => x.trim()).filter(Boolean) })}
+                placeholder={targetColumns.slice(0, 5).join(", ")}
+              />
+              <label className="text-xs text-slate-500">갱신 대상 컬럼(쉼표 구분, 비우면 자동)</label>
+              <TextInput
+                value={(writePolicy.update_columns_json || []).join(",")}
+                onChange={(v) => setWritePolicy({ ...writePolicy, update_columns_json: v.split(",").map((x) => x.trim()).filter(Boolean) })}
+              />
+              <p className="text-xs text-slate-500">중복 판단 키가 없으면 중복 제외 또는 upsert를 사용할 수 없습니다.</p>
+            </div>
             {targetValidation && <p className="text-red-600 text-xs">{targetValidation}</p>}
             {columnMatching.rows.length > 0 && (
               <div>
@@ -911,12 +999,26 @@ export function ApiConnectorOperationWizard({
             </div>
             <div className="flex flex-wrap gap-2">
               <Button onClick={() => void handleFinalSave()} disabled={busy}>{busy ? <Loader2 className="w-4 h-4 animate-spin" /> : "저장"}</Button>
+              <Button
+                variant="secondary"
+                disabled={!operationId || busy}
+                onClick={async () => {
+                  if (!operationId) return;
+                  try {
+                    await validateApiConnectorWritePolicy(operationId, writePolicy);
+                    showToast("success", "적재 방식 정책 검증 완료");
+                  } catch (e) {
+                    showToast("error", apiConnectorErrorMessage(e, "적재 방식 정책 검증 실패"));
+                  }
+                }}
+              >정책 검증</Button>
               <Button variant="secondary" disabled={!operationId || !target.target_table || busy} onClick={() => void handleLoadPreview()}>적재 미리보기</Button>
               <Button variant="secondary" disabled={!operationId || !target.target_table || busy} onClick={() => void handleLoadRun()}>적재 실행</Button>
             </div>
             {loadPreviewResult && (
               <div className="text-xs space-y-1 border rounded p-2">
                 <p>원본 {String(loadPreviewResult.raw_item_count ?? loadPreviewResult.api_item_count ?? "-")}건 · 변환 {String(loadPreviewResult.transformed_row_count ?? loadPreviewResult.item_count ?? "-")}행</p>
+                <p>적재 방식: {String(loadPreviewResult.write_mode ?? "INSERT_ONLY")} · 예상 신규 {String(loadPreviewResult.estimated_insert_count ?? 0)} · 예상 갱신 {String(loadPreviewResult.estimated_update_count ?? 0)} · 예상 제외 {String(loadPreviewResult.estimated_skip_count ?? 0)}</p>
                 {(loadPreviewResult.unmapped_codes as unknown[] | undefined)?.length ? (
                   <p className="text-amber-700">미매핑 코드 {(loadPreviewResult.unmapped_codes as unknown[]).length}건 — 외부 코드 매핑을 확인하세요.</p>
                 ) : null}
@@ -925,7 +1027,7 @@ export function ApiConnectorOperationWizard({
             )}
             {loadRunResult && (
               <div className="text-xs text-green-700 space-y-1">
-                <p>적재 완료: {String(loadRunResult.status ?? loadRunResult.run_status)} — {String(loadRunResult.inserted_count)}건</p>
+                <p>적재 완료: {String(loadRunResult.status ?? loadRunResult.run_status)} — 신규 {String(loadRunResult.inserted_count)} · 갱신 {String(loadRunResult.updated_count ?? 0)} · 제외 {String(loadRunResult.skipped_count ?? 0)}</p>
                 {(loadRunResult.result_summary as Record<string, unknown> | undefined)?.transform_summary ? (
                   <p>변환 요약: {safeJsonStringify((loadRunResult.result_summary as Record<string, unknown>).transform_summary)}</p>
                 ) : null}

@@ -57,7 +57,10 @@ const runColumns: Column<RunRow>[] = [
   { key: "started_at", header: "시작", render: (r) => r.started_at?.slice(0, 19) || "-" },
   { key: "finished_at", header: "종료", render: (r) => r.finished_at?.slice(0, 19) || "-" },
   { key: "run_status", header: "상태", render: (r) => <StatusBadge status={lifecycleStatusLabel(r.run_status)} /> },
-  { key: "inserted_count", header: "적재" },
+  { key: "write_mode", header: "적재 방식", render: (r) => String(r.write_mode || (r.result_summary as Record<string, unknown> | undefined)?.write_mode || "-") },
+  { key: "inserted_count", header: "신규" },
+  { key: "updated_count", header: "갱신", render: (r) => String(r.updated_count ?? (r.result_summary as Record<string, unknown> | undefined)?.updated_count ?? 0) },
+  { key: "skipped_count", header: "제외", render: (r) => String(r.skipped_count ?? (r.result_summary as Record<string, unknown> | undefined)?.skipped_count ?? 0) },
   { key: "error_message", header: "오류", render: (r) => r.error_message?.slice(0, 40) || "-" },
 ];
 
@@ -347,6 +350,7 @@ export default function DataLoadSchedulesPage() {
           <p>{HELP_TEXTS.dataLoadSchedulerHelp1}</p>
           <p>{HELP_TEXTS.dataLoadSchedulerHelp2}</p>
           <p>{HELP_TEXTS.dataLoadSchedulerHelp3}</p>
+          <p>재실행 시 동일 키 데이터는 적재 방식(신규 행 추가/중복 제외/있으면 갱신, 없으면 추가)에 따라 신규 건수가 0이 될 수 있습니다.</p>
           <p>재시도 정책: 일정별 retry_enabled_yn, max_retry_count, retry_interval_minutes 설정</p>
           <p>실행 파라미터 템플릿 예: {`{"bas_ymd": "{{today:YYYYMMDD}}"}`}</p>
         </div>

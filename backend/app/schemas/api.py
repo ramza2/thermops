@@ -523,6 +523,19 @@ class ApiConnectorTransformPreviewRequest(BaseModel):
     runtime_params: dict[str, Any] | None = None
 
 
+class ApiConnectorWritePolicyUpsert(BaseModel):
+    write_mode: str = "INSERT_ONLY"
+    conflict_key_columns_json: list[str] | None = None
+    update_columns_json: list[str] | None = None
+    exclude_update_columns_json: list[str] | None = None
+    compare_columns_json: list[str] | None = None
+    null_update_policy: str = "KEEP_EXISTING"
+    duplicate_within_batch_policy: str = "KEEP_LAST"
+    no_conflict_key_policy: str = "WARN_INSERT_ONLY"
+    active_yn: bool = True
+    metadata_json: dict[str, Any] | None = None
+
+
 class PredictionEntityCreate(BaseModel):
     entity_code: str
     entity_name: str

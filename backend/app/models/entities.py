@@ -303,6 +303,49 @@ class ApiConnectorLoadRun(Base):
     error_message: Mapped[str | None] = mapped_column(Text)
 
 
+class ApiConnectorWritePolicy(Base):
+    __tablename__ = "tb_api_connector_write_policy"
+    write_policy_id: Mapped[str] = mapped_column(String(50), primary_key=True)
+    operation_id: Mapped[str] = mapped_column(String(50))
+    target_table: Mapped[str] = mapped_column(String(100))
+    write_mode: Mapped[str] = mapped_column(String(30), default="INSERT_ONLY")
+    conflict_key_columns_json: Mapped[Any | None] = mapped_column(JSONB)
+    update_columns_json: Mapped[Any | None] = mapped_column(JSONB)
+    exclude_update_columns_json: Mapped[Any | None] = mapped_column(JSONB)
+    compare_columns_json: Mapped[Any | None] = mapped_column(JSONB)
+    null_update_policy: Mapped[str] = mapped_column(String(30), default="KEEP_EXISTING")
+    duplicate_within_batch_policy: Mapped[str] = mapped_column(String(30), default="KEEP_LAST")
+    no_conflict_key_policy: Mapped[str] = mapped_column(String(30), default="WARN_INSERT_ONLY")
+    active_yn: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime)
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime)
+    metadata_json: Mapped[dict | None] = mapped_column(JSONB)
+
+
+class ApiConnectorLoadDedupSummary(Base):
+    __tablename__ = "tb_api_connector_load_dedup_summary"
+    summary_id: Mapped[str] = mapped_column(String(50), primary_key=True)
+    load_run_id: Mapped[str | None] = mapped_column(String(50))
+    schedule_run_id: Mapped[str | None] = mapped_column(String(50))
+    operation_id: Mapped[str] = mapped_column(String(50))
+    target_table: Mapped[str | None] = mapped_column(String(100))
+    write_mode: Mapped[str] = mapped_column(String(30), default="INSERT_ONLY")
+    input_row_count: Mapped[int] = mapped_column(Integer, default=0)
+    unique_input_row_count: Mapped[int] = mapped_column(Integer, default=0)
+    duplicate_within_batch_count: Mapped[int] = mapped_column(Integer, default=0)
+    existing_match_count: Mapped[int] = mapped_column(Integer, default=0)
+    inserted_count: Mapped[int] = mapped_column(Integer, default=0)
+    updated_count: Mapped[int] = mapped_column(Integer, default=0)
+    skipped_duplicate_count: Mapped[int] = mapped_column(Integer, default=0)
+    unchanged_count: Mapped[int] = mapped_column(Integer, default=0)
+    error_count: Mapped[int] = mapped_column(Integer, default=0)
+    conflict_key_columns_json: Mapped[Any | None] = mapped_column(JSONB)
+    sample_conflicts_json: Mapped[Any | None] = mapped_column(JSONB)
+    warnings_json: Mapped[Any | None] = mapped_column(JSONB)
+    created_at: Mapped[datetime] = mapped_column(DateTime)
+    metadata_json: Mapped[dict | None] = mapped_column(JSONB)
+
+
 class DataMapping(Base):
     __tablename__ = "tb_data_mapping"
     mapping_id: Mapped[str] = mapped_column(String(50), primary_key=True)

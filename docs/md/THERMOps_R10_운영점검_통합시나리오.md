@@ -33,8 +33,9 @@
 3. REST API 작업 + `WIDE_HOUR_TO_LONG` 설정
 4. load-preview 변환 건수 확인
 5. load-run INSERT 확인
-6. 미매핑 ND_ID 수집 확인
-7. secret 미노출 확인
+6. 동일 조건 재실행 시 UPSERT/DEDUPLICATE 정책으로 중복 누적 방지 확인(신규 0 또는 갱신/제외 증가)
+7. 미매핑 ND_ID 수집 확인
+8. secret 미노출 확인
 
 ### D. ASOS / Calendar 적재
 1. ASOS 관측소 생성
@@ -49,6 +50,7 @@
 3. run-now, run-due 실행
 4. `schedule_run.api_load_run_id` 연결 확인
 5. event 기록/실패 재시도 확인
+6. run-due 재실행 시 적재 방식(write_mode)에 따라 inserted/updated/skipped 변화 확인
 
 ### F. Forecast on-demand
 1. forecast_ready entity(nx/ny) 생성
@@ -95,4 +97,5 @@ node scripts/check-pages.mjs
 4. 운영 seed 업무 샘플 없음 확인
 5. 마스킹 정책 검증(serviceKey/API Key 원문 미노출)
 6. 배포 시 migration 실행 및 backend/frontend 재기동
+7. write policy/중복 요약 조회 API 동작 확인
 

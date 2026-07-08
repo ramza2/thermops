@@ -23,7 +23,7 @@ from app.models.entities import (
     DataSource,
 )
 from app.services.api_connector_http_client import build_full_url, encode_query_value, execute_http_request
-from app.services.api_connector_loader import insert_rows, preview_load_rows
+from app.services.api_connector_loader import preview_load_rows
 from app.services.external_code_mapping_service import scan_items_for_code_mappings
 from app.services.connector_transform_service import (
     TRANSFORM_ERROR_TYPES,
@@ -38,6 +38,7 @@ from app.services.wide_hour_transform_service import (
 )
 from app.services.api_connector_parser import normalize_items, parse_response_body
 from app.services.standard_dataset_service import TargetTableNotAllowedError, validate_target_table_allowed
+from app.services.load_write_policy_service import apply_write_policy
 from app.utils.masking import mask_params_dict, mask_secret_value, mask_url
 from app.utils.secret_crypto import decrypt_secret, store_secret
 
@@ -727,6 +728,14 @@ async def load_preview(
         mapping=mapping,
         limit=10,
     )
+    dedup_preview = await apply_write_policy(
+        db,
+        operation_id=operation_id,
+        target_table=op.target_table,
+        items=items,
+        mapping=mapping,
+        dry_run=True,
+    )
     code_scan: dict[str, Any] = {}
     code_mappings = (op.metadata_json or {}).get("code_mappings") if op.metadata_json else None
     if code_mappings and isinstance(code_mappings, list):
@@ -741,6 +750,7 @@ async def load_preview(
         column_info = await match_target_columns(db, op.target_table, items[0])
     return {
         **preview,
+        **dedup_preview,
         "snapshot_id": result["snapshot_id"],
         "api_item_count": result["item_count"],
         "raw_item_count": len(raw_items),
@@ -835,17 +845,21 @@ async def run_load(
                 code_mappings=code_mappings,
                 source_operation_id=operation_id,
             )
-        counts = await insert_rows(
+        counts = await apply_write_policy(
             db,
+            operation_id=operation_id,
             target_table=op.target_table,
             items=items,
             mapping=mapping,
+            dry_run=False,
+            load_run_id=load_id,
             max_rows=MAX_LOAD_ITEMS,
         )
         finished = utc_now()
         run.run_status = "SUCCESS" if counts["error_count"] == 0 else "WARNING"
         run.finished_at = finished
         run.inserted_count = counts["inserted_count"]
+        run.updated_count = counts.get("updated_count", 0)
         run.skipped_count = counts["skipped_count"]
         run.error_count = counts["error_count"]
         run.result_summary = {
@@ -922,6 +936,7 @@ async def list_load_runs(db: AsyncSession, *, operation_id: str | None = None) -
             "target_table": r.target_table,
             "run_status": r.run_status,
             "inserted_count": r.inserted_count,
+            "updated_count": r.updated_count,
             "skipped_count": r.skipped_count,
             "error_count": r.error_count,
             "started_at": r.started_at.isoformat() if r.started_at else None,
@@ -947,6 +962,7 @@ async def get_load_run(db: AsyncSession, load_run_id: str) -> dict[str, Any] | N
         "run_status": row.run_status,
         "request_params_masked": row.request_params_masked,
         "inserted_count": row.inserted_count,
+        "updated_count": row.updated_count,
         "skipped_count": row.skipped_count,
         "error_count": row.error_count,
         "raw_snapshot_id": row.raw_snapshot_id,

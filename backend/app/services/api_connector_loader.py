@@ -97,7 +97,10 @@ def coerce_value_for_column(value: Any, data_type: str) -> Any:
 def _normalize_row_values(row: dict[str, Any], col_types: dict[str, str]) -> dict[str, Any]:
     normalized: dict[str, Any] = {}
     for col, value in row.items():
-        if value is None or value == "":
+        if value == "":
+            continue
+        if value is None:
+            normalized[col] = None
             continue
         normalized[col] = coerce_value_for_column(value, col_types.get(col, ""))
     return normalized
@@ -141,27 +144,13 @@ async def insert_rows(
     max_rows: int = 1000,
 ) -> dict[str, int]:
     await validate_target_table_allowed(db, target_table)
-    physical = resolve_physical_table_name(target_table)
-    cols = await get_physical_columns(db, physical)
-    if not cols:
-        raise TargetTableNotAllowedError(
-            f"적재 대상 테이블 컬럼을 찾을 수 없습니다: {target_table}",
-            allowed_tables=[],
-        )
-
-    physical = resolve_physical_table_name(target_table)
-    cols = await get_physical_columns(db, physical)
-    col_types = await get_physical_column_types(db, physical)
-    if mapping and mapping.columns:
-        str_rows = [{k: "" if v is None else str(v) for k, v in row.items()} for row in items[:max_rows]]
-        rows = apply_mapping(str_rows, mapping)
-        rows = [_normalize_row_values(row, col_types) for row in rows]
-    else:
-        rows = []
-        for raw in items[:max_rows]:
-            row = {c: raw.get(c) for c in cols if c in raw and raw.get(c) not in (None, "")}
-            if row:
-                rows.append(_normalize_row_values(row, col_types))
+    physical, cols, _, rows = await prepare_rows_for_target(
+        db,
+        target_table=target_table,
+        items=items,
+        mapping=mapping,
+        max_rows=max_rows,
+    )
 
     inserted = 0
     skipped = 0
@@ -180,3 +169,33 @@ async def insert_rows(
         except Exception:
             errors += 1
     return {"inserted_count": inserted, "skipped_count": skipped, "error_count": errors}
+
+
+async def prepare_rows_for_target(
+    db: AsyncSession,
+    *,
+    target_table: str,
+    items: list[dict[str, Any]],
+    mapping: DataMapping | None,
+    max_rows: int = 1000,
+) -> tuple[str, list[str], dict[str, str], list[dict[str, Any]]]:
+    await validate_target_table_allowed(db, target_table)
+    physical = resolve_physical_table_name(target_table)
+    cols = await get_physical_columns(db, physical)
+    if not cols:
+        raise TargetTableNotAllowedError(
+            f"적재 대상 테이블 컬럼을 찾을 수 없습니다: {target_table}",
+            allowed_tables=[],
+        )
+    col_types = await get_physical_column_types(db, physical)
+    if mapping and mapping.columns:
+        mapped_inputs = [{k: (None if v is None else str(v)) for k, v in row.items()} for row in items[:max_rows]]
+        rows = apply_mapping(mapped_inputs, mapping)
+        rows = [_normalize_row_values(row, col_types) for row in rows]
+    else:
+        rows = []
+        for raw in items[:max_rows]:
+            row = {c: raw.get(c) for c in cols if c in raw and raw.get(c) != ""}
+            if row:
+                rows.append(_normalize_row_values(row, col_types))
+    return physical, cols, col_types, rows

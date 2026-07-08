@@ -210,6 +210,8 @@ flowchart LR
 1) 표준 데이터셋 생성(열수요 long, ASOS, Calendar date/hour) → 2) 예측 대상/기상 매핑 등록 → 3) 외부 코드 매핑 등록 → 4) REST API 작업 등록 및 변환 설정 → 5) load-preview/load-run 검증 → 6) 데이터 적재 일정(run-now/run-due) 등록 및 실행 이력 확인 → 7) 단기예보 on-demand 입력 미리보기/캐시 확인 → 8) 예측 작업 실행 후 `forecast_input_summary`와 기상 입력 스냅샷 확인.  
 수동 적재는 즉시 1회 실행용, 정기 적재는 일정 정의 + due 실행(run-due)용입니다. 미매핑 코드는 자동 매핑되지 않으므로 `/external-code-mappings`의 **미매핑 코드**에서 검토 후 assign/ignore 처리합니다.
 
+**R10-S8 Upsert / 중복 제거 고도화**: REST API 작업 Wizard의 **적재 방식**에서 `신규 행 추가`, `중복 제외`, `있으면 갱신, 없으면 추가`를 선택할 수 있습니다. `중복 판단 키`를 설정하면 load-preview에 예상 신규/갱신/제외 건수와 batch 내 중복 수가 표시되고, load-run 및 스케줄 실행 이력에 실제 신규/갱신/제외 결과가 반영됩니다. conflict key가 없으면 정책에 따라 INSERT_ONLY로 경고 전환되거나 실행이 차단됩니다.
+
 **R9-S2 Dataset Version 운영 정책**: Feature Build로 생성되는 학습 데이터 버전에 역할·상태·생성 범위를 부여합니다. 대표 버전(`PRIMARY`)은 학습/예측 자동 선택 시 우선 사용되며, 일부 생성(`PARTIAL`)·임시(`TEMPORARY`)·보관(`ARCHIVED`)·생성 실패(`BUILD_FAILED`) 버전은 자동 선택에서 제외됩니다. 명시적 운영 후보가 없을 때만 `record_count DESC` fallback을 사용합니다(R9-S1 임시 복구 유지). 화면 `/dataset-versions`(학습 데이터 버전), API `GET/POST /api/v1/dataset-versions/*`.
 
 **R10 REST API Connector Builder**: 데이터 소스 화면 **REST API 연결**에서 API 작업(Operation)을 등록합니다. serviceKey는 Decoding 키 입력을 권장하며 저장 후 마스킹만 표시됩니다. 요청 파라미터·페이징·응답 데이터 경로·**변환 설정** 후 테스트 호출·적재 미리보기·적재 실행이 가능합니다. 표준 데이터셋 Wizard로 생성한 ACTIVE 물리 테이블만 적재 대상으로 허용합니다.
