@@ -64,6 +64,7 @@ export const PAGE_TITLES = {
   driftReports: "데이터 변화 리포트",
   retrainingCandidates: "재학습 후보",
   dataLoadSchedules: "데이터 적재 일정",
+  notifications: "알림 / 장애 통보",
   systemConfig: "시스템 설정",
 } as const;
 
@@ -95,6 +96,7 @@ export const PAGE_DESCRIPTIONS = {
   driftReports: "학습 당시 데이터와 최근 데이터의 분포 차이를 확인합니다.",
   retrainingCandidates: "데이터 변화·성능 저하 등으로 재학습이 필요한 후보를 관리합니다.",
   dataLoadSchedules: "REST API 작업의 적재 실행을 정기 일정으로 등록하고 실행 이력과 실패 여부를 관리합니다.",
+  notifications: "데이터 적재, 예측, 스케줄 실행 중 발생한 오류와 경고를 수집하고 알림 규칙에 따라 통보합니다.",
   systemConfig: "공통 코드와 시스템 운영 설정을 관리합니다.",
 } as const;
 
@@ -129,6 +131,12 @@ export const EMPTY_MESSAGES = {
     "등록된 작업 흐름이 없습니다. 데이터 적재부터 예측까지의 실행 순서를 구성하세요.",
   dataLoadSchedules:
     "등록된 데이터 적재 일정이 없습니다. REST API 작업을 선택해 정기 적재 일정을 등록하세요.",
+  notificationsIncidents: "등록된 장애가 없습니다. 알림 규칙과 채널을 등록하면 실패·경고 발생 시 장애가 생성됩니다.",
+  notificationsEvents: "기록된 알림 이벤트가 없습니다.",
+  notificationsRules: "등록된 알림 규칙이 없습니다. 필요한 규칙과 채널을 직접 등록하세요.",
+  notificationsChannels: "등록된 알림 채널이 없습니다. MOCK 채널로 테스트할 수 있습니다.",
+  notificationsRecipients: "등록된 수신 대상이 없습니다.",
+  notificationsDeliveries: "발송 이력이 없습니다.",
   pipelineRuns: "실행 이력이 없습니다. 작업 흐름 구성에서 실행하거나 개별 작업을 실행하세요.",
   generic: "데이터가 없습니다.",
 } as const;
@@ -192,6 +200,16 @@ export const HELP_TEXTS = {
     "스케줄 실행 이력에는 인증 키 원문이 저장되지 않으며, 실행 파라미터 템플릿만 마스킹되어 보관됩니다.",
   dataLoadWriteModeHelp:
     "적재 방식은 신규 행 추가, 중복 제외, 있으면 갱신·없으면 추가를 지원합니다. 재실행 시 동일 키는 정책에 따라 제외되거나 갱신됩니다.",
+  notificationIntro:
+    "데이터 적재, 예측, 스케줄 실행 중 발생한 오류와 경고를 수집하고 알림 규칙에 따라 통보합니다.",
+  notificationHelp1:
+    "알림 이벤트는 먼저 내부에 기록되며, 활성 알림 규칙과 매칭될 때 발송 이력이 생성됩니다.",
+  notificationHelp2:
+    "반복되는 동일 장애는 중복 알림 억제 시간 동안 하나의 장애로 묶을 수 있습니다. 장애 확인 처리와 장애 해결 처리로 운영 상태를 관리합니다.",
+  notificationHelp3:
+    "운영 seed에는 기본 알림 규칙이 포함되지 않으므로 필요한 규칙과 채널을 직접 등록하세요.",
+  notificationHelp4:
+    "외부 발송 정보는 암호화/마스킹되어 저장되며 화면에는 원문이 표시되지 않습니다.",
   forecastProviderHint:
     "데이터 소스에 등록한 기상청 단기예보 API 작업을 선택하면 예측 실행 시 on-demand로 호출됩니다. serviceKey는 마스킹되어 표시됩니다.",
   forecastEntityReadiness:

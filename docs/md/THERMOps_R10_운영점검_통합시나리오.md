@@ -89,13 +89,24 @@ node scripts/check-pages.mjs
 - schedule `next_run_at`/active 상태
 - forecast entity readiness(nx/ny) 누락
 - 마스킹 검증 시 secret 문자열 직접 포함 여부
+- 알림 규칙/채널 등록 여부 (운영 seed 기본값 없음)
+- `/notifications` 화면 및 MOCK 채널 테스트 발송
 
 ## 7) 배포 전 체크리스트
 1. R10-S7 통합 테스트 PASS
-2. model/quick regression PASS
-3. frontend build/check-pages PASS
-4. 운영 seed 업무 샘플 없음 확인
-5. 마스킹 정책 검증(serviceKey/API Key 원문 미노출)
-6. 배포 시 migration 실행 및 backend/frontend 재기동
-7. write policy/중복 요약 조회 API 동작 확인
+2. `python scripts/test_notification_alerting.py` PASS
+3. model/quick regression PASS
+4. frontend build/check-pages PASS
+5. 운영 seed 업무 샘플 없음 확인 (notification 테이블 0건)
+6. 마스킹 정책 검증(serviceKey/API Key/notification secret 원문 미노출)
+7. 배포 시 migration 실행 및 backend/frontend 재기동
+8. write policy/중복 요약 조회 API 동작 확인
+9. 알림 / 장애 통보 화면(`/notifications`) clean 상태 확인
+
+## 부록. 시나리오 G — 알림 / 장애 통보 (R10-S9)
+1. MOCK 알림 채널·수신 대상·알림 규칙 등록 (`SCHEDULE_RUN_FAILED` 등)
+2. `POST /notifications/events/test` 또는 스케줄/API 실패로 이벤트 생성
+3. 장애 현황에서 OPEN incident 확인 → 장애 확인 처리 → 장애 해결 처리
+4. 발송 이력에서 MOCK `SENT` 또는 `SUPPRESSED` 확인
+5. secret probe 문자열이 API 응답/발송 이력에 노출되지 않음 확인
 

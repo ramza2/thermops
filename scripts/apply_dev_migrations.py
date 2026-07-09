@@ -330,6 +330,10 @@ MIGRATIONS = [
         "R10-S8 upsert dedup schema",
         _load_sql("r10s8_upsert_dedup_schema.sql"),
     ),
+    (
+        "R10-S9 alert notification schema",
+        _load_sql("r10s9_alert_notification_schema.sql"),
+    ),
 ]
 
 

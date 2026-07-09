@@ -1269,3 +1269,7 @@ R10-S7은 **운영 점검·통합 검증·회귀 방지** 단계이며 Feature R
 ## 부록 VIII. Phase R10-S8 Upsert / 중복 제거 고도화
 
 R10-S8은 REST API Connector 적재 안정화 단계로, `INSERT_ONLY` 외에 `DEDUPLICATE`/`UPSERT` 정책과 `중복 판단 키`를 도입합니다. 이 단계는 적재 결과의 중복 누적 방지 목적이며, **Feature Recipe 계산 로직·Recipe Type·`ml/features.py`·학습/예측 알고리즘은 변경하지 않습니다.**
+
+## 부록 IX. Phase R10-S9 알림 / 장애 통보
+
+R10-S9는 운영 알림·장애 통보 단계입니다. Event → Alert Rule → Incident → Delivery 흐름으로 스케줄/API Connector/Forecast/Prediction 실패를 수집합니다. **Feature Recipe 계산 로직·학습/예측 알고리즘은 변경하지 않습니다.**

@@ -36,6 +36,7 @@ from app.services.forecast_input_provider_service import (
     ForecastProviderError,
     provide_forecast_for_prediction_job,
 )
+from app.services.notification_event_service import emit_notification_safe
 
 
 class PredictionModelError(ValueError):
@@ -481,6 +482,18 @@ async def run_prediction_job(db: AsyncSession, params: PredictionJobParams) -> d
                 pipeline.finished_at = finished
                 pipeline.message = str(exc)[:500]
                 await db.flush()
+                await emit_notification_safe(
+                    db,
+                    event_source="PREDICTION_JOB",
+                    event_type="FORECAST_INPUT_MISSING",
+                    severity="ERROR",
+                    title=f"예측 작업 실패(기상 입력): {job_id}",
+                    message=str(exc)[:500],
+                    resource_type="prediction_job",
+                    resource_id=job_id,
+                    dedup_key=f"{job_id}:FORECAST_INPUT_MISSING",
+                    event_payload_json={"failed": True, "weather_input_required": True},
+                )
                 return {
                     "job_id": job_id,
                     "pipeline_run_id": run_id,
@@ -599,6 +612,18 @@ async def run_prediction_job(db: AsyncSession, params: PredictionJobParams) -> d
         pipeline.finished_at = finished
         pipeline.message = str(exc)[:500]
         await db.flush()
+        await emit_notification_safe(
+            db,
+            event_source="PREDICTION_JOB",
+            event_type="PREDICTION_JOB_FAILED",
+            severity="ERROR",
+            title=f"예측 작업 실패: {job_id}",
+            message=str(exc)[:500],
+            resource_type="prediction_job",
+            resource_id=job_id,
+            dedup_key=f"{job_id}:PREDICTION_JOB_FAILED",
+            event_payload_json={"job_status": "FAILED", "warnings": warnings},
+        )
         return {
             "job_id": job_id,
             "pipeline_run_id": run_id,

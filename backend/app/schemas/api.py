@@ -812,3 +812,102 @@ class DataLoadScheduleRunNowRequest(BaseModel):
 
 class DataLoadScheduleArchiveRequest(BaseModel):
     archived_reason: str | None = None
+
+
+# Notifications (R10-S9)
+class NotificationChannelCreate(BaseModel):
+    channel_name: str
+    channel_type: str = "MOCK"
+    enabled_yn: bool = True
+    config_json: dict[str, Any] | None = None
+    secret_value: str | None = None
+    mask_policy_json: dict[str, Any] | None = None
+    metadata_json: dict[str, Any] | None = None
+
+
+class NotificationChannelUpdate(BaseModel):
+    channel_name: str | None = None
+    channel_type: str | None = None
+    enabled_yn: bool | None = None
+    config_json: dict[str, Any] | None = None
+    secret_value: str | None = None
+    mask_policy_json: dict[str, Any] | None = None
+    metadata_json: dict[str, Any] | None = None
+
+
+class NotificationRecipientCreate(BaseModel):
+    recipient_name: str
+    recipient_type: str = "CUSTOM"
+    address: str | None = None
+    enabled_yn: bool = True
+    metadata_json: dict[str, Any] | None = None
+
+
+class NotificationRecipientUpdate(BaseModel):
+    recipient_name: str | None = None
+    recipient_type: str | None = None
+    address: str | None = None
+    enabled_yn: bool | None = None
+    metadata_json: dict[str, Any] | None = None
+
+
+class AlertRuleCreate(BaseModel):
+    rule_name: str
+    rule_description: str | None = None
+    enabled_yn: bool = True
+    event_source: str
+    event_type: str
+    min_severity: str = "WARNING"
+    condition_json: dict[str, Any] | None = None
+    dedup_window_minutes: int = 30
+    suppress_yn: bool = False
+    create_incident_yn: bool = True
+    channel_ids_json: list[str] | None = None
+    recipient_ids_json: list[str] | None = None
+    message_template: str | None = None
+    metadata_json: dict[str, Any] | None = None
+
+
+class AlertRuleUpdate(BaseModel):
+    rule_name: str | None = None
+    rule_description: str | None = None
+    enabled_yn: bool | None = None
+    event_source: str | None = None
+    event_type: str | None = None
+    min_severity: str | None = None
+    condition_json: dict[str, Any] | None = None
+    dedup_window_minutes: int | None = None
+    suppress_yn: bool | None = None
+    create_incident_yn: bool | None = None
+    channel_ids_json: list[str] | None = None
+    recipient_ids_json: list[str] | None = None
+    message_template: str | None = None
+    metadata_json: dict[str, Any] | None = None
+
+
+class AlertRuleTestMatchRequest(BaseModel):
+    severity: str = "ERROR"
+    event_payload_json: dict[str, Any] | None = None
+
+
+class NotificationEventTestRequest(BaseModel):
+    event_source: str
+    event_type: str
+    severity: str = "WARNING"
+    title: str
+    message: str | None = None
+    resource_type: str | None = None
+    resource_id: str | None = None
+    correlation_id: str | None = None
+    dedup_key: str | None = None
+    event_payload_json: dict[str, Any] | None = None
+    metadata_json: dict[str, Any] | None = None
+
+
+class IncidentAcknowledgeRequest(BaseModel):
+    acknowledged_by: str | None = None
+
+
+class IncidentResolveRequest(BaseModel):
+    resolved_by: str | None = None
+    resolution_note: str | None = None

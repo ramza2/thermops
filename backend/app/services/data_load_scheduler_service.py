@@ -17,6 +17,7 @@ from app.models.entities import (
     DataLoadScheduleRun,
 )
 from app.services.api_connector_service import ApiConnectorError, _get_operation, load_preview, run_load
+from app.services.notification_event_service import emit_notification_safe
 from app.services.runtime_param_template_service import mask_runtime_params, resolve_runtime_params
 from app.services.schedule_time_service import compute_next_run_at, is_schedule_due
 
@@ -392,6 +393,34 @@ async def list_due_schedules(db: AsyncSession, *, now: datetime | None = None) -
     return [s for s in schedules if is_schedule_due(s, ref)]
 
 
+async def _emit_schedule_run_notification(
+    db: AsyncSession,
+    *,
+    schedule: DataLoadSchedule,
+    run_row: DataLoadScheduleRun,
+    attempt_no: int,
+    event_type: str,
+) -> None:
+    await emit_notification_safe(
+        db,
+        event_source="DATA_LOAD_SCHEDULE_RUN",
+        event_type=event_type,
+        severity="CRITICAL" if event_type == "SCHEDULE_RETRY_FAILED" else "ERROR",
+        title=f"데이터 적재 일정 실행 실패: {schedule.schedule_name}",
+        message=run_row.error_message or "적재 실행이 실패했습니다.",
+        resource_type="schedule_run",
+        resource_id=run_row.schedule_run_id,
+        correlation_id=schedule.schedule_id,
+        dedup_key=f"{schedule.schedule_id}:{event_type}",
+        event_payload_json={
+            "run_status": run_row.run_status,
+            "schedule_id": schedule.schedule_id,
+            "operation_id": schedule.operation_id,
+            "attempt_no": attempt_no,
+        },
+    )
+
+
 async def _execute_schedule_run(
     db: AsyncSession,
     schedule: DataLoadSchedule,
@@ -490,6 +519,13 @@ async def _execute_schedule_run(
                 event_type="RUN_FAILED",
                 event_message="적재 실행이 실패했습니다.",
             )
+            await _emit_schedule_run_notification(
+                db,
+                schedule=schedule,
+                run_row=run_row,
+                attempt_no=attempt_no,
+                event_type="SCHEDULE_RUN_FAILED" if attempt_no == 1 else "SCHEDULE_RETRY_FAILED",
+            )
     except Exception as exc:
         run_row.run_status = "FAILED"
         run_row.finished_at = utc_now()
@@ -502,6 +538,14 @@ async def _execute_schedule_run(
             schedule_run_id=run_id,
             event_type="RUN_FAILED" if attempt_no == 1 else "RETRY_FAILED",
             event_message=str(exc)[:300],
+        )
+        fail_event_type = "SCHEDULE_RUN_FAILED" if attempt_no == 1 else "SCHEDULE_RETRY_FAILED"
+        await _emit_schedule_run_notification(
+            db,
+            schedule=schedule,
+            run_row=run_row,
+            attempt_no=attempt_no,
+            event_type=fail_event_type,
         )
         schedule.next_run_at = compute_next_run_at(sched_dict, from_time=utc_now())
         schedule.updated_at = utc_now()

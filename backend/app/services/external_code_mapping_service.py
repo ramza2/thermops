@@ -10,6 +10,7 @@ from sqlalchemy import or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.time import utc_now
+from app.services.notification_event_service import emit_notification_safe
 from app.models.entities import (
     CommonCode,
     ExternalCodeMapping,
@@ -523,7 +524,25 @@ async def log_unmapped_external_code(
             existing.source_operation_id = source_operation_id
         existing.updated_at = now
         await db.flush()
-        return _unmapped_dict(existing)
+        result = _unmapped_dict(existing)
+        await emit_notification_safe(
+            db,
+            event_source="SYSTEM",
+            event_type="UNMAPPED_CODE_DETECTED",
+            severity="WARNING",
+            title=f"미매핑 코드 재발견: {source_system}/{external_code}",
+            message=f"seen_count={existing.seen_count}",
+            resource_type="unmapped_code",
+            resource_id=existing.unmapped_id,
+            dedup_key=f"{source_system}:{external_code_group}:{external_code}",
+            event_payload_json={
+                "source_system": source_system,
+                "external_code_group": external_code_group,
+                "external_code": external_code,
+                "seen_count": existing.seen_count,
+            },
+        )
+        return result
     row = UnmappedExternalCode(
         unmapped_id=_new_id("UEC"),
         source_system=source_system,
@@ -544,7 +563,25 @@ async def log_unmapped_external_code(
     )
     db.add(row)
     await db.flush()
-    return _unmapped_dict(row)
+    result = _unmapped_dict(row)
+    await emit_notification_safe(
+        db,
+        event_source="SYSTEM",
+        event_type="UNMAPPED_CODE_DETECTED",
+        severity="WARNING",
+        title=f"미매핑 코드 발생: {source_system}/{external_code}",
+        message=external_code_name or external_code,
+        resource_type="unmapped_code",
+        resource_id=row.unmapped_id,
+        dedup_key=f"{source_system}:{external_code_group}:{external_code}",
+        event_payload_json={
+            "source_system": source_system,
+            "external_code_group": external_code_group,
+            "external_code": external_code,
+            "seen_count": 1,
+        },
+    )
+    return result
 
 
 async def resolve_or_log_unmapped(

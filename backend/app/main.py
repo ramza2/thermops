@@ -17,6 +17,7 @@ from app.api.v1 import (
     mapping,
     model,
     monitoring,
+    notification,
     pipeline,
     pipeline_builder,
     prediction,
@@ -64,6 +65,7 @@ app.include_router(training.router, prefix=api_prefix)
 app.include_router(model.router, prefix=api_prefix)
 app.include_router(prediction.router, prefix=api_prefix)
 app.include_router(monitoring.router, prefix=api_prefix)
+app.include_router(notification.router, prefix=api_prefix)
 app.include_router(pipeline.router, prefix=api_prefix)
 app.include_router(pipeline_builder.router, prefix=api_prefix)
 app.include_router(system.router, prefix=api_prefix)

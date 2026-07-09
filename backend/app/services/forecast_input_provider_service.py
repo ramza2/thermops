@@ -19,6 +19,7 @@ from app.services.kma_short_forecast_parser import (
     pivot_kma_short_forecast_items,
     resolve_latest_kma_base_time,
 )
+from app.services.notification_event_service import emit_notification_safe
 from app.services.prediction_weather_input_service import save_prediction_weather_inputs
 from app.services.weather_mapping_service import compute_weather_readiness, get_entity_forecast_grid
 from app.utils.masking import mask_params_dict
@@ -309,6 +310,23 @@ async def fetch_and_normalize_forecast(
         )
         db.add(row)
         await db.flush()
+        await emit_notification_safe(
+            db,
+            event_source="FORECAST_PROVIDER",
+            event_type="FORECAST_PROVIDER_FAILED",
+            severity="ERROR",
+            title=f"단기예보 입력 생성 실패: entity {entity_id}",
+            message=str(exc)[:500],
+            resource_type="forecast_snapshot",
+            resource_id=snapshot_id,
+            dedup_key=f"{entity_id}:{base_date}:{base_time}:FORECAST_PROVIDER_FAILED",
+            event_payload_json={
+                "entity_id": entity_id,
+                "base_date": base_date,
+                "base_time": base_time,
+                "error_message": str(exc)[:500],
+            },
+        )
         raise ForecastProviderError(str(exc), error_code="FORECAST_API_FAILED") from exc
 
     raw_items = result.get("items") or []

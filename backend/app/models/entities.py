@@ -1103,3 +1103,116 @@ class SystemConfig(Base):
     editable_yn: Mapped[str] = mapped_column(String(1), default="Y")
     updated_by: Mapped[str | None] = mapped_column(String(50))
     updated_at: Mapped[datetime | None] = mapped_column(DateTime)
+
+
+class NotificationChannel(Base):
+    __tablename__ = "tb_notification_channel"
+    channel_id: Mapped[str] = mapped_column(String(50), primary_key=True)
+    channel_name: Mapped[str] = mapped_column(String(200))
+    channel_type: Mapped[str] = mapped_column(String(50))
+    enabled_yn: Mapped[bool] = mapped_column(Boolean, default=True)
+    config_json: Mapped[dict | None] = mapped_column(JSONB)
+    secret_config_encrypted: Mapped[str | None] = mapped_column(Text)
+    mask_policy_json: Mapped[dict | None] = mapped_column(JSONB)
+    created_at: Mapped[datetime] = mapped_column(DateTime)
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime)
+    metadata_json: Mapped[dict | None] = mapped_column(JSONB)
+
+
+class NotificationRecipient(Base):
+    __tablename__ = "tb_notification_recipient"
+    recipient_id: Mapped[str] = mapped_column(String(50), primary_key=True)
+    recipient_name: Mapped[str] = mapped_column(String(200))
+    recipient_type: Mapped[str] = mapped_column(String(50))
+    address_masked: Mapped[str | None] = mapped_column(String(300))
+    address_encrypted: Mapped[str | None] = mapped_column(Text)
+    enabled_yn: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime)
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime)
+    metadata_json: Mapped[dict | None] = mapped_column(JSONB)
+
+
+class AlertRule(Base):
+    __tablename__ = "tb_alert_rule"
+    alert_rule_id: Mapped[str] = mapped_column(String(50), primary_key=True)
+    rule_name: Mapped[str] = mapped_column(String(200))
+    rule_description: Mapped[str | None] = mapped_column(Text)
+    enabled_yn: Mapped[bool] = mapped_column(Boolean, default=True)
+    event_source: Mapped[str] = mapped_column(String(80))
+    event_type: Mapped[str] = mapped_column(String(80))
+    min_severity: Mapped[str] = mapped_column(String(30), default="WARNING")
+    condition_json: Mapped[dict | None] = mapped_column(JSONB)
+    dedup_window_minutes: Mapped[int] = mapped_column(Integer, default=30)
+    suppress_yn: Mapped[bool] = mapped_column(Boolean, default=False)
+    create_incident_yn: Mapped[bool] = mapped_column(Boolean, default=True)
+    channel_ids_json: Mapped[Any | None] = mapped_column(JSONB)
+    recipient_ids_json: Mapped[Any | None] = mapped_column(JSONB)
+    message_template: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime)
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime)
+    metadata_json: Mapped[dict | None] = mapped_column(JSONB)
+
+
+class NotificationEvent(Base):
+    __tablename__ = "tb_notification_event"
+    event_id: Mapped[str] = mapped_column(String(50), primary_key=True)
+    event_source: Mapped[str] = mapped_column(String(80))
+    event_type: Mapped[str] = mapped_column(String(80))
+    severity: Mapped[str] = mapped_column(String(30))
+    title: Mapped[str] = mapped_column(String(300))
+    message: Mapped[str | None] = mapped_column(Text)
+    resource_type: Mapped[str | None] = mapped_column(String(100))
+    resource_id: Mapped[str | None] = mapped_column(String(100))
+    correlation_id: Mapped[str | None] = mapped_column(String(100))
+    dedup_key: Mapped[str | None] = mapped_column(String(300))
+    event_payload_json: Mapped[dict | None] = mapped_column(JSONB)
+    masked_payload_json: Mapped[dict | None] = mapped_column(JSONB)
+    occurred_at: Mapped[datetime] = mapped_column(DateTime)
+    created_at: Mapped[datetime] = mapped_column(DateTime)
+    metadata_json: Mapped[dict | None] = mapped_column(JSONB)
+
+
+class Incident(Base):
+    __tablename__ = "tb_incident"
+    incident_id: Mapped[str] = mapped_column(String(50), primary_key=True)
+    event_id: Mapped[str | None] = mapped_column(String(50))
+    alert_rule_id: Mapped[str | None] = mapped_column(String(50))
+    severity: Mapped[str] = mapped_column(String(30))
+    status: Mapped[str] = mapped_column(String(30), default="OPEN")
+    title: Mapped[str] = mapped_column(String(300))
+    summary: Mapped[str | None] = mapped_column(Text)
+    resource_type: Mapped[str | None] = mapped_column(String(100))
+    resource_id: Mapped[str | None] = mapped_column(String(100))
+    dedup_key: Mapped[str | None] = mapped_column(String(300))
+    first_occurred_at: Mapped[datetime] = mapped_column(DateTime)
+    last_occurred_at: Mapped[datetime] = mapped_column(DateTime)
+    occurrence_count: Mapped[int] = mapped_column(Integer, default=1)
+    acknowledged_at: Mapped[datetime | None] = mapped_column(DateTime)
+    acknowledged_by: Mapped[str | None] = mapped_column(String(100))
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime)
+    resolved_by: Mapped[str | None] = mapped_column(String(100))
+    resolution_note: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime)
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime)
+    metadata_json: Mapped[dict | None] = mapped_column(JSONB)
+
+
+class NotificationDelivery(Base):
+    __tablename__ = "tb_notification_delivery"
+    delivery_id: Mapped[str] = mapped_column(String(50), primary_key=True)
+    event_id: Mapped[str] = mapped_column(String(50))
+    incident_id: Mapped[str | None] = mapped_column(String(50))
+    alert_rule_id: Mapped[str | None] = mapped_column(String(50))
+    channel_id: Mapped[str | None] = mapped_column(String(50))
+    recipient_id: Mapped[str | None] = mapped_column(String(50))
+    delivery_status: Mapped[str] = mapped_column(String(30))
+    severity: Mapped[str] = mapped_column(String(30))
+    title: Mapped[str] = mapped_column(String(300))
+    message: Mapped[str | None] = mapped_column(Text)
+    destination_masked: Mapped[str | None] = mapped_column(String(300))
+    request_payload_masked: Mapped[dict | None] = mapped_column(JSONB)
+    response_payload_masked: Mapped[dict | None] = mapped_column(JSONB)
+    error_message: Mapped[str | None] = mapped_column(Text)
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime)
+    created_at: Mapped[datetime] = mapped_column(DateTime)
+    metadata_json: Mapped[dict | None] = mapped_column(JSONB)

@@ -39,6 +39,7 @@ from app.services.wide_hour_transform_service import (
 from app.services.api_connector_parser import normalize_items, parse_response_body
 from app.services.standard_dataset_service import TargetTableNotAllowedError, validate_target_table_allowed
 from app.services.load_write_policy_service import apply_write_policy
+from app.services.notification_event_service import emit_notification_safe
 from app.utils.masking import mask_params_dict, mask_secret_value, mask_url
 from app.utils.secret_crypto import decrypt_secret, store_secret
 
@@ -875,6 +876,23 @@ async def run_load(
         source = await _get_source(db, op.data_source_id)
         source.last_loaded_at = finished
         await db.flush()
+        if run.run_status == "WARNING":
+            await emit_notification_safe(
+                db,
+                event_source="API_CONNECTOR",
+                event_type="LOAD_RUN_WARNING",
+                severity="WARNING",
+                title=f"API 적재 경고: {op.operation_name}",
+                message=f"오류 {counts['error_count']}건, 적재 run {load_id}",
+                resource_type="load_run",
+                resource_id=load_id,
+                dedup_key=f"{operation_id}:LOAD_RUN_WARNING",
+                event_payload_json={
+                    "run_status": run.run_status,
+                    "error_count": counts["error_count"],
+                    "operation_id": operation_id,
+                },
+            )
         return {
             "load_run_id": load_id,
             "status": run.run_status,
@@ -886,6 +904,22 @@ async def run_load(
         run.finished_at = utc_now()
         run.error_message = str(exc)[:500]
         await db.flush()
+        await emit_notification_safe(
+            db,
+            event_source="API_CONNECTOR",
+            event_type="LOAD_RUN_FAILED",
+            severity="ERROR",
+            title=f"API 적재 실패: {op.operation_name}",
+            message=run.error_message,
+            resource_type="load_run",
+            resource_id=load_id,
+            dedup_key=f"{operation_id}:LOAD_RUN_FAILED",
+            event_payload_json={
+                "run_status": "FAILED",
+                "operation_id": operation_id,
+                "error_message": run.error_message,
+            },
+        )
         if isinstance(exc, ApiConnectorError):
             raise
         if isinstance(exc, TRANSFORM_ERROR_TYPES):

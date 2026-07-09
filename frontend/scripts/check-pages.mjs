@@ -23,6 +23,7 @@ const PATHS = [
   "/ops/drift-reports",
   "/ops/retraining-candidates",
   "/data-load-schedules",
+  "/notifications",
   "/system/configs",
 ];
 
@@ -83,6 +84,8 @@ for (const path of PATHS) {
     await waitMainHeading("시스템 설정");
   } else if (path === "/data-load-schedules") {
     await waitMainHeading("데이터 적재 일정");
+  } else if (path === "/notifications") {
+    await waitMainHeading("알림 / 장애 통보");
   } else {
     await page.locator("main h1").first().waitFor({ state: "visible", timeout: 60000 });
   }
@@ -305,10 +308,27 @@ for (const path of PATHS) {
     await page.getByText("다음 실행 예정").first().waitFor({ state: "visible", timeout: 30000 });
     await page.getByRole("button", { name: "취소" }).click();
   }
+  if (path === "/notifications") {
+    for (const label of ["장애 현황", "알림 이벤트", "알림 규칙", "알림 채널", "수신 대상", "발송 이력", "도움말"]) {
+      await page.getByRole("button", { name: label, exact: true }).waitFor({ state: "visible", timeout: 30000 });
+    }
+    await page.getByRole("button", { name: "도움말", exact: true }).click();
+    await page.getByText("중복 알림 억제").first().waitFor({ state: "visible", timeout: 30000 });
+    await page.getByText("장애 확인 처리").first().waitFor({ state: "visible", timeout: 30000 });
+    await page.getByText("장애 해결 처리").first().waitFor({ state: "visible", timeout: 30000 });
+    await page.getByText("장애 확인").first().waitFor({ state: "visible", timeout: 30000 }).catch(() => {});
+    await page.getByText("장애 해결").first().waitFor({ state: "visible", timeout: 30000 }).catch(() => {});
+    await page.getByText("외부 발송 정보는 암호화").first().waitFor({ state: "visible", timeout: 30000 });
+    const hasIncidentContent = (await page.getByText(/등록된 장애가 없습니다/).count()) > 0
+      || (await page.locator("main table tbody tr").count()) > 0
+      || (await page.getByText("미해결 장애").count()) > 0;
+    if (!hasIncidentContent) errors.push(`${path}: incidents tab content missing`);
+  }
 }
 
 // Sidebar menu groups (dashboard page has sidebar)
 await page.goto(`${BASE}/dashboard`, { waitUntil: "load", timeout: 60000 });
+await page.getByText("운영 모니터링", { exact: true }).click();
 for (const group of ["데이터 준비", "학습 변수 관리", "모델 학습·예측", "운영 모니터링", "시스템 관리"]) {
   const count = await page.getByText(group, { exact: true }).count();
   if (!count) errors.push(`sidebar: menu group '${group}' not found`);
@@ -320,6 +340,7 @@ const dataPrepIndices = DATA_PREP_ORDER.map((label) => sidebarLinks.indexOf(labe
 for (const label of DATA_PREP_ORDER) {
   if (!sidebarLinks.includes(label)) errors.push(`sidebar: data prep item '${label}' not found`);
 }
+if (!sidebarLinks.includes("알림 / 장애 통보")) errors.push(`sidebar: operations item '알림 / 장애 통보' not found`);
 for (let i = 1; i < dataPrepIndices.length; i++) {
   if (dataPrepIndices[i] >= 0 && dataPrepIndices[i - 1] >= 0 && dataPrepIndices[i] <= dataPrepIndices[i - 1]) {
     errors.push(`sidebar: data prep order must be ${DATA_PREP_ORDER.join(" → ")}`);
