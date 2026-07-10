@@ -23,6 +23,17 @@ class Settings(BaseSettings):
     airflow_base_url: str = "http://airflow:8080"
     airflow_username: str = "admin"
     airflow_password: str = "admin"
+    # R10-S10 Run Due Worker
+    run_due_worker_enabled: bool = Field(default=False, validation_alias="THERMOOPS_RUN_DUE_WORKER_ENABLED")
+    run_due_worker_name: str = Field(default="run-due-worker-1", validation_alias="THERMOOPS_RUN_DUE_WORKER_NAME")
+    run_due_worker_mode: str = Field(default="loop", validation_alias="THERMOOPS_RUN_DUE_WORKER_MODE")
+    run_due_poll_interval_seconds: int = Field(default=60, validation_alias="THERMOOPS_RUN_DUE_POLL_INTERVAL_SECONDS")
+    run_due_lock_ttl_seconds: int = Field(default=120, validation_alias="THERMOOPS_RUN_DUE_LOCK_TTL_SECONDS")
+    run_due_max_batch_size: int = Field(default=20, validation_alias="THERMOOPS_RUN_DUE_MAX_BATCH_SIZE")
+    run_due_fail_fast: bool = Field(default=False, validation_alias="THERMOOPS_RUN_DUE_FAIL_FAST")
+    run_due_notification_enabled: bool = Field(default=True, validation_alias="THERMOOPS_RUN_DUE_NOTIFICATION_ENABLED")
+    run_due_graceful_timeout_seconds: int = Field(default=30, validation_alias="THERMOOPS_RUN_DUE_GRACEFUL_TIMEOUT_SECONDS")
+    run_due_log_level: str = Field(default="INFO", validation_alias="THERMOOPS_RUN_DUE_LOG_LEVEL")
 
     @property
     def cors_origin_list(self) -> list[str]:

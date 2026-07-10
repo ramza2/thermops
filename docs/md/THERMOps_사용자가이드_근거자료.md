@@ -204,7 +204,9 @@ flowchart LR
 
 **R10-S5 Forecast On-demand Input Provider**: `/predictions/jobs`(예측 작업)에서 **단기예보 입력**을 켜고 `forecast_ready` 예측 대상을 선택합니다. 데이터 소스 **REST API 연결**에 등록한 **기상청 단기예보 API 작업**을 예측 시점 단기예보 입력 생성기 설정에서 연결합니다. **예보 발표 시각**은 자동 선택(최신 발표 + 지연 보정) 또는 수동 입력이며, **단기예보 입력 미리보기**로 nx/ny·표준 행·경고를 확인합니다. 예측 실행 시 호출 결과는 **기상 입력 스냅샷**(`tb_forecast_input_snapshot`)과 예측 작업별 기상 입력(`tb_prediction_weather_input`)으로 저장되어 재현할 수 있습니다. `weather_input_required`를 켜면 단기예보 실패 시 예측 작업이 중단됩니다. serviceKey 원문은 로그·화면·스냅샷에 노출되지 않습니다. 운영 seed에는 Forecast Provider·snapshot 샘플이 없습니다.
 
-**R10-S6 데이터 적재 일정**: `/data-load-schedules`(운영 모니터링 메뉴)에서 REST API 작업의 **load-run**을 정기 일정으로 등록합니다. **적재 일정 설정**에서 API 작업·스케줄 유형(DAILY/HOURLY 등)·**실행 파라미터 템플릿**·**적재 기간(Load Window)**·**재시도 정책**을 지정하고 **다음 실행 예정 시각**을 확인합니다. **수동 실행**(run-now)과 **실행 대상 일정** 탭의 **run-due**로 due 일정을 일괄 처리할 수 있습니다. 실제 운영에서는 cron/worker/Airflow가 `POST /api/v1/data-load-schedules/run-due`를 주기 호출하는 방식으로 연계합니다. **적재 실행 이력**에서 실패 사유·**마지막 성공 시각**·재시도 결과를 확인합니다. 단기예보 on-demand(R10-S5)는 스케줄 대상이 아닙니다. 운영 seed에 스케줄 샘플은 없습니다.
+**R10-S6 데이터 적재 일정**: `/data-load-schedules`(운영 모니터링 메뉴)에서 REST API 작업의 **load-run**을 정기 일정으로 등록합니다. **적재 일정 설정**에서 API 작업·스케줄 유형(DAILY/HOURLY 등)·**실행 파라미터 템플릿**·**적재 기간(Load Window)**·**재시도 정책**을 지정하고 **다음 실행 예정 시각**을 확인합니다. **수동 실행**(run-now)과 **실행 대상 일정** 탭의 **run-due**로 due 일정을 일괄 처리할 수 있습니다.
+
+**R10-S10 적재 일정 실행 Worker**: 운영에서는 Docker **loop worker**(`run-due-worker` 서비스)가 `run-due`를 주기 실행합니다. **Worker 상태** 탭에서 Worker 상태 신호(heartbeat)·중복 실행 방지 잠금·연속 실패·최근 Worker 실행 이력을 확인하고, 필요 시 **1회 실행**으로 수동 tick을 수행할 수 있습니다. cron 대안은 `scripts/run_due_once.sh` 예시만 제공하며 OS cron 자동 등록은 하지 않습니다. Worker 실패 시 **알림 / 장애 통보**(`/notifications`)에서 RUN_DUE_WORKER 이벤트를 확인합니다(알림 규칙 등록 시). CRON 표현식 정식 해석은 후속 Phase입니다. 운영 seed에 Worker/스케줄 샘플은 없습니다.
 
 **R10-S7 운영 점검 / 통합 시나리오**: 배포 전에는 아래 순서로 통합 운영 흐름을 점검합니다.  
 1) 표준 데이터셋 생성(열수요 long, ASOS, Calendar date/hour) → 2) 예측 대상/기상 매핑 등록 → 3) 외부 코드 매핑 등록 → 4) REST API 작업 등록 및 변환 설정 → 5) load-preview/load-run 검증 → 6) 데이터 적재 일정(run-now/run-due) 등록 및 실행 이력 확인 → 7) 단기예보 on-demand 입력 미리보기/캐시 확인 → 8) 예측 작업 실행 후 `forecast_input_summary`와 기상 입력 스냅샷 확인.  

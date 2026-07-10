@@ -1273,3 +1273,7 @@ R10-S8은 REST API Connector 적재 안정화 단계로, `INSERT_ONLY` 외에 `D
 ## 부록 IX. Phase R10-S9 알림 / 장애 통보
 
 R10-S9는 운영 알림·장애 통보 단계입니다. Event → Alert Rule → Incident → Delivery 흐름으로 스케줄/API Connector/Forecast/Prediction 실패를 수집합니다. **Feature Recipe 계산 로직·학습/예측 알고리즘은 변경하지 않습니다.**
+
+## 부록 X. Phase R10-S10 Run Due Worker / Cron 운영 구성
+
+R10-S10은 데이터 적재 일정의 `run-due`를 Worker(loop/once)로 자동 실행하는 운영 자동화 단계입니다. lock·heartbeat·worker_run 이력과 R10-S9 알림 연계를 포함하나, **Feature Recipe 계산 로직·학습/예측 알고리즘은 변경하지 않습니다.** CRON parser 정식 지원은 후속 Phase입니다.

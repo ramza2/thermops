@@ -317,6 +317,12 @@ def _build_registry() -> list[TestCase]:
             timeout_seconds=420,
         ),
         _python_test(
+            "test_run_due_worker.py",
+            groups=["model", "full"],
+            description="Run Due Worker / Cron ops (R10-S10)",
+            timeout_seconds=420,
+        ),
+        _python_test(
             "test_r10_operational_integration.py",
             groups=["full"],
             description="R10 Operational Integration (R10-S7)",

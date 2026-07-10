@@ -911,3 +911,13 @@ class IncidentAcknowledgeRequest(BaseModel):
 class IncidentResolveRequest(BaseModel):
     resolved_by: str | None = None
     resolution_note: str | None = None
+
+
+# Run Due Worker (R10-S10)
+class RunDueWorkerRunOnceRequest(BaseModel):
+    worker_name: str | None = None
+    max_batch_size: int | None = None
+
+
+class RunDueWorkerMarkStaleRequest(BaseModel):
+    lock_ttl_seconds: int | None = None

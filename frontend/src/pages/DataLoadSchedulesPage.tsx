@@ -13,6 +13,13 @@ import {
   runDueDataLoadSchedules,
   updateDataLoadSchedule,
 } from "@/api/dataLoadSchedules";
+import {
+  listRunDueWorkerInstances,
+  listRunDueWorkerLocks,
+  listRunDueWorkerRuns,
+  markStaleRunDueWorkers,
+  runDueWorkerOnce,
+} from "@/api/runDueWorker";
 import { fetchApi } from "@/api/client";
 import { Button } from "@/components/Button";
 import { Column, DataTable } from "@/components/DataTable";
@@ -30,11 +37,14 @@ import {
   lifecycleStatusLabel,
 } from "@/constants/displayLabels";
 import type { DataLoadSchedule, DataLoadScheduleRun } from "@/types/dataLoadSchedule";
+import type { RunDueWorkerInstance, RunDueWorkerLock, RunDueWorkerRun } from "@/api/runDueWorker";
 import { LOAD_WINDOW_OPTIONS, SCHEDULE_TYPE_OPTIONS } from "@/types/dataLoadSchedule";
 
-type Tab = "schedules" | "runs" | "due" | "help";
+type Tab = "schedules" | "runs" | "due" | "worker" | "help";
 type ScheduleRow = DataLoadSchedule & Record<string, unknown>;
 type RunRow = DataLoadScheduleRun & Record<string, unknown>;
+type WorkerInstanceRow = RunDueWorkerInstance & Record<string, unknown>;
+type WorkerRunRow = RunDueWorkerRun & Record<string, unknown>;
 
 const scheduleColumns: Column<ScheduleRow>[] = [
   { key: "schedule_name", header: "일정명" },
@@ -62,6 +72,27 @@ const runColumns: Column<RunRow>[] = [
   { key: "updated_count", header: "갱신", render: (r) => String(r.updated_count ?? (r.result_summary as Record<string, unknown> | undefined)?.updated_count ?? 0) },
   { key: "skipped_count", header: "제외", render: (r) => String(r.skipped_count ?? (r.result_summary as Record<string, unknown> | undefined)?.skipped_count ?? 0) },
   { key: "error_message", header: "오류", render: (r) => r.error_message?.slice(0, 40) || "-" },
+];
+
+const workerInstanceColumns: Column<WorkerInstanceRow>[] = [
+  { key: "worker_name", header: "Worker명" },
+  { key: "worker_mode", header: "실행 모드" },
+  { key: "status", header: "상태", render: (r) => <StatusBadge status={lifecycleStatusLabel(r.status)} /> },
+  { key: "last_heartbeat_at", header: "Worker 상태 신호", render: (r) => r.last_heartbeat_at?.slice(0, 19) || "-" },
+  { key: "last_run_status", header: "최근 실행", render: (r) => lifecycleStatusLabel(r.last_run_status) },
+  { key: "consecutive_failure_count", header: "연속 실패" },
+  { key: "total_run_count", header: "총 실행" },
+  { key: "poll_interval_seconds", header: "실행 확인 주기(초)" },
+];
+
+const workerRunColumns: Column<WorkerRunRow>[] = [
+  { key: "worker_name", header: "Worker명" },
+  { key: "run_mode", header: "실행 모드" },
+  { key: "started_at", header: "시작", render: (r) => r.started_at?.slice(0, 19) || "-" },
+  { key: "run_status", header: "상태", render: (r) => <StatusBadge status={lifecycleStatusLabel(r.run_status)} /> },
+  { key: "due_schedule_count", header: "실행 대상" },
+  { key: "executed_schedule_count", header: "처리" },
+  { key: "failed_schedule_count", header: "실패" },
 ];
 
 const dueColumns: Column<ScheduleRow>[] = [
@@ -105,6 +136,10 @@ export default function DataLoadSchedulesPage() {
   const [nextPreview, setNextPreview] = useState<string>("");
   const [runDueResult, setRunDueResult] = useState<Record<string, unknown> | null>(null);
   const [runningId, setRunningId] = useState<string | null>(null);
+  const [workerInstances, setWorkerInstances] = useState<RunDueWorkerInstance[]>([]);
+  const [workerRuns, setWorkerRuns] = useState<RunDueWorkerRun[]>([]);
+  const [workerLocks, setWorkerLocks] = useState<RunDueWorkerLock[]>([]);
+  const [workerLoading, setWorkerLoading] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -130,6 +165,28 @@ export default function DataLoadSchedulesPage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  const loadWorker = useCallback(async () => {
+    setWorkerLoading(true);
+    try {
+      const [instRes, runRes, lockRes] = await Promise.all([
+        listRunDueWorkerInstances(),
+        listRunDueWorkerRuns(30),
+        listRunDueWorkerLocks(),
+      ]);
+      setWorkerInstances(instRes);
+      setWorkerRuns(runRes);
+      setWorkerLocks(lockRes);
+    } catch (e: unknown) {
+      showToast("error", e instanceof Error ? e.message : "Worker 상태 조회 실패");
+    } finally {
+      setWorkerLoading(false);
+    }
+  }, [showToast]);
+
+  useEffect(() => {
+    if (tab === "worker") void loadWorker();
+  }, [tab, loadWorker]);
 
   const openCreate = () => {
     setEditing(null);
@@ -236,6 +293,26 @@ export default function DataLoadSchedulesPage() {
     }
   };
 
+  const handleWorkerOnce = async () => {
+    try {
+      await runDueWorkerOnce();
+      showToast("success", "Worker 1회 실행이 완료되었습니다.");
+      await loadWorker();
+    } catch (e: unknown) {
+      showToast("error", e instanceof Error ? e.message : "1회 실행 실패");
+    }
+  };
+
+  const handleMarkStale = async () => {
+    try {
+      const marked = await markStaleRunDueWorkers();
+      showToast("success", `STALE 처리 ${marked.length}건`);
+      await loadWorker();
+    } catch (e: unknown) {
+      showToast("error", e instanceof Error ? e.message : "STALE 처리 실패");
+    }
+  };
+
   const handleRetry = async (runId: string) => {
     try {
       await retryDataLoadScheduleRun(runId);
@@ -261,6 +338,7 @@ export default function DataLoadSchedulesPage() {
           ["schedules", "일정 목록"],
           ["runs", "실행 이력"],
           ["due", "실행 대상 일정"],
+          ["worker", "Worker 상태"],
           ["help", "도움말"],
         ].map(([id, label]) => (
           <button
@@ -277,6 +355,13 @@ export default function DataLoadSchedulesPage() {
         )}
         {tab === "due" && (
           <Button icon={<RefreshCw className="w-4 h-4" />} onClick={handleRunDue}>run-due 실행</Button>
+        )}
+        {tab === "worker" && (
+          <>
+            <Button icon={<Play className="w-4 h-4" />} onClick={() => void handleWorkerOnce()}>1회 실행</Button>
+            <Button variant="secondary" icon={<RefreshCw className="w-4 h-4" />} onClick={() => void loadWorker()}>새로고침</Button>
+            <Button variant="secondary" onClick={() => void handleMarkStale()}>STALE 표시</Button>
+          </>
         )}
       </div>
 
@@ -345,11 +430,43 @@ export default function DataLoadSchedulesPage() {
         </div>
       )}
 
+      {tab === "worker" && (
+        <div className="space-y-6">
+          <p className="text-sm text-slate-600">
+            적재 일정 실행 Worker는 run-due를 주기적으로 호출합니다. 중복 실행 방지 잠금: {workerLocks.length ? workerLocks.map((l) => `${l.lock_key} → ${l.owner_instance_id}`).join(", ") : "없음"}
+          </p>
+          {workerLoading ? <LoadingState /> : (
+            <>
+              <div>
+                <h3 className="text-sm font-medium text-slate-700 mb-2">적재 일정 실행 Worker</h3>
+                {workerInstances.length === 0 ? (
+                  <div className="text-center py-8 text-slate-500 border border-dashed rounded text-sm">{EMPTY_MESSAGES.runDueWorkerInstances}</div>
+                ) : (
+                  <DataTable columns={workerInstanceColumns} data={workerInstances as WorkerInstanceRow[]} />
+                )}
+              </div>
+              <div>
+                <h3 className="text-sm font-medium text-slate-700 mb-2">최근 Worker 실행 이력</h3>
+                {workerRuns.length === 0 ? (
+                  <div className="text-center py-8 text-slate-500 border border-dashed rounded text-sm">{EMPTY_MESSAGES.runDueWorkerRuns}</div>
+                ) : (
+                  <DataTable columns={workerRunColumns} data={workerRuns as WorkerRunRow[]} />
+                )}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
       {tab === "help" && (
         <div className="text-sm text-slate-700 space-y-2 bg-slate-50 border rounded p-4">
           <p>{HELP_TEXTS.dataLoadSchedulerHelp1}</p>
           <p>{HELP_TEXTS.dataLoadSchedulerHelp2}</p>
           <p>{HELP_TEXTS.dataLoadSchedulerHelp3}</p>
+          <p>{HELP_TEXTS.runDueWorkerHelp1}</p>
+          <p>{HELP_TEXTS.runDueWorkerHelp2}</p>
+          <p>{HELP_TEXTS.runDueWorkerHelp3}</p>
+          <p>{HELP_TEXTS.runDueWorkerHelp4}</p>
           <p>재실행 시 동일 키 데이터는 적재 방식(신규 행 추가/중복 제외/있으면 갱신, 없으면 추가)에 따라 신규 건수가 0이 될 수 있습니다.</p>
           <p>재시도 정책: 일정별 retry_enabled_yn, max_retry_count, retry_interval_minutes 설정</p>
           <p>실행 파라미터 템플릿 예: {`{"bas_ymd": "{{today:YYYYMMDD}}"}`}</p>

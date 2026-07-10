@@ -291,14 +291,21 @@ for (const path of PATHS) {
     await page.getByText("일정 목록", { exact: true }).waitFor({ state: "visible", timeout: 30000 });
     await page.getByText("실행 이력", { exact: true }).waitFor({ state: "visible", timeout: 30000 });
     await page.getByText("실행 대상 일정", { exact: true }).waitFor({ state: "visible", timeout: 30000 });
+    await page.getByText("Worker 상태", { exact: true }).waitFor({ state: "visible", timeout: 30000 });
     await page.getByText("도움말", { exact: true }).waitFor({ state: "visible", timeout: 30000 });
     if (!(await hasEmptyOrTable(/등록된 데이터 적재 일정이 없습니다/))) {
       errors.push(`${path}: empty message or table rows expected`);
     }
+    await page.getByText("Worker 상태", { exact: true }).click();
+    await page.getByText("적재 일정 실행 Worker").first().waitFor({ state: "visible", timeout: 30000 });
+    await page.getByText("Worker 상태 신호").first().waitFor({ state: "visible", timeout: 30000 });
+    await page.getByText("중복 실행 방지 잠금").first().waitFor({ state: "visible", timeout: 30000 });
+    await page.getByText("1회 실행").first().waitFor({ state: "visible", timeout: 30000 });
+    await page.getByText(/등록된 적재 일정 실행 Worker가 없습니다|Worker명/).first().waitFor({ state: "visible", timeout: 30000 });
     await page.getByText("도움말", { exact: true }).click();
     await page.getByText("재시도 정책").first().waitFor({ state: "visible", timeout: 30000 });
-    await page.getByText("재실행 시 동일 키 데이터").first().waitFor({ state: "visible", timeout: 30000 });
-    await page.getByText("실행 파라미터 템플릿").first().waitFor({ state: "visible", timeout: 30000 });
+    await page.getByText("run-due").first().waitFor({ state: "visible", timeout: 30000 });
+    await page.getByText("중복 실행 방지 잠금").first().waitFor({ state: "visible", timeout: 30000 });
     await page.getByText("실행 대상 일정", { exact: true }).click();
     await page.getByText("run-due").first().waitFor({ state: "visible", timeout: 30000 });
     await page.getByText("일정 목록", { exact: true }).click();
@@ -318,6 +325,7 @@ for (const path of PATHS) {
     await page.getByText("장애 해결 처리").first().waitFor({ state: "visible", timeout: 30000 });
     await page.getByText("장애 확인").first().waitFor({ state: "visible", timeout: 30000 }).catch(() => {});
     await page.getByText("장애 해결").first().waitFor({ state: "visible", timeout: 30000 }).catch(() => {});
+    await page.getByText("적재 일정 실행 Worker").first().waitFor({ state: "visible", timeout: 30000 }).catch(() => {});
     await page.getByText("외부 발송 정보는 암호화").first().waitFor({ state: "visible", timeout: 30000 });
     const hasIncidentContent = (await page.getByText(/등록된 장애가 없습니다/).count()) > 0
       || (await page.locator("main table tbody tr").count()) > 0

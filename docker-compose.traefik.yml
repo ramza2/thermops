@@ -119,6 +119,38 @@ services:
       - traefik.http.routers.thermops-docs.service=thermops-api
     restart: unless-stopped
 
+  run-due-worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: ${COMPOSE_PROJECT_NAME:-thermops}-run-due-worker
+    env_file:
+      - .env.deploy
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_USER: ${POSTGRES_USER:-thermops}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-thermops}
+      GIT_PYTHON_REFRESH: quiet
+      THERMOOPS_RUN_DUE_WORKER_ENABLED: "true"
+      THERMOOPS_RUN_DUE_WORKER_MODE: loop
+      THERMOOPS_RUN_DUE_WORKER_NAME: run-due-worker-1
+      THERMOOPS_RUN_DUE_POLL_INTERVAL_SECONDS: "60"
+      THERMOOPS_RUN_DUE_LOCK_TTL_SECONDS: "120"
+      THERMOOPS_RUN_DUE_MAX_BATCH_SIZE: "20"
+      THERMOOPS_RUN_DUE_NOTIFICATION_ENABLED: "true"
+    networks:
+      - thermops_internal
+    depends_on:
+      postgres:
+        condition: service_healthy
+      backend:
+        condition: service_started
+    labels:
+      - traefik.enable=false
+    command: python -m app.workers.run_due_worker --mode loop
+    restart: unless-stopped
+
   frontend:
     build:
       context: ./frontend

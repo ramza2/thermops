@@ -334,6 +334,10 @@ MIGRATIONS = [
         "R10-S9 alert notification schema",
         _load_sql("r10s9_alert_notification_schema.sql"),
     ),
+    (
+        "R10-S10 run due worker schema",
+        _load_sql("r10s10_run_due_worker_schema.sql"),
+    ),
 ]
 
 

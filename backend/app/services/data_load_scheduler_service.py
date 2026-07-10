@@ -585,10 +585,48 @@ async def run_schedule_now(
     )
 
 
-async def run_due_schedules(db: AsyncSession) -> dict[str, Any]:
-    due = await list_due_schedules(db)
+async def run_due_schedules(
+    db: AsyncSession,
+    *,
+    max_batch_size: int | None = None,
+    triggered_by: str = "API",
+    worker_instance_id: str | None = None,
+    fail_fast: bool = False,
+    dry_run: bool = False,
+    return_detail: bool = True,
+) -> dict[str, Any]:
+    due_all = await list_due_schedules(db)
+    due_schedule_count = len(due_all)
+    due = due_all
+    if max_batch_size is not None and max_batch_size > 0:
+        due = due[:max_batch_size]
+
+    if dry_run:
+        return {
+            "due_count": due_schedule_count,
+            "executed_count": 0,
+            "failed_count": 0,
+            "due_schedule_count": due_schedule_count,
+            "executed_schedule_count": 0,
+            "success_schedule_count": 0,
+            "failed_schedule_count": 0,
+            "skipped_schedule_count": 0,
+            "schedule_run_ids": [],
+            "error_summary": [],
+            "triggered_by": triggered_by,
+            "worker_instance_id": worker_instance_id,
+            "dry_run": True,
+            "results": [],
+            "errors": [],
+        }
+
     results: list[dict[str, Any]] = []
     errors: list[dict[str, Any]] = []
+    schedule_run_ids: list[str] = []
+    success_schedule_count = 0
+    failed_schedule_count = 0
+    skipped_schedule_count = 0
+
     for sched in due:
         row = (
             await db.execute(
@@ -602,15 +640,45 @@ async def run_due_schedules(db: AsyncSession) -> dict[str, Any]:
                 run_source="RUN_DUE",
                 scheduled_for=row.next_run_at,
             )
-            results.append({"schedule_id": row.schedule_id, "schedule_run_id": item["schedule_run_id"], "status": item["run_status"]})
+            results.append(
+                {
+                    "schedule_id": row.schedule_id,
+                    "schedule_run_id": item["schedule_run_id"],
+                    "status": item["run_status"],
+                }
+            )
+            schedule_run_ids.append(item["schedule_run_id"])
+            status = str(item.get("run_status") or "")
+            if status in ("SUCCESS", "WARNING"):
+                success_schedule_count += 1
+            elif status == "SKIPPED":
+                skipped_schedule_count += 1
+            else:
+                failed_schedule_count += 1
+                if fail_fast:
+                    break
         except DataLoadSchedulerError as exc:
+            failed_schedule_count += 1
             errors.append({"schedule_id": row.schedule_id, "error_message": str(exc)})
+            if fail_fast:
+                break
+
+    executed_schedule_count = len(results)
     return {
-        "due_count": len(due),
-        "executed_count": len(results),
-        "failed_count": len(errors),
-        "results": results,
-        "errors": errors,
+        "due_count": due_schedule_count,
+        "executed_count": executed_schedule_count,
+        "failed_count": failed_schedule_count + len(errors),
+        "due_schedule_count": due_schedule_count,
+        "executed_schedule_count": executed_schedule_count,
+        "success_schedule_count": success_schedule_count,
+        "failed_schedule_count": failed_schedule_count,
+        "skipped_schedule_count": skipped_schedule_count,
+        "schedule_run_ids": schedule_run_ids,
+        "error_summary": errors,
+        "triggered_by": triggered_by,
+        "worker_instance_id": worker_instance_id,
+        "results": results if return_detail else [],
+        "errors": errors if return_detail else [],
     }
 
 

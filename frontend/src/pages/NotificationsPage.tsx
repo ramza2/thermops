@@ -24,7 +24,7 @@ import { LoadingState, ErrorState } from "@/components/Pagination";
 import { SelectInput, TextInput } from "@/components/SearchPanel";
 import { useToast } from "@/hooks/useToast";
 import { PageHeader } from "@/layouts/MainLayout";
-import { EMPTY_MESSAGES, HELP_TEXTS, PAGE_DESCRIPTIONS, PAGE_TITLES } from "@/constants/displayLabels";
+import { EMPTY_MESSAGES, HELP_TEXTS, PAGE_DESCRIPTIONS, PAGE_TITLES, notificationEventSourceLabel } from "@/constants/displayLabels";
 import type { AlertRule, Incident, NotificationChannel, NotificationDelivery, NotificationEvent, NotificationRecipient } from "@/types/notification";
 
 type Tab = "incidents" | "events" | "rules" | "channels" | "recipients" | "deliveries" | "help";
@@ -146,7 +146,7 @@ export default function NotificationsPage() {
       )}
       {tab === "events" && (
         events.length ? <DataTable columns={[
-          { key: "event_source", header: "발생 위치" },
+          { key: "event_source", header: "발생 위치", render: (r) => notificationEventSourceLabel(r.event_source) },
           { key: "event_type", header: "유형" },
           { key: "severity", header: "심각도" },
           { key: "title", header: "제목" },
@@ -158,7 +158,7 @@ export default function NotificationsPage() {
       {tab === "rules" && (
         rules.length ? <DataTable columns={[
           { key: "rule_name", header: "규칙명" },
-          { key: "event_source", header: "발생 위치" },
+          { key: "event_source", header: "발생 위치", render: (r) => notificationEventSourceLabel(r.event_source) },
           { key: "event_type", header: "유형" },
           { key: "min_severity", header: "최소 심각도" },
           { key: "dedup_window_minutes", header: "중복 알림 억제(분)" },

@@ -29,6 +29,21 @@ export function lifecycleStatusLabel(code?: string | null, fallback?: string): s
   return LIFECYCLE_STATUS_LABELS[code] ?? fallback ?? code;
 }
 
+const NOTIFICATION_EVENT_SOURCE_LABELS: Record<string, string> = {
+  RUN_DUE_WORKER: "적재 일정 실행 Worker",
+  DATA_LOAD_SCHEDULE_RUN: "데이터 적재 일정 실행",
+  API_CONNECTOR: "REST API 연결",
+  FORECAST_PROVIDER: "단기예보 입력",
+  PREDICTION: "예측",
+  EXTERNAL_CODE_MAPPING: "외부 코드 매핑",
+  SYSTEM: "시스템",
+};
+
+export function notificationEventSourceLabel(code?: string | null): string {
+  if (!code) return "-";
+  return NOTIFICATION_EVENT_SOURCE_LABELS[code] ?? code;
+}
+
 export const MENU_GROUPS = {
   dataPrep: "데이터 준비",
   features: "학습 변수 관리",
@@ -131,6 +146,8 @@ export const EMPTY_MESSAGES = {
     "등록된 작업 흐름이 없습니다. 데이터 적재부터 예측까지의 실행 순서를 구성하세요.",
   dataLoadSchedules:
     "등록된 데이터 적재 일정이 없습니다. REST API 작업을 선택해 정기 적재 일정을 등록하세요.",
+  runDueWorkerInstances: "등록된 적재 일정 실행 Worker가 없습니다. Docker loop worker 또는 1회 실행으로 Worker가 등록됩니다.",
+  runDueWorkerRuns: "Worker 실행 이력이 없습니다.",
   notificationsIncidents: "등록된 장애가 없습니다. 알림 규칙과 채널을 등록하면 실패·경고 발생 시 장애가 생성됩니다.",
   notificationsEvents: "기록된 알림 이벤트가 없습니다.",
   notificationsRules: "등록된 알림 규칙이 없습니다. 필요한 규칙과 채널을 직접 등록하세요.",
@@ -198,6 +215,14 @@ export const HELP_TEXTS = {
     "단기예보 on-demand 입력(R10-S5)은 스케줄 대상이 아닙니다. 예측 실행 시점 Provider로 유지됩니다.",
   dataLoadSchedulerHelp3:
     "스케줄 실행 이력에는 인증 키 원문이 저장되지 않으며, 실행 파라미터 템플릿만 마스킹되어 보관됩니다.",
+  runDueWorkerHelp1:
+    "Worker는 run-due API를 주기적으로 실행하여 실행 대상 일정을 자동 처리합니다.",
+  runDueWorkerHelp2:
+    "동시에 여러 Worker가 떠도 중복 실행 방지 잠금으로 하나만 실행합니다.",
+  runDueWorkerHelp3:
+    "운영에서는 Docker loop worker를 권장하며, cron once mode는 대안으로 사용할 수 있습니다.",
+  runDueWorkerHelp4:
+    "CRON 표현식 정식 해석은 후속 Phase에서 지원합니다.",
   dataLoadWriteModeHelp:
     "적재 방식은 신규 행 추가, 중복 제외, 있으면 갱신·없으면 추가를 지원합니다. 재실행 시 동일 키는 정책에 따라 제외되거나 갱신됩니다.",
   notificationIntro:

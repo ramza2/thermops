@@ -1161,16 +1161,55 @@ R10 운영 기능(스케줄러, API Connector, Forecast Provider, Prediction Job
 - **UI:** `/notifications` — 장애 현황, 알림 이벤트, 알림 규칙, 알림 채널, 수신 대상, 발송 이력
 - **연계:** schedule run 실패, API load-run warning/failure, forecast provider failure, prediction job failure, unmapped code detected
 - **운영 seed:** channel/rule/recipient 샘플 없음 (clean 0건). 테스트는 fixture/MOCK만 사용
-- **제한:** 실제 SMS/메일/Slack 외부 발송 테스트 금지, run-due worker/cron·CRON parser는 후속
+- **제한:** 실제 SMS/메일/Slack 외부 발송 테스트 금지, CRON parser 정식 지원은 후속
+
+### R10-S10 Run Due Worker / Cron 운영 구성
+
+R10-S6 `POST /api/v1/data-load-schedules/run-due`를 **운영 환경에서 주기적으로 자동 실행**할 수 있게 합니다.
+
+- **Worker 모드:** `loop`(Docker 상시 서비스) / `once`(cron·외부 스케줄러 1회 호출)
+- **중복 실행 방지:** row 기반 `tb_run_due_worker_lock` + `expires_at` TTL
+- **상태 기록:** `tb_run_due_worker_instance`(heartbeat·연속 실패), `tb_run_due_worker_run`(실행 이력)
+- **알림 연계:** RUN_DUE_WORKER_FAILED, CONSECUTIVE_FAILURE, STALE, RECOVERED, RUN_WARNING (R10-S9, 실패 시 worker 본동작 유지)
+- **API:** `/api/v1/run-due-worker/*` (instances, runs, locks, summary, run-once, mark-stale)
+- **UI:** 데이터 적재 일정 → **Worker 상태** 탭
+- **DB:** `scripts/r10s10_run_due_worker_schema.sql`
+- **운영 seed:** worker instance/schedule 샘플 없음 (clean 0건)
+- **제한:** CRON parser 정식 지원·OS cron 자동 등록·Airflow schedule 동적 생성 금지
+
+**환경 변수** (`.env.example` / `.env.deploy`):
+
+| 변수 | 기본 | 설명 |
+|------|------|------|
+| `THERMOOPS_RUN_DUE_WORKER_ENABLED` | false | Worker CLI 동작 여부 |
+| `THERMOOPS_RUN_DUE_WORKER_MODE` | loop | loop / once |
+| `THERMOOPS_RUN_DUE_POLL_INTERVAL_SECONDS` | 60 | loop polling 주기 |
+| `THERMOOPS_RUN_DUE_LOCK_TTL_SECONDS` | 120 | 잠금 TTL |
+| `THERMOOPS_RUN_DUE_MAX_BATCH_SIZE` | 20 | run-due 배치 상한 |
+
+**Traefik 배포 (worker 포함):**
+
+```bash
+python3 scripts/apply_dev_migrations.py
+docker compose -f docker-compose.traefik.yml --env-file .env.deploy up -d --build backend frontend run-due-worker
+```
+
+**cron 대안 (예시만, 자동 등록 없음):**
+
+```bash
+./scripts/run_due_once.sh
+# crontab 예: * * * * * cd /opt/thermops && ./scripts/run_due_once.sh >> /var/log/thermops-run-due.log 2>&1
+```
 
 **배포 전 체크리스트 (R10):**
 1. `python scripts/apply_dev_migrations.py`
 2. `python scripts/test_notification_alerting.py`
-3. `python scripts/test_r10_operational_integration.py`
-3. `python scripts/run_regression_tests.py --group model --timeout-scale 2`
-4. `python scripts/run_regression_tests.py --group quick --timeout-scale 2`
-5. `cd frontend && npm run build && node scripts/check-pages.mjs`
-6. (Traefik) `docker compose -f docker-compose.traefik.yml --env-file .env.deploy down -v && docker compose -f docker-compose.traefik.yml --env-file .env.deploy up -d --build`
+3. `python scripts/test_run_due_worker.py`
+4. `python scripts/test_r10_operational_integration.py`
+5. `python scripts/run_regression_tests.py --group model --timeout-scale 2`
+6. `python scripts/run_regression_tests.py --group quick --timeout-scale 2`
+7. `cd frontend && npm run build && node scripts/check-pages.mjs`
+8. (Traefik) `docker compose -f docker-compose.traefik.yml --env-file .env.deploy up -d --build backend frontend run-due-worker`
 
 ## 설계 문서 참조
 

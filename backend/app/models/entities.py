@@ -1197,6 +1197,59 @@ class Incident(Base):
     metadata_json: Mapped[dict | None] = mapped_column(JSONB)
 
 
+class RunDueWorkerInstance(Base):
+    __tablename__ = "tb_run_due_worker_instance"
+    worker_instance_id: Mapped[str] = mapped_column(String(100), primary_key=True)
+    worker_name: Mapped[str] = mapped_column(String(200))
+    worker_mode: Mapped[str] = mapped_column(String(30))
+    host_name: Mapped[str | None] = mapped_column(String(200))
+    process_id: Mapped[int | None] = mapped_column(Integer)
+    enabled_yn: Mapped[bool] = mapped_column(Boolean, default=True)
+    status: Mapped[str] = mapped_column(String(30), default="STARTING")
+    poll_interval_seconds: Mapped[int] = mapped_column(Integer, default=60)
+    last_heartbeat_at: Mapped[datetime | None] = mapped_column(DateTime)
+    last_run_started_at: Mapped[datetime | None] = mapped_column(DateTime)
+    last_run_finished_at: Mapped[datetime | None] = mapped_column(DateTime)
+    last_run_status: Mapped[str | None] = mapped_column(String(30))
+    consecutive_failure_count: Mapped[int] = mapped_column(Integer, default=0)
+    total_run_count: Mapped[int] = mapped_column(Integer, default=0)
+    total_success_count: Mapped[int] = mapped_column(Integer, default=0)
+    total_failure_count: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime)
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime)
+    metadata_json: Mapped[dict | None] = mapped_column(JSONB)
+
+
+class RunDueWorkerRun(Base):
+    __tablename__ = "tb_run_due_worker_run"
+    worker_run_id: Mapped[str] = mapped_column(String(50), primary_key=True)
+    worker_instance_id: Mapped[str | None] = mapped_column(String(100))
+    worker_name: Mapped[str | None] = mapped_column(String(200))
+    run_mode: Mapped[str] = mapped_column(String(30))
+    started_at: Mapped[datetime] = mapped_column(DateTime)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime)
+    run_status: Mapped[str] = mapped_column(String(30), default="RUNNING")
+    due_schedule_count: Mapped[int] = mapped_column(Integer, default=0)
+    executed_schedule_count: Mapped[int] = mapped_column(Integer, default=0)
+    success_schedule_count: Mapped[int] = mapped_column(Integer, default=0)
+    failed_schedule_count: Mapped[int] = mapped_column(Integer, default=0)
+    skipped_schedule_count: Mapped[int] = mapped_column(Integer, default=0)
+    run_due_result_json: Mapped[dict | None] = mapped_column(JSONB)
+    error_message: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime)
+    metadata_json: Mapped[dict | None] = mapped_column(JSONB)
+
+
+class RunDueWorkerLock(Base):
+    __tablename__ = "tb_run_due_worker_lock"
+    lock_key: Mapped[str] = mapped_column(String(100), primary_key=True)
+    owner_instance_id: Mapped[str] = mapped_column(String(100))
+    acquired_at: Mapped[datetime] = mapped_column(DateTime)
+    expires_at: Mapped[datetime] = mapped_column(DateTime)
+    heartbeat_at: Mapped[datetime] = mapped_column(DateTime)
+    metadata_json: Mapped[dict | None] = mapped_column(JSONB)
+
+
 class NotificationDelivery(Base):
     __tablename__ = "tb_notification_delivery"
     delivery_id: Mapped[str] = mapped_column(String(50), primary_key=True)

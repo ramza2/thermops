@@ -110,3 +110,13 @@ node scripts/check-pages.mjs
 4. 발송 이력에서 MOCK `SENT` 또는 `SUPPRESSED` 확인
 5. secret probe 문자열이 API 응답/발송 이력에 노출되지 않음 확인
 
+## 부록. 시나리오 H — Run Due Worker 운영 구성 (R10-S10)
+1. `python scripts/apply_dev_migrations.py` 로 worker 테이블 적용 확인
+2. Traefik: `docker compose -f docker-compose.traefik.yml --env-file .env.deploy up -d --build run-due-worker`
+3. `docker compose ... logs run-due-worker` 에서 loop tick·heartbeat 로그 확인
+4. 데이터 적재 일정 → **Worker 상태** 탭에서 instance/run/lock 조회 (clean 0건 또는 실행 후 등록)
+5. `POST /api/v1/run-due-worker/run-once` (또는 UI **1회 실행**) — fixture 일정만 사용
+6. `GET /api/v1/run-due-worker/locks` 로 중복 실행 방지 잠금 확인
+7. 연속 실패·STALE 시 `/notifications` 에 RUN_DUE_WORKER 이벤트 확인 (규칙 등록 시)
+8. `./scripts/run_due_once.sh` cron 예시 스크립트 존재 확인 (OS cron 자동 등록 없음)
+
