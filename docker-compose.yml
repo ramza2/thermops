@@ -113,7 +113,7 @@ services:
       dockerfile: Dockerfile
     container_name: thermops-frontend
     environment:
-      VITE_API_BASE_URL: http://localhost:8000/api/v1
+      VITE_API_BASE_URL: /api/v1
       VITE_USER_ROLE: ${VITE_USER_ROLE:-ADMIN}
     ports:
       - "5173:5173"

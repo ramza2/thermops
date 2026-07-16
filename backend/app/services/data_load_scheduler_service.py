@@ -17,6 +17,13 @@ from app.models.entities import (
     DataLoadScheduleRun,
 )
 from app.services.api_connector_service import ApiConnectorError, _get_operation, load_preview, run_load
+from app.services.cron_schedule_service import (
+    CronParseError,
+    cron_validate_and_preview,
+    explain_cron_expression,
+    parse_cron_expression,
+    validate_cron_expression,
+)
 from app.services.notification_event_service import emit_notification_safe
 from app.services.runtime_param_template_service import mask_runtime_params, resolve_runtime_params
 from app.services.schedule_time_service import compute_next_run_at, is_schedule_due
@@ -26,6 +33,50 @@ class DataLoadSchedulerError(ValueError):
     def __init__(self, message: str, *, error_code: str = "SCHEDULER_ERROR"):
         self.error_code = error_code
         super().__init__(message)
+
+
+def _ensure_cron_expression(schedule_type: str, cron_expression: str | None) -> str | None:
+    st = str(schedule_type or "MANUAL").upper()
+    if st != "CRON":
+        return cron_expression
+    if not cron_expression or not str(cron_expression).strip():
+        raise DataLoadSchedulerError(
+            "CRON 유형에는 CRON 표현식이 필요합니다.",
+            error_code="CRON_REQUIRED",
+        )
+    try:
+        parsed = parse_cron_expression(cron_expression)
+    except CronParseError as exc:
+        raise DataLoadSchedulerError(str(exc), error_code=getattr(exc, "error_code", "CRON_PARSE_ERROR")) from exc
+    return parsed.expression
+
+
+async def _emit_cron_parse_notification(
+    db: AsyncSession,
+    *,
+    schedule_id: str,
+    schedule_name: str,
+    event_type: str,
+    message: str,
+    cron_expression: str | None = None,
+) -> None:
+    await emit_notification_safe(
+        db,
+        event_source="DATA_LOAD_SCHEDULE",
+        event_type=event_type,
+        severity="ERROR",
+        title=f"CRON 일정 오류: {schedule_name}",
+        message=message,
+        resource_type="schedule",
+        resource_id=schedule_id,
+        correlation_id=schedule_id,
+        dedup_key=f"{schedule_id}:{event_type}",
+        event_payload_json={
+            "schedule_id": schedule_id,
+            "schedule_type": "CRON",
+            "cron_expression": cron_expression,
+        },
+    )
 
 
 def _new_id(prefix: str) -> str:
@@ -194,6 +245,7 @@ async def create_schedule(db: AsyncSession, payload: dict[str, Any]) -> dict[str
     op = await _get_operation(db, operation_id)
     now = utc_now()
     schedule_type = str(payload.get("schedule_type") or "MANUAL").upper()
+    cron_expression = _ensure_cron_expression(schedule_type, payload.get("cron_expression"))
     row = DataLoadSchedule(
         schedule_id=_new_id("DLS"),
         schedule_name=payload["schedule_name"],
@@ -201,7 +253,7 @@ async def create_schedule(db: AsyncSession, payload: dict[str, Any]) -> dict[str
         operation_id=operation_id,
         data_source_id=op.data_source_id,
         schedule_type=schedule_type,
-        cron_expression=payload.get("cron_expression"),
+        cron_expression=cron_expression,
         timezone=payload.get("timezone") or "Asia/Seoul",
         start_at=payload.get("start_at"),
         end_at=payload.get("end_at"),
@@ -220,7 +272,23 @@ async def create_schedule(db: AsyncSession, payload: dict[str, Any]) -> dict[str
         metadata_json=payload.get("metadata_json"),
     )
     sched_dict = _schedule_dict(row)
-    row.next_run_at = compute_next_run_at(sched_dict, from_time=now)
+    try:
+        row.next_run_at = compute_next_run_at(sched_dict, from_time=now)
+        if schedule_type == "CRON" and row.next_run_at is None:
+            raise DataLoadSchedulerError(
+                "CRON 다음 실행 예정 시각을 계산하지 못했습니다.",
+                error_code="CRON_NEXT_RUN_FAILED",
+            )
+    except CronParseError as exc:
+        await _emit_cron_parse_notification(
+            db,
+            schedule_id=row.schedule_id,
+            schedule_name=row.schedule_name,
+            event_type="SCHEDULE_CRON_NEXT_RUN_FAILED",
+            message=str(exc),
+            cron_expression=cron_expression,
+        )
+        raise DataLoadSchedulerError(str(exc), error_code="CRON_NEXT_RUN_FAILED") from exc
     db.add(row)
     await _record_event(db, schedule_id=row.schedule_id, event_type="CREATED", event_message="적재 일정이 등록되었습니다.")
     await db.flush()
@@ -259,8 +327,37 @@ async def update_schedule(db: AsyncSession, schedule_id: str, payload: dict[str,
         op = await _get_operation(db, payload["operation_id"])
         row.operation_id = op.operation_id
         row.data_source_id = op.data_source_id
+    try:
+        row.cron_expression = _ensure_cron_expression(row.schedule_type, row.cron_expression)
+    except DataLoadSchedulerError as exc:
+        if getattr(exc, "error_code", "").startswith("CRON"):
+            await _emit_cron_parse_notification(
+                db,
+                schedule_id=schedule_id,
+                schedule_name=row.schedule_name,
+                event_type="SCHEDULE_CRON_PARSE_FAILED",
+                message=str(exc),
+                cron_expression=row.cron_expression,
+            )
+        raise
     row.updated_at = utc_now()
-    row.next_run_at = compute_next_run_at(_schedule_dict(row), from_time=utc_now())
+    try:
+        row.next_run_at = compute_next_run_at(_schedule_dict(row), from_time=utc_now())
+        if str(row.schedule_type).upper() == "CRON" and row.next_run_at is None:
+            raise DataLoadSchedulerError(
+                "CRON 다음 실행 예정 시각을 계산하지 못했습니다.",
+                error_code="CRON_NEXT_RUN_FAILED",
+            )
+    except CronParseError as exc:
+        await _emit_cron_parse_notification(
+            db,
+            schedule_id=schedule_id,
+            schedule_name=row.schedule_name,
+            event_type="SCHEDULE_CRON_NEXT_RUN_FAILED",
+            message=str(exc),
+            cron_expression=row.cron_expression,
+        )
+        raise DataLoadSchedulerError(str(exc), error_code="CRON_NEXT_RUN_FAILED") from exc
     await _record_event(db, schedule_id=schedule_id, event_type="UPDATED", event_message="적재 일정이 수정되었습니다.")
     await db.flush()
     return await get_schedule(db, schedule_id)
@@ -272,9 +369,15 @@ async def activate_schedule(db: AsyncSession, schedule_id: str) -> dict[str, Any
     ).scalar_one_or_none()
     if not row:
         raise DataLoadSchedulerError("적재 일정을 찾을 수 없습니다.", error_code="NOT_FOUND")
+    row.cron_expression = _ensure_cron_expression(row.schedule_type, row.cron_expression)
     row.active_yn = True
     row.updated_at = utc_now()
     row.next_run_at = compute_next_run_at(_schedule_dict(row), from_time=utc_now())
+    if str(row.schedule_type).upper() == "CRON" and row.next_run_at is None:
+        raise DataLoadSchedulerError(
+            "CRON 다음 실행 예정 시각을 계산하지 못했습니다.",
+            error_code="CRON_NEXT_RUN_FAILED",
+        )
     await _record_event(db, schedule_id=schedule_id, event_type="ACTIVATED", event_message="적재 일정이 활성화되었습니다.")
     await db.flush()
     return await get_schedule(db, schedule_id)
@@ -325,17 +428,62 @@ async def preview_next_run(db: AsyncSession, payload: dict[str, Any]) -> dict[st
             raise DataLoadSchedulerError("적재 일정을 찾을 수 없습니다.", error_code="NOT_FOUND")
         sched = {**existing, **{k: v for k, v in payload.items() if v is not None}}
     now = utc_now()
-    next_at = compute_next_run_at(sched, from_time=now)
+    schedule_type = str(sched.get("schedule_type") or "MANUAL").upper()
+    tz_name = sched.get("timezone") or "Asia/Seoul"
     warnings: list[str] = []
-    if str(sched.get("schedule_type", "")).upper() == "CRON":
-        warnings.append("CRON 유형은 R10-S6에서 next_run_at 자동 계산을 지원하지 않습니다.")
+    next_runs: list[str] = []
+    explanation: str | None = None
+
+    if schedule_type == "CRON":
+        count = int(payload.get("count") or 10)
+        from_time = payload.get("from_time")
+        if isinstance(from_time, str):
+            from_time = datetime.fromisoformat(from_time.replace("Z", ""))
+        preview = cron_validate_and_preview(
+            sched.get("cron_expression"),
+            timezone=tz_name,
+            from_time=from_time or now,
+            count=count,
+        )
+        if not preview["valid"]:
+            raise DataLoadSchedulerError(
+                "; ".join(preview.get("errors") or ["CRON 표현식이 올바르지 않습니다."]),
+                error_code="CRON_PARSE_ERROR",
+            )
+        next_at = datetime.fromisoformat(preview["next_runs"][0]) if preview.get("next_runs") else None
+        next_runs = list(preview.get("next_runs") or [])
+        explanation = preview.get("explanation")
+        warnings.extend(preview.get("warnings") or [])
+        warnings.append("Worker 중단으로 놓친 여러 실행 시각을 한 번에 catch-up 하지는 않습니다.")
+    else:
+        next_at = compute_next_run_at(sched, from_time=now)
+        if schedule_type == "MANUAL":
+            warnings.append("MANUAL 유형은 run-due 자동 실행 대상이 아닙니다.")
+
     return {
-        "schedule_type": sched.get("schedule_type"),
-        "timezone": sched.get("timezone") or "Asia/Seoul",
+        "schedule_type": schedule_type,
+        "timezone": tz_name,
         "from_time": now.isoformat(),
         "next_run_at": next_at.isoformat() if next_at else None,
+        "next_runs": next_runs,
+        "cron_expression": sched.get("cron_expression"),
+        "explanation": explanation,
         "warnings": warnings,
     }
+
+
+async def validate_cron_only(payload: dict[str, Any]) -> dict[str, Any]:
+    tz_name = payload.get("timezone") or "Asia/Seoul"
+    from_time = payload.get("from_time")
+    if isinstance(from_time, str):
+        from_time = datetime.fromisoformat(from_time.replace("Z", ""))
+    count = int(payload.get("count") or 10)
+    return cron_validate_and_preview(
+        payload.get("cron_expression"),
+        timezone=tz_name,
+        from_time=from_time,
+        count=count,
+    )
 
 
 async def render_runtime_params_preview(db: AsyncSession, payload: dict[str, Any]) -> dict[str, Any]:
@@ -380,11 +528,25 @@ async def validate_schedule(db: AsyncSession, schedule_id: str) -> dict[str, Any
             errors.append("API 작업에 적재 대상 테이블이 설정되지 않았습니다.")
     except ApiConnectorError as exc:
         errors.append(str(exc))
-    if str(sched.get("schedule_type")).upper() == "CRON":
-        warnings.append("CRON 유형은 due 자동 실행 대상에서 제외됩니다.")
-    if str(sched.get("schedule_type")).upper() == "MANUAL":
+    schedule_type = str(sched.get("schedule_type")).upper()
+    if schedule_type == "CRON":
+        cron_result = validate_cron_expression(sched.get("cron_expression"))
+        if not cron_result["valid"]:
+            errors.extend(cron_result.get("errors") or ["CRON 표현식이 올바르지 않습니다."])
+        else:
+            warnings.append("CRON 일정도 run-due Worker가 다음 실행 예정 시각에 맞춰 자동 실행합니다.")
+            warnings.append("놓친 실행 시각 catch-up은 하지 않으며, due이면 1회 실행 후 다음 시각으로 이동합니다.")
+            if not sched.get("next_run_at"):
+                warnings.append("next_run_at이 비어 있습니다. 일정을 저장/활성화하면 다시 계산됩니다.")
+    if schedule_type == "MANUAL":
         warnings.append("MANUAL 유형은 run-due 자동 실행 대상이 아닙니다.")
-    return {"valid": not errors, "errors": errors, "warnings": warnings}
+    return {
+        "valid": not errors,
+        "errors": errors,
+        "warnings": warnings,
+        "cron_expression": sched.get("cron_expression"),
+        "explanation": explain_cron_expression(sched.get("cron_expression")) if schedule_type == "CRON" and not errors else None,
+    }
 
 
 async def list_due_schedules(db: AsyncSession, *, now: datetime | None = None) -> list[dict[str, Any]]:

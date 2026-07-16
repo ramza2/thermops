@@ -1203,13 +1203,30 @@ docker compose -f docker-compose.traefik.yml --env-file .env.deploy up -d --buil
 
 **배포 전 체크리스트 (R10):**
 1. `python scripts/apply_dev_migrations.py`
-2. `python scripts/test_notification_alerting.py`
-3. `python scripts/test_run_due_worker.py`
-4. `python scripts/test_r10_operational_integration.py`
-5. `python scripts/run_regression_tests.py --group model --timeout-scale 2`
-6. `python scripts/run_regression_tests.py --group quick --timeout-scale 2`
-7. `cd frontend && npm run build && node scripts/check-pages.mjs`
-8. (Traefik) `docker compose -f docker-compose.traefik.yml --env-file .env.deploy up -d --build backend frontend run-due-worker`
+2. `python scripts/test_cron_schedule_parser.py`
+3. `python scripts/test_notification_alerting.py`
+4. `python scripts/test_run_due_worker.py`
+5. `python scripts/test_r10_operational_integration.py`
+6. `python scripts/run_regression_tests.py --group model --timeout-scale 2`
+7. `python scripts/run_regression_tests.py --group quick --timeout-scale 2`
+8. `cd frontend && npm run build && node scripts/check-pages.mjs`
+9. (Traefik) `docker compose -f docker-compose.traefik.yml --env-file .env.deploy up -d --build backend frontend run-due-worker`
+
+### R10-S11 CRON parser 정식 지원
+
+R10-S6에서 저장만 가능하던 `schedule_type=CRON`을 **due 계산·next_run_at·Worker 자동 실행**까지 정식 지원합니다.
+
+- **지원:** 5-field CRON (`분 시 일 월 요일`) — `*`, `N`, `A-B`, `A,B,C`, `*/N`, `A-B/N`
+- **예:** `*/5 * * * *`, `0 * * * *`, `30 2 * * *`, `0 9 * * 1-5`, `0 0 1 * *`
+- **미지원:** 6-field(초), Quartz(`?`, `L`, `W`, `#`), `@hourly`/`@daily` alias
+- **요일:** `0`과 `7` 모두 일요일
+- **시간대:** 기본 `Asia/Seoul` (`timezone` 컬럼)
+- **due/missed:** `next_run_at <= now`이면 1회 due 후 다음 future fire로 이동 (catch-up 전체 실행 없음)
+- **DB:** 기존 `cron_expression`/`timezone`/`next_run_at` 재사용, `cron_expression` VARCHAR(120) (`scripts/r10s11_cron_schedule_schema.sql`)
+- **API:** `/data-load-schedules/cron/validate`, `/cron/preview`, `preview-next-run` CRON 확장
+- **UI:** CRON 표현식 입력·예시·검증·다음 실행 예정 미리보기
+- **운영 seed:** CRON 샘플 일정 추가 없음 (clean 0건)
+- **제한:** OS cron 자동 등록·Airflow schedule 동적 생성·catch-up 전체 실행 금지
 
 ## 설계 문서 참조
 

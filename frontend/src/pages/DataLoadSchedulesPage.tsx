@@ -7,11 +7,13 @@ import {
   listDataLoadScheduleRuns,
   listDataLoadSchedules,
   listDueDataLoadSchedules,
+  previewCronExpression,
   previewNextRun,
   retryDataLoadScheduleRun,
   runDataLoadScheduleNow,
   runDueDataLoadSchedules,
   updateDataLoadSchedule,
+  validateCronExpression,
 } from "@/api/dataLoadSchedules";
 import {
   listRunDueWorkerInstances,
@@ -36,9 +38,9 @@ import {
   PAGE_TITLES,
   lifecycleStatusLabel,
 } from "@/constants/displayLabels";
-import type { DataLoadSchedule, DataLoadScheduleRun } from "@/types/dataLoadSchedule";
+import type { CronPreviewResult, DataLoadSchedule, DataLoadScheduleRun } from "@/types/dataLoadSchedule";
 import type { RunDueWorkerInstance, RunDueWorkerLock, RunDueWorkerRun } from "@/api/runDueWorker";
-import { LOAD_WINDOW_OPTIONS, SCHEDULE_TYPE_OPTIONS } from "@/types/dataLoadSchedule";
+import { CRON_EXAMPLES, LOAD_WINDOW_OPTIONS, SCHEDULE_TYPE_OPTIONS } from "@/types/dataLoadSchedule";
 
 type Tab = "schedules" | "runs" | "due" | "worker" | "help";
 type ScheduleRow = DataLoadSchedule & Record<string, unknown>;
@@ -50,6 +52,11 @@ const scheduleColumns: Column<ScheduleRow>[] = [
   { key: "schedule_name", header: "일정명" },
   { key: "operation_name", header: "API 작업", render: (r) => r.operation_name || r.operation_id },
   { key: "schedule_type", header: "스케줄 유형" },
+  {
+    key: "cron_expression",
+    header: "CRON 표현식",
+    render: (r) => (r.schedule_type === "CRON" ? (r.cron_expression || "-") : "-"),
+  },
   { key: "active_yn", header: "사용", render: (r) => (r.active_yn ? "사용" : "중지") },
   { key: "last_run_at", header: "마지막 실행", render: (r) => r.last_run_at?.slice(0, 19) || "-" },
   { key: "last_success_at", header: "마지막 성공 시각", render: (r) => r.last_success_at?.slice(0, 19) || "-" },
@@ -98,6 +105,11 @@ const workerRunColumns: Column<WorkerRunRow>[] = [
 const dueColumns: Column<ScheduleRow>[] = [
   { key: "schedule_name", header: "일정명" },
   { key: "schedule_type", header: "유형" },
+  {
+    key: "cron_expression",
+    header: "CRON 표현식",
+    render: (r) => (r.schedule_type === "CRON" ? (r.cron_expression || "-") : "-"),
+  },
   { key: "next_run_at", header: "다음 실행 예정 시각", render: (r) => r.next_run_at?.slice(0, 19) || "-" },
 ];
 
@@ -111,6 +123,8 @@ const EMPTY_FORM = {
   schedule_description: "",
   operation_id: "",
   schedule_type: "DAILY",
+  cron_expression: "0 9 * * 1-5",
+  timezone: "Asia/Seoul",
   run_policy: "LOAD_RUN",
   load_window_type: "NONE",
   window_offset_minutes: "60",
@@ -134,6 +148,7 @@ export default function DataLoadSchedulesPage() {
   const [editing, setEditing] = useState<DataLoadSchedule | null>(null);
   const [form, setForm] = useState(EMPTY_FORM);
   const [nextPreview, setNextPreview] = useState<string>("");
+  const [cronPreview, setCronPreview] = useState<CronPreviewResult | null>(null);
   const [runDueResult, setRunDueResult] = useState<Record<string, unknown> | null>(null);
   const [runningId, setRunningId] = useState<string | null>(null);
   const [workerInstances, setWorkerInstances] = useState<RunDueWorkerInstance[]>([]);
@@ -192,6 +207,7 @@ export default function DataLoadSchedulesPage() {
     setEditing(null);
     setForm(EMPTY_FORM);
     setNextPreview("");
+    setCronPreview(null);
     setModalOpen(true);
   };
 
@@ -202,6 +218,8 @@ export default function DataLoadSchedulesPage() {
       schedule_description: row.schedule_description || "",
       operation_id: row.operation_id,
       schedule_type: row.schedule_type,
+      cron_expression: row.cron_expression || "0 9 * * 1-5",
+      timezone: row.timezone || "Asia/Seoul",
       run_policy: row.run_policy,
       load_window_type: row.load_window_type,
       window_offset_minutes: String(row.window_offset_minutes ?? 60),
@@ -212,6 +230,7 @@ export default function DataLoadSchedulesPage() {
       start_at: row.start_at ? row.start_at.slice(0, 16) : "",
     });
     setNextPreview(row.next_run_at || "");
+    setCronPreview(null);
     setModalOpen(true);
   };
 
@@ -234,6 +253,8 @@ export default function DataLoadSchedulesPage() {
         schedule_description: form.schedule_description || null,
         operation_id: form.operation_id,
         schedule_type: form.schedule_type,
+        cron_expression: form.schedule_type === "CRON" ? form.cron_expression : null,
+        timezone: form.timezone || "Asia/Seoul",
         run_policy: form.run_policy,
         load_window_type: form.load_window_type,
         window_offset_minutes: form.window_offset_minutes ? Number(form.window_offset_minutes) : null,
@@ -261,11 +282,55 @@ export default function DataLoadSchedulesPage() {
     try {
       const res = await previewNextRun({
         schedule_type: form.schedule_type,
+        cron_expression: form.schedule_type === "CRON" ? form.cron_expression : null,
+        timezone: form.timezone || "Asia/Seoul",
         start_at: form.start_at ? new Date(form.start_at).toISOString() : null,
-      });
-      setNextPreview((res as { next_run_at?: string }).next_run_at || "-");
+        count: 10,
+      }) as CronPreviewResult & { next_run_at?: string; next_runs?: string[] };
+      setNextPreview(res.next_run_at || "-");
+      if (form.schedule_type === "CRON") {
+        setCronPreview(res);
+      }
     } catch (e: unknown) {
       showToast("error", e instanceof Error ? e.message : "미리보기 실패");
+    }
+  };
+
+  const handleValidateCron = async () => {
+    try {
+      const res = await validateCronExpression({
+        cron_expression: form.cron_expression,
+        timezone: form.timezone || "Asia/Seoul",
+        count: 10,
+      }) as CronPreviewResult;
+      setCronPreview(res);
+      if (res.valid) {
+        showToast("success", "CRON 표현식이 유효합니다.");
+        setNextPreview(res.next_runs?.[0] || res.next_run_at || "");
+      } else {
+        showToast("error", (res.errors || []).join(" ") || "CRON 표현식이 올바르지 않습니다.");
+      }
+    } catch (e: unknown) {
+      showToast("error", e instanceof Error ? e.message : "CRON 검증 실패");
+    }
+  };
+
+  const handlePreviewCron = async () => {
+    try {
+      const res = await previewCronExpression({
+        cron_expression: form.cron_expression,
+        timezone: form.timezone || "Asia/Seoul",
+        count: 10,
+      }) as CronPreviewResult;
+      setCronPreview(res);
+      if (!res.valid) {
+        showToast("error", (res.errors || []).join(" ") || "CRON 미리보기 실패");
+        return;
+      }
+      setNextPreview(res.next_runs?.[0] || "");
+      showToast("success", "다음 실행 예정 미리보기를 갱신했습니다.");
+    } catch (e: unknown) {
+      showToast("error", e instanceof Error ? e.message : "CRON 미리보기 실패");
     }
   };
 
@@ -433,7 +498,8 @@ export default function DataLoadSchedulesPage() {
       {tab === "worker" && (
         <div className="space-y-6">
           <p className="text-sm text-slate-600">
-            적재 일정 실행 Worker는 run-due를 주기적으로 호출합니다. 중복 실행 방지 잠금: {workerLocks.length ? workerLocks.map((l) => `${l.lock_key} → ${l.owner_instance_id}`).join(", ") : "없음"}
+            적재 일정 실행 Worker는 run-due를 주기적으로 호출합니다. CRON 일정도 실행 대상 일정(due) 건수에 포함됩니다.
+            중복 실행 방지 잠금: {workerLocks.length ? workerLocks.map((l) => `${l.lock_key} → ${l.owner_instance_id}`).join(", ") : "없음"}
           </p>
           {workerLoading ? <LoadingState /> : (
             <>
@@ -463,10 +529,14 @@ export default function DataLoadSchedulesPage() {
           <p>{HELP_TEXTS.dataLoadSchedulerHelp1}</p>
           <p>{HELP_TEXTS.dataLoadSchedulerHelp2}</p>
           <p>{HELP_TEXTS.dataLoadSchedulerHelp3}</p>
+          <p>{HELP_TEXTS.dataLoadCronHelp1}</p>
+          <p>{HELP_TEXTS.dataLoadCronHelp2}</p>
+          <p>{HELP_TEXTS.dataLoadCronHelp3}</p>
           <p>{HELP_TEXTS.runDueWorkerHelp1}</p>
           <p>{HELP_TEXTS.runDueWorkerHelp2}</p>
           <p>{HELP_TEXTS.runDueWorkerHelp3}</p>
           <p>{HELP_TEXTS.runDueWorkerHelp4}</p>
+          <p>{HELP_TEXTS.runDueWorkerHelp5}</p>
           <p>재실행 시 동일 키 데이터는 적재 방식(신규 행 추가/중복 제외/있으면 갱신, 없으면 추가)에 따라 신규 건수가 0이 될 수 있습니다.</p>
           <p>재시도 정책: 일정별 retry_enabled_yn, max_retry_count, retry_interval_minutes 설정</p>
           <p>실행 파라미터 템플릿 예: {`{"bas_ymd": "{{today:YYYYMMDD}}"}`}</p>
@@ -487,6 +557,52 @@ export default function DataLoadSchedulesPage() {
           <div><label className="text-xs text-slate-500">스케줄 유형</label>
             <SelectInput value={form.schedule_type} onChange={(v) => setForm({ ...form, schedule_type: v })} options={SCHEDULE_TYPE_OPTIONS} />
           </div>
+          {form.schedule_type === "CRON" && (
+            <div className="space-y-2 border rounded p-3 bg-slate-50">
+              <div>
+                <label className="text-xs text-slate-500">CRON 표현식</label>
+                <TextInput value={form.cron_expression} onChange={(v) => setForm({ ...form, cron_expression: v })} />
+              </div>
+              <div>
+                <label className="text-xs text-slate-500">시간대</label>
+                <TextInput value={form.timezone} onChange={(v) => setForm({ ...form, timezone: v })} />
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {CRON_EXAMPLES.map((ex) => (
+                  <Button key={ex.expression} variant="secondary" onClick={() => setForm({ ...form, cron_expression: ex.expression })}>
+                    {ex.label}
+                  </Button>
+                ))}
+              </div>
+              <div className="text-xs text-slate-600 space-y-1">
+                <p>THERMOps는 5-field CRON 표현식을 지원합니다.</p>
+                <p>형식: 분 시 일 월 요일</p>
+                <p>0 또는 7은 일요일로 처리됩니다.</p>
+                <p>?, L, W, # 같은 Quartz 문법은 현재 지원하지 않습니다.</p>
+                <p>CRON 일정도 run-due Worker가 다음 실행 예정 시각에 맞춰 자동 실행합니다.</p>
+                <p>Worker 중단으로 놓친 여러 실행 시각을 한 번에 catch-up 하지는 않습니다.</p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button variant="secondary" onClick={() => void handleValidateCron()}>CRON 검증</Button>
+                <Button variant="secondary" onClick={() => void handlePreviewCron()}>다음 실행 예정 미리보기</Button>
+              </div>
+              {cronPreview && (
+                <div className="text-xs space-y-1">
+                  {cronPreview.explanation && <p>{cronPreview.explanation}</p>}
+                  {cronPreview.next_runs && cronPreview.next_runs.length > 0 && (
+                    <ul className="list-disc pl-4">
+                      {cronPreview.next_runs.slice(0, 10).map((t) => (
+                        <li key={t}>{t.slice(0, 19)}</li>
+                      ))}
+                    </ul>
+                  )}
+                  {(cronPreview.errors || []).map((err) => (
+                    <p key={err} className="text-red-600">{err}</p>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
           <div><label className="text-xs text-slate-500">적재 기간(load window)</label>
             <SelectInput value={form.load_window_type} onChange={(v) => setForm({ ...form, load_window_type: v })} options={LOAD_WINDOW_OPTIONS} />
           </div>
@@ -499,7 +615,7 @@ export default function DataLoadSchedulesPage() {
             재시도 정책 사용
           </label>
           <div className="flex gap-2 items-end">
-            <Button variant="secondary" onClick={handlePreviewNext}>다음 실행 예정 시각 미리보기</Button>
+            <Button variant="secondary" onClick={() => void handlePreviewNext()}>다음 실행 예정 시각 미리보기</Button>
             {nextPreview && <span className="text-xs text-slate-600">다음 실행 예정: {nextPreview}</span>}
           </div>
         </div>

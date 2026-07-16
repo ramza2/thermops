@@ -675,7 +675,7 @@ class DataLoadSchedule(Base):
     operation_id: Mapped[str] = mapped_column(String(50))
     data_source_id: Mapped[str | None] = mapped_column(String(50))
     schedule_type: Mapped[str] = mapped_column(String(30), default="MANUAL")
-    cron_expression: Mapped[str | None] = mapped_column(String(100))
+    cron_expression: Mapped[str | None] = mapped_column(String(120))
     timezone: Mapped[str] = mapped_column(String(50), default="Asia/Seoul")
     start_at: Mapped[datetime | None] = mapped_column(DateTime)
     end_at: Mapped[datetime | None] = mapped_column(DateTime)

@@ -120,3 +120,13 @@ node scripts/check-pages.mjs
 7. 연속 실패·STALE 시 `/notifications` 에 RUN_DUE_WORKER 이벤트 확인 (규칙 등록 시)
 8. `./scripts/run_due_once.sh` cron 예시 스크립트 존재 확인 (OS cron 자동 등록 없음)
 
+## 부록. 시나리오 I — CRON schedule due / Worker (R10-S11)
+1. `python scripts/test_cron_schedule_parser.py` 로 parser/next-run 단위 검증
+2. CRON 일정 생성 (`*/5 * * * *`) — next_run_at 자동 계산 확인
+3. `POST /data-load-schedules/cron/validate` · `preview-next-run` 으로 다음 실행 예정 미리보기
+4. invalid 표현식(`0 0 L * *`, 6-field) 저장 차단 확인
+5. `next_run_at`을 과거로 조정 후 `GET /due`에 CRON 포함 확인
+6. `run-due` 또는 Worker **1회 실행** 후 schedule_run 생성·next_run_at 미래로 갱신 확인
+7. MANUAL은 계속 due 제외, HOURLY/DAILY regression 유지
+8. 운영 seed에 CRON 샘플 일정 없음 확인
+

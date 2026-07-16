@@ -204,6 +204,38 @@ def main() -> int:
         assert "due_count" in run_due and "due_schedule_count" in run_due
         print("  [ok] data_load_scheduler run-due backward compat")
 
+        # R10-S11: CRON schedule appears in due and worker once processes it via run-due
+        ops = api("GET", "/api-connectors/operations")
+        if isinstance(ops, list) and ops:
+            op_id = ops[0]["operation_id"]
+            cron = api(
+                "POST",
+                "/data-load-schedules",
+                {
+                    "schedule_name": f"TEST cron worker {uuid.uuid4().hex[:6]}",
+                    "operation_id": op_id,
+                    "schedule_type": "CRON",
+                    "cron_expression": "*/5 * * * *",
+                    "timezone": "Asia/Seoul",
+                    "run_policy": "LOAD_PREVIEW",
+                    "runtime_params_template": {},
+                },
+            )
+            cron_id = cron["schedule_id"]
+            assert cron.get("next_run_at")
+            psql_run(
+                f"UPDATE tb_data_load_schedule SET next_run_at = NOW() - INTERVAL '1 minute', "
+                f"last_run_status='SUCCESS', active_yn=TRUE WHERE schedule_id='{cron_id}'"
+            )
+            due_list = api("GET", "/data-load-schedules/due")
+            assert any(x.get("schedule_id") == cron_id for x in due_list)
+            once = api("POST", "/run-due-worker/run-once", {"worker_name": f"cron-test-{uuid.uuid4().hex[:6]}"})
+            assert once.get("worker_run_id")
+            assert_no_secret(json.dumps(once))
+            print("  [ok] CRON schedule due + worker once via run-due")
+        else:
+            print("  [ok] CRON worker check skipped (no operations yet)")
+
         print("PASS")
         return 0
     except Exception as exc:

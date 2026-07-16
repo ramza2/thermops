@@ -1276,4 +1276,8 @@ R10-S9는 운영 알림·장애 통보 단계입니다. Event → Alert Rule →
 
 ## 부록 X. Phase R10-S10 Run Due Worker / Cron 운영 구성
 
-R10-S10은 데이터 적재 일정의 `run-due`를 Worker(loop/once)로 자동 실행하는 운영 자동화 단계입니다. lock·heartbeat·worker_run 이력과 R10-S9 알림 연계를 포함하나, **Feature Recipe 계산 로직·학습/예측 알고리즘은 변경하지 않습니다.** CRON parser 정식 지원은 후속 Phase입니다.
+R10-S10은 데이터 적재 일정의 `run-due`를 Worker(loop/once)로 자동 실행하는 운영 자동화 단계입니다. lock·heartbeat·worker_run 이력과 R10-S9 알림 연계를 포함하나, **Feature Recipe 계산 로직·학습/예측 알고리즘은 변경하지 않습니다.** CRON parser 정식 지원은 R10-S11에서 다룹니다.
+
+## 부록 Y. Phase R10-S11 CRON parser 정식 지원
+
+R10-S11은 데이터 적재 일정의 `schedule_type=CRON`에 대한 **표현식 검증·next_run_at/due 계산** 단계이며, **Feature Recipe 계산 로직·Recipe Type·`ml/features.py`·학습/예측 알고리즘은 변경하지 않습니다.**

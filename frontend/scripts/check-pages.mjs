@@ -313,7 +313,19 @@ for (const path of PATHS) {
     await page.getByText("실행 파라미터 템플릿").first().waitFor({ state: "visible", timeout: 30000 });
     await page.getByText("재시도 정책").first().waitFor({ state: "visible", timeout: 30000 });
     await page.getByText("다음 실행 예정").first().waitFor({ state: "visible", timeout: 30000 });
+    await page.getByText("스케줄 유형").first().waitFor({ state: "visible", timeout: 30000 });
+    const scheduleTypeSelect = page.locator("select").filter({ has: page.locator('option[value="CRON"]') }).first();
+    await scheduleTypeSelect.selectOption("CRON");
+    await page.getByText("CRON 표현식").first().waitFor({ state: "visible", timeout: 30000 });
+    await page.getByText("분 시 일 월 요일").first().waitFor({ state: "visible", timeout: 30000 });
+    await page.getByText("매 5분").first().waitFor({ state: "visible", timeout: 30000 });
+    await page.getByText("평일 09:00").first().waitFor({ state: "visible", timeout: 30000 });
+    await page.getByText("Quartz 문법").first().waitFor({ state: "visible", timeout: 30000 });
+    await page.getByText("다음 실행 예정 미리보기").first().waitFor({ state: "visible", timeout: 30000 });
+    await page.getByText("Worker가 다음 실행 예정 시각에 맞춰 자동 실행").first().waitFor({ state: "visible", timeout: 30000 });
     await page.getByRole("button", { name: "취소" }).click();
+    await page.getByText("도움말", { exact: true }).click();
+    await page.getByText("5-field CRON").first().waitFor({ state: "visible", timeout: 30000 });
   }
   if (path === "/notifications") {
     for (const label of ["장애 현황", "알림 이벤트", "알림 규칙", "알림 채널", "수신 대상", "발송 이력", "도움말"]) {

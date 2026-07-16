@@ -338,6 +338,10 @@ MIGRATIONS = [
         "R10-S10 run due worker schema",
         _load_sql("r10s10_run_due_worker_schema.sql"),
     ),
+    (
+        "R10-S11 cron schedule schema",
+        _load_sql("r10s11_cron_schedule_schema.sql"),
+    ),
 ]
 
 
@@ -381,8 +385,14 @@ def main() -> int:
                 # Fresh reset 후 일부 legacy migration이 이미 schema에 존재할 때
                 # CREATE INDEX IF NOT EXISTS 구문에서 내부 duplicate relname 오류가 드물게 발생한다.
                 # 이 경우 다음 migration을 계속 적용해 개발환경 복구를 우선한다.
-                if "pg_class_relname_nsp_index" in msg and "duplicate key value violates unique constraint" in msg:
-                    print(f"  [warn] skipped duplicate relation while applying '{label}'")
+                if (
+                    "duplicate key value violates unique constraint" in msg
+                    and (
+                        "pg_class_relname_nsp_index" in msg
+                        or "pg_type_typname_nsp_index" in msg
+                    )
+                ):
+                    print(f"  [warn] skipped duplicate catalog entry while applying '{label}'")
                     continue
                 raise
         print("PASSED")

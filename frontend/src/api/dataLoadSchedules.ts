@@ -54,6 +54,14 @@ export async function previewNextRun(body: Record<string, unknown>) {
   return postApi("/data-load-schedules/preview-next-run", body);
 }
 
+export async function validateCronExpression(body: Record<string, unknown>) {
+  return postApi("/data-load-schedules/cron/validate", body);
+}
+
+export async function previewCronExpression(body: Record<string, unknown>) {
+  return postApi("/data-load-schedules/cron/preview", body);
+}
+
 export async function renderRuntimeParams(body: Record<string, unknown>) {
   return postApi("/data-load-schedules/render-runtime-params", body);
 }

@@ -210,11 +210,17 @@ export const HELP_TEXTS = {
   dataLoadSchedulerIntro:
     "스케줄러는 REST API 작업의 load-run을 정해진 시간에 실행하기 위한 설정입니다. serviceKey 등 인증 정보는 REST API 연결 Credential을 사용합니다.",
   dataLoadSchedulerHelp1:
-    "R10-S6에서는 run-due API를 제공하며, 실제 운영에서는 cron/worker/Airflow에서 이 API를 호출할 수 있습니다.",
+    "R10-S6/R10-S11에서는 run-due API와 CRON 일정을 지원하며, 운영에서는 run-due Worker가 다음 실행 예정 시각에 맞춰 자동 실행합니다.",
   dataLoadSchedulerHelp2:
     "단기예보 on-demand 입력(R10-S5)은 스케줄 대상이 아닙니다. 예측 실행 시점 Provider로 유지됩니다.",
   dataLoadSchedulerHelp3:
     "스케줄 실행 이력에는 인증 키 원문이 저장되지 않으며, 실행 파라미터 템플릿만 마스킹되어 보관됩니다.",
+  dataLoadCronHelp1:
+    "THERMOps는 5-field CRON 표현식을 지원합니다. 형식: 분 시 일 월 요일",
+  dataLoadCronHelp2:
+    "0 또는 7은 일요일로 처리됩니다. ?, L, W, # 같은 Quartz 문법은 현재 지원하지 않습니다.",
+  dataLoadCronHelp3:
+    "CRON 일정도 run-due Worker가 다음 실행 예정 시각에 맞춰 자동 실행합니다. Worker 중단으로 놓친 여러 실행 시각을 한 번에 catch-up 하지는 않습니다.",
   runDueWorkerHelp1:
     "Worker는 run-due API를 주기적으로 실행하여 실행 대상 일정을 자동 처리합니다.",
   runDueWorkerHelp2:
@@ -222,7 +228,9 @@ export const HELP_TEXTS = {
   runDueWorkerHelp3:
     "운영에서는 Docker loop worker를 권장하며, cron once mode는 대안으로 사용할 수 있습니다.",
   runDueWorkerHelp4:
-    "CRON 표현식 정식 해석은 후속 Phase에서 지원합니다.",
+    "CRON 표현식도 due 계산에 포함되며, Worker는 기존 run-due만 호출합니다.",
+  runDueWorkerHelp5:
+    "CRON 일정도 실행 대상 일정(due) 건수에 포함됩니다.",
   dataLoadWriteModeHelp:
     "적재 방식은 신규 행 추가, 중복 제외, 있으면 갱신·없으면 추가를 지원합니다. 재실행 시 동일 키는 정책에 따라 제외되거나 갱신됩니다.",
   notificationIntro:

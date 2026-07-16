@@ -305,6 +305,12 @@ def _build_registry() -> list[TestCase]:
             timeout_seconds=420,
         ),
         _python_test(
+            "test_cron_schedule_parser.py",
+            groups=["model", "full", "quick"],
+            description="CRON parser / next-run (R10-S11)",
+            timeout_seconds=120,
+        ),
+        _python_test(
             "test_upsert_dedup_loader.py",
             groups=["model", "full"],
             description="Upsert / Deduplicate Loader (R10-S8)",

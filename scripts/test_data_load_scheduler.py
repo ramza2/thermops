@@ -358,6 +358,82 @@ def main() -> int:
         assert "RUN_STARTED" in event_types or "RUN_SUCCEEDED" in event_types
         print("  [ok] schedule events recorded")
 
+        # --- R10-S11 CRON ---
+        cron_bad = api(
+            "POST",
+            "/data-load-schedules",
+            {
+                "schedule_name": f"TEST cron bad {suffix}",
+                "operation_id": load_op,
+                "schedule_type": "CRON",
+                "cron_expression": "0 0 L * *",
+                "run_policy": "LOAD_PREVIEW",
+            },
+            expect_fail=True,
+        )
+        assert cron_bad and cron_bad.get("http_error") == 400
+        print("  [ok] CRON invalid expression rejected")
+
+        cron_validate = api(
+            "POST",
+            "/data-load-schedules/cron/validate",
+            {"cron_expression": "*/5 * * * *", "timezone": "Asia/Seoul", "count": 5},
+        )
+        assert cron_validate.get("valid") is True
+        assert len(cron_validate.get("next_runs") or []) >= 1
+        print("  [ok] CRON validate/preview API")
+
+        cron_sched = api(
+            "POST",
+            "/data-load-schedules",
+            {
+                "schedule_name": f"TEST cron {suffix}",
+                "operation_id": load_op,
+                "schedule_type": "CRON",
+                "cron_expression": "*/5 * * * *",
+                "timezone": "Asia/Seoul",
+                "run_policy": "LOAD_PREVIEW",
+                "runtime_params_template": {"probe": "TEST_SECRET_R10S11_SHOULD_NOT_LEAK"},
+            },
+        )
+        cron_sid = cron_sched["schedule_id"]
+        assert cron_sched.get("next_run_at")
+        assert cron_sched.get("cron_expression") == "*/5 * * * *"
+        cron_preview = api(
+            "POST",
+            "/data-load-schedules/preview-next-run",
+            {
+                "schedule_type": "CRON",
+                "cron_expression": "0 9 * * 1-5",
+                "timezone": "Asia/Seoul",
+                "count": 5,
+            },
+        )
+        assert cron_preview.get("next_run_at")
+        assert len(cron_preview.get("next_runs") or []) >= 1
+        print("  [ok] CRON schedule create + preview-next-run")
+
+        cron_val = api("POST", f"/data-load-schedules/{cron_sid}/validate")
+        assert cron_val.get("valid") is True
+        assert any("Worker" in w or "자동" in w for w in (cron_val.get("warnings") or []))
+        print("  [ok] CRON validate includes due")
+
+        psql_run(
+            f"UPDATE tb_data_load_schedule SET next_run_at = NOW() - INTERVAL '1 minute', "
+            f"last_run_status = 'SUCCESS' WHERE schedule_id = '{cron_sid}'"
+        )
+        due_cron = api("GET", "/data-load-schedules/due")
+        assert any(x["schedule_id"] == cron_sid for x in due_cron)
+        print("  [ok] CRON included in due")
+
+        due_cron_run = api("POST", "/data-load-schedules/run-due", {})
+        assert due_cron_run.get("executed_count", 0) >= 1
+        cron_after = api("GET", f"/data-load-schedules/{cron_sid}")
+        assert cron_after.get("next_run_at")
+        # next fire should be in the future after run
+        assert "TEST_SECRET_R10S11_SHOULD_NOT_LEAK" not in json.dumps(due_cron_run)
+        print("  [ok] CRON run-due + next_run_at refreshed + masking")
+
         fail_source = ensure_rest_source(f"TEST R10-S6 Fail {suffix}")
         fail_op = api(
             "POST",

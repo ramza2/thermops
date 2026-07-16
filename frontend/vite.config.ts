@@ -5,5 +5,10 @@ import path from "path";
 export default defineConfig({
   plugins: [react()],
   resolve: { alias: { "@": path.resolve(__dirname, "src") } },
-  server: { port: 5173, proxy: { "/api": { target: "http://localhost:8000", changeOrigin: true } } },
+  server: {
+    port: 5173,
+    host: true,
+    allowedHosts: true,
+    proxy: { "/api": { target: "http://backend:8000", changeOrigin: true } },
+  },
 });

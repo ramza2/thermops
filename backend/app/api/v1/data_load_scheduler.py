@@ -8,6 +8,7 @@ from app.core.response import ok
 from app.schemas.api import (
     DataLoadScheduleArchiveRequest,
     DataLoadScheduleCreate,
+    DataLoadScheduleCronValidateRequest,
     DataLoadSchedulePreviewNextRunRequest,
     DataLoadScheduleRenderParamsRequest,
     DataLoadScheduleRunNowRequest,
@@ -31,6 +32,7 @@ from app.services.data_load_scheduler_service import (
     run_due_schedules,
     run_schedule_now,
     update_schedule,
+    validate_cron_only,
     validate_schedule,
 )
 
@@ -85,6 +87,24 @@ async def post_run_due_data_load_schedules(db: AsyncSession = Depends(get_db)):
 async def post_preview_next_run(body: DataLoadSchedulePreviewNextRunRequest, db: AsyncSession = Depends(get_db)):
     try:
         item = await preview_next_run(db, body.model_dump(exclude_unset=True))
+    except DataLoadSchedulerError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return ok(item)
+
+
+@router.post("/data-load-schedules/cron/validate")
+async def post_cron_validate(body: DataLoadScheduleCronValidateRequest):
+    try:
+        item = await validate_cron_only(body.model_dump(exclude_unset=True))
+    except DataLoadSchedulerError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return ok(item)
+
+
+@router.post("/data-load-schedules/cron/preview")
+async def post_cron_preview(body: DataLoadScheduleCronValidateRequest):
+    try:
+        item = await validate_cron_only(body.model_dump(exclude_unset=True))
     except DataLoadSchedulerError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return ok(item)

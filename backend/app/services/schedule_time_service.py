@@ -1,4 +1,4 @@
-"""데이터 적재 스케줄 시각 계산 (R10-S6)."""
+"""데이터 적재 스케줄 시각 계산 (R10-S6 / R10-S11 CRON)."""
 
 from __future__ import annotations
 
@@ -6,6 +6,11 @@ from calendar import monthrange
 from datetime import datetime, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
+
+from app.services.cron_schedule_service import (
+    CronParseError,
+    compute_next_cron_run_at,
+)
 
 DEFAULT_TZ = "Asia/Seoul"
 SUPPORTED_TYPES = frozenset({"MANUAL", "HOURLY", "DAILY", "WEEKLY", "MONTHLY", "CRON"})
@@ -35,11 +40,21 @@ def compute_next_run_at(
     from_time: datetime | None = None,
 ) -> datetime | None:
     schedule_type = str(schedule.get("schedule_type") or "MANUAL").upper()
-    if schedule_type in ("MANUAL", "CRON"):
+    if schedule_type == "MANUAL":
         return None
 
     tz_name = schedule.get("timezone") or DEFAULT_TZ
     ref = _as_naive_local(from_time or datetime.now(_zone(tz_name)), tz_name)
+
+    if schedule_type == "CRON":
+        expr = schedule.get("cron_expression")
+        if not expr:
+            return None
+        try:
+            return compute_next_cron_run_at(expr, from_time=ref, timezone=tz_name)
+        except CronParseError:
+            return None
+
     start_at = schedule.get("start_at")
     if isinstance(start_at, str):
         start_at = datetime.fromisoformat(start_at.replace("Z", ""))
@@ -94,7 +109,7 @@ def is_schedule_due(schedule: dict[str, Any], now: datetime | None = None) -> bo
     if meta.get("archived_at"):
         return False
     schedule_type = str(schedule.get("schedule_type") or "MANUAL").upper()
-    if schedule_type in ("MANUAL", "CRON"):
+    if schedule_type == "MANUAL":
         return False
 
     tz_name = schedule.get("timezone") or DEFAULT_TZ
@@ -114,6 +129,18 @@ def is_schedule_due(schedule: dict[str, Any], now: datetime | None = None) -> bo
 
     if schedule.get("last_run_status") == "RUNNING":
         return False
+
+    if schedule_type == "CRON":
+        expr = schedule.get("cron_expression")
+        if not expr:
+            return False
+        next_run = schedule.get("next_run_at")
+        if isinstance(next_run, str):
+            next_run = datetime.fromisoformat(next_run.replace("Z", ""))
+        # miss catch-up: next_run_at <= now 이면 1회 due (과거 fire 여러 개여도 1회만)
+        if next_run is None:
+            return False
+        return next_run <= ref
 
     next_run = schedule.get("next_run_at")
     if isinstance(next_run, str):

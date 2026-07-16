@@ -794,8 +794,18 @@ class DataLoadScheduleUpdate(BaseModel):
 class DataLoadSchedulePreviewNextRunRequest(BaseModel):
     schedule_id: str | None = None
     schedule_type: str | None = None
+    cron_expression: str | None = None
     timezone: str | None = None
     start_at: datetime | None = None
+    from_time: datetime | None = None
+    count: int | None = 10
+
+
+class DataLoadScheduleCronValidateRequest(BaseModel):
+    cron_expression: str
+    timezone: str | None = "Asia/Seoul"
+    from_time: datetime | None = None
+    count: int | None = 10
 
 
 class DataLoadScheduleRenderParamsRequest(BaseModel):

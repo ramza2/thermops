@@ -1,21 +1,27 @@
 -- THERMOps test platform seed (R9-S2-0) - NOT operational seed; loaded by scripts/test_fixtures.py
 
--- Sites & weather (CSV sample compatibility: SITE-001..003, WA-001..002)
+-- Sites & weather (CSV sample compatibility: SITE-001..005, WA-001..004)
 INSERT INTO tb_site (site_id, site_name, site_type, active_yn) VALUES
 ('SITE-001', '중앙지사', 'BRANCH', 'Y'),
 ('SITE-002', '강남지사', 'BRANCH', 'Y'),
-('SITE-003', '분당지사', 'BRANCH', 'Y')
+('SITE-003', '분당지사', 'BRANCH', 'Y'),
+('SITE-004', '수원지사', 'BRANCH', 'Y'),
+('SITE-005', '일산지사', 'BRANCH', 'Y')
 ON CONFLICT (site_id) DO NOTHING;
 
 INSERT INTO tb_weather_area (weather_area_id, area_name, latitude, longitude, provider) VALUES
 ('WA-001', '서울중앙', 37.5665, 126.9780, 'KMA'),
-('WA-002', '경기남부', 37.2636, 127.0286, 'KMA')
+('WA-002', '경기남부', 37.2636, 127.0286, 'KMA'),
+('WA-003', '경기서부', 37.4563, 126.7052, 'KMA'),
+('WA-004', '경기북부', 37.6584, 126.8320, 'KMA')
 ON CONFLICT (weather_area_id) DO NOTHING;
 
 INSERT INTO tb_site_weather_mapping (site_id, weather_area_id, priority_no) VALUES
 ('SITE-001', 'WA-001', 1),
 ('SITE-002', 'WA-001', 1),
-('SITE-003', 'WA-002', 1)
+('SITE-003', 'WA-002', 1),
+('SITE-004', 'WA-003', 1),
+('SITE-005', 'WA-004', 1)
 ON CONFLICT DO NOTHING;
 
 -- Standard dataset types (test platform)

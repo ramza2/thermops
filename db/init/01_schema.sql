@@ -1067,7 +1067,7 @@ CREATE TABLE IF NOT EXISTS tb_data_load_schedule (
     operation_id VARCHAR(50) NOT NULL,
     data_source_id VARCHAR(50),
     schedule_type VARCHAR(30) NOT NULL DEFAULT 'MANUAL',
-    cron_expression VARCHAR(100),
+    cron_expression VARCHAR(120),
     timezone VARCHAR(50) NOT NULL DEFAULT 'Asia/Seoul',
     start_at TIMESTAMP,
     end_at TIMESTAMP,
