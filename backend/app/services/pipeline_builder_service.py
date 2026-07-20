@@ -6,7 +6,7 @@ from copy import deepcopy
 from typing import Any
 from uuid import uuid4
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.time import utc_now
@@ -232,6 +232,13 @@ async def list_pipeline_definitions(
 ) -> list[dict[str, Any]]:
     q = select(PipelineDefinition, PipelineTemplate).join(
         PipelineTemplate, PipelineDefinition.template_id == PipelineTemplate.template_id
+    )
+    # R11-S2: Visual Pipeline Studio rows are served only via /visual-pipelines
+    q = q.where(
+        or_(
+            PipelineDefinition.pipeline_kind.is_(None),
+            PipelineDefinition.pipeline_kind != "VISUAL_DATA_LOAD",
+        )
     )
     if active_only:
         q = q.where(PipelineDefinition.active_yn == "Y")

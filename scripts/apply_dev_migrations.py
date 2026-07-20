@@ -350,6 +350,10 @@ MIGRATIONS = [
         "R10-S11 cron schedule schema",
         _load_sql("r10s11_cron_schedule_schema.sql"),
     ),
+    (
+        "R11-S2 visual pipeline graph schema",
+        _load_sql("r11s2_visual_pipeline_graph_schema.sql"),
+    ),
 ]
 
 

@@ -1237,6 +1237,19 @@ Visual Pipeline Studio용 **code-based** 컴포넌트 계약/카탈로그 API입
 - **API:** `GET /api/v1/visual-pipelines/components`, `.../components/{component_type}`, `.../connection-rules`
 - **테스트:** `python scripts/test_visual_pipeline_component_catalog.py` (service direct + optional HTTP smoke)
 
+### R11-S2 Visual Pipeline Graph 저장 / CRUD
+
+기존 `tb_pipeline_*`를 확장해 Visual Pipeline Graph를 저장합니다. (`tb_visual_pipeline_*` 신설 없음)
+
+- **구분:** `pipeline_kind=VISUAL_DATA_LOAD`, `pipeline_type=DATA_LOAD`
+- **컬럼:** `current_graph_json`, `current_sync_status`(기본 `NOT_COMPILED`)
+- **Template:** `PT-VISUAL-DATA-LOAD` skeleton (`02_seed_clean` + migration)
+- **API:** `/api/v1/visual-pipelines` CRUD, archive, versions (`snapshot_json.graph`)
+- **격리:** `/pipeline-definitions` 목록에서 VISUAL 제외
+- **미포함:** React Flow UI, compile, run-now, semantic validation
+- **테스트:** `python scripts/test_visual_pipeline_graph_storage.py`
+- **Migration:** `python scripts/apply_dev_migrations.py` (`r11s2_visual_pipeline_graph_schema.sql`)
+
 ## 설계 문서 참조
 
 - `docs/md/THERMOps_API_설계서.md`

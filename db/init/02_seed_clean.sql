@@ -30,3 +30,46 @@ INSERT INTO tb_system_config (config_key, config_name, config_value, config_type
 ('batch_prediction_default_horizon', '배치 예측 기본 범위', '24', 'NUMBER', 'GLOBAL', '배치 예측 기본 시간 범위(시간)', 'Y'),
 ('system_version', '시스템 버전', '0.1.0', 'STRING', 'GLOBAL', 'THERMOps 릴리스 버전', 'N')
 ON CONFLICT (config_key) DO NOTHING;
+
+-- R11-S2 Visual Pipeline Studio skeleton template (system meta — no business sample data)
+INSERT INTO tb_pipeline_template (
+    template_id,
+    template_code,
+    template_name,
+    description,
+    pipeline_type,
+    airflow_dag_id,
+    template_version,
+    node_schema_json,
+    edge_schema_json,
+    default_config_json,
+    status,
+    active_yn,
+    created_at,
+    updated_at
+) VALUES (
+    'PT-VISUAL-DATA-LOAD',
+    'VISUAL_DATA_LOAD',
+    'Visual Data Load Pipeline',
+    'Visual Pipeline Studio 데이터 적재 파이프라인용 skeleton template (FK/생성용). 고정 노드 강제 아님.',
+    'DATA_LOAD',
+    NULL,
+    '1.0',
+    '{"nodes":[]}'::jsonb,
+    '{"edges":[]}'::jsonb,
+    NULL,
+    'ACTIVE',
+    'Y',
+    NOW(),
+    NOW()
+)
+ON CONFLICT (template_id) DO UPDATE SET
+    template_code = EXCLUDED.template_code,
+    template_name = EXCLUDED.template_name,
+    description = EXCLUDED.description,
+    pipeline_type = EXCLUDED.pipeline_type,
+    node_schema_json = EXCLUDED.node_schema_json,
+    edge_schema_json = EXCLUDED.edge_schema_json,
+    status = EXCLUDED.status,
+    active_yn = EXCLUDED.active_yn,
+    updated_at = NOW();

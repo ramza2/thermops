@@ -816,12 +816,15 @@ BEGIN
     pipeline_name VARCHAR(200) NOT NULL,
     description TEXT,
     pipeline_type VARCHAR(80) NOT NULL,
+    pipeline_kind VARCHAR(50) NOT NULL DEFAULT 'MLOPS_FLOW',
     airflow_dag_id VARCHAR(200),
     node_config_json JSONB NOT NULL DEFAULT '{}',
     edge_config_json JSONB,
     runtime_params_json JSONB,
     schedule_config_json JSONB,
     validation_result_json JSONB,
+    current_graph_json JSONB,
+    current_sync_status VARCHAR(30) NOT NULL DEFAULT 'NOT_COMPILED',
     status VARCHAR(30) NOT NULL DEFAULT 'DRAFT',
     last_validated_at TIMESTAMP,
     last_run_id VARCHAR(80),
@@ -857,6 +860,9 @@ CREATE INDEX IF NOT EXISTS ix_pipeline_definition_template
 CREATE INDEX IF NOT EXISTS ix_pipeline_definition_status
     ON tb_pipeline_definition(status)
     WHERE active_yn = 'Y';
+
+CREATE INDEX IF NOT EXISTS ix_pipeline_definition_kind
+    ON tb_pipeline_definition(pipeline_kind);
 
 CREATE UNIQUE INDEX IF NOT EXISTS ux_pipeline_definition_version
     ON tb_pipeline_definition_version(pipeline_id, version_no);
