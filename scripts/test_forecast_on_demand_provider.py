@@ -18,12 +18,72 @@ for p in (str(_SCRIPTS), str(_BACKEND)):
     if p not in sys.path:
         sys.path.insert(0, p)
 
-from test_fixtures import FS_LAG_ROLL_ID, ensure_csv_ingested, ensure_feature_dataset_built, ensure_test_platform, psql_scalar
+from test_fixtures import (
+    FS_LAG_ROLL_ID,
+    TRC_LGBM_ID,
+    ensure_csv_ingested,
+    ensure_feature_dataset_built,
+    ensure_test_platform,
+    psql_run,
+    psql_scalar,
+)
 
 API_BASE = os.environ.get("THERMOOPS_API_BASE", "http://localhost:8000/api/v1")
 INTERNAL_BASE = os.environ.get("THERMOOPS_INTERNAL_API_BASE", "http://127.0.0.1:8000/api/v1")
 TEST_SECRET = "abcde12345xyzTESTKEY"
 FEATURE_SET_ID = os.environ.get("THERMOOPS_FEATURE_SET_ID", FS_LAG_ROLL_ID)
+
+
+def cleanup_prediction_overwrite_targets(model_version_id: str) -> None:
+    """overwrite_yn=True 예측 전 FK 충돌 방지: match → prediction 순서로 정리.
+
+    tb_prediction_actual_match.prediction_id → tb_heat_demand_prediction.prediction_id
+    이므로 자식(match)을 먼저 삭제해야 prediction overwrite DELETE가 성공한다.
+    """
+    if not model_version_id:
+        return
+    safe_id = model_version_id.replace("'", "''")
+    psql_run(
+        f"DELETE FROM tb_prediction_actual_match WHERE model_version_id = '{safe_id}'; "
+        f"DELETE FROM tb_heat_demand_prediction WHERE model_version_id = '{safe_id}';"
+    )
+
+
+def find_compatible_model_version() -> str | None:
+    models = api("GET", "/models") or []
+    for m in models:
+        versions = api("GET", f"/models/{m['model_name']}/versions") or []
+        for v in versions:
+            if v.get("model_stage") in ("CHAMPION", "CANDIDATE", "STAGING"):
+                return v["model_version_id"]
+        if versions:
+            return versions[0]["model_version_id"]
+    return None
+
+
+def ensure_compatible_model_version() -> str:
+    """단건 독립 실행용: 기존 model_version 재사용, 없으면 최소 학습으로 생성."""
+    existing = find_compatible_model_version()
+    if existing:
+        return existing
+    configs = api("GET", "/training-configs") or []
+    config_id = next(
+        (c["config_id"] for c in configs if c.get("feature_set_id") == FEATURE_SET_ID),
+        None,
+    )
+    if not config_id:
+        config_id = next(
+            (c["config_id"] for c in configs if c.get("config_id") == TRC_LGBM_ID),
+            None,
+        )
+    if not config_id and configs:
+        config_id = configs[0].get("config_id")
+    if not config_id:
+        raise RuntimeError("training config not found for forecast provider test")
+    result = api("POST", "/training-jobs", {"config_id": config_id}, timeout=300)
+    if not result or result.get("status") != "SUCCESS" or not result.get("model_version_id"):
+        raise RuntimeError(f"training failed for forecast fixture: {result}")
+    return result["model_version_id"]
 
 
 def api(method: str, path: str, body: dict | None = None, expect_fail: bool = False, timeout: int = 120) -> dict | list | None:
@@ -355,20 +415,10 @@ def main() -> int:
         pred_start = start_at
         pred_end = end_at
 
-        models = api("GET", "/models")
-        model_version_id = None
-        for m in models:
-            versions = api("GET", f"/models/{m['model_name']}/versions")
-            for v in versions:
-                if v.get("model_stage") in ("CHAMPION", "CANDIDATE", "STAGING"):
-                    model_version_id = v["model_version_id"]
-                    break
-            if model_version_id:
-                break
-        if not model_version_id and models:
-            versions = api("GET", f"/models/{models[0]['model_name']}/versions")
-            model_version_id = versions[0]["model_version_id"] if versions else None
-        assert model_version_id, "compatible model_version required"
+        model_version_id = ensure_compatible_model_version()
+        print(f"  [ok] model_version ready {model_version_id}")
+        # overwrite_yn 예측 전: evaluation match → prediction 순서로 정리 (FK 독립 재실행)
+        cleanup_prediction_overwrite_targets(model_version_id)
 
         pred = api(
             "POST",
@@ -406,6 +456,7 @@ def main() -> int:
             print(f"  [ok] prediction job forecast_input_summary saved ({len(weather_inputs)} weather inputs)")
 
         fail_entity = not_ready["entity_id"]
+        cleanup_prediction_overwrite_targets(model_version_id)
         fail_pred = api(
             "POST",
             "/prediction-jobs",
@@ -424,6 +475,7 @@ def main() -> int:
         assert fail_pred and fail_pred.get("http_error") == 400
         print("  [ok] weather_input_required=true + forecast fail blocks job")
 
+        cleanup_prediction_overwrite_targets(model_version_id)
         warn_pred = api(
             "POST",
             "/prediction-jobs",
