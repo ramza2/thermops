@@ -1228,6 +1228,15 @@ R10-S6에서 저장만 가능하던 `schedule_type=CRON`을 **due 계산·next_r
 - **운영 seed:** CRON 샘플 일정 추가 없음 (clean 0건)
 - **제한:** OS cron 자동 등록·Airflow schedule 동적 생성·catch-up 전체 실행 금지
 
+### R11-S1 Visual Pipeline Component Catalog
+
+Visual Pipeline Studio용 **code-based** 컴포넌트 계약/카탈로그 API입니다. DB migration·graph·compile·UI는 포함하지 않습니다.
+
+- **ACTIVE 4종:** `VP_REST_API_SOURCE`, `VP_TRANSFORM`, `VP_UPSERT_LOAD`, `VP_CRON_SCHEDULE`
+- **DISABLED:** Notification / Data Quality / Feature·Training·Prediction / Forecast·DB·CSV Source
+- **API:** `GET /api/v1/visual-pipelines/components`, `.../components/{component_type}`, `.../connection-rules`
+- **테스트:** `python scripts/test_visual_pipeline_component_catalog.py` (service direct + optional HTTP smoke)
+
 ## 설계 문서 참조
 
 - `docs/md/THERMOps_API_설계서.md`
