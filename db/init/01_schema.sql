@@ -1,10 +1,18 @@
 -- THERMOps PostgreSQL Schema v0.1
 -- Reference: docs/md/THERMOps_DB_설계서.md
+--
+-- CREATE TABLE IF NOT EXISTS 는 동시 세션(예: apply_dev_migrations)과 경합 시
+-- pg_type_typname_nsp_index unique_violation 이 날 수 있다.
+-- docker-entrypoint 는 SQL 오류 시 init 실패로 Postgres가 종료되므로,
+-- 각 CREATE TABLE 을 DO 블록으로 감싸 duplicate_table/unique_violation 을 무시한다.
+-- 파일 끝 tb_schema_init_ready 는 migration 경합 방지용 완료 마커이다.
 
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- 기준정보
-CREATE TABLE IF NOT EXISTS tb_site (
+DO $thermops_ct$
+BEGIN
+    CREATE TABLE IF NOT EXISTS tb_site (
     site_id VARCHAR(50) PRIMARY KEY,
     site_name VARCHAR(100) NOT NULL,
     site_type VARCHAR(20) NOT NULL,
@@ -13,8 +21,14 @@ CREATE TABLE IF NOT EXISTS tb_site (
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP
 );
+EXCEPTION
+    WHEN duplicate_table THEN NULL;
+    WHEN unique_violation THEN NULL;
+END $thermops_ct$;
 
-CREATE TABLE IF NOT EXISTS tb_weather_area (
+DO $thermops_ct$
+BEGIN
+    CREATE TABLE IF NOT EXISTS tb_weather_area (
     weather_area_id VARCHAR(50) PRIMARY KEY,
     area_name VARCHAR(100) NOT NULL,
     latitude NUMERIC(10,6),
@@ -23,8 +37,14 @@ CREATE TABLE IF NOT EXISTS tb_weather_area (
     active_yn CHAR(1) NOT NULL DEFAULT 'Y',
     created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
+EXCEPTION
+    WHEN duplicate_table THEN NULL;
+    WHEN unique_violation THEN NULL;
+END $thermops_ct$;
 
-CREATE TABLE IF NOT EXISTS tb_site_weather_mapping (
+DO $thermops_ct$
+BEGIN
+    CREATE TABLE IF NOT EXISTS tb_site_weather_mapping (
     mapping_id BIGSERIAL PRIMARY KEY,
     site_id VARCHAR(50) NOT NULL REFERENCES tb_site(site_id),
     weather_area_id VARCHAR(50) NOT NULL REFERENCES tb_weather_area(weather_area_id),
@@ -33,8 +53,14 @@ CREATE TABLE IF NOT EXISTS tb_site_weather_mapping (
     valid_to DATE,
     active_yn CHAR(1) NOT NULL DEFAULT 'Y'
 );
+EXCEPTION
+    WHEN duplicate_table THEN NULL;
+    WHEN unique_violation THEN NULL;
+END $thermops_ct$;
 
-CREATE TABLE IF NOT EXISTS tb_common_code (
+DO $thermops_ct$
+BEGIN
+    CREATE TABLE IF NOT EXISTS tb_common_code (
     code_group VARCHAR(50) NOT NULL,
     code VARCHAR(50) NOT NULL,
     code_name VARCHAR(100) NOT NULL,
@@ -44,9 +70,15 @@ CREATE TABLE IF NOT EXISTS tb_common_code (
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     PRIMARY KEY (code_group, code)
 );
+EXCEPTION
+    WHEN duplicate_table THEN NULL;
+    WHEN unique_violation THEN NULL;
+END $thermops_ct$;
 
 -- 연계/적재
-CREATE TABLE IF NOT EXISTS tb_data_source (
+DO $thermops_ct$
+BEGIN
+    CREATE TABLE IF NOT EXISTS tb_data_source (
     data_source_id VARCHAR(50) PRIMARY KEY,
     source_name VARCHAR(100) NOT NULL,
     source_type VARCHAR(20) NOT NULL,
@@ -58,8 +90,14 @@ CREATE TABLE IF NOT EXISTS tb_data_source (
     last_loaded_at TIMESTAMP,
     created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
+EXCEPTION
+    WHEN duplicate_table THEN NULL;
+    WHEN unique_violation THEN NULL;
+END $thermops_ct$;
 
-CREATE TABLE IF NOT EXISTS tb_data_mapping (
+DO $thermops_ct$
+BEGIN
+    CREATE TABLE IF NOT EXISTS tb_data_mapping (
     mapping_id VARCHAR(50) PRIMARY KEY,
     source_id VARCHAR(50) NOT NULL REFERENCES tb_data_source(data_source_id),
     mapping_name VARCHAR(100) NOT NULL,
@@ -69,8 +107,14 @@ CREATE TABLE IF NOT EXISTS tb_data_mapping (
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP
 );
+EXCEPTION
+    WHEN duplicate_table THEN NULL;
+    WHEN unique_violation THEN NULL;
+END $thermops_ct$;
 
-CREATE TABLE IF NOT EXISTS tb_feature_column_role (
+DO $thermops_ct$
+BEGIN
+    CREATE TABLE IF NOT EXISTS tb_feature_column_role (
     role_id VARCHAR(50) PRIMARY KEY,
     mapping_id VARCHAR(50) REFERENCES tb_data_mapping(mapping_id),
     data_source_id VARCHAR(50) REFERENCES tb_data_source(data_source_id),
@@ -88,6 +132,10 @@ CREATE TABLE IF NOT EXISTS tb_feature_column_role (
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP
 );
+EXCEPTION
+    WHEN duplicate_table THEN NULL;
+    WHEN unique_violation THEN NULL;
+END $thermops_ct$;
 
 CREATE UNIQUE INDEX IF NOT EXISTS ux_feature_column_role_mapping_source
     ON tb_feature_column_role(mapping_id, source_column)
@@ -102,7 +150,9 @@ CREATE INDEX IF NOT EXISTS ix_feature_column_role_target_table
     WHERE active_yn = 'Y';
 
 -- Standard dataset type catalog (R7)
-CREATE TABLE IF NOT EXISTS tb_standard_dataset_type (
+DO $thermops_ct$
+BEGIN
+    CREATE TABLE IF NOT EXISTS tb_standard_dataset_type (
     dataset_type_id VARCHAR(50) PRIMARY KEY,
     dataset_type_code VARCHAR(80) NOT NULL UNIQUE,
     dataset_type_name VARCHAR(200) NOT NULL,
@@ -132,8 +182,14 @@ CREATE TABLE IF NOT EXISTS tb_standard_dataset_type (
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP
 );
+EXCEPTION
+    WHEN duplicate_table THEN NULL;
+    WHEN unique_violation THEN NULL;
+END $thermops_ct$;
 
-CREATE TABLE IF NOT EXISTS tb_standard_dataset_column (
+DO $thermops_ct$
+BEGIN
+    CREATE TABLE IF NOT EXISTS tb_standard_dataset_column (
     column_id VARCHAR(50) PRIMARY KEY,
     dataset_type_id VARCHAR(50) NOT NULL REFERENCES tb_standard_dataset_type(dataset_type_id),
     column_name VARCHAR(120) NOT NULL,
@@ -155,6 +211,10 @@ CREATE TABLE IF NOT EXISTS tb_standard_dataset_column (
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP
 );
+EXCEPTION
+    WHEN duplicate_table THEN NULL;
+    WHEN unique_violation THEN NULL;
+END $thermops_ct$;
 
 CREATE UNIQUE INDEX IF NOT EXISTS ux_standard_dataset_column_active
     ON tb_standard_dataset_column(dataset_type_id, column_name)
@@ -164,7 +224,9 @@ CREATE INDEX IF NOT EXISTS ix_standard_dataset_type_target_table
     ON tb_standard_dataset_type(target_table)
     WHERE active_yn = 'Y';
 
-CREATE TABLE IF NOT EXISTS tb_standard_dataset_table_create_log (
+DO $thermops_ct$
+BEGIN
+    CREATE TABLE IF NOT EXISTS tb_standard_dataset_table_create_log (
     log_id VARCHAR(50) PRIMARY KEY,
     dataset_type_id VARCHAR(50) NOT NULL REFERENCES tb_standard_dataset_type(dataset_type_id),
     action_type VARCHAR(30) NOT NULL,
@@ -174,12 +236,18 @@ CREATE TABLE IF NOT EXISTS tb_standard_dataset_table_create_log (
     created_by VARCHAR(100),
     created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
+EXCEPTION
+    WHEN duplicate_table THEN NULL;
+    WHEN unique_violation THEN NULL;
+END $thermops_ct$;
 
 CREATE INDEX IF NOT EXISTS ix_std_dataset_table_create_log_dataset
     ON tb_standard_dataset_table_create_log(dataset_type_id, created_at DESC);
 
 -- Feature Recipe Builder (R5)
-CREATE TABLE IF NOT EXISTS tb_feature_recipe (
+DO $thermops_ct$
+BEGIN
+    CREATE TABLE IF NOT EXISTS tb_feature_recipe (
     recipe_id VARCHAR(50) PRIMARY KEY,
     feature_name VARCHAR(100),
     display_name VARCHAR(200) NOT NULL,
@@ -214,8 +282,14 @@ CREATE TABLE IF NOT EXISTS tb_feature_recipe (
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
+EXCEPTION
+    WHEN duplicate_table THEN NULL;
+    WHEN unique_violation THEN NULL;
+END $thermops_ct$;
 
-CREATE TABLE IF NOT EXISTS tb_feature_recipe_version (
+DO $thermops_ct$
+BEGIN
+    CREATE TABLE IF NOT EXISTS tb_feature_recipe_version (
     version_id VARCHAR(50) PRIMARY KEY,
     recipe_id VARCHAR(50) NOT NULL REFERENCES tb_feature_recipe(recipe_id),
     version_no INTEGER NOT NULL,
@@ -223,6 +297,10 @@ CREATE TABLE IF NOT EXISTS tb_feature_recipe_version (
     change_reason TEXT,
     created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
+EXCEPTION
+    WHEN duplicate_table THEN NULL;
+    WHEN unique_violation THEN NULL;
+END $thermops_ct$;
 
 CREATE UNIQUE INDEX IF NOT EXISTS ux_feature_recipe_published_feature_name
     ON tb_feature_recipe(feature_name)
@@ -232,7 +310,9 @@ CREATE INDEX IF NOT EXISTS ix_feature_recipe_status ON tb_feature_recipe(status)
 CREATE INDEX IF NOT EXISTS ix_feature_recipe_mapping ON tb_feature_recipe(mapping_id) WHERE active_yn = 'Y';
 CREATE INDEX IF NOT EXISTS ix_feature_recipe_type ON tb_feature_recipe(recipe_type) WHERE active_yn = 'Y';
 
-CREATE TABLE IF NOT EXISTS tb_data_quality_run (
+DO $thermops_ct$
+BEGIN
+    CREATE TABLE IF NOT EXISTS tb_data_quality_run (
     run_id VARCHAR(80) PRIMARY KEY,
     source_id VARCHAR(50),
     check_type VARCHAR(50) NOT NULL,
@@ -241,8 +321,14 @@ CREATE TABLE IF NOT EXISTS tb_data_quality_run (
     started_at TIMESTAMP NOT NULL DEFAULT NOW(),
     finished_at TIMESTAMP
 );
+EXCEPTION
+    WHEN duplicate_table THEN NULL;
+    WHEN unique_violation THEN NULL;
+END $thermops_ct$;
 
-CREATE TABLE IF NOT EXISTS tb_heat_demand_actual (
+DO $thermops_ct$
+BEGIN
+    CREATE TABLE IF NOT EXISTS tb_heat_demand_actual (
     actual_id BIGSERIAL PRIMARY KEY,
     site_id VARCHAR(50) NOT NULL REFERENCES tb_site(site_id),
     measured_at TIMESTAMP NOT NULL,
@@ -255,10 +341,16 @@ CREATE TABLE IF NOT EXISTS tb_heat_demand_actual (
     loaded_at TIMESTAMP NOT NULL DEFAULT NOW(),
     CONSTRAINT uk_heat_actual UNIQUE(site_id, measured_at)
 );
+EXCEPTION
+    WHEN duplicate_table THEN NULL;
+    WHEN unique_violation THEN NULL;
+END $thermops_ct$;
 
 CREATE INDEX IF NOT EXISTS ix_heat_actual_site_time ON tb_heat_demand_actual(site_id, measured_at DESC);
 
-CREATE TABLE IF NOT EXISTS tb_weather_observation (
+DO $thermops_ct$
+BEGIN
+    CREATE TABLE IF NOT EXISTS tb_weather_observation (
     weather_id BIGSERIAL PRIMARY KEY,
     weather_area_id VARCHAR(50) NOT NULL REFERENCES tb_weather_area(weather_area_id),
     measured_at TIMESTAMP NOT NULL,
@@ -271,10 +363,16 @@ CREATE TABLE IF NOT EXISTS tb_weather_observation (
     loaded_at TIMESTAMP NOT NULL DEFAULT NOW(),
     CONSTRAINT uk_weather_obs UNIQUE(weather_area_id, measured_at, data_type)
 );
+EXCEPTION
+    WHEN duplicate_table THEN NULL;
+    WHEN unique_violation THEN NULL;
+END $thermops_ct$;
 
 CREATE INDEX IF NOT EXISTS ix_weather_area_time ON tb_weather_observation(weather_area_id, measured_at DESC);
 
-CREATE TABLE IF NOT EXISTS tb_calendar (
+DO $thermops_ct$
+BEGIN
+    CREATE TABLE IF NOT EXISTS tb_calendar (
     calendar_date DATE PRIMARY KEY,
     day_of_week INTEGER NOT NULL,
     is_weekend CHAR(1) NOT NULL,
@@ -283,9 +381,15 @@ CREATE TABLE IF NOT EXISTS tb_calendar (
     season VARCHAR(20),
     created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
+EXCEPTION
+    WHEN duplicate_table THEN NULL;
+    WHEN unique_violation THEN NULL;
+END $thermops_ct$;
 
 -- Feature/학습
-CREATE TABLE IF NOT EXISTS tb_feature (
+DO $thermops_ct$
+BEGIN
+    CREATE TABLE IF NOT EXISTS tb_feature (
     feature_id VARCHAR(50) PRIMARY KEY,
     feature_name VARCHAR(100) NOT NULL,
     feature_group VARCHAR(50),
@@ -295,8 +399,14 @@ CREATE TABLE IF NOT EXISTS tb_feature (
     description VARCHAR(500),
     created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
+EXCEPTION
+    WHEN duplicate_table THEN NULL;
+    WHEN unique_violation THEN NULL;
+END $thermops_ct$;
 
-CREATE TABLE IF NOT EXISTS tb_feature_set (
+DO $thermops_ct$
+BEGIN
+    CREATE TABLE IF NOT EXISTS tb_feature_set (
     feature_set_id VARCHAR(50) PRIMARY KEY,
     feature_set_name VARCHAR(100) NOT NULL,
     target_domain VARCHAR(30) NOT NULL,
@@ -306,8 +416,14 @@ CREATE TABLE IF NOT EXISTS tb_feature_set (
     active_yn CHAR(1) NOT NULL DEFAULT 'Y',
     created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
+EXCEPTION
+    WHEN duplicate_table THEN NULL;
+    WHEN unique_violation THEN NULL;
+END $thermops_ct$;
 
-CREATE TABLE IF NOT EXISTS tb_dataset_version (
+DO $thermops_ct$
+BEGIN
+    CREATE TABLE IF NOT EXISTS tb_dataset_version (
     dataset_version_id VARCHAR(80) PRIMARY KEY,
     dataset_type VARCHAR(30) NOT NULL,
     feature_set_id VARCHAR(50),
@@ -334,6 +450,10 @@ CREATE TABLE IF NOT EXISTS tb_dataset_version (
     created_by VARCHAR(50),
     created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
+EXCEPTION
+    WHEN duplicate_table THEN NULL;
+    WHEN unique_violation THEN NULL;
+END $thermops_ct$;
 
 CREATE INDEX IF NOT EXISTS ix_dataset_version_feature_set ON tb_dataset_version(feature_set_id);
 CREATE INDEX IF NOT EXISTS ix_dataset_version_role ON tb_dataset_version(feature_set_id, dataset_version_role);
@@ -342,7 +462,9 @@ CREATE UNIQUE INDEX IF NOT EXISTS ux_dataset_version_primary
     ON tb_dataset_version(feature_set_id)
     WHERE is_primary = TRUE AND archived_at IS NULL;
 
-CREATE TABLE IF NOT EXISTS tb_feature_dataset (
+DO $thermops_ct$
+BEGIN
+    CREATE TABLE IF NOT EXISTS tb_feature_dataset (
     feature_id BIGSERIAL PRIMARY KEY,
     dataset_version_id VARCHAR(80) NOT NULL REFERENCES tb_dataset_version(dataset_version_id),
     site_id VARCHAR(50) NOT NULL REFERENCES tb_site(site_id),
@@ -356,10 +478,16 @@ CREATE TABLE IF NOT EXISTS tb_feature_dataset (
     feature_json JSONB,
     created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
+EXCEPTION
+    WHEN duplicate_table THEN NULL;
+    WHEN unique_violation THEN NULL;
+END $thermops_ct$;
 
 CREATE INDEX IF NOT EXISTS ix_feature_dataset ON tb_feature_dataset(dataset_version_id, site_id, feature_at);
 
-CREATE TABLE IF NOT EXISTS tb_feature_lineage (
+DO $thermops_ct$
+BEGIN
+    CREATE TABLE IF NOT EXISTS tb_feature_lineage (
     lineage_id BIGSERIAL PRIMARY KEY,
     dataset_version_id VARCHAR(80) NOT NULL REFERENCES tb_dataset_version(dataset_version_id),
     feature_build_job_id VARCHAR(80),
@@ -381,13 +509,19 @@ CREATE TABLE IF NOT EXISTS tb_feature_lineage (
     lineage_json JSONB,
     created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
+EXCEPTION
+    WHEN duplicate_table THEN NULL;
+    WHEN unique_violation THEN NULL;
+END $thermops_ct$;
 
 CREATE INDEX IF NOT EXISTS ix_feature_lineage_dsv ON tb_feature_lineage(dataset_version_id);
 CREATE INDEX IF NOT EXISTS ix_feature_lineage_job ON tb_feature_lineage(feature_build_job_id);
 -- dataset_version_id = DSV-{feature_set_id}-{timestamp} 이므로 Feature Set별 유일. 동일 DSV 내 Feature당 1행.
 CREATE UNIQUE INDEX IF NOT EXISTS ux_feature_lineage_dsv_feature ON tb_feature_lineage(dataset_version_id, feature_name);
 
-CREATE TABLE IF NOT EXISTS tb_training_config (
+DO $thermops_ct$
+BEGIN
+    CREATE TABLE IF NOT EXISTS tb_training_config (
     config_id VARCHAR(50) PRIMARY KEY,
     config_name VARCHAR(100) NOT NULL,
     feature_set_id VARCHAR(50) REFERENCES tb_feature_set(feature_set_id),
@@ -398,8 +532,14 @@ CREATE TABLE IF NOT EXISTS tb_training_config (
     active_yn CHAR(1) NOT NULL DEFAULT 'Y',
     created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
+EXCEPTION
+    WHEN duplicate_table THEN NULL;
+    WHEN unique_violation THEN NULL;
+END $thermops_ct$;
 
-CREATE TABLE IF NOT EXISTS tb_training_job (
+DO $thermops_ct$
+BEGIN
+    CREATE TABLE IF NOT EXISTS tb_training_job (
     job_id VARCHAR(80) PRIMARY KEY,
     config_id VARCHAR(50) REFERENCES tb_training_config(config_id),
     pipeline_run_id VARCHAR(80),
@@ -417,9 +557,15 @@ CREATE TABLE IF NOT EXISTS tb_training_job (
     ended_at TIMESTAMP,
     created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
+EXCEPTION
+    WHEN duplicate_table THEN NULL;
+    WHEN unique_violation THEN NULL;
+END $thermops_ct$;
 
 -- 모델/MLOps
-CREATE TABLE IF NOT EXISTS tb_model_experiment (
+DO $thermops_ct$
+BEGIN
+    CREATE TABLE IF NOT EXISTS tb_model_experiment (
     experiment_id VARCHAR(80) PRIMARY KEY,
     mlflow_run_id VARCHAR(80),
     dataset_version_id VARCHAR(80) REFERENCES tb_dataset_version(dataset_version_id),
@@ -429,8 +575,14 @@ CREATE TABLE IF NOT EXISTS tb_model_experiment (
     trained_at TIMESTAMP NOT NULL,
     created_by VARCHAR(50)
 );
+EXCEPTION
+    WHEN duplicate_table THEN NULL;
+    WHEN unique_violation THEN NULL;
+END $thermops_ct$;
 
-CREATE TABLE IF NOT EXISTS tb_model_version (
+DO $thermops_ct$
+BEGIN
+    CREATE TABLE IF NOT EXISTS tb_model_version (
     model_version_id VARCHAR(80) PRIMARY KEY,
     model_name VARCHAR(100) NOT NULL,
     version_no VARCHAR(20) NOT NULL,
@@ -441,9 +593,15 @@ CREATE TABLE IF NOT EXISTS tb_model_version (
     metric_summary_json JSONB,
     registered_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
+EXCEPTION
+    WHEN duplicate_table THEN NULL;
+    WHEN unique_violation THEN NULL;
+END $thermops_ct$;
 
 -- 예측
-CREATE TABLE IF NOT EXISTS tb_prediction_job (
+DO $thermops_ct$
+BEGIN
+    CREATE TABLE IF NOT EXISTS tb_prediction_job (
     prediction_job_id VARCHAR(80) PRIMARY KEY,
     pipeline_run_id VARCHAR(80),
     model_version_id VARCHAR(80) REFERENCES tb_model_version(model_version_id),
@@ -458,8 +616,14 @@ CREATE TABLE IF NOT EXISTS tb_prediction_job (
     error_message TEXT,
     created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
+EXCEPTION
+    WHEN duplicate_table THEN NULL;
+    WHEN unique_violation THEN NULL;
+END $thermops_ct$;
 
-CREATE TABLE IF NOT EXISTS tb_heat_demand_prediction (
+DO $thermops_ct$
+BEGIN
+    CREATE TABLE IF NOT EXISTS tb_heat_demand_prediction (
     prediction_id BIGSERIAL PRIMARY KEY,
     prediction_job_id VARCHAR(80) NOT NULL REFERENCES tb_prediction_job(prediction_job_id),
     site_id VARCHAR(50) NOT NULL REFERENCES tb_site(site_id),
@@ -472,12 +636,18 @@ CREATE TABLE IF NOT EXISTS tb_heat_demand_prediction (
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     CONSTRAINT uk_heat_prediction UNIQUE(prediction_job_id, site_id, target_at)
 );
+EXCEPTION
+    WHEN duplicate_table THEN NULL;
+    WHEN unique_violation THEN NULL;
+END $thermops_ct$;
 
 CREATE INDEX IF NOT EXISTS ix_heat_prediction_model_time ON tb_heat_demand_prediction(model_version_id, target_at DESC);
 
 CREATE INDEX IF NOT EXISTS ix_heat_prediction_site_time ON tb_heat_demand_prediction(site_id, target_at DESC);
 
-CREATE TABLE IF NOT EXISTS tb_prediction_actual_match (
+DO $thermops_ct$
+BEGIN
+    CREATE TABLE IF NOT EXISTS tb_prediction_actual_match (
     match_id BIGSERIAL PRIMARY KEY,
     prediction_id BIGINT NOT NULL REFERENCES tb_heat_demand_prediction(prediction_id),
     site_id VARCHAR(50) NOT NULL REFERENCES tb_site(site_id),
@@ -493,6 +663,10 @@ CREATE TABLE IF NOT EXISTS tb_prediction_actual_match (
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     CONSTRAINT uk_pred_actual_match_prediction UNIQUE(prediction_id)
 );
+EXCEPTION
+    WHEN duplicate_table THEN NULL;
+    WHEN unique_violation THEN NULL;
+END $thermops_ct$;
 
 CREATE UNIQUE INDEX IF NOT EXISTS uk_pred_actual_match_site_time_model
     ON tb_prediction_actual_match(site_id, target_at, model_version_id);
@@ -501,7 +675,9 @@ CREATE INDEX IF NOT EXISTS ix_pred_actual_match_model_time
     ON tb_prediction_actual_match(model_version_id, target_at DESC);
 
 -- 모니터링
-CREATE TABLE IF NOT EXISTS tb_model_performance_metric (
+DO $thermops_ct$
+BEGIN
+    CREATE TABLE IF NOT EXISTS tb_model_performance_metric (
     metric_id BIGSERIAL PRIMARY KEY,
     site_id VARCHAR(50) NOT NULL REFERENCES tb_site(site_id),
     model_version_id VARCHAR(80) NOT NULL REFERENCES tb_model_version(model_version_id),
@@ -514,10 +690,16 @@ CREATE TABLE IF NOT EXISTS tb_model_performance_metric (
     metric_json JSONB,
     created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
+EXCEPTION
+    WHEN duplicate_table THEN NULL;
+    WHEN unique_violation THEN NULL;
+END $thermops_ct$;
 
 CREATE INDEX IF NOT EXISTS ix_perf_metric ON tb_model_performance_metric(site_id, model_version_id, eval_end_at DESC);
 
-CREATE TABLE IF NOT EXISTS tb_drift_report (
+DO $thermops_ct$
+BEGIN
+    CREATE TABLE IF NOT EXISTS tb_drift_report (
     drift_report_id VARCHAR(80) PRIMARY KEY,
     dataset_version_id VARCHAR(80) REFERENCES tb_dataset_version(dataset_version_id),
     model_version_id VARCHAR(80) REFERENCES tb_model_version(model_version_id),
@@ -538,8 +720,14 @@ CREATE TABLE IF NOT EXISTS tb_drift_report (
     report_uri VARCHAR(500),
     created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
+EXCEPTION
+    WHEN duplicate_table THEN NULL;
+    WHEN unique_violation THEN NULL;
+END $thermops_ct$;
 
-CREATE TABLE IF NOT EXISTS tb_retraining_candidate (
+DO $thermops_ct$
+BEGIN
+    CREATE TABLE IF NOT EXISTS tb_retraining_candidate (
     candidate_id VARCHAR(50) PRIMARY KEY,
     reason VARCHAR(500) NOT NULL,
     reason_summary VARCHAR(500),
@@ -569,8 +757,14 @@ CREATE TABLE IF NOT EXISTS tb_retraining_candidate (
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP
 );
+EXCEPTION
+    WHEN duplicate_table THEN NULL;
+    WHEN unique_violation THEN NULL;
+END $thermops_ct$;
 
-CREATE TABLE IF NOT EXISTS tb_pipeline_run (
+DO $thermops_ct$
+BEGIN
+    CREATE TABLE IF NOT EXISTS tb_pipeline_run (
     pipeline_run_id VARCHAR(80) PRIMARY KEY,
     pipeline_id VARCHAR(50) NOT NULL,
     pipeline_name VARCHAR(100),
@@ -583,11 +777,17 @@ CREATE TABLE IF NOT EXISTS tb_pipeline_run (
     message TEXT,
     result_summary JSONB
 );
+EXCEPTION
+    WHEN duplicate_table THEN NULL;
+    WHEN unique_violation THEN NULL;
+END $thermops_ct$;
 
 CREATE INDEX IF NOT EXISTS ix_pipeline_run ON tb_pipeline_run(pipeline_type, run_status, started_at DESC);
 
 -- Pipeline Builder (R8)
-CREATE TABLE IF NOT EXISTS tb_pipeline_template (
+DO $thermops_ct$
+BEGIN
+    CREATE TABLE IF NOT EXISTS tb_pipeline_template (
     template_id VARCHAR(50) PRIMARY KEY,
     template_code VARCHAR(80) NOT NULL UNIQUE,
     template_name VARCHAR(200) NOT NULL,
@@ -603,8 +803,14 @@ CREATE TABLE IF NOT EXISTS tb_pipeline_template (
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP
 );
+EXCEPTION
+    WHEN duplicate_table THEN NULL;
+    WHEN unique_violation THEN NULL;
+END $thermops_ct$;
 
-CREATE TABLE IF NOT EXISTS tb_pipeline_definition (
+DO $thermops_ct$
+BEGIN
+    CREATE TABLE IF NOT EXISTS tb_pipeline_definition (
     pipeline_id VARCHAR(50) PRIMARY KEY,
     template_id VARCHAR(50) NOT NULL REFERENCES tb_pipeline_template(template_id),
     pipeline_name VARCHAR(200) NOT NULL,
@@ -624,8 +830,14 @@ CREATE TABLE IF NOT EXISTS tb_pipeline_definition (
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP
 );
+EXCEPTION
+    WHEN duplicate_table THEN NULL;
+    WHEN unique_violation THEN NULL;
+END $thermops_ct$;
 
-CREATE TABLE IF NOT EXISTS tb_pipeline_definition_version (
+DO $thermops_ct$
+BEGIN
+    CREATE TABLE IF NOT EXISTS tb_pipeline_definition_version (
     version_id VARCHAR(50) PRIMARY KEY,
     pipeline_id VARCHAR(50) NOT NULL REFERENCES tb_pipeline_definition(pipeline_id),
     version_no INTEGER NOT NULL,
@@ -633,6 +845,10 @@ CREATE TABLE IF NOT EXISTS tb_pipeline_definition_version (
     change_summary TEXT,
     created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
+EXCEPTION
+    WHEN duplicate_table THEN NULL;
+    WHEN unique_violation THEN NULL;
+END $thermops_ct$;
 
 CREATE INDEX IF NOT EXISTS ix_pipeline_definition_template
     ON tb_pipeline_definition(template_id)
@@ -646,7 +862,9 @@ CREATE UNIQUE INDEX IF NOT EXISTS ux_pipeline_definition_version
     ON tb_pipeline_definition_version(pipeline_id, version_no);
 
 -- Pipeline Definition 실행 이력 연결 (R9)
-CREATE TABLE IF NOT EXISTS tb_pipeline_run_link (
+DO $thermops_ct$
+BEGIN
+    CREATE TABLE IF NOT EXISTS tb_pipeline_run_link (
     link_id VARCHAR(50) PRIMARY KEY,
     pipeline_id VARCHAR(50) NOT NULL REFERENCES tb_pipeline_definition(pipeline_id),
     template_id VARCHAR(50) NOT NULL REFERENCES tb_pipeline_template(template_id),
@@ -667,6 +885,10 @@ CREATE TABLE IF NOT EXISTS tb_pipeline_run_link (
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP
 );
+EXCEPTION
+    WHEN duplicate_table THEN NULL;
+    WHEN unique_violation THEN NULL;
+END $thermops_ct$;
 
 CREATE INDEX IF NOT EXISTS ix_pipeline_run_link_pipeline
     ON tb_pipeline_run_link(pipeline_id, requested_at DESC);
@@ -683,7 +905,9 @@ CREATE INDEX IF NOT EXISTS ix_pipeline_run_link_airflow
 CREATE INDEX IF NOT EXISTS ix_pipeline_run_link_status
     ON tb_pipeline_run_link(run_status, requested_at DESC);
 
-CREATE TABLE IF NOT EXISTS tb_system_config (
+DO $thermops_ct$
+BEGIN
+    CREATE TABLE IF NOT EXISTS tb_system_config (
     config_key VARCHAR(100) PRIMARY KEY,
     config_name VARCHAR(200),
     config_value TEXT,
@@ -694,11 +918,17 @@ CREATE TABLE IF NOT EXISTS tb_system_config (
     updated_by VARCHAR(50),
     updated_at TIMESTAMP
 );
+EXCEPTION
+    WHEN duplicate_table THEN NULL;
+    WHEN unique_violation THEN NULL;
+END $thermops_ct$;
 
 -- Airflow uses separate database (created in 00_airflow_db.sql)
 
 -- R10 Generic REST API Connector Builder
-CREATE TABLE IF NOT EXISTS tb_api_connector_operation (
+DO $thermops_ct$
+BEGIN
+    CREATE TABLE IF NOT EXISTS tb_api_connector_operation (
     operation_id VARCHAR(50) PRIMARY KEY,
     data_source_id VARCHAR(50) NOT NULL REFERENCES tb_data_source(data_source_id),
     operation_name VARCHAR(200) NOT NULL,
@@ -718,8 +948,14 @@ CREATE TABLE IF NOT EXISTS tb_api_connector_operation (
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP
 );
+EXCEPTION
+    WHEN duplicate_table THEN NULL;
+    WHEN unique_violation THEN NULL;
+END $thermops_ct$;
 CREATE INDEX IF NOT EXISTS ix_api_connector_op_source ON tb_api_connector_operation(data_source_id, active_yn);
-CREATE TABLE IF NOT EXISTS tb_api_connector_param (
+DO $thermops_ct$
+BEGIN
+    CREATE TABLE IF NOT EXISTS tb_api_connector_param (
     param_id VARCHAR(50) PRIMARY KEY,
     operation_id VARCHAR(50) NOT NULL REFERENCES tb_api_connector_operation(operation_id) ON DELETE CASCADE,
     param_name VARCHAR(100) NOT NULL,
@@ -737,8 +973,14 @@ CREATE TABLE IF NOT EXISTS tb_api_connector_param (
     active_yn BOOLEAN NOT NULL DEFAULT TRUE,
     metadata_json JSONB
 );
+EXCEPTION
+    WHEN duplicate_table THEN NULL;
+    WHEN unique_violation THEN NULL;
+END $thermops_ct$;
 CREATE INDEX IF NOT EXISTS ix_api_connector_param_op ON tb_api_connector_param(operation_id, sort_order);
-CREATE TABLE IF NOT EXISTS tb_api_connector_credential (
+DO $thermops_ct$
+BEGIN
+    CREATE TABLE IF NOT EXISTS tb_api_connector_credential (
     credential_id VARCHAR(50) PRIMARY KEY,
     data_source_id VARCHAR(50) NOT NULL REFERENCES tb_data_source(data_source_id) ON DELETE CASCADE,
     credential_name VARCHAR(200) NOT NULL DEFAULT 'default',
@@ -752,8 +994,14 @@ CREATE TABLE IF NOT EXISTS tb_api_connector_credential (
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP
 );
+EXCEPTION
+    WHEN duplicate_table THEN NULL;
+    WHEN unique_violation THEN NULL;
+END $thermops_ct$;
 CREATE UNIQUE INDEX IF NOT EXISTS ux_api_connector_credential_source ON tb_api_connector_credential(data_source_id) WHERE active_yn = TRUE;
-CREATE TABLE IF NOT EXISTS tb_api_connector_pagination (
+DO $thermops_ct$
+BEGIN
+    CREATE TABLE IF NOT EXISTS tb_api_connector_pagination (
     pagination_id VARCHAR(50) PRIMARY KEY,
     operation_id VARCHAR(50) NOT NULL UNIQUE REFERENCES tb_api_connector_operation(operation_id) ON DELETE CASCADE,
     pagination_type VARCHAR(30) NOT NULL DEFAULT 'NONE',
@@ -767,7 +1015,13 @@ CREATE TABLE IF NOT EXISTS tb_api_connector_pagination (
     stop_condition VARCHAR(50) NOT NULL DEFAULT 'EMPTY_ITEMS',
     active_yn BOOLEAN NOT NULL DEFAULT TRUE
 );
-CREATE TABLE IF NOT EXISTS tb_api_connector_call_log (
+EXCEPTION
+    WHEN duplicate_table THEN NULL;
+    WHEN unique_violation THEN NULL;
+END $thermops_ct$;
+DO $thermops_ct$
+BEGIN
+    CREATE TABLE IF NOT EXISTS tb_api_connector_call_log (
     call_log_id VARCHAR(50) PRIMARY KEY,
     operation_id VARCHAR(50) NOT NULL REFERENCES tb_api_connector_operation(operation_id),
     data_source_id VARCHAR(50) NOT NULL REFERENCES tb_data_source(data_source_id),
@@ -784,8 +1038,14 @@ CREATE TABLE IF NOT EXISTS tb_api_connector_call_log (
     raw_response_snapshot_id VARCHAR(50),
     metadata_json JSONB
 );
+EXCEPTION
+    WHEN duplicate_table THEN NULL;
+    WHEN unique_violation THEN NULL;
+END $thermops_ct$;
 CREATE INDEX IF NOT EXISTS ix_api_connector_call_log_op ON tb_api_connector_call_log(operation_id, called_at DESC);
-CREATE TABLE IF NOT EXISTS tb_api_connector_response_snapshot (
+DO $thermops_ct$
+BEGIN
+    CREATE TABLE IF NOT EXISTS tb_api_connector_response_snapshot (
     snapshot_id VARCHAR(50) PRIMARY KEY,
     operation_id VARCHAR(50) NOT NULL REFERENCES tb_api_connector_operation(operation_id),
     call_log_id VARCHAR(50) REFERENCES tb_api_connector_call_log(call_log_id),
@@ -797,8 +1057,14 @@ CREATE TABLE IF NOT EXISTS tb_api_connector_response_snapshot (
     sample_only_yn BOOLEAN NOT NULL DEFAULT TRUE,
     metadata_json JSONB
 );
+EXCEPTION
+    WHEN duplicate_table THEN NULL;
+    WHEN unique_violation THEN NULL;
+END $thermops_ct$;
 CREATE INDEX IF NOT EXISTS ix_api_connector_snapshot_op ON tb_api_connector_response_snapshot(operation_id, captured_at DESC);
-CREATE TABLE IF NOT EXISTS tb_api_connector_load_run (
+DO $thermops_ct$
+BEGIN
+    CREATE TABLE IF NOT EXISTS tb_api_connector_load_run (
     load_run_id VARCHAR(50) PRIMARY KEY,
     operation_id VARCHAR(50) NOT NULL REFERENCES tb_api_connector_operation(operation_id),
     data_source_id VARCHAR(50) NOT NULL REFERENCES tb_data_source(data_source_id),
@@ -817,10 +1083,16 @@ CREATE TABLE IF NOT EXISTS tb_api_connector_load_run (
     result_summary JSONB,
     error_message TEXT
 );
+EXCEPTION
+    WHEN duplicate_table THEN NULL;
+    WHEN unique_violation THEN NULL;
+END $thermops_ct$;
 CREATE INDEX IF NOT EXISTS ix_api_connector_load_run_op ON tb_api_connector_load_run(operation_id, started_at DESC);
 -- R10-S1 Prediction Entity / Location / Weather Mapping
 
-CREATE TABLE IF NOT EXISTS tb_prediction_entity (
+DO $thermops_ct$
+BEGIN
+    CREATE TABLE IF NOT EXISTS tb_prediction_entity (
     entity_id VARCHAR(50) PRIMARY KEY,
     entity_code VARCHAR(100) NOT NULL UNIQUE,
     entity_name VARCHAR(200) NOT NULL,
@@ -833,12 +1105,18 @@ CREATE TABLE IF NOT EXISTS tb_prediction_entity (
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP
 );
+EXCEPTION
+    WHEN duplicate_table THEN NULL;
+    WHEN unique_violation THEN NULL;
+END $thermops_ct$;
 
 CREATE INDEX IF NOT EXISTS ix_prediction_entity_code ON tb_prediction_entity(entity_code);
 CREATE INDEX IF NOT EXISTS ix_prediction_entity_type ON tb_prediction_entity(entity_type);
 CREATE INDEX IF NOT EXISTS ix_prediction_entity_active ON tb_prediction_entity(active_yn);
 
-CREATE TABLE IF NOT EXISTS tb_prediction_entity_location (
+DO $thermops_ct$
+BEGIN
+    CREATE TABLE IF NOT EXISTS tb_prediction_entity_location (
     location_id VARCHAR(50) PRIMARY KEY,
     entity_id VARCHAR(50) NOT NULL REFERENCES tb_prediction_entity(entity_id) ON DELETE CASCADE,
     address TEXT,
@@ -852,11 +1130,17 @@ CREATE TABLE IF NOT EXISTS tb_prediction_entity_location (
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP
 );
+EXCEPTION
+    WHEN duplicate_table THEN NULL;
+    WHEN unique_violation THEN NULL;
+END $thermops_ct$;
 
 CREATE INDEX IF NOT EXISTS ix_prediction_entity_location_entity
     ON tb_prediction_entity_location(entity_id, active_yn);
 
-CREATE TABLE IF NOT EXISTS tb_weather_forecast_grid (
+DO $thermops_ct$
+BEGIN
+    CREATE TABLE IF NOT EXISTS tb_weather_forecast_grid (
     forecast_grid_id VARCHAR(50) PRIMARY KEY,
     grid_system VARCHAR(50) NOT NULL DEFAULT 'KMA_DFS',
     nx INTEGER NOT NULL,
@@ -870,11 +1154,17 @@ CREATE TABLE IF NOT EXISTS tb_weather_forecast_grid (
     updated_at TIMESTAMP,
     UNIQUE(grid_system, nx, ny)
 );
+EXCEPTION
+    WHEN duplicate_table THEN NULL;
+    WHEN unique_violation THEN NULL;
+END $thermops_ct$;
 
 CREATE INDEX IF NOT EXISTS ix_weather_forecast_grid_nx_ny
     ON tb_weather_forecast_grid(grid_system, nx, ny);
 
-CREATE TABLE IF NOT EXISTS tb_weather_observation_station (
+DO $thermops_ct$
+BEGIN
+    CREATE TABLE IF NOT EXISTS tb_weather_observation_station (
     station_id VARCHAR(50) PRIMARY KEY,
     station_code VARCHAR(50) NOT NULL UNIQUE,
     station_name VARCHAR(200) NOT NULL,
@@ -887,10 +1177,16 @@ CREATE TABLE IF NOT EXISTS tb_weather_observation_station (
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP
 );
+EXCEPTION
+    WHEN duplicate_table THEN NULL;
+    WHEN unique_violation THEN NULL;
+END $thermops_ct$;
 
 CREATE INDEX IF NOT EXISTS ix_weather_obs_station_code ON tb_weather_observation_station(station_code);
 
-CREATE TABLE IF NOT EXISTS tb_prediction_entity_weather_mapping (
+DO $thermops_ct$
+BEGIN
+    CREATE TABLE IF NOT EXISTS tb_prediction_entity_weather_mapping (
     mapping_id VARCHAR(50) PRIMARY KEY,
     entity_id VARCHAR(50) NOT NULL REFERENCES tb_prediction_entity(entity_id) ON DELETE CASCADE,
     forecast_grid_id VARCHAR(50) REFERENCES tb_weather_forecast_grid(forecast_grid_id),
@@ -908,6 +1204,10 @@ CREATE TABLE IF NOT EXISTS tb_prediction_entity_weather_mapping (
     updated_at TIMESTAMP,
     CHECK (forecast_grid_id IS NOT NULL OR station_id IS NOT NULL)
 );
+EXCEPTION
+    WHEN duplicate_table THEN NULL;
+    WHEN unique_violation THEN NULL;
+END $thermops_ct$;
 
 CREATE INDEX IF NOT EXISTS ix_pe_weather_mapping_entity
     ON tb_prediction_entity_weather_mapping(entity_id, active_yn);
@@ -917,7 +1217,9 @@ CREATE INDEX IF NOT EXISTS ix_pe_weather_mapping_station
     ON tb_prediction_entity_weather_mapping(station_id);
 -- R10-S2 External Code / Common Code Mapping
 
-CREATE TABLE IF NOT EXISTS tb_external_code_mapping (
+DO $thermops_ct$
+BEGIN
+    CREATE TABLE IF NOT EXISTS tb_external_code_mapping (
     mapping_id VARCHAR(50) PRIMARY KEY,
     source_system VARCHAR(100) NOT NULL,
     source_operation_id VARCHAR(50),
@@ -942,6 +1244,10 @@ CREATE TABLE IF NOT EXISTS tb_external_code_mapping (
     updated_at TIMESTAMP,
     CHECK (valid_from IS NULL OR valid_to IS NULL OR valid_from <= valid_to)
 );
+EXCEPTION
+    WHEN duplicate_table THEN NULL;
+    WHEN unique_violation THEN NULL;
+END $thermops_ct$;
 
 CREATE INDEX IF NOT EXISTS ix_ext_code_mapping_lookup
     ON tb_external_code_mapping(source_system, external_code_group, external_code);
@@ -952,7 +1258,9 @@ CREATE INDEX IF NOT EXISTS ix_ext_code_mapping_status
 CREATE INDEX IF NOT EXISTS ix_ext_code_mapping_active
     ON tb_external_code_mapping(active_yn, mapping_status);
 
-CREATE TABLE IF NOT EXISTS tb_unmapped_external_code (
+DO $thermops_ct$
+BEGIN
+    CREATE TABLE IF NOT EXISTS tb_unmapped_external_code (
     unmapped_id VARCHAR(50) PRIMARY KEY,
     source_system VARCHAR(100) NOT NULL,
     source_operation_id VARCHAR(50),
@@ -974,6 +1282,10 @@ CREATE TABLE IF NOT EXISTS tb_unmapped_external_code (
     updated_at TIMESTAMP,
     UNIQUE(source_system, external_code_group, external_code)
 );
+EXCEPTION
+    WHEN duplicate_table THEN NULL;
+    WHEN unique_violation THEN NULL;
+END $thermops_ct$;
 
 CREATE INDEX IF NOT EXISTS ix_unmapped_ext_code_lookup
     ON tb_unmapped_external_code(source_system, external_code_group, external_code);
@@ -984,7 +1296,9 @@ CREATE INDEX IF NOT EXISTS ix_unmapped_ext_code_last_seen
 
 -- R10-S5 Forecast On-demand Input Provider
 
-CREATE TABLE IF NOT EXISTS tb_forecast_provider_config (
+DO $thermops_ct$
+BEGIN
+    CREATE TABLE IF NOT EXISTS tb_forecast_provider_config (
     provider_config_id VARCHAR(50) PRIMARY KEY,
     provider_name VARCHAR(200) NOT NULL,
     provider_type VARCHAR(50) NOT NULL DEFAULT 'KMA_SHORT_FORECAST',
@@ -998,8 +1312,14 @@ CREATE TABLE IF NOT EXISTS tb_forecast_provider_config (
     updated_at TIMESTAMP,
     metadata_json JSONB
 );
+EXCEPTION
+    WHEN duplicate_table THEN NULL;
+    WHEN unique_violation THEN NULL;
+END $thermops_ct$;
 
-CREATE TABLE IF NOT EXISTS tb_forecast_input_snapshot (
+DO $thermops_ct$
+BEGIN
+    CREATE TABLE IF NOT EXISTS tb_forecast_input_snapshot (
     snapshot_id VARCHAR(50) PRIMARY KEY,
     prediction_job_id VARCHAR(80),
     entity_id VARCHAR(50),
@@ -1023,8 +1343,14 @@ CREATE TABLE IF NOT EXISTS tb_forecast_input_snapshot (
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     metadata_json JSONB
 );
+EXCEPTION
+    WHEN duplicate_table THEN NULL;
+    WHEN unique_violation THEN NULL;
+END $thermops_ct$;
 
-CREATE TABLE IF NOT EXISTS tb_prediction_weather_input (
+DO $thermops_ct$
+BEGIN
+    CREATE TABLE IF NOT EXISTS tb_prediction_weather_input (
     weather_input_id VARCHAR(50) PRIMARY KEY,
     prediction_job_id VARCHAR(80) NOT NULL,
     snapshot_id VARCHAR(50),
@@ -1044,6 +1370,10 @@ CREATE TABLE IF NOT EXISTS tb_prediction_weather_input (
     raw_category_values_json JSONB,
     created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
+EXCEPTION
+    WHEN duplicate_table THEN NULL;
+    WHEN unique_violation THEN NULL;
+END $thermops_ct$;
 
 CREATE INDEX IF NOT EXISTS ix_forecast_input_snapshot_cache_key
     ON tb_forecast_input_snapshot(cache_key);
@@ -1060,7 +1390,9 @@ CREATE INDEX IF NOT EXISTS ix_prediction_weather_input_snapshot
 
 -- R10-S6 Data Load Scheduler
 
-CREATE TABLE IF NOT EXISTS tb_data_load_schedule (
+DO $thermops_ct$
+BEGIN
+    CREATE TABLE IF NOT EXISTS tb_data_load_schedule (
     schedule_id VARCHAR(50) PRIMARY KEY,
     schedule_name VARCHAR(200) NOT NULL,
     schedule_description TEXT,
@@ -1090,8 +1422,14 @@ CREATE TABLE IF NOT EXISTS tb_data_load_schedule (
     updated_at TIMESTAMP,
     metadata_json JSONB
 );
+EXCEPTION
+    WHEN duplicate_table THEN NULL;
+    WHEN unique_violation THEN NULL;
+END $thermops_ct$;
 
-CREATE TABLE IF NOT EXISTS tb_data_load_schedule_run (
+DO $thermops_ct$
+BEGIN
+    CREATE TABLE IF NOT EXISTS tb_data_load_schedule_run (
     schedule_run_id VARCHAR(50) PRIMARY KEY,
     schedule_id VARCHAR(50) NOT NULL,
     operation_id VARCHAR(50) NOT NULL,
@@ -1115,8 +1453,14 @@ CREATE TABLE IF NOT EXISTS tb_data_load_schedule_run (
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     metadata_json JSONB
 );
+EXCEPTION
+    WHEN duplicate_table THEN NULL;
+    WHEN unique_violation THEN NULL;
+END $thermops_ct$;
 
-CREATE TABLE IF NOT EXISTS tb_data_load_schedule_event (
+DO $thermops_ct$
+BEGIN
+    CREATE TABLE IF NOT EXISTS tb_data_load_schedule_event (
     event_id VARCHAR(50) PRIMARY KEY,
     schedule_id VARCHAR(50) NOT NULL,
     schedule_run_id VARCHAR(50),
@@ -1125,6 +1469,10 @@ CREATE TABLE IF NOT EXISTS tb_data_load_schedule_event (
     event_payload_json JSONB,
     created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
+EXCEPTION
+    WHEN duplicate_table THEN NULL;
+    WHEN unique_violation THEN NULL;
+END $thermops_ct$;
 
 CREATE INDEX IF NOT EXISTS ix_data_load_schedule_active_next
     ON tb_data_load_schedule(active_yn, next_run_at);
@@ -1138,7 +1486,9 @@ CREATE INDEX IF NOT EXISTS ix_data_load_schedule_event_schedule
     ON tb_data_load_schedule_event(schedule_id, created_at DESC);
 
 -- R10-S8 Upsert / Deduplicate
-CREATE TABLE IF NOT EXISTS tb_api_connector_write_policy (
+DO $thermops_ct$
+BEGIN
+    CREATE TABLE IF NOT EXISTS tb_api_connector_write_policy (
     write_policy_id VARCHAR(50) PRIMARY KEY,
     operation_id VARCHAR(50) NOT NULL REFERENCES tb_api_connector_operation(operation_id) ON DELETE CASCADE,
     target_table VARCHAR(100) NOT NULL,
@@ -1155,6 +1505,10 @@ CREATE TABLE IF NOT EXISTS tb_api_connector_write_policy (
     updated_at TIMESTAMP,
     metadata_json JSONB
 );
+EXCEPTION
+    WHEN duplicate_table THEN NULL;
+    WHEN unique_violation THEN NULL;
+END $thermops_ct$;
 
 CREATE UNIQUE INDEX IF NOT EXISTS ux_api_connector_write_policy_active
     ON tb_api_connector_write_policy(operation_id, target_table)
@@ -1163,7 +1517,9 @@ CREATE UNIQUE INDEX IF NOT EXISTS ux_api_connector_write_policy_active
 CREATE INDEX IF NOT EXISTS ix_api_connector_write_policy_op_target_active
     ON tb_api_connector_write_policy(operation_id, target_table, active_yn);
 
-CREATE TABLE IF NOT EXISTS tb_api_connector_load_dedup_summary (
+DO $thermops_ct$
+BEGIN
+    CREATE TABLE IF NOT EXISTS tb_api_connector_load_dedup_summary (
     summary_id VARCHAR(50) PRIMARY KEY,
     load_run_id VARCHAR(50) REFERENCES tb_api_connector_load_run(load_run_id) ON DELETE SET NULL,
     schedule_run_id VARCHAR(50) REFERENCES tb_data_load_schedule_run(schedule_run_id) ON DELETE SET NULL,
@@ -1185,6 +1541,10 @@ CREATE TABLE IF NOT EXISTS tb_api_connector_load_dedup_summary (
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     metadata_json JSONB
 );
+EXCEPTION
+    WHEN duplicate_table THEN NULL;
+    WHEN unique_violation THEN NULL;
+END $thermops_ct$;
 
 CREATE INDEX IF NOT EXISTS ix_api_connector_dedup_summary_load_run
     ON tb_api_connector_load_dedup_summary(load_run_id);
@@ -1193,7 +1553,9 @@ CREATE INDEX IF NOT EXISTS ix_api_connector_dedup_summary_op_created
     ON tb_api_connector_load_dedup_summary(operation_id, created_at DESC);
 
 -- R10-S9 Alert / Notification
-CREATE TABLE IF NOT EXISTS tb_notification_channel (
+DO $thermops_ct$
+BEGIN
+    CREATE TABLE IF NOT EXISTS tb_notification_channel (
     channel_id VARCHAR(50) PRIMARY KEY,
     channel_name VARCHAR(200) NOT NULL,
     channel_type VARCHAR(50) NOT NULL,
@@ -1205,8 +1567,14 @@ CREATE TABLE IF NOT EXISTS tb_notification_channel (
     updated_at TIMESTAMP,
     metadata_json JSONB
 );
+EXCEPTION
+    WHEN duplicate_table THEN NULL;
+    WHEN unique_violation THEN NULL;
+END $thermops_ct$;
 
-CREATE TABLE IF NOT EXISTS tb_notification_recipient (
+DO $thermops_ct$
+BEGIN
+    CREATE TABLE IF NOT EXISTS tb_notification_recipient (
     recipient_id VARCHAR(50) PRIMARY KEY,
     recipient_name VARCHAR(200) NOT NULL,
     recipient_type VARCHAR(50) NOT NULL,
@@ -1217,8 +1585,14 @@ CREATE TABLE IF NOT EXISTS tb_notification_recipient (
     updated_at TIMESTAMP,
     metadata_json JSONB
 );
+EXCEPTION
+    WHEN duplicate_table THEN NULL;
+    WHEN unique_violation THEN NULL;
+END $thermops_ct$;
 
-CREATE TABLE IF NOT EXISTS tb_alert_rule (
+DO $thermops_ct$
+BEGIN
+    CREATE TABLE IF NOT EXISTS tb_alert_rule (
     alert_rule_id VARCHAR(50) PRIMARY KEY,
     rule_name VARCHAR(200) NOT NULL,
     rule_description TEXT,
@@ -1237,11 +1611,17 @@ CREATE TABLE IF NOT EXISTS tb_alert_rule (
     updated_at TIMESTAMP,
     metadata_json JSONB
 );
+EXCEPTION
+    WHEN duplicate_table THEN NULL;
+    WHEN unique_violation THEN NULL;
+END $thermops_ct$;
 
 CREATE INDEX IF NOT EXISTS ix_alert_rule_source_type_enabled
     ON tb_alert_rule(event_source, event_type, enabled_yn);
 
-CREATE TABLE IF NOT EXISTS tb_notification_event (
+DO $thermops_ct$
+BEGIN
+    CREATE TABLE IF NOT EXISTS tb_notification_event (
     event_id VARCHAR(50) PRIMARY KEY,
     event_source VARCHAR(80) NOT NULL,
     event_type VARCHAR(80) NOT NULL,
@@ -1258,6 +1638,10 @@ CREATE TABLE IF NOT EXISTS tb_notification_event (
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     metadata_json JSONB
 );
+EXCEPTION
+    WHEN duplicate_table THEN NULL;
+    WHEN unique_violation THEN NULL;
+END $thermops_ct$;
 
 CREATE INDEX IF NOT EXISTS ix_notification_event_source_type_occurred
     ON tb_notification_event(event_source, event_type, occurred_at DESC);
@@ -1265,7 +1649,9 @@ CREATE INDEX IF NOT EXISTS ix_notification_event_source_type_occurred
 CREATE INDEX IF NOT EXISTS ix_notification_event_dedup_occurred
     ON tb_notification_event(dedup_key, occurred_at DESC);
 
-CREATE TABLE IF NOT EXISTS tb_incident (
+DO $thermops_ct$
+BEGIN
+    CREATE TABLE IF NOT EXISTS tb_incident (
     incident_id VARCHAR(50) PRIMARY KEY,
     event_id VARCHAR(50) REFERENCES tb_notification_event(event_id) ON DELETE SET NULL,
     alert_rule_id VARCHAR(50) REFERENCES tb_alert_rule(alert_rule_id) ON DELETE SET NULL,
@@ -1288,6 +1674,10 @@ CREATE TABLE IF NOT EXISTS tb_incident (
     updated_at TIMESTAMP,
     metadata_json JSONB
 );
+EXCEPTION
+    WHEN duplicate_table THEN NULL;
+    WHEN unique_violation THEN NULL;
+END $thermops_ct$;
 
 CREATE INDEX IF NOT EXISTS ix_incident_status_severity_last
     ON tb_incident(status, severity, last_occurred_at DESC);
@@ -1295,7 +1685,9 @@ CREATE INDEX IF NOT EXISTS ix_incident_status_severity_last
 CREATE INDEX IF NOT EXISTS ix_incident_dedup_status
     ON tb_incident(dedup_key, status);
 
-CREATE TABLE IF NOT EXISTS tb_notification_delivery (
+DO $thermops_ct$
+BEGIN
+    CREATE TABLE IF NOT EXISTS tb_notification_delivery (
     delivery_id VARCHAR(50) PRIMARY KEY,
     event_id VARCHAR(50) NOT NULL REFERENCES tb_notification_event(event_id) ON DELETE CASCADE,
     incident_id VARCHAR(50) REFERENCES tb_incident(incident_id) ON DELETE SET NULL,
@@ -1314,6 +1706,10 @@ CREATE TABLE IF NOT EXISTS tb_notification_delivery (
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     metadata_json JSONB
 );
+EXCEPTION
+    WHEN duplicate_table THEN NULL;
+    WHEN unique_violation THEN NULL;
+END $thermops_ct$;
 
 CREATE INDEX IF NOT EXISTS ix_notification_delivery_event
     ON tb_notification_delivery(event_id);
@@ -1322,7 +1718,9 @@ CREATE INDEX IF NOT EXISTS ix_notification_delivery_status_created
     ON tb_notification_delivery(delivery_status, created_at DESC);
 
 -- R10-S10 Run Due Worker
-CREATE TABLE IF NOT EXISTS tb_run_due_worker_instance (
+DO $thermops_ct$
+BEGIN
+    CREATE TABLE IF NOT EXISTS tb_run_due_worker_instance (
     worker_instance_id VARCHAR(100) PRIMARY KEY,
     worker_name VARCHAR(200) NOT NULL,
     worker_mode VARCHAR(30) NOT NULL,
@@ -1343,8 +1741,14 @@ CREATE TABLE IF NOT EXISTS tb_run_due_worker_instance (
     updated_at TIMESTAMP,
     metadata_json JSONB
 );
+EXCEPTION
+    WHEN duplicate_table THEN NULL;
+    WHEN unique_violation THEN NULL;
+END $thermops_ct$;
 
-CREATE TABLE IF NOT EXISTS tb_run_due_worker_run (
+DO $thermops_ct$
+BEGIN
+    CREATE TABLE IF NOT EXISTS tb_run_due_worker_run (
     worker_run_id VARCHAR(50) PRIMARY KEY,
     worker_instance_id VARCHAR(100),
     worker_name VARCHAR(200),
@@ -1362,8 +1766,14 @@ CREATE TABLE IF NOT EXISTS tb_run_due_worker_run (
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     metadata_json JSONB
 );
+EXCEPTION
+    WHEN duplicate_table THEN NULL;
+    WHEN unique_violation THEN NULL;
+END $thermops_ct$;
 
-CREATE TABLE IF NOT EXISTS tb_run_due_worker_lock (
+DO $thermops_ct$
+BEGIN
+    CREATE TABLE IF NOT EXISTS tb_run_due_worker_lock (
     lock_key VARCHAR(100) PRIMARY KEY,
     owner_instance_id VARCHAR(100) NOT NULL,
     acquired_at TIMESTAMP NOT NULL,
@@ -1371,6 +1781,10 @@ CREATE TABLE IF NOT EXISTS tb_run_due_worker_lock (
     heartbeat_at TIMESTAMP NOT NULL,
     metadata_json JSONB
 );
+EXCEPTION
+    WHEN duplicate_table THEN NULL;
+    WHEN unique_violation THEN NULL;
+END $thermops_ct$;
 
 CREATE INDEX IF NOT EXISTS ix_run_due_worker_instance_status_hb
     ON tb_run_due_worker_instance(status, last_heartbeat_at);
@@ -1383,3 +1797,20 @@ CREATE INDEX IF NOT EXISTS ix_run_due_worker_run_status_started
 
 CREATE INDEX IF NOT EXISTS ix_run_due_worker_lock_expires
     ON tb_run_due_worker_lock(expires_at);
+
+-- THERMOps schema init completion marker
+-- apply_dev_migrations.py waits for this relation to avoid racing docker-entrypoint init.
+DO $thermops_ct$
+BEGIN
+    CREATE TABLE IF NOT EXISTS tb_schema_init_ready (
+        ready_yn BOOLEAN PRIMARY KEY DEFAULT TRUE,
+        initialized_at TIMESTAMP NOT NULL DEFAULT NOW()
+    );
+EXCEPTION
+    WHEN duplicate_table THEN NULL;
+    WHEN unique_violation THEN NULL;
+END $thermops_ct$;
+
+INSERT INTO tb_schema_init_ready (ready_yn, initialized_at)
+VALUES (TRUE, NOW())
+ON CONFLICT (ready_yn) DO UPDATE SET initialized_at = EXCLUDED.initialized_at;

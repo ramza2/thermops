@@ -6,11 +6,19 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
+import time
 
 DB_URL = os.environ.get(
     "DATABASE_URL",
     "postgresql://thermops:thermops@localhost:5432/thermops",
 )
+
+# docker-entrypoint init(01_schema.sql) 완료 마커.
+# healthcheck는 init 중간에도 ready가 될 수 있어, migration이 경합하면
+# CREATE TABLE IF NOT EXISTS 가 pg_type_typname_nsp_index duplicate 로 init을 실패시킨다.
+INIT_READY_SQL = "SELECT to_regclass('public.tb_schema_init_ready') IS NOT NULL"
+INIT_READY_TIMEOUT_SEC = int(os.environ.get("THERMOOPS_INIT_READY_TIMEOUT_SEC", "180"))
+INIT_READY_POLL_SEC = float(os.environ.get("THERMOOPS_INIT_READY_POLL_SEC", "2"))
 
 
 def _load_sql(filename: str) -> str:
@@ -350,6 +358,87 @@ def _postgres_container() -> str:
     return os.environ.get("THERMOOPS_POSTGRES_CONTAINER", f"{project}-postgres")
 
 
+def _scalar_sql(sql: str) -> str:
+    if os.environ.get("THERMOOPS_USE_DOCKER", "1") == "1":
+        container = _postgres_container()
+        out = subprocess.check_output(
+            [
+                "docker",
+                "exec",
+                container,
+                "psql",
+                "-U",
+                "thermops",
+                "-d",
+                "thermops",
+                "-t",
+                "-A",
+                "-c",
+                sql,
+            ],
+            text=True,
+        )
+        return out.strip()
+    try:
+        import psycopg2
+    except ImportError as exc:
+        raise RuntimeError("psycopg2 required when THERMOOPS_USE_DOCKER=0") from exc
+    conn = psycopg2.connect(DB_URL)
+    try:
+        with conn.cursor() as cur:
+            cur.execute(sql)
+            row = cur.fetchone()
+            return "" if row is None or row[0] is None else str(row[0]).strip()
+    finally:
+        conn.close()
+
+
+def wait_for_schema_init_ready() -> None:
+    """Fresh compose up 직후 migration이 docker-entrypoint init과 경합하지 않도록 대기."""
+    deadline = time.time() + INIT_READY_TIMEOUT_SEC
+    last_err = ""
+    print("  [wait] schema init ready (tb_schema_init_ready)")
+    while time.time() < deadline:
+        try:
+            ready = _scalar_sql(INIT_READY_SQL).lower()
+            if ready in {"t", "true", "1"}:
+                print("  [wait] schema init ready OK")
+                return
+            last_err = f"ready={ready!r}"
+        except Exception as exc:  # noqa: BLE001 - poll until timeout
+            last_err = str(exc)
+        time.sleep(INIT_READY_POLL_SEC)
+
+    # 마커 도입 이전 볼륨: 이미 init이 끝난 상태면 마커만 보강한다.
+    try:
+        legacy = _scalar_sql(
+            "SELECT to_regclass('public.tb_run_due_worker_lock') IS NOT NULL"
+        ).lower()
+    except Exception as exc:  # noqa: BLE001
+        legacy = "false"
+        last_err = f"{last_err}; legacy_check={exc}"
+    if legacy in {"t", "true", "1"}:
+        run_sql(
+            """
+            CREATE TABLE IF NOT EXISTS tb_schema_init_ready (
+                ready_yn BOOLEAN PRIMARY KEY DEFAULT TRUE,
+                initialized_at TIMESTAMP NOT NULL DEFAULT NOW()
+            );
+            INSERT INTO tb_schema_init_ready (ready_yn, initialized_at)
+            VALUES (TRUE, NOW())
+            ON CONFLICT (ready_yn) DO UPDATE
+            SET initialized_at = EXCLUDED.initialized_at;
+            """
+        )
+        print("  [wait] legacy schema detected; init marker backfilled")
+        return
+
+    raise RuntimeError(
+        f"schema init ready timeout after {INIT_READY_TIMEOUT_SEC}s ({last_err}). "
+        "docker compose postgres init(01_schema.sql)이 완료됐는지 확인하세요."
+    )
+
+
 def run_sql(sql: str) -> None:
     if os.environ.get("THERMOOPS_USE_DOCKER", "1") == "1":
         container = _postgres_container()
@@ -376,6 +465,7 @@ def run_sql(sql: str) -> None:
 def main() -> int:
     print("THERMOps dev migrations")
     try:
+        wait_for_schema_init_ready()
         for label, sql in MIGRATIONS:
             print(f"  [apply] {label}")
             try:
