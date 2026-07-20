@@ -24,6 +24,13 @@ const STATUS_MAP: Record<string, { label: string; className: string }> = {
   TRAINED: { label: "학습완료", className: "bg-blue-100 text-blue-700" },
   TRAINING: { label: "학습중", className: "bg-blue-100 text-blue-700" },
   LOW: { label: "낮음", className: "bg-slate-100 text-slate-600" },
+  DRAFT: { label: "DRAFT", className: "bg-slate-100 text-slate-600" },
+  VALIDATED: { label: "VALIDATED", className: "bg-blue-100 text-blue-700" },
+  NOT_COMPILED: { label: "NOT_COMPILED", className: "bg-amber-100 text-amber-700" },
+  IN_SYNC: { label: "IN_SYNC", className: "bg-emerald-100 text-emerald-700" },
+  STALE: { label: "STALE", className: "bg-orange-100 text-orange-700" },
+  COMPILE_FAILED: { label: "COMPILE_FAILED", className: "bg-red-100 text-red-700" },
+  PARTIAL: { label: "PARTIAL", className: "bg-amber-100 text-amber-700" },
 };
 
 export function StatusBadge({ status }: { status: string }) {

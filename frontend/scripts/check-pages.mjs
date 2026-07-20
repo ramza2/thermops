@@ -24,6 +24,7 @@ const PATHS = [
   "/ops/retraining-candidates",
   "/data-load-schedules",
   "/notifications",
+  "/visual-pipelines",
   "/system/configs",
 ];
 
@@ -86,6 +87,12 @@ for (const path of PATHS) {
     await waitMainHeading("데이터 적재 일정");
   } else if (path === "/notifications") {
     await waitMainHeading("알림 / 장애 통보");
+  } else if (path === "/visual-pipelines") {
+    await waitMainHeading("Visual Pipeline Studio");
+    await page.getByRole("button", { name: "새 Visual Pipeline" }).first().waitFor({ state: "visible", timeout: 30000 });
+    if (!(await hasEmptyOrTable(/아직 생성된 Visual Pipeline이 없습니다/))) {
+      errors.push(`${path}: empty message or table rows expected`);
+    }
   } else {
     await page.locator("main h1").first().waitFor({ state: "visible", timeout: 60000 });
   }
@@ -349,7 +356,7 @@ for (const path of PATHS) {
 // Sidebar menu groups (dashboard page has sidebar)
 await page.goto(`${BASE}/dashboard`, { waitUntil: "load", timeout: 60000 });
 await page.getByText("운영 모니터링", { exact: true }).click();
-for (const group of ["데이터 준비", "학습 변수 관리", "모델 학습·예측", "운영 모니터링", "시스템 관리"]) {
+for (const group of ["데이터 준비", "학습 변수 관리", "모델 학습·예측", "운영 모니터링", "Visual Pipeline Studio", "시스템 관리"]) {
   const count = await page.getByText(group, { exact: true }).count();
   if (!count) errors.push(`sidebar: menu group '${group}' not found`);
 }

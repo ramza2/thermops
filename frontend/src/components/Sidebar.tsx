@@ -1,6 +1,6 @@
 import { NavLink } from "react-router-dom";
 import {
-  LayoutDashboard, Database, Layers, Box, Activity, Settings,
+  LayoutDashboard, Database, Layers, Box, Activity, Settings, Workflow,
   ChevronDown, ChevronRight,
 } from "lucide-react";
 import { useState } from "react";
@@ -49,6 +49,11 @@ const MENU = [
     ],
   },
   {
+    label: MENU_GROUPS.visualPipelineStudio, icon: Workflow, children: [
+      { label: "Visual Pipeline 목록", path: "/visual-pipelines" },
+    ],
+  },
+  {
     label: MENU_GROUPS.system, icon: Settings, children: [
       { label: "시스템 설정", path: "/system/configs" },
     ],
@@ -59,6 +64,7 @@ export function Sidebar() {
   const [open, setOpen] = useState<Record<string, boolean>>({
     [MENU_GROUPS.dataPrep]: true,
     [MENU_GROUPS.modelPredict]: true,
+    [MENU_GROUPS.visualPipelineStudio]: true,
   });
 
   return (

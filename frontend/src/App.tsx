@@ -29,6 +29,8 @@ import RetrainingCandidatesPage from "@/pages/RetrainingCandidatesPage";
 import DataLoadSchedulesPage from "@/pages/DataLoadSchedulesPage";
 import NotificationsPage from "@/pages/NotificationsPage";
 import SystemConfigPage from "@/pages/SystemConfigPage";
+import VisualPipelineListPage from "@/pages/VisualPipelineListPage";
+import VisualPipelineStudioPage from "@/pages/VisualPipelineStudioPage";
 
 export default function App() {
   return (
@@ -66,6 +68,8 @@ export default function App() {
             <Route path="ops/retraining-candidates" element={<RetrainingCandidatesPage />} />
             <Route path="data-load-schedules" element={<DataLoadSchedulesPage />} />
             <Route path="notifications" element={<NotificationsPage />} />
+            <Route path="visual-pipelines" element={<VisualPipelineListPage />} />
+            <Route path="visual-pipelines/:pipelineId" element={<VisualPipelineStudioPage />} />
             <Route path="system/configs" element={<SystemConfigPage />} />
           </Route>
         </Routes>
