@@ -1293,8 +1293,18 @@ docker run --rm --network thermops_default \
 cd frontend && node scripts/check-visual-pipeline-studio.mjs
 ```
 
+### R11-S5-0 Inspector Config Form 설계
+
+- **문서:** [`docs/md/THERMOps_R11-S5-0_Visual_Pipeline_Inspector_Config_Form_설계.md`](docs/md/THERMOps_R11-S5-0_Visual_Pipeline_Inspector_Config_Form_설계.md)
+- **범위:** 설계만 (Form/API/DB 구현 없음). S5-1~에서 단계적 구현.
+- **config 저장:** `node.data.config` — `{ schema_version, values, validation }`; `values` 키는 S1 catalog `config_schema`와 1:1.
+- **secret:** graph에 원문 저장 금지, `credential_ref` 등 참조만 허용.
+- **validation:** BASIC=저장 차단 없음(WARNING 중심); STRICT=S6 compile gate; `validation.status`는 UI cache, authoritative=validation API.
+- **legacy:** config 없는 graph도 load 가능 (`values: {}` normalize).
+
 ## 설계 문서 참조
 
+- `docs/md/THERMOps_R11-S5-0_Visual_Pipeline_Inspector_Config_Form_설계.md`
 - `docs/md/THERMOps_API_설계서.md`
 - `docs/md/THERMOps_DB_설계서.md`
 - `docs/md/THERMOps_배치_파이프라인_설계서.md`
