@@ -170,6 +170,30 @@ export function withUpdatedNodeConfig(
   };
 }
 
+/** Apply values patch and reset validation cache (R11-S5-2+). */
+export function applyNodeConfigPatch(node: Node, patch: Record<string, unknown>): Node {
+  const ctype = String(node.type ?? node.data?.component_type ?? "");
+  const updated = withUpdatedNodeConfig(node, (prev) => {
+    const next = { ...prev, ...patch };
+    for (const [key, val] of Object.entries(patch)) {
+      if (val === undefined) delete next[key];
+    }
+    return next;
+  });
+  const config = normalizeNodeConfig(updated.data?.config, ctype);
+  return {
+    ...updated,
+    data: {
+      ...updated.data,
+      config: {
+        ...config,
+        schema_version: config.schema_version ?? VISUAL_PIPELINE_CONFIG_SCHEMA_VERSION,
+        validation: defaultConfigValidation(),
+      },
+    },
+  };
+}
+
 /** Detect secret-like keys/values. S5-1: prepare only — does not mutate unless caller applies. */
 export function sanitizeConfigValuesForGraph(
   componentType: string,

@@ -65,6 +65,7 @@ import {
   parsePortHandleId,
   serializeGraphBody,
 } from "@/utils/visualPipelineGraph";
+import { applyNodeConfigPatch } from "@/utils/visualPipelineNodeConfig";
 
 function StudioCanvasInner() {
   const { pipelineId = "" } = useParams<{ pipelineId: string }>();
@@ -84,6 +85,7 @@ function StudioCanvasInner() {
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const [viewport, setViewport] = useState({ x: 0, y: 0, zoom: 1 });
   const savedGraphRef = useRef("");
+  const [graphSaveEpoch, setGraphSaveEpoch] = useState(0);
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [versionSaving, setVersionSaving] = useState(false);
@@ -109,6 +111,7 @@ function StudioCanvasInner() {
       setEdges(e);
       setViewport(detail.graph?.viewport ?? { x: 0, y: 0, zoom: 1 });
       savedGraphRef.current = serializeGraphBody(detail.graph ?? { nodes: [], edges: [], viewport: { x: 0, y: 0, zoom: 1 } });
+      setGraphSaveEpoch((e) => e + 1);
       setLastSavedAt(detail.updated_at ?? null);
     } catch (err) {
       setError(extractApiErrorMessage(err, "Visual Pipeline을 불러오지 못했습니다."));
@@ -140,7 +143,10 @@ function StudioCanvasInner() {
 
   const currentGraph = useMemo(() => flowToGraph(nodes, edges, viewport), [nodes, edges, viewport]);
 
-  const dirty = useMemo(() => serializeGraphBody(currentGraph) !== savedGraphRef.current, [currentGraph]);
+  const dirty = useMemo(
+    () => serializeGraphBody(currentGraph) !== savedGraphRef.current,
+    [currentGraph, graphSaveEpoch],
+  );
 
   useEffect(() => {
     const handler = (e: BeforeUnloadEvent) => {
@@ -208,6 +214,11 @@ function StudioCanvasInner() {
     setNodes((nds) => nds.map((n) => (n.id === selectedNodeId ? { ...n, data: { ...n.data, label } } : n)));
   };
 
+  const handleNodeConfigChange = (patch: Record<string, unknown>) => {
+    if (!selectedNodeId) return;
+    setNodes((nds) => nds.map((n) => (n.id === selectedNodeId ? applyNodeConfigPatch(n, patch) : n)));
+  };
+
   const handleDeleteNode = () => {
     if (!selectedNodeId) return;
     setNodes((nds) => nds.filter((n) => n.id !== selectedNodeId));
@@ -227,6 +238,7 @@ function StudioCanvasInner() {
       });
       setPipeline(updated);
       savedGraphRef.current = serializeGraphBody(graph);
+      setGraphSaveEpoch((e) => e + 1);
       setLastSavedAt(updated.updated_at ?? new Date().toISOString());
       if (!silent) {
         showToast("success", "현재 Graph가 저장되었습니다.");
@@ -478,6 +490,7 @@ function StudioCanvasInner() {
           node={selectedNode}
           catalogItem={selectedCatalog}
           onLabelChange={handleLabelChange}
+          onConfigChange={handleNodeConfigChange}
           onDelete={handleDeleteNode}
         />
       </div>

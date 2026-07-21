@@ -260,19 +260,38 @@ async function runBrowserSmoke(pipeline) {
       state: "visible",
       timeout: 10000,
     });
-    await page.getByTestId("visual-pipeline-inspector").getByText("e2e-rest").first().waitFor({
+    const inspector = page.getByTestId("visual-pipeline-inspector");
+    await inspector.getByTestId("visual-pipeline-inspector-config-form").waitFor({
       state: "visible",
       timeout: 10000,
     });
-    await page.getByTestId("visual-pipeline-inspector").getByText("operation_name").first().waitFor({
+    for (const fieldKey of ["operation_name", "endpoint_path", "http_method", "credential_ref"]) {
+      await inspector.getByTestId(`visual-pipeline-inspector-config-field-${fieldKey}`).waitFor({
+        state: "visible",
+        timeout: 10000,
+      });
+    }
+    await inspector.getByText("API key/token/password 원문이 아닌 credential 참조 ID만 입력하세요.").first().waitFor({
       state: "visible",
       timeout: 10000,
     });
-    await page.getByTestId("visual-pipeline-inspector").getByText("sample_fetch").first().waitFor({
-      state: "visible",
-      timeout: 10000,
-    });
-    console.log("  [ok] node select -> inspector (S5 config preview)");
+    console.log("  [ok] REST config form fields visible");
+
+    const operationInput = inspector
+      .getByTestId("visual-pipeline-inspector-config-field-operation_name")
+      .locator("input");
+    await operationInput.fill("sample_fetch_e2e");
+    const endpointInput = inspector
+      .getByTestId("visual-pipeline-inspector-config-field-endpoint_path")
+      .locator("input");
+    await endpointInput.fill("/api/v1/e2e/sample");
+    await toolbar.getByText("● 저장되지 않음").first().waitFor({ state: "visible", timeout: 10000 });
+    console.log("  [ok] config edit -> graph dirty");
+
+    await toolbar.getByRole("button", { name: "저장", exact: true }).click();
+    await page.getByText("현재 Graph가 저장되었습니다.").first().waitFor({ state: "visible", timeout: 30000 });
+    await toolbar.getByText("● 저장되지 않음").waitFor({ state: "hidden", timeout: 10000 });
+    console.log("  [ok] graph save toast + dirty cleared");
 
     await page.getByTestId("visual-pipeline-validate-button").click();
     await validation.getByText(/OK|WARNING|ERROR|INFO/).first().waitFor({ state: "visible", timeout: 30000 });

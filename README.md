@@ -1314,6 +1314,18 @@ cd frontend && node scripts/check-visual-pipeline-studio.mjs
 - **E2E:** `check-visual-pipeline-studio.mjs` fixture에 S5-0 config sample + legacy flat CRON 포함.
 - **제외:** secret 자동 삭제, config validation API, compile/저장 UX 변경.
 
+### R11-S5-2 REST API Source Inspector Form UI
+
+- **범위:** frontend only — `VP_REST_API_SOURCE` 노드만 editable Form. Transform/Upsert/CRON은 JSON preview 유지.
+- **파일:**
+  - `frontend/src/components/visualPipeline/config/VpRestApiSourceConfigForm.tsx` — REST 8 fields (connection/request/response sections)
+  - `frontend/src/components/visualPipeline/config/VpConfigFieldShell.tsx`, `VpJsonTextareaField.tsx` — 소형 재사용 field helpers
+  - `VpNodeInspector.tsx`, `VisualPipelineStudioPage.tsx` — Form 연동, `applyNodeConfigPatch`
+- **동작:** Form 변경 → `node.data.config.values` patch → validation cache `NOT_VALIDATED` → graph dirty → 기존 `저장`/`버전 저장` UX.
+- **JSON fields:** `request_params`/`pagination` — local draft, valid JSON일 때만 object 반영, invalid JSON은 warning만.
+- **E2E:** Studio script — REST Form 표시, 입력, dirty, 저장 toast, Graph 검증 OK/errors 0.
+- **제외:** backend/config validation API, Transform/Upsert/CRON Form, secret 원문 입력 UI.
+
 ## 설계 문서 참조
 
 - `docs/md/THERMOps_R11-S5-0_Visual_Pipeline_Inspector_Config_Form_설계.md`

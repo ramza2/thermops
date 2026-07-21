@@ -1,17 +1,65 @@
 import { Box, Trash2 } from "lucide-react";
 import type { Node } from "@xyflow/react";
 import { Button } from "@/components/Button";
-import type { ComponentCatalogItem } from "@/types/visualPipeline";
-import { formatNodeConfigPreviewJson } from "@/utils/visualPipelineNodeConfig";
+import { VpRestApiSourceConfigForm } from "@/components/visualPipeline/config/VpRestApiSourceConfigForm";
+import type {
+  ComponentCatalogItem,
+  VisualPipelineConfigValidationStatus,
+  VisualPipelineNodeConfigValidation,
+} from "@/types/visualPipeline";
+import { getVisualPipelineConfigSchema } from "@/utils/visualPipelineConfigRegistry";
+import { ensureNodeConfig, formatNodeConfigPreviewJson } from "@/utils/visualPipelineNodeConfig";
 
 interface VpNodeInspectorProps {
   node: Node | null;
   catalogItem: ComponentCatalogItem | null;
   onLabelChange: (label: string) => void;
+  onConfigChange: (patch: Record<string, unknown>) => void;
   onDelete: () => void;
 }
 
-export function VpNodeInspector({ node, catalogItem, onLabelChange, onDelete }: VpNodeInspectorProps) {
+const VALIDATION_BADGE: Record<
+  VisualPipelineConfigValidationStatus,
+  { label: string; className: string }
+> = {
+  NOT_VALIDATED: {
+    label: "NOT_VALIDATED",
+    className: "bg-slate-100 text-slate-600 border-slate-200",
+  },
+  VALID: {
+    label: "VALID",
+    className: "bg-emerald-50 text-emerald-700 border-emerald-200",
+  },
+  INVALID: {
+    label: "INVALID",
+    className: "bg-red-50 text-red-700 border-red-200",
+  },
+  STALE: {
+    label: "STALE",
+    className: "bg-amber-50 text-amber-700 border-amber-200",
+  },
+};
+
+function ConfigValidationBadge({ validation }: { validation?: VisualPipelineNodeConfigValidation }) {
+  const status = validation?.status ?? "NOT_VALIDATED";
+  const badge = VALIDATION_BADGE[status];
+  return (
+    <span
+      className={`inline-flex text-[8px] font-bold uppercase tracking-wide border rounded px-1.5 py-0.5 ${badge.className}`}
+      data-testid="visual-pipeline-inspector-validation-badge"
+    >
+      {badge.label}
+    </span>
+  );
+}
+
+export function VpNodeInspector({
+  node,
+  catalogItem,
+  onLabelChange,
+  onConfigChange,
+  onDelete,
+}: VpNodeInspectorProps) {
   if (!node) {
     return (
       <div
@@ -25,7 +73,7 @@ export function VpNodeInspector({ node, catalogItem, onLabelChange, onDelete }: 
           <Box className="w-8 h-8 mb-3 text-slate-300" />
           <p className="text-xs font-medium text-slate-500">노드를 선택하세요</p>
           <p className="text-[10px] mt-1.5 leading-relaxed max-w-[200px]">
-            Canvas에서 노드를 클릭하면 속성·포트·placeholder config를 확인할 수 있습니다.
+            Canvas에서 노드를 클릭하면 속성·포트·config를 확인할 수 있습니다.
           </p>
         </div>
       </div>
@@ -34,6 +82,9 @@ export function VpNodeInspector({ node, catalogItem, onLabelChange, onDelete }: 
 
   const componentType = String(node.type ?? node.data?.component_type ?? "");
   const label = String(node.data?.label ?? "");
+  const isRestSource = componentType === "VP_REST_API_SOURCE";
+  const normalizedConfig = ensureNodeConfig(node, componentType);
+  const restSchema = isRestSource ? getVisualPipelineConfigSchema("VP_REST_API_SOURCE") : null;
   const inputs = catalogItem?.input_ports?.map((p) => p.port_id) ?? [];
   const outputs = catalogItem?.output_ports?.map((p) => p.port_id) ?? [];
 
@@ -50,7 +101,10 @@ export function VpNodeInspector({ node, catalogItem, onLabelChange, onDelete }: 
       data-testid="visual-pipeline-inspector"
     >
       <div className="px-3 py-2.5 border-b border-slate-100 bg-slate-50">
-        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Node Inspector</span>
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Node Inspector</span>
+          <ConfigValidationBadge validation={normalizedConfig.validation} />
+        </div>
         <p className="text-[10px] text-slate-400 mt-0.5 truncate">{label || componentType}</p>
       </div>
       <div className="flex-1 overflow-y-auto p-3 space-y-3 text-xs">
@@ -97,13 +151,25 @@ export function VpNodeInspector({ node, catalogItem, onLabelChange, onDelete }: 
         </section>
 
         <section className="rounded-lg border border-slate-100 p-2.5">
-          <div className="text-[9px] font-bold text-slate-400 uppercase tracking-wide mb-2">Config (preview)</div>
-          <pre className="bg-slate-900 text-slate-100 border border-slate-700 rounded-md p-2.5 text-[10px] font-mono whitespace-pre-wrap leading-relaxed overflow-x-auto">
-            {formatNodeConfigPreviewJson(node, componentType)}
-          </pre>
-          <p className="text-[9px] text-amber-700 mt-1.5">
-            S1 catalog 필드명 기준 JSON preview입니다. Form UI는 R11-S5-2에서 구현됩니다.
-          </p>
+          <div className="text-[9px] font-bold text-slate-400 uppercase tracking-wide mb-2">
+            {isRestSource ? "Config" : "Config (preview)"}
+          </div>
+          {isRestSource ? (
+            <VpRestApiSourceConfigForm
+              values={normalizedConfig.values}
+              schema={restSchema}
+              onChange={onConfigChange}
+            />
+          ) : (
+            <>
+              <pre className="bg-slate-900 text-slate-100 border border-slate-700 rounded-md p-2.5 text-[10px] font-mono whitespace-pre-wrap leading-relaxed overflow-x-auto">
+                {formatNodeConfigPreviewJson(node, componentType)}
+              </pre>
+              <p className="text-[9px] text-amber-700 mt-1.5">
+                S1 catalog 필드명 기준 JSON preview입니다. Form UI는 해당 노드 타입에서 아직 미구현입니다.
+              </p>
+            </>
+          )}
         </section>
 
         <Button variant="danger" icon={<Trash2 className="w-3 h-3" />} onClick={onDelete} className="w-full justify-center text-xs">
