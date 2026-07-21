@@ -416,6 +416,14 @@ def _build_registry() -> list[TestCase]:
             timeout_seconds=300,
             cwd=FRONTEND_DIR,
         ),
+        TestCase(
+            name="frontend_check_visual_pipeline_studio",
+            command=[],  # resolved at runtime
+            groups=["frontend", "full"],
+            description="Visual Pipeline Studio 상세 route E2E",
+            timeout_seconds=300,
+            cwd=FRONTEND_DIR,
+        ),
     ]
 
 
@@ -445,6 +453,8 @@ def resolve_frontend_commands(test: TestCase) -> list[str]:
         return [resolve_executable("npm"), "run", "build"]
     if test.name == "frontend_check_pages":
         return [resolve_executable("node"), "scripts/check-pages.mjs"]
+    if test.name == "frontend_check_visual_pipeline_studio":
+        return [resolve_executable("node"), "scripts/check-visual-pipeline-studio.mjs"]
     return test.command
 
 

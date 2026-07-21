@@ -1273,6 +1273,26 @@ Visual Pipeline Studio용 **code-based** 컴포넌트 계약/카탈로그 API입
 - edge에 `sourceHandle` / `targetHandle` / `data.source_port` / `data.target_port` / `data_type` 보존
 - Validation은 handle 우선, legacy label-only는 `EDGE_PORT_UNSPECIFIED` fallback 유지
 
+### R11-S4-3 Studio 상세 route E2E
+
+- 목록 route(`/visual-pipelines`)는 기존 `frontend/scripts/check-pages.mjs`에서 검증
+- Studio 상세(`/visual-pipelines/:pipelineId`)는 별도 smoke: `frontend/scripts/check-visual-pipeline-studio.mjs`
+- API로 E2E fixture(4-node + handle metadata) 생성 → browser 검증 → `archive` cleanup
+- env: `CHECK_PAGES_BASE`(frontend), `THERMOOPS_API_BASE`(API, `/api/v1` 포함)
+- 회귀 그룹: `frontend` / `full` (`quick` 미포함)
+
+```bash
+# Docker 예시
+docker run --rm --network thermops_default \
+  -v "$PWD/frontend:/app" -w /app \
+  -e CHECK_PAGES_BASE=http://thermops-frontend:5173 \
+  -e THERMOOPS_API_BASE=http://thermops-backend:8000/api/v1 \
+  node:20-bookworm bash -lc "npx playwright install --with-deps chromium && node scripts/check-visual-pipeline-studio.mjs"
+
+# 로컬 예시 (frontend :5173 + backend :8000)
+cd frontend && node scripts/check-visual-pipeline-studio.mjs
+```
+
 ## 설계 문서 참조
 
 - `docs/md/THERMOps_API_설계서.md`

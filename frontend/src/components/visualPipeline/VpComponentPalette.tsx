@@ -33,7 +33,10 @@ export function VpComponentPalette({ active, disabled, loading, error, onAdd }: 
   }
 
   return (
-    <div className="w-[260px] shrink-0 bg-white border border-slate-200 rounded-lg shadow-sm flex flex-col overflow-hidden max-h-[min(720px,calc(100vh-12rem))]">
+    <div
+      className="w-[260px] shrink-0 bg-white border border-slate-200 rounded-lg shadow-sm flex flex-col overflow-hidden max-h-[min(720px,calc(100vh-12rem))]"
+      data-testid="visual-pipeline-palette"
+    >
       <div className="px-3 py-2.5 border-b border-slate-100 bg-slate-50">
         <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Component Palette</span>
         <p className="text-[10px] text-slate-400 mt-0.5">클릭하여 Canvas에 추가</p>

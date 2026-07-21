@@ -315,12 +315,23 @@ function StudioCanvasInner() {
   if (!pipeline) return null;
 
   return (
-    <div className="-m-6 p-4 md:p-5 min-h-[calc(100vh-4rem)] flex flex-col bg-slate-100/60">
-      <div className="bg-white border border-slate-200 rounded-lg shadow-sm px-3 py-2.5 flex flex-wrap items-center justify-between gap-2 mb-3">
+    <div
+      className="-m-6 p-4 md:p-5 min-h-[calc(100vh-4rem)] flex flex-col bg-slate-100/60"
+      data-testid="visual-pipeline-studio-page"
+    >
+      <div
+        className="bg-white border border-slate-200 rounded-lg shadow-sm px-3 py-2.5 flex flex-wrap items-center justify-between gap-2 mb-3"
+        data-testid="visual-pipeline-toolbar"
+      >
         <div className="flex items-center gap-2 flex-wrap min-w-0">
           <Button variant="ghost" icon={<ChevronLeft className="w-4 h-4" />} onClick={goList}>목록</Button>
           <span className="w-px h-4 bg-slate-200 shrink-0" aria-hidden />
-          <span className="text-sm font-semibold text-slate-800 truncate max-w-[260px]">{pipeline.pipeline_name}</span>
+          <span
+            className="text-sm font-semibold text-slate-800 truncate max-w-[260px]"
+            data-testid="visual-pipeline-name"
+          >
+            {pipeline.pipeline_name}
+          </span>
           <StatusBadge status={pipeline.status} />
           <span className="inline-flex items-center text-[9px] font-bold uppercase tracking-wide bg-violet-50 text-violet-700 border border-violet-200 rounded px-1.5 py-0.5">
             PoC
@@ -365,6 +376,7 @@ function StudioCanvasInner() {
             onClick={() => void handleValidate()}
             disabled={validating}
             title="현재 Canvas Graph를 BASIC 수준으로 검증합니다. 저장을 차단하지 않습니다."
+            data-testid="visual-pipeline-validate-button"
           >
             {validating ? "검증 중…" : "Graph 검증"}
           </Button>
@@ -407,7 +419,10 @@ function StudioCanvasInner() {
           error={catalogError}
           onAdd={handleAddNode}
         />
-        <div className="flex-1 bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden min-h-[620px] relative">
+        <div
+          className="flex-1 bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden min-h-[620px] relative"
+          data-testid="visual-pipeline-canvas"
+        >
           <ReactFlow
             nodes={nodes}
             edges={edges}

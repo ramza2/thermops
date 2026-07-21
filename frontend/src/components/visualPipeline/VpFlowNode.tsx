@@ -11,7 +11,7 @@ export interface VpNodeData {
   [key: string]: unknown;
 }
 
-function VpFlowNodeComponent({ data, selected }: NodeProps) {
+function VpFlowNodeComponent({ id, data, selected }: NodeProps) {
   const d = data as VpNodeData;
   const componentType = d.component_type ?? "VP_TRANSFORM";
   const style = NODE_STYLE[componentType] ?? {
@@ -27,6 +27,7 @@ function VpFlowNodeComponent({ data, selected }: NodeProps) {
 
   return (
     <div
+      data-testid={id ? `visual-pipeline-node-${id}` : "visual-pipeline-node"}
       className={`w-[168px] rounded-lg border-2 shadow-sm overflow-hidden ${style.tint} ${
         selected
           ? "border-blue-500 ring-2 ring-blue-200 shadow-md shadow-blue-100"
