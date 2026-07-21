@@ -79,6 +79,7 @@ def normalize_graph(graph: Any | None) -> dict[str, Any]:
             raise VisualPipelineGraphError(f"graph.edges[{idx}].source가 필요합니다.")
         if not target or not isinstance(target, str):
             raise VisualPipelineGraphError(f"graph.edges[{idx}].target가 필요합니다.")
+        # Keep extra React Flow fields for S3+ compatibility (sourceHandle/targetHandle/data/label)
         item = dict(edge)
         if not item.get("id"):
             item["id"] = f"edge-{source}-{target}-{idx}"

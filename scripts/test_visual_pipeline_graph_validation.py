@@ -61,9 +61,33 @@ def mvp_graph() -> dict:
             {"id": "n-load", "type": "VP_UPSERT_LOAD", "position": {"x": 600, "y": 0}, "data": {"label": "LOAD"}},
         ],
         "edges": [
-            {"id": "e1", "source": "n-cron", "target": "n-rest", "label": "trigger"},
-            {"id": "e2", "source": "n-rest", "target": "n-xform", "label": "raw_rows"},
-            {"id": "e3", "source": "n-xform", "target": "n-load", "label": "transformed_rows"},
+            {
+                "id": "e1",
+                "source": "n-cron",
+                "target": "n-rest",
+                "sourceHandle": "output:schedule_config",
+                "targetHandle": "input:trigger",
+                "label": "schedule_config → trigger",
+                "data": {"source_port": "schedule_config", "target_port": "trigger", "data_type": "SCHEDULE_CONFIG"},
+            },
+            {
+                "id": "e2",
+                "source": "n-rest",
+                "target": "n-xform",
+                "sourceHandle": "output:raw_rows",
+                "targetHandle": "input:input_rows",
+                "label": "raw_rows → input_rows",
+                "data": {"source_port": "raw_rows", "target_port": "input_rows", "data_type": "RAW_ROWS"},
+            },
+            {
+                "id": "e3",
+                "source": "n-xform",
+                "target": "n-load",
+                "sourceHandle": "output:transformed_rows",
+                "targetHandle": "input:input_rows",
+                "label": "transformed_rows → input_rows",
+                "data": {"source_port": "transformed_rows", "target_port": "input_rows", "data_type": "TRANSFORMED_ROWS"},
+            },
         ],
         "viewport": {"x": 0, "y": 0, "zoom": 1},
     }
@@ -86,19 +110,110 @@ def test_service_direct() -> None:
     ok = validate_visual_pipeline_graph(mvp_graph(), validation_level="BASIC")
     assert ok["valid"] is True
     assert ok["summary"]["error_count"] == 0
-    print("  [ok] 4-node MVP valid")
+    assert "EDGE_PORT_UNSPECIFIED" not in codes(ok)
+    print("  [ok] 4-node MVP valid with handles (no PORT_UNSPECIFIED)")
 
     rest_upsert = {
         "nodes": [
             {"id": "a", "type": "VP_REST_API_SOURCE", "position": {"x": 0, "y": 0}, "data": {}},
             {"id": "b", "type": "VP_UPSERT_LOAD", "position": {"x": 100, "y": 0}, "data": {}},
         ],
-        "edges": [{"id": "e", "source": "a", "target": "b", "label": "raw_rows"}],
+        "edges": [
+            {
+                "id": "e",
+                "source": "a",
+                "target": "b",
+                "sourceHandle": "output:raw_rows",
+                "targetHandle": "input:input_rows",
+                "data": {"source_port": "raw_rows", "target_port": "input_rows", "data_type": "RAW_ROWS"},
+            }
+        ],
     }
     ru = validate_visual_pipeline_graph(rest_upsert, validation_level="BASIC")
     assert ru["valid"] is True
     assert "TRANSFORM_RECOMMENDED" in codes(ru)
-    print("  [ok] REST→UPSERT allowed + INFO")
+    assert "EDGE_PORT_UNSPECIFIED" not in codes(ru)
+    print("  [ok] REST→UPSERT handles ALLOW + INFO")
+
+    bad_src = validate_visual_pipeline_graph(
+        {
+            "nodes": [
+                {"id": "a", "type": "VP_REST_API_SOURCE", "position": {"x": 0, "y": 0}, "data": {}},
+                {"id": "b", "type": "VP_TRANSFORM", "position": {"x": 10, "y": 0}, "data": {}},
+            ],
+            "edges": [
+                {
+                    "id": "e",
+                    "source": "a",
+                    "target": "b",
+                    "sourceHandle": "input:raw_rows",
+                    "targetHandle": "input:input_rows",
+                }
+            ],
+        }
+    )
+    assert "EDGE_SOURCE_PORT_INVALID" in codes(bad_src)
+    print("  [ok] sourceHandle direction mismatch")
+
+    bad_tgt = validate_visual_pipeline_graph(
+        {
+            "nodes": [
+                {"id": "a", "type": "VP_REST_API_SOURCE", "position": {"x": 0, "y": 0}, "data": {}},
+                {"id": "b", "type": "VP_TRANSFORM", "position": {"x": 10, "y": 0}, "data": {}},
+            ],
+            "edges": [
+                {
+                    "id": "e",
+                    "source": "a",
+                    "target": "b",
+                    "sourceHandle": "output:raw_rows",
+                    "targetHandle": "output:input_rows",
+                }
+            ],
+        }
+    )
+    assert "EDGE_TARGET_PORT_INVALID" in codes(bad_tgt)
+    print("  [ok] targetHandle direction mismatch")
+
+    malformed = validate_visual_pipeline_graph(
+        {
+            "nodes": [
+                {"id": "a", "type": "VP_REST_API_SOURCE", "position": {"x": 0, "y": 0}, "data": {}},
+                {"id": "b", "type": "VP_TRANSFORM", "position": {"x": 10, "y": 0}, "data": {}},
+            ],
+            "edges": [
+                {
+                    "id": "e",
+                    "source": "a",
+                    "target": "b",
+                    "sourceHandle": "raw_rows",
+                    "targetHandle": ":::bad",
+                }
+            ],
+        }
+    )
+    assert "EDGE_TARGET_PORT_INVALID" in codes(malformed)
+    print("  [ok] malformed targetHandle")
+
+    unknown_port = validate_visual_pipeline_graph(
+        {
+            "nodes": [
+                {"id": "a", "type": "VP_REST_API_SOURCE", "position": {"x": 0, "y": 0}, "data": {}},
+                {"id": "b", "type": "VP_TRANSFORM", "position": {"x": 10, "y": 0}, "data": {}},
+            ],
+            "edges": [
+                {
+                    "id": "e",
+                    "source": "a",
+                    "target": "b",
+                    "sourceHandle": "output:nope",
+                    "targetHandle": "input:input_rows",
+                }
+            ],
+        }
+    )
+    assert "EDGE_SOURCE_PORT_INVALID" in codes(unknown_port)
+    print("  [ok] unknown source port")
 
     dangling = validate_visual_pipeline_graph(
         {
@@ -172,7 +287,7 @@ def test_service_direct() -> None:
         }
     )
     assert "EDGE_PORT_UNSPECIFIED" in codes(no_port)
-    print("  [ok] port unspecified warning")
+    print("  [ok] port unspecified warning (legacy label-only / no handle)")
 
     deny = validate_visual_pipeline_graph(
         {

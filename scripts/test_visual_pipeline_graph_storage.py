@@ -165,9 +165,56 @@ def test_crud_and_versions() -> str:
     assert len(reloaded["graph"]["nodes"]) == 3
     print("  [ok] put graph update (create_version default false, version unchanged)")
 
+    # R11-S4-2: sourceHandle/targetHandle/data round-trip
+    handle_graph = {
+        "nodes": [
+            {
+                "id": "n-rest",
+                "type": "VP_REST_API_SOURCE",
+                "position": {"x": 0, "y": 0},
+                "data": {"label": "REST"},
+            },
+            {
+                "id": "n-xform",
+                "type": "VP_TRANSFORM",
+                "position": {"x": 200, "y": 0},
+                "data": {"label": "XFORM"},
+            },
+        ],
+        "edges": [
+            {
+                "id": "e-handle",
+                "source": "n-rest",
+                "target": "n-xform",
+                "sourceHandle": "output:raw_rows",
+                "targetHandle": "input:input_rows",
+                "label": "raw_rows → input_rows",
+                "data": {
+                    "source_port": "raw_rows",
+                    "target_port": "input_rows",
+                    "data_type": "RAW_ROWS",
+                },
+            }
+        ],
+        "viewport": {"x": 0, "y": 0, "zoom": 1},
+    }
+    api("PUT", f"/visual-pipelines/{pid}", {"graph": handle_graph, "create_version": False})
+    got = api("GET", f"/visual-pipelines/{pid}")["graph"]["edges"][0]
+    assert got.get("sourceHandle") == "output:raw_rows"
+    assert got.get("targetHandle") == "input:input_rows"
+    assert got.get("data", {}).get("source_port") == "raw_rows"
+    assert got.get("data", {}).get("target_port") == "input_rows"
+    snap = api("POST", f"/visual-pipelines/{pid}/versions", {"change_summary": "handle snapshot"})
+    snap_edge = snap["snapshot"]["graph"]["edges"][0]
+    assert snap_edge.get("sourceHandle") == "output:raw_rows"
+    assert snap_edge.get("targetHandle") == "input:input_rows"
+    print("  [ok] put/get/version preserve sourceHandle/targetHandle/data")
+
     # dirty-style: PUT create_version=false then POST /versions -> exactly +1
+    # (continue with handle_graph as current)
+    versions_after_put = api("GET", f"/visual-pipelines/{pid}/versions")
     count_before_dirty = versions_after_put["total"]
-    dirty_graph = dict(updated_graph)
+    dirty_graph = dict(handle_graph)
     dirty_graph["viewport"] = {"x": 5, "y": 10, "zoom": 0.95}
     api(
         "PUT",

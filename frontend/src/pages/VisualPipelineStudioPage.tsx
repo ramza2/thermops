@@ -56,12 +56,13 @@ import type {
 } from "@/types/visualPipeline";
 import {
   defaultNodeData,
-  edgeLabelStyleProps,
+  enrichEdgeWithPortMetadata,
   findConnectionRuleWarning,
   flowToGraph,
   graphToFlow,
   newNodeId,
   NODE_STYLE,
+  parsePortHandleId,
   serializeGraphBody,
 } from "@/utils/visualPipelineGraph";
 
@@ -165,19 +166,20 @@ function StudioCanvasInner() {
     (connection: Connection) => {
       const sourceNode = nodes.find((n) => n.id === connection.source);
       const targetNode = nodes.find((n) => n.id === connection.target);
+      const enriched = enrichEdgeWithPortMetadata(connection, nodes);
+      const sourcePort = parsePortHandleId(enriched.sourceHandle).portName;
+      const targetPort = parsePortHandleId(enriched.targetHandle).portName;
       if (sourceNode && targetNode) {
-        const warn = findConnectionRuleWarning(connectionRules, String(sourceNode.type), String(targetNode.type));
+        const warn = findConnectionRuleWarning(
+          connectionRules,
+          String(sourceNode.type),
+          String(targetNode.type),
+          sourcePort,
+          targetPort,
+        );
         if (warn) showToast("warning", warn);
       }
-      setEdges((eds) =>
-        addEdge(
-          {
-            ...connection,
-            ...edgeLabelStyleProps(),
-          },
-          eds,
-        ),
-      );
+      setEdges((eds) => addEdge(enriched, eds));
     },
     [nodes, connectionRules, setEdges, showToast],
   );

@@ -1267,6 +1267,12 @@ Visual Pipeline Studio용 **code-based** 컴포넌트 계약/카탈로그 API입
 - **Studio:** `Graph 검증` 버튼 + Validation Panel (저장 차단 없음)
 - **테스트:** `python scripts/test_visual_pipeline_graph_validation.py`
 
+### R11-S4-2 Port Handle 저장 / 검증 정확도
+
+- Handle id: `output:{port}` / `input:{port}` (catalog `port_id`)
+- edge에 `sourceHandle` / `targetHandle` / `data.source_port` / `data.target_port` / `data_type` 보존
+- Validation은 handle 우선, legacy label-only는 `EDGE_PORT_UNSPECIFIED` fallback 유지
+
 ## 설계 문서 참조
 
 - `docs/md/THERMOps_API_설계서.md`

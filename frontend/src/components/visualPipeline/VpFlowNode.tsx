@@ -1,6 +1,6 @@
 import { memo } from "react";
 import { Handle, Position, type NodeProps } from "@xyflow/react";
-import { NODE_STYLE } from "@/utils/visualPipelineGraph";
+import { makePortHandleId, NODE_STYLE } from "@/utils/visualPipelineGraph";
 
 export interface VpNodeData {
   label?: string;
@@ -62,7 +62,7 @@ function VpFlowNodeComponent({ data, selected }: NodeProps) {
                       <Handle
                         type="target"
                         position={Position.Left}
-                        id={p}
+                        id={makePortHandleId("input", p)}
                         className="!w-2.5 !h-2.5 !bg-slate-400 !border-2 !border-white"
                         style={{ top: 72 + i * 18 }}
                       />
@@ -85,7 +85,7 @@ function VpFlowNodeComponent({ data, selected }: NodeProps) {
                       <Handle
                         type="source"
                         position={Position.Right}
-                        id={p}
+                        id={makePortHandleId("output", p)}
                         className="!w-2.5 !h-2.5 !border-2 !border-white"
                         style={{ top: 72 + i * 18, background: style.minimap }}
                       />

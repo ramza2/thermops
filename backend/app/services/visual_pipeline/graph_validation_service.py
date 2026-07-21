@@ -34,6 +34,11 @@ def _issue(
     target_component_type: str | None = None,
     source_port: str | None = None,
     target_port: str | None = None,
+    source_handle: str | None = None,
+    target_handle: str | None = None,
+    source_data_type: str | None = None,
+    target_data_type: str | None = None,
+    data_type: str | None = None,
 ) -> dict[str, Any]:
     item: dict[str, Any] = {
         "severity": severity,
@@ -58,6 +63,16 @@ def _issue(
         item["source_port"] = source_port
     if target_port:
         item["target_port"] = target_port
+    if source_handle:
+        item["source_handle"] = source_handle
+    if target_handle:
+        item["target_handle"] = target_handle
+    if source_data_type:
+        item["source_data_type"] = source_data_type
+    if target_data_type:
+        item["target_data_type"] = target_data_type
+    if data_type:
+        item["data_type"] = data_type
     return item
 
 
@@ -67,43 +82,112 @@ def _node_component_type(node: dict[str, Any]) -> str:
     return str(raw).strip().upper()
 
 
+def _parse_handle(handle: Any, *, expect_direction: str | None = None) -> dict[str, Any]:
+    """Parse output:{port} / input:{port} or legacy bare port_id."""
+    if handle is None or str(handle).strip() == "":
+        return {}
+    raw = str(handle).strip()
+    if ":" in raw:
+        direction, port = raw.split(":", 1)
+        direction = direction.strip().lower()
+        port = port.strip()
+        if direction not in {"input", "output"} or not port:
+            return {"raw": raw, "malformed": True}
+        result: dict[str, Any] = {"raw": raw, "direction": direction, "port": port}
+        if expect_direction and direction != expect_direction:
+            result["direction_mismatch"] = True
+        return result
+    return {"raw": raw, "port": raw, "legacy_bare": True}
+
+
 def _resolve_edge_ports(
     edge: dict[str, Any],
     source_comp: dict[str, Any] | None,
     target_comp: dict[str, Any] | None,
-) -> tuple[str | None, str | None, bool]:
-    """Return (source_port, target_port, port_unspecified)."""
+) -> dict[str, Any]:
+    """Resolve ports with handle-first priority.
+
+    Returns dict with source_port, target_port, source_handle, target_handle,
+    unspecified (True only for component-pair fallback), handle_errors (list of issue dicts partial).
+    """
     data = edge.get("data") if isinstance(edge.get("data"), dict) else {}
-    source_port = (
-        edge.get("sourceHandle")
-        or edge.get("source_handle")
-        or data.get("source_port")
-        or data.get("from_port_id")
-    )
-    target_port = (
-        edge.get("targetHandle")
-        or edge.get("target_handle")
-        or data.get("target_port")
-        or data.get("to_port_id")
-    )
+    source_handle_raw = edge.get("sourceHandle") or edge.get("source_handle")
+    target_handle_raw = edge.get("targetHandle") or edge.get("target_handle")
+
+    src_h = _parse_handle(source_handle_raw, expect_direction="output")
+    tgt_h = _parse_handle(target_handle_raw, expect_direction="input")
+
+    handle_errors: list[dict[str, Any]] = []
+    if src_h.get("malformed"):
+        handle_errors.append(
+            {
+                "code": "EDGE_SOURCE_PORT_INVALID",
+                "message": f"sourceHandle 형식이 올바르지 않습니다: {src_h.get('raw')}",
+                "hint": "expected format: output:{port_name}",
+                "source_handle": src_h.get("raw"),
+            }
+        )
+    elif src_h.get("direction_mismatch"):
+        handle_errors.append(
+            {
+                "code": "EDGE_SOURCE_PORT_INVALID",
+                "message": f"sourceHandle은 output:{{port}} 이어야 합니다: {src_h.get('raw')}",
+                "hint": "expected format: output:{port_name}",
+                "source_handle": src_h.get("raw"),
+            }
+        )
+    if tgt_h.get("malformed"):
+        handle_errors.append(
+            {
+                "code": "EDGE_TARGET_PORT_INVALID",
+                "message": f"targetHandle 형식이 올바르지 않습니다: {tgt_h.get('raw')}",
+                "hint": "expected format: input:{port_name}",
+                "target_handle": tgt_h.get("raw"),
+            }
+        )
+    elif tgt_h.get("direction_mismatch"):
+        handle_errors.append(
+            {
+                "code": "EDGE_TARGET_PORT_INVALID",
+                "message": f"targetHandle은 input:{{port}} 이어야 합니다: {tgt_h.get('raw')}",
+                "hint": "expected format: input:{port_name}",
+                "target_handle": tgt_h.get("raw"),
+            }
+        )
+
+    source_port = src_h.get("port")
+    target_port = tgt_h.get("port")
+
+    if not source_port:
+        source_port = data.get("source_port") or data.get("from_port_id")
+    if not target_port:
+        target_port = data.get("target_port") or data.get("to_port_id")
+
     label = edge.get("label")
     if isinstance(label, str) and label.strip():
         label = label.strip()
+        # support "raw_rows → input_rows"
+        if "→" in label:
+            left, right = [p.strip() for p in label.split("→", 1)]
+            if not source_port:
+                source_port = left or None
+            if not target_port:
+                target_port = right or None
+        else:
+            label_simple = label
     else:
-        label = None
+        label_simple = None
 
-    unspecified = False
-    if not source_port and label and source_comp:
+    if not source_port and label_simple and source_comp:
         out_ids = {p.get("port_id") for p in (source_comp.get("output_ports") or [])}
-        if label in out_ids:
-            source_port = label
+        if label_simple in out_ids:
+            source_port = label_simple
 
     if not target_port and target_comp:
         inputs = list(target_comp.get("input_ports") or [])
         if len(inputs) == 1:
             target_port = inputs[0].get("port_id")
         elif source_port and source_comp:
-            # match by data_type compatibility
             out_ports = {p.get("port_id"): p for p in (source_comp.get("output_ports") or [])}
             out = out_ports.get(source_port) or {}
             out_type = out.get("data_type")
@@ -113,9 +197,8 @@ def _resolve_edge_ports(
                     target_port = inp.get("port_id")
                     break
 
+    unspecified = False
     if not source_port or not target_port:
-        unspecified = True
-        # fallback: single output of source / single input of target
         if not source_port and source_comp:
             outs = list(source_comp.get("output_ports") or [])
             if len(outs) == 1:
@@ -125,11 +208,19 @@ def _resolve_edge_ports(
             if len(ins) == 1:
                 target_port = ins[0].get("port_id")
 
-    return (
-        str(source_port) if source_port else None,
-        str(target_port) if target_port else None,
-        unspecified,
-    )
+    has_handles = bool(source_handle_raw) and bool(target_handle_raw) and not handle_errors
+    has_data_ports = bool(data.get("source_port")) and bool(data.get("target_port"))
+    # EDGE_PORT_UNSPECIFIED only when falling back (no handles / data ports)
+    unspecified = not has_handles and not has_data_ports
+
+    return {
+        "source_port": str(source_port) if source_port else None,
+        "target_port": str(target_port) if target_port else None,
+        "source_handle": str(source_handle_raw) if source_handle_raw else None,
+        "target_handle": str(target_handle_raw) if target_handle_raw else None,
+        "unspecified": unspecified,
+        "handle_errors": handle_errors,
+    }
 
 
 def _has_cycle(node_ids: set[str], edges: list[dict[str, Any]]) -> bool:
@@ -319,7 +410,48 @@ def validate_visual_pipeline_graph(
         src_comp = catalog.get(src_type)
         tgt_comp = catalog.get(tgt_type)
 
-        source_port, target_port, unspecified = _resolve_edge_ports(edge, src_comp, tgt_comp)
+        resolved = _resolve_edge_ports(edge, src_comp, tgt_comp)
+        source_port = resolved["source_port"]
+        target_port = resolved["target_port"]
+        unspecified = resolved["unspecified"]
+        source_handle = resolved["source_handle"]
+        target_handle = resolved["target_handle"]
+
+        for herr in resolved.get("handle_errors") or []:
+            issues.append(
+                _issue(
+                    severity="ERROR",
+                    code=herr["code"],
+                    message=herr["message"],
+                    hint=herr.get("hint"),
+                    edge_id=eid or None,
+                    source_node_id=str(source),
+                    target_node_id=str(target),
+                    source_component_type=src_type,
+                    target_component_type=tgt_type,
+                    source_handle=herr.get("source_handle") or source_handle,
+                    target_handle=herr.get("target_handle") or target_handle,
+                )
+            )
+
+        src_port_meta = None
+        tgt_port_meta = None
+        if src_comp and source_port:
+            src_port_meta = next(
+                (p for p in (src_comp.get("output_ports") or []) if p.get("port_id") == source_port),
+                None,
+            )
+        if tgt_comp and target_port:
+            tgt_port_meta = next(
+                (p for p in (tgt_comp.get("input_ports") or []) if p.get("port_id") == target_port),
+                None,
+            )
+        source_data_type = (src_port_meta or {}).get("data_type")
+        target_data_type = (tgt_port_meta or {}).get("data_type")
+        accepted = (tgt_port_meta or {}).get("accepted_data_types") or (
+            [target_data_type] if target_data_type else []
+        )
+
         key = (str(source), str(target), source_port)
         if key in edge_keys:
             issues.append(
@@ -332,6 +464,8 @@ def validate_visual_pipeline_graph(
                     target_node_id=str(target),
                     source_port=source_port,
                     target_port=target_port,
+                    source_handle=source_handle,
+                    target_handle=target_handle,
                 )
             )
         edge_keys.add(key)
@@ -349,40 +483,42 @@ def validate_visual_pipeline_graph(
                     target_component_type=tgt_type,
                     source_port=source_port,
                     target_port=target_port,
-                    hint="향후 sourceHandle/targetHandle을 저장하면 포트 검증이 정확해집니다.",
+                    source_handle=source_handle,
+                    target_handle=target_handle,
+                    hint="sourceHandle/targetHandle(output:{port} / input:{port})을 저장하면 포트 검증이 정확해집니다.",
                 )
             )
 
-        if src_comp and source_port:
-            out_ids = {p.get("port_id") for p in (src_comp.get("output_ports") or [])}
-            if source_port not in out_ids:
-                issues.append(
-                    _issue(
-                        severity="ERROR",
-                        code="EDGE_SOURCE_PORT_INVALID",
-                        message=f"{src_type}에 출력 포트 {source_port}가 없습니다.",
-                        edge_id=eid or None,
-                        source_node_id=str(source),
-                        target_node_id=str(target),
-                        source_component_type=src_type,
-                        source_port=source_port,
-                    )
+        if src_comp and source_port and src_port_meta is None:
+            issues.append(
+                _issue(
+                    severity="ERROR",
+                    code="EDGE_SOURCE_PORT_INVALID",
+                    message=f"{src_type}에 출력 포트 {source_port}가 없습니다.",
+                    edge_id=eid or None,
+                    source_node_id=str(source),
+                    target_node_id=str(target),
+                    source_component_type=src_type,
+                    source_port=source_port,
+                    source_handle=source_handle,
+                    target_handle=target_handle,
                 )
-        if tgt_comp and target_port:
-            in_ids = {p.get("port_id") for p in (tgt_comp.get("input_ports") or [])}
-            if target_port not in in_ids:
-                issues.append(
-                    _issue(
-                        severity="ERROR",
-                        code="EDGE_TARGET_PORT_INVALID",
-                        message=f"{tgt_type}에 입력 포트 {target_port}가 없습니다.",
-                        edge_id=eid or None,
-                        source_node_id=str(source),
-                        target_node_id=str(target),
-                        target_component_type=tgt_type,
-                        target_port=target_port,
-                    )
+            )
+        if tgt_comp and target_port and tgt_port_meta is None:
+            issues.append(
+                _issue(
+                    severity="ERROR",
+                    code="EDGE_TARGET_PORT_INVALID",
+                    message=f"{tgt_type}에 입력 포트 {target_port}가 없습니다.",
+                    edge_id=eid or None,
+                    source_node_id=str(source),
+                    target_node_id=str(target),
+                    target_component_type=tgt_type,
+                    target_port=target_port,
+                    source_handle=source_handle,
+                    target_handle=target_handle,
                 )
+            )
 
         # Connection rules
         matched_allow = None
@@ -404,6 +540,32 @@ def validate_visual_pipeline_graph(
                     matched_allow = r
                     break
 
+        if (
+            not matched_allow
+            and source_data_type
+            and accepted
+            and source_data_type not in accepted
+        ):
+            issues.append(
+                _issue(
+                    severity="ERROR",
+                    code="EDGE_PORT_TYPE_MISMATCH",
+                    message=f"포트 data_type이 호환되지 않습니다: {source_data_type} → {accepted}",
+                    edge_id=eid or None,
+                    source_node_id=str(source),
+                    target_node_id=str(target),
+                    source_component_type=src_type,
+                    target_component_type=tgt_type,
+                    source_port=source_port,
+                    target_port=target_port,
+                    source_handle=source_handle,
+                    target_handle=target_handle,
+                    source_data_type=source_data_type,
+                    target_data_type=target_data_type,
+                    data_type=source_data_type,
+                )
+            )
+
         if matched_deny and not matched_allow:
             issues.append(
                 _issue(
@@ -418,6 +580,10 @@ def validate_visual_pipeline_graph(
                     target_component_type=tgt_type,
                     source_port=source_port,
                     target_port=target_port,
+                    source_handle=source_handle,
+                    target_handle=target_handle,
+                    source_data_type=source_data_type,
+                    target_data_type=target_data_type,
                 )
             )
         elif not matched_allow and not matched_deny:
@@ -438,6 +604,8 @@ def validate_visual_pipeline_graph(
                         target_component_type=tgt_type,
                         source_port=source_port,
                         target_port=target_port,
+                        source_handle=source_handle,
+                        target_handle=target_handle,
                     )
                 )
             elif source_port and target_port:
@@ -453,6 +621,8 @@ def validate_visual_pipeline_graph(
                         target_component_type=tgt_type,
                         source_port=source_port,
                         target_port=target_port,
+                        source_handle=source_handle,
+                        target_handle=target_handle,
                     )
                 )
 
@@ -468,6 +638,10 @@ def validate_visual_pipeline_graph(
                     target_node_id=str(target),
                     source_component_type=src_type,
                     target_component_type=tgt_type,
+                    source_port=source_port,
+                    target_port=target_port,
+                    source_handle=source_handle,
+                    target_handle=target_handle,
                     hint="권장 흐름: REST → Transform → Upsert",
                 )
             )

@@ -17,8 +17,15 @@ export interface VisualPipelineGraphEdge {
   id?: string;
   source: string;
   target: string;
+  sourceHandle?: string;
+  targetHandle?: string;
   label?: string;
-  data?: Record<string, unknown>;
+  data?: {
+    source_port?: string;
+    target_port?: string;
+    data_type?: string;
+    [key: string]: unknown;
+  };
 }
 
 export interface VisualPipelineGraph {
@@ -129,6 +136,11 @@ export interface VisualPipelineValidationIssue {
   target_component_type?: string;
   source_port?: string;
   target_port?: string;
+  source_handle?: string;
+  target_handle?: string;
+  source_data_type?: string;
+  target_data_type?: string;
+  data_type?: string;
 }
 
 export interface VisualPipelineValidationSummary {

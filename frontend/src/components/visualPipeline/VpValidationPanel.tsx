@@ -34,13 +34,14 @@ function IssueRow({
           </div>
           <p className="mt-1 text-[11px] leading-snug">{issue.message}</p>
           {issue.hint && <p className="mt-1 text-[10px] opacity-80">{issue.hint}</p>}
-          {(issue.source_node_id || issue.target_node_id) && (
+          {(issue.source_node_id || issue.target_node_id || issue.source_port) && (
             <p className="mt-1 font-mono text-[10px] opacity-70">
-              {issue.source_component_type ?? issue.source_node_id}
-              {issue.source_port ? `.${issue.source_port}` : ""}
+              {issue.source_handle || `${issue.source_component_type ?? issue.source_node_id}${issue.source_port ? `.${issue.source_port}` : ""}`}
               {" → "}
-              {issue.target_component_type ?? issue.target_node_id}
-              {issue.target_port ? `.${issue.target_port}` : ""}
+              {issue.target_handle || `${issue.target_component_type ?? issue.target_node_id}${issue.target_port ? `.${issue.target_port}` : ""}`}
+              {issue.data_type || issue.source_data_type
+                ? ` · ${issue.data_type || issue.source_data_type}`
+                : ""}
             </p>
           )}
         </div>
