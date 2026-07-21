@@ -9,6 +9,8 @@ import type {
   VisualPipelineGraph,
   VisualPipelineListResponse,
   VisualPipelineSummary,
+  VisualPipelineValidationRequest,
+  VisualPipelineValidationResponse,
   VisualPipelineVersion,
   VisualPipelineVersionListResponse,
 } from "@/types/visualPipeline";
@@ -64,6 +66,16 @@ export async function createVisualPipelineVersion(
 ): Promise<VisualPipelineVersion> {
   return postApi<VisualPipelineVersion>(`/visual-pipelines/${pipelineId}/versions`, {
     change_summary: change_summary ?? "manual snapshot",
+  });
+}
+
+export async function validateVisualPipelineGraph(
+  payload: VisualPipelineValidationRequest,
+): Promise<VisualPipelineValidationResponse> {
+  return postApi<VisualPipelineValidationResponse>("/visual-pipelines/validate-graph", {
+    graph: payload.graph,
+    pipeline_id: payload.pipeline_id,
+    validation_level: payload.validation_level ?? "BASIC",
   });
 }
 

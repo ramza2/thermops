@@ -24,6 +24,7 @@ import {
   Maximize2,
   Play,
   Save,
+  ShieldCheck,
   Zap,
 } from "lucide-react";
 import {
@@ -33,6 +34,7 @@ import {
   getVisualPipeline,
   listVisualPipelineVersions,
   updateVisualPipeline,
+  validateVisualPipelineGraph,
 } from "@/api/visualPipelines";
 import { extractApiErrorMessage } from "@/api/client";
 import { Button } from "@/components/Button";
@@ -42,9 +44,16 @@ import { VpComponentPalette } from "@/components/visualPipeline/VpComponentPalet
 import { buildNodeTypes } from "@/components/visualPipeline/VpFlowNode";
 import { VpGraphStatusPanel } from "@/components/visualPipeline/VpGraphStatusPanel";
 import { VpNodeInspector } from "@/components/visualPipeline/VpNodeInspector";
+import { VpValidationPanel } from "@/components/visualPipeline/VpValidationPanel";
 import { VpVersionHistoryModal } from "@/components/visualPipeline/VpVersionHistoryModal";
 import { useToast } from "@/hooks/useToast";
-import type { ComponentCatalogItem, ConnectionRule, VisualPipelineDetail, VisualPipelineVersion } from "@/types/visualPipeline";
+import type {
+  ComponentCatalogItem,
+  ConnectionRule,
+  VisualPipelineDetail,
+  VisualPipelineValidationResponse,
+  VisualPipelineVersion,
+} from "@/types/visualPipeline";
 import {
   defaultNodeData,
   edgeLabelStyleProps,
@@ -82,6 +91,9 @@ function StudioCanvasInner() {
   const [versionsOpen, setVersionsOpen] = useState(false);
   const [versionsLoading, setVersionsLoading] = useState(false);
   const [versions, setVersions] = useState<VisualPipelineVersion[]>([]);
+  const [validating, setValidating] = useState(false);
+  const [validationResult, setValidationResult] = useState<VisualPipelineValidationResponse | null>(null);
+  const [validationExpanded, setValidationExpanded] = useState(true);
 
   const nodeTypes = useMemo(() => buildNodeTypes(), []);
 
@@ -266,6 +278,31 @@ function StudioCanvasInner() {
     }
   };
 
+  const handleValidate = async () => {
+    setValidating(true);
+    try {
+      const graph = flowToGraph(nodes, edges, viewport);
+      const result = await validateVisualPipelineGraph({
+        graph,
+        pipeline_id: pipelineId,
+        validation_level: "BASIC",
+      });
+      setValidationResult(result);
+      setValidationExpanded(true);
+      if (result.severity === "ERROR") {
+        showToast("error", "Graph 검증 오류가 있습니다.");
+      } else if (result.severity === "WARNING") {
+        showToast("warning", "Graph 검증 경고가 있습니다.");
+      } else {
+        showToast("success", "Graph 검증을 통과했습니다.");
+      }
+    } catch (err) {
+      showToast("error", extractApiErrorMessage(err, "Graph 검증에 실패했습니다."));
+    } finally {
+      setValidating(false);
+    }
+  };
+
   const goList = () => {
     if (dirty && !window.confirm("저장하지 않은 변경 사항이 있습니다. 목록으로 이동할까요?")) return;
     navigate("/visual-pipelines");
@@ -320,6 +357,15 @@ function StudioCanvasInner() {
             Fit View
           </Button>
           <Button variant="secondary" onClick={() => void openVersions()}>이력</Button>
+          <Button
+            variant="secondary"
+            icon={<ShieldCheck className="w-4 h-4" />}
+            onClick={() => void handleValidate()}
+            disabled={validating}
+            title="현재 Canvas Graph를 BASIC 수준으로 검증합니다. 저장을 차단하지 않습니다."
+          >
+            {validating ? "검증 중…" : "Graph 검증"}
+          </Button>
           <span className="w-px h-4 bg-slate-200 shrink-0 mx-0.5" aria-hidden />
           <button
             type="button"
@@ -426,6 +472,13 @@ function StudioCanvasInner() {
         lastSavedAt={lastSavedAt}
         expanded={jsonExpanded}
         onToggle={() => setJsonExpanded((v) => !v)}
+      />
+      <VpValidationPanel
+        result={validationResult}
+        loading={validating}
+        expanded={validationExpanded}
+        onToggle={() => setValidationExpanded((v) => !v)}
+        onSelectNode={(nodeId) => setSelectedNodeId(nodeId)}
       />
       <VpVersionHistoryModal
         open={versionsOpen}

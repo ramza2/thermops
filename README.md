@@ -1259,6 +1259,14 @@ Visual Pipeline Studio용 **code-based** 컴포넌트 계약/카탈로그 API입
   - `POST .../versions`: 명시적 snapshot
   - Studio **저장** = graph만 저장 / **버전 저장** = dirty면 PUT(false) 후 POST → version +1
 
+### R11-S4-1 Visual Pipeline Graph Validation
+
+- **API:** `POST /api/v1/visual-pipelines/validate-graph`, `POST /api/v1/visual-pipelines/{id}/validate`
+- **검증:** node/edge/component/port/topology/cycle (DB write 없음)
+- **level:** BASIC(기본) / STRICT
+- **Studio:** `Graph 검증` 버튼 + Validation Panel (저장 차단 없음)
+- **테스트:** `python scripts/test_visual_pipeline_graph_validation.py`
+
 ## 설계 문서 참조
 
 - `docs/md/THERMOps_API_설계서.md`

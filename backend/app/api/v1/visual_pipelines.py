@@ -51,6 +51,17 @@ class VisualPipelineVersionCreateBody(BaseModel):
     change_summary: str | None = Field(default=None)
 
 
+class VisualPipelineValidateGraphBody(BaseModel):
+    graph: Any = None
+    pipeline_id: str | None = None
+    validation_level: str = Field(default="BASIC", description="BASIC | STRICT")
+
+
+class VisualPipelineValidateBody(BaseModel):
+    graph: Any = None
+    validation_level: str = Field(default="BASIC", description="BASIC | STRICT")
+
+
 # --- S1 Catalog (static paths before /{pipeline_id}) ---
 
 
@@ -75,6 +86,19 @@ async def get_visual_pipeline_component(component_type: str):
 @router.get("/visual-pipelines/connection-rules")
 async def get_visual_pipeline_connection_rules():
     return ok(list_connection_rules())
+
+
+@router.post("/visual-pipelines/validate-graph")
+async def post_validate_visual_pipeline_graph(body: VisualPipelineValidateGraphBody):
+    """Validate a client graph. Does not write to DB."""
+    from app.services.visual_pipeline.graph_validation_service import validate_visual_pipeline_graph
+
+    result = validate_visual_pipeline_graph(
+        body.graph,
+        validation_level=body.validation_level,
+        pipeline_id=body.pipeline_id,
+    )
+    return ok(result)
 
 
 # --- S2 CRUD / versions ---
@@ -159,6 +183,28 @@ async def post_archive_visual_pipeline(pipeline_id: str, db: AsyncSession = Depe
     except LookupError:
         raise HTTPException(status_code=404, detail="VISUAL_PIPELINE_NOT_FOUND") from None
     return ok(item, message="Visual Pipeline이 보관 처리되었습니다.")
+
+
+@router.post("/visual-pipelines/{pipeline_id}/validate")
+async def post_validate_visual_pipeline(
+    pipeline_id: str,
+    body: VisualPipelineValidateBody | None = None,
+    db: AsyncSession = Depends(get_db),
+):
+    """Validate body graph or saved current_graph_json. Does not write to DB."""
+    from app.services.visual_pipeline.graph_validation_service import validate_visual_pipeline_graph
+
+    payload = body.model_dump() if body else {}
+    graph = payload.get("graph")
+    level = payload.get("validation_level") or "BASIC"
+    if graph is None:
+        try:
+            detail = await get_visual_pipeline(db, pipeline_id)
+        except LookupError:
+            raise HTTPException(status_code=404, detail="VISUAL_PIPELINE_NOT_FOUND") from None
+        graph = detail.get("graph")
+    result = validate_visual_pipeline_graph(graph, validation_level=level, pipeline_id=pipeline_id)
+    return ok(result)
 
 
 @router.get("/visual-pipelines/{pipeline_id}")

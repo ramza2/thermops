@@ -323,6 +323,12 @@ def _build_registry() -> list[TestCase]:
             timeout_seconds=180,
         ),
         _python_test(
+            "test_visual_pipeline_graph_validation.py",
+            groups=["model", "full", "quick"],
+            description="Visual Pipeline graph validation (R11-S4-1)",
+            timeout_seconds=120,
+        ),
+        _python_test(
             "test_upsert_dedup_loader.py",
             groups=["model", "full"],
             description="Upsert / Deduplicate Loader (R10-S8)",

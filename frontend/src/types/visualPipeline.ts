@@ -111,3 +111,46 @@ export interface ConnectionRulesResponse {
 }
 
 export type GraphTemplateId = "blank" | "rest-upsert" | "cron-full";
+
+export type ValidationSeverity = "OK" | "INFO" | "WARNING" | "ERROR";
+export type ValidationLevel = "BASIC" | "STRICT";
+export type ValidationIssueSeverity = "ERROR" | "WARNING" | "INFO";
+
+export interface VisualPipelineValidationIssue {
+  severity: ValidationIssueSeverity;
+  code: string;
+  message: string;
+  hint?: string;
+  node_id?: string;
+  edge_id?: string;
+  source_node_id?: string;
+  target_node_id?: string;
+  source_component_type?: string;
+  target_component_type?: string;
+  source_port?: string;
+  target_port?: string;
+}
+
+export interface VisualPipelineValidationSummary {
+  node_count: number;
+  edge_count: number;
+  error_count: number;
+  warning_count: number;
+  info_count: number;
+}
+
+export interface VisualPipelineValidationResponse {
+  valid: boolean;
+  severity: ValidationSeverity;
+  validation_level: ValidationLevel;
+  pipeline_id?: string;
+  summary: VisualPipelineValidationSummary;
+  issues: VisualPipelineValidationIssue[];
+  normalized_graph?: VisualPipelineGraph;
+}
+
+export interface VisualPipelineValidationRequest {
+  graph: VisualPipelineGraph;
+  pipeline_id?: string;
+  validation_level?: ValidationLevel;
+}
