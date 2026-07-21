@@ -274,8 +274,13 @@ async def update_visual_pipeline(
 
     defn.updated_at = utc_now()
     await db.flush()
-    if "graph" in payload:
-        await _save_visual_version(db, defn, change_summary=payload.get("change_summary") or "graph update")
+    create_version = bool(payload.get("create_version", False))
+    if "graph" in payload and create_version:
+        await _save_visual_version(
+            db,
+            defn,
+            change_summary=payload.get("change_summary") or "graph update",
+        )
     return _definition_dict(defn)
 
 

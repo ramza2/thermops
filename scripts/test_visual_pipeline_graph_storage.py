@@ -138,6 +138,11 @@ def test_crud_and_versions() -> str:
     assert len(detail["graph"]["nodes"]) == 2
     print("  [ok] get detail with graph")
 
+    versions_after_create = api("GET", f"/visual-pipelines/{pid}/versions")
+    count_after_create = versions_after_create["total"]
+    assert count_after_create >= 1
+    print(f"  [ok] initial version count={count_after_create}")
+
     updated_graph = dict(sample_graph)
     updated_graph["nodes"] = list(sample_graph["nodes"]) + [
         {
@@ -154,14 +159,48 @@ def test_crud_and_versions() -> str:
     )
     assert updated["node_count"] == 3
     assert updated["current_sync_status"] == "NOT_COMPILED"
-    print("  [ok] put graph update")
+    versions_after_put = api("GET", f"/visual-pipelines/{pid}/versions")
+    assert versions_after_put["total"] == count_after_create
+    reloaded = api("GET", f"/visual-pipelines/{pid}")
+    assert len(reloaded["graph"]["nodes"]) == 3
+    print("  [ok] put graph update (create_version default false, version unchanged)")
 
+    # dirty-style: PUT create_version=false then POST /versions -> exactly +1
+    count_before_dirty = versions_after_put["total"]
+    dirty_graph = dict(updated_graph)
+    dirty_graph["viewport"] = {"x": 5, "y": 10, "zoom": 0.95}
+    api(
+        "PUT",
+        f"/visual-pipelines/{pid}",
+        {"graph": dirty_graph, "create_version": False},
+    )
+    after_silent_put = api("GET", f"/visual-pipelines/{pid}/versions")
+    assert after_silent_put["total"] == count_before_dirty
     ver = api("POST", f"/visual-pipelines/{pid}/versions", {"change_summary": "manual snapshot"})
     assert ver["version_id"]
     assert ver["snapshot"]["graph"]["nodes"]
     assert ver["snapshot"]["pipeline_kind"] == "VISUAL_DATA_LOAD"
     assert ver["snapshot"]["component_contract_version"]
-    print(f"  [ok] create version {ver['version_id']} no={ver['version_no']}")
+    versions_after_post = api("GET", f"/visual-pipelines/{pid}/versions")
+    assert versions_after_post["total"] == count_before_dirty + 1
+    print(f"  [ok] dirty PUT(false)+POST version +1 -> no={ver['version_no']} total={versions_after_post['total']}")
+
+    # optional create_version=true on PUT -> +1
+    count_before_opt = versions_after_post["total"]
+    opt_graph = dict(dirty_graph)
+    opt_graph["viewport"] = {"x": 1, "y": 2, "zoom": 1.1}
+    api(
+        "PUT",
+        f"/visual-pipelines/{pid}",
+        {
+            "graph": opt_graph,
+            "create_version": True,
+            "change_summary": "optional put version",
+        },
+    )
+    versions_after_opt = api("GET", f"/visual-pipelines/{pid}/versions")
+    assert versions_after_opt["total"] == count_before_opt + 1
+    print("  [ok] put create_version=true -> version +1")
 
     versions = api("GET", f"/visual-pipelines/{pid}/versions")
     assert versions["total"] >= 2

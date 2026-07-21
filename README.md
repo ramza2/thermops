@@ -1250,6 +1250,15 @@ Visual Pipeline Studio용 **code-based** 컴포넌트 계약/카탈로그 API입
 - **테스트:** `python scripts/test_visual_pipeline_graph_storage.py`
 - **Migration:** `python scripts/apply_dev_migrations.py` (`r11s2_visual_pipeline_graph_schema.sql`)
 
+### R11-S3 / R11-S4-0 Visual Pipeline Studio UX
+
+- **S3:** React Flow Canvas PoC (`/visual-pipelines`, Studio), `@xyflow/react`
+- **S4-0:** 저장과 버전 저장 UX 분리
+  - `PUT /visual-pipelines/{id}`: 기본 `create_version=false` → graph만 저장, version 미생성
+  - `create_version=true`일 때만 PUT에서 version 생성
+  - `POST .../versions`: 명시적 snapshot
+  - Studio **저장** = graph만 저장 / **버전 저장** = dirty면 PUT(false) 후 POST → version +1
+
 ## 설계 문서 참조
 
 - `docs/md/THERMOps_API_설계서.md`

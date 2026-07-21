@@ -191,28 +191,45 @@ function StudioCanvasInner() {
     setSelectedNodeId(null);
   };
 
-  const handleSave = async () => {
+  const saveGraph = async (opts?: { silent?: boolean }) => {
     if (!pipeline) return;
-    setSaving(true);
+    const silent = opts?.silent === true;
+    if (!silent) setSaving(true);
     try {
       const graph = flowToGraph(nodes, edges, viewport);
-      const updated = await updateVisualPipeline(pipelineId, { graph, change_summary: "graph save from studio" });
+      const updated = await updateVisualPipeline(pipelineId, {
+        graph,
+        create_version: false,
+      });
       setPipeline(updated);
       savedGraphRef.current = serializeGraphBody(graph);
       setLastSavedAt(updated.updated_at ?? new Date().toISOString());
-      showToast("success", "Graph가 저장되었습니다.");
+      if (!silent) {
+        showToast("success", "현재 Graph가 저장되었습니다.");
+      }
     } catch (err) {
       showToast("error", extractApiErrorMessage(err, "Graph 저장에 실패했습니다."));
+      throw err;
     } finally {
-      setSaving(false);
+      if (!silent) setSaving(false);
+    }
+  };
+
+  const handleSave = async () => {
+    try {
+      await saveGraph({ silent: false });
+    } catch {
+      // toast already shown in saveGraph
     }
   };
 
   const handleVersionSave = async () => {
     setVersionSaving(true);
     try {
-      if (dirty) await handleSave();
-      await createVisualPipelineVersion(pipelineId, "manual snapshot from studio");
+      if (dirty) {
+        await saveGraph({ silent: true });
+      }
+      await createVisualPipelineVersion(pipelineId, "manual snapshot");
       showToast("success", "현재 Graph가 version snapshot으로 저장되었습니다.");
       setVersionsOpen(true);
       setVersionsLoading(true);
@@ -260,8 +277,23 @@ function StudioCanvasInner() {
           {saving && <span className="text-[10px] text-blue-600 animate-pulse">저장 중…</span>}
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          <Button icon={<Save className="w-4 h-4" />} onClick={() => void handleSave()} disabled={saving || !dirty}>저장</Button>
-          <Button variant="secondary" icon={<History className="w-4 h-4" />} onClick={() => void handleVersionSave()} disabled={versionSaving}>버전 저장</Button>
+          <Button
+            icon={<Save className="w-4 h-4" />}
+            onClick={() => void handleSave()}
+            disabled={saving || !dirty}
+            title="현재 작업본 Graph를 저장합니다. version snapshot은 만들지 않습니다."
+          >
+            저장
+          </Button>
+          <Button
+            variant="secondary"
+            icon={<History className="w-4 h-4" />}
+            onClick={() => void handleVersionSave()}
+            disabled={versionSaving}
+            title="현재 Graph를 명시적 version snapshot으로 남깁니다."
+          >
+            버전 저장
+          </Button>
           <Button variant="secondary" icon={<Maximize2 className="w-4 h-4" />} onClick={() => fitView({ padding: 0.2 })}>Fit View</Button>
           <Button variant="secondary" onClick={() => void openVersions()}>이력</Button>
           <button type="button" disabled title="현재 단계에서는 Compile/Run을 지원하지 않습니다." className="inline-flex items-center gap-1 px-2 py-1.5 bg-slate-100 text-slate-400 text-xs font-medium rounded cursor-not-allowed">

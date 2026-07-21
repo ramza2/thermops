@@ -44,6 +44,7 @@ class VisualPipelineUpdateBody(BaseModel):
     status: str | None = None
     graph: Any = None
     change_summary: str | None = None
+    create_version: bool = False
 
 
 class VisualPipelineVersionCreateBody(BaseModel):

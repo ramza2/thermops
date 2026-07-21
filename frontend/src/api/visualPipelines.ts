@@ -44,6 +44,7 @@ export async function updateVisualPipeline(
     status?: string;
     graph?: VisualPipelineGraph;
     change_summary?: string;
+    create_version?: boolean;
   },
 ): Promise<VisualPipelineDetail> {
   return putApi<VisualPipelineDetail>(`/visual-pipelines/${pipelineId}`, body);
