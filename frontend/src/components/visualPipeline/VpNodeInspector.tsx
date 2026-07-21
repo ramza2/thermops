@@ -2,7 +2,7 @@ import { Box, Trash2 } from "lucide-react";
 import type { Node } from "@xyflow/react";
 import { Button } from "@/components/Button";
 import type { ComponentCatalogItem } from "@/types/visualPipeline";
-import { placeholderConfigJson } from "@/utils/visualPipelineGraph";
+import { formatNodeConfigPreviewJson } from "@/utils/visualPipelineNodeConfig";
 
 interface VpNodeInspectorProps {
   node: Node | null;
@@ -97,11 +97,13 @@ export function VpNodeInspector({ node, catalogItem, onLabelChange, onDelete }: 
         </section>
 
         <section className="rounded-lg border border-slate-100 p-2.5">
-          <div className="text-[9px] font-bold text-slate-400 uppercase tracking-wide mb-2">Config (placeholder)</div>
+          <div className="text-[9px] font-bold text-slate-400 uppercase tracking-wide mb-2">Config (preview)</div>
           <pre className="bg-slate-900 text-slate-100 border border-slate-700 rounded-md p-2.5 text-[10px] font-mono whitespace-pre-wrap leading-relaxed overflow-x-auto">
-            {placeholderConfigJson(componentType)}
+            {formatNodeConfigPreviewJson(node, componentType)}
           </pre>
-          <p className="text-[9px] text-amber-700 mt-1.5">상세 Form은 이후 단계에서 구현됩니다.</p>
+          <p className="text-[9px] text-amber-700 mt-1.5">
+            S1 catalog 필드명 기준 JSON preview입니다. Form UI는 R11-S5-2에서 구현됩니다.
+          </p>
         </section>
 
         <Button variant="danger" icon={<Trash2 className="w-3 h-3" />} onClick={onDelete} className="w-full justify-center text-xs">

@@ -13,19 +13,47 @@ const API_BASE = process.env.THERMOOPS_API_BASE || "http://localhost:8000/api/v1
 const PIPELINE_NAME_PREFIX = "E2E R11-S4-3 Visual Pipeline";
 const PIPELINE_DESCRIPTION = "Created by R11-S4-3 Studio route E2E";
 
+const S5_CONFIG_SAMPLE_REST = {
+  schema_version: "R11-S5-0",
+  values: {
+    data_source_id: "DS-SAMPLE",
+    operation_name: "sample_fetch",
+    endpoint_path: "/api/v1/sample",
+    http_method: "GET",
+    response_item_path: "$.items",
+    credential_ref: "CRED-SAMPLE",
+  },
+  validation: { status: "NOT_VALIDATED", last_validated_at: null, issue_count: 0 },
+};
+
+const S5_CONFIG_LEGACY_FLAT_CRON = {
+  schedule_type: "CRON",
+  cron_expression: "0 6 * * *",
+  timezone: "Asia/Seoul",
+  active_yn: false,
+};
+
 const FIXTURE_GRAPH = {
   nodes: [
     {
       id: "e2e-cron",
       type: "VP_CRON_SCHEDULE",
       position: { x: 40, y: 100 },
-      data: { label: "CRON Schedule", component_type: "VP_CRON_SCHEDULE" },
+      data: {
+        label: "CRON Schedule",
+        component_type: "VP_CRON_SCHEDULE",
+        config: S5_CONFIG_LEGACY_FLAT_CRON,
+      },
     },
     {
       id: "e2e-rest",
       type: "VP_REST_API_SOURCE",
       position: { x: 320, y: 100 },
-      data: { label: "REST API Source", component_type: "VP_REST_API_SOURCE" },
+      data: {
+        label: "REST API Source",
+        component_type: "VP_REST_API_SOURCE",
+        config: S5_CONFIG_SAMPLE_REST,
+      },
     },
     {
       id: "e2e-transform",
@@ -236,7 +264,15 @@ async function runBrowserSmoke(pipeline) {
       state: "visible",
       timeout: 10000,
     });
-    console.log("  [ok] node select -> inspector");
+    await page.getByTestId("visual-pipeline-inspector").getByText("operation_name").first().waitFor({
+      state: "visible",
+      timeout: 10000,
+    });
+    await page.getByTestId("visual-pipeline-inspector").getByText("sample_fetch").first().waitFor({
+      state: "visible",
+      timeout: 10000,
+    });
+    console.log("  [ok] node select -> inspector (S5 config preview)");
 
     await page.getByTestId("visual-pipeline-validate-button").click();
     await validation.getByText(/OK|WARNING|ERROR|INFO/).first().waitFor({ state: "visible", timeout: 30000 });

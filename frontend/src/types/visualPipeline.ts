@@ -6,11 +6,76 @@ export interface VisualPipelineGraphViewport {
   zoom: number;
 }
 
+/** R11-S5-1 config validation cache on node.data.config.validation */
+export type VisualPipelineConfigValidationStatus =
+  | "NOT_VALIDATED"
+  | "VALID"
+  | "INVALID"
+  | "STALE";
+
+export interface VisualPipelineNodeConfigValidation {
+  status: VisualPipelineConfigValidationStatus;
+  last_validated_at?: string | null;
+  issue_count?: number;
+}
+
+export type VisualPipelineNodeConfigValues = Record<string, unknown>;
+
+/** R11-S5-0 node.data.config shape (legacy flat objects normalized on load/save). */
+export interface VisualPipelineNodeConfig {
+  schema_version?: string | null;
+  values: VisualPipelineNodeConfigValues;
+  validation?: VisualPipelineNodeConfigValidation;
+}
+
+export interface VisualPipelineConfigFieldOptionSource {
+  type: "api" | "static";
+  endpoint?: string;
+  options?: Array<string | { value: string; label: string }>;
+}
+
+export interface VisualPipelineConfigFieldSchema {
+  name: string;
+  type: string;
+  field_type?: string;
+  ui_component?: string;
+  required?: boolean;
+  required_if?: string;
+  default?: unknown;
+  description?: string;
+  options?: string[];
+  advanced?: boolean;
+  readonly?: boolean;
+  secret?: boolean;
+  store_in_graph?: boolean;
+  option_source?: VisualPipelineConfigFieldOptionSource;
+}
+
+export interface VisualPipelineConfigSection {
+  id: string;
+  title: string;
+  fields: string[];
+}
+
+export interface VisualPipelineComponentConfigSchema {
+  component_type: string;
+  schema_version: string;
+  fields: VisualPipelineConfigFieldSchema[];
+  sections?: VisualPipelineConfigSection[];
+}
+
+export interface VisualPipelineNodeData {
+  label?: string;
+  component_type?: string;
+  config?: VisualPipelineNodeConfig | Record<string, unknown>;
+  [key: string]: unknown;
+}
+
 export interface VisualPipelineGraphNode {
   id: string;
   type: string;
   position: { x: number; y: number };
-  data?: Record<string, unknown>;
+  data?: VisualPipelineNodeData | Record<string, unknown>;
 }
 
 export interface VisualPipelineGraphEdge {

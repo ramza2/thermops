@@ -1302,6 +1302,18 @@ cd frontend && node scripts/check-visual-pipeline-studio.mjs
 - **validation:** BASIC=저장 차단 없음(WARNING 중심); STRICT=S6 compile gate; `validation.status`는 UI cache, authoritative=validation API.
 - **legacy:** config 없는 graph도 load 가능 (`values: {}` normalize).
 
+### R11-S5-1 Config schema registry + normalize
+
+- **범위:** frontend only — Form UI·backend API·DB 변경 없음.
+- **파일:**
+  - `frontend/src/types/visualPipeline.ts` — `VisualPipelineNodeConfig`, field/section schema types
+  - `frontend/src/utils/visualPipelineConfigRegistry.ts` — MVP 4종 local registry (S1 catalog `config_schema.name` 1:1)
+  - `frontend/src/utils/visualPipelineNodeConfig.ts` — `normalizeNodeConfig`, `createDefaultNodeConfig`, `sanitizeConfigValuesForGraph`(준비만)
+- **normalize:** `graphToFlow` / `flowToGraph`에서 `node.data.config`를 `{ schema_version, values, validation }`로 호환 변환. legacy flat config는 `values`로 감싸 보존, unknown key 삭제 없음.
+- **Inspector:** `VpNodeInspector` placeholder JSON → registry/catalog 정렬 preview (Form은 S5-2).
+- **E2E:** `check-visual-pipeline-studio.mjs` fixture에 S5-0 config sample + legacy flat CRON 포함.
+- **제외:** secret 자동 삭제, config validation API, compile/저장 UX 변경.
+
 ## 설계 문서 참조
 
 - `docs/md/THERMOps_R11-S5-0_Visual_Pipeline_Inspector_Config_Form_설계.md`

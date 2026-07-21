@@ -4,7 +4,9 @@ import type {
   VisualPipelineGraph,
   VisualPipelineGraphEdge,
   VisualPipelineGraphNode,
+  VisualPipelineNodeConfig,
 } from "@/types/visualPipeline";
+import { formatPlaceholderConfigJson, normalizeNodeConfig } from "@/utils/visualPipelineNodeConfig";
 
 export const MVP_COMPONENT_TYPES = [
   "VP_REST_API_SOURCE",
@@ -190,6 +192,7 @@ export function graphToFlow(graph: VisualPipelineGraph | undefined | null): { no
     const ctype = String(n.type ?? "").toUpperCase();
     const ports = DEFAULT_PORTS[ctype] ?? { input: [], output: [] };
     const data = n.data ?? {};
+    const config = normalizeNodeConfig(data.config, ctype) as VisualPipelineNodeConfig;
     return {
       id: n.id,
       type: n.type,
@@ -200,6 +203,7 @@ export function graphToFlow(graph: VisualPipelineGraph | undefined | null): { no
         label: (data.label as string) ?? n.type,
         input_ports: (data.input_ports as string[]) ?? ports.input,
         output_ports: (data.output_ports as string[]) ?? ports.output,
+        config,
       },
     };
   });
@@ -219,13 +223,14 @@ export function graphToFlow(graph: VisualPipelineGraph | undefined | null): { no
 export function flowToGraph(nodes: Node[], edges: Edge[], viewport: VisualPipelineGraph["viewport"]): VisualPipelineGraph {
   const graphNodes: VisualPipelineGraphNode[] = nodes.map((n) => {
     const ctype = getNodeComponentType(n);
+    const config = normalizeNodeConfig(n.data?.config, ctype) as VisualPipelineNodeConfig;
     return {
       id: n.id,
       type: ctype || "VP_TRANSFORM",
       position: { x: n.position.x, y: n.position.y },
       data: {
         label: (n.data?.label as string) ?? n.id,
-        config: (n.data?.config as Record<string, unknown>) ?? {},
+        config,
         component_type: ctype,
         description: n.data?.description,
         input_ports: n.data?.input_ports,
@@ -325,24 +330,9 @@ export function serializeGraphBody(graph: VisualPipelineGraph, includeViewport =
   return JSON.stringify(payload);
 }
 
+/** @deprecated Use formatPlaceholderConfigJson from visualPipelineNodeConfig */
 export function placeholderConfigJson(componentType: string): string {
-  if (componentType === "VP_REST_API_SOURCE") {
-    return JSON.stringify(
-      { data_source_id: "미설정", endpoint_path: "미설정", http_method: "GET" },
-      null,
-      2,
-    );
-  }
-  if (componentType === "VP_TRANSFORM") {
-    return JSON.stringify({ transform_profile: "미설정" }, null, 2);
-  }
-  if (componentType === "VP_UPSERT_LOAD") {
-    return JSON.stringify({ dataset_type_id: "미설정", upsert_mode: "미설정" }, null, 2);
-  }
-  if (componentType === "VP_CRON_SCHEDULE") {
-    return JSON.stringify({ cron_expression: "미설정" }, null, 2);
-  }
-  return JSON.stringify({}, null, 2);
+  return formatPlaceholderConfigJson(componentType);
 }
 
 export function findConnectionRuleWarning(
