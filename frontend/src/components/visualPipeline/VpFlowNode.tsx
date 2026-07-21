@@ -14,58 +14,99 @@ export interface VpNodeData {
 function VpFlowNodeComponent({ data, selected }: NodeProps) {
   const d = data as VpNodeData;
   const componentType = d.component_type ?? "VP_TRANSFORM";
-  const style = NODE_STYLE[componentType] ?? { border: "border-slate-400", header: "bg-slate-500" };
+  const style = NODE_STYLE[componentType] ?? {
+    border: "border-slate-400",
+    header: "bg-slate-500",
+    tint: "bg-slate-50",
+    accentDot: "bg-slate-400",
+    minimap: "#64748b",
+  };
   const inputs = d.input_ports ?? [];
   const outputs = d.output_ports ?? [];
+  const typeShort = componentType.replace(/^VP_/, "");
 
   return (
     <div
-      className={`rounded-lg border-2 bg-white shadow-sm min-w-[148px] max-w-[168px] ${
-        selected ? "border-blue-500 shadow-md" : style.border
+      className={`w-[168px] rounded-lg border-2 shadow-sm overflow-hidden ${style.tint} ${
+        selected
+          ? "border-blue-500 ring-2 ring-blue-200 shadow-md shadow-blue-100"
+          : style.border
       }`}
     >
-      <div className={`${style.header} rounded-t px-2 py-1.5`}>
-        <span className="text-white text-[10px] font-bold uppercase tracking-wide truncate block">
-          {componentType.replace("VP_", "")}
+      <div className={`${style.header} px-2.5 py-1.5 flex items-center gap-1.5`}>
+        <span className="w-1.5 h-1.5 rounded-full bg-white/80 shrink-0" />
+        <span className="text-white text-[10px] font-bold tracking-wide truncate leading-tight">
+          {d.label ?? typeShort}
         </span>
       </div>
-      <div className="px-2 py-1.5">
-        <div className="text-xs font-semibold text-slate-700 leading-tight">{d.label ?? componentType}</div>
+      <div className="px-2.5 py-2 space-y-1.5 bg-white/70">
+        <span className="inline-block font-mono text-[9px] text-slate-500 bg-slate-100 border border-slate-200 rounded px-1.5 py-0.5 truncate max-w-full">
+          {componentType}
+        </span>
         {d.description && (
-          <div className="text-[10px] text-slate-400 mt-0.5 truncate">{d.description}</div>
+          <p className="text-[10px] text-slate-500 leading-snug line-clamp-2">{d.description}</p>
         )}
-      </div>
-      <div className="px-2 pb-2 space-y-0.5 relative">
-        {inputs.map((p, i) => (
-          <Handle
-            key={`in-${p}`}
-            type="target"
-            position={Position.Left}
-            id={p}
-            style={{ top: 48 + i * 14, background: "#94a3b8" }}
-          />
-        ))}
-        {outputs.map((p, i) => (
-          <Handle
-            key={`out-${p}`}
-            type="source"
-            position={Position.Right}
-            id={p}
-            style={{ top: 48 + i * 14, background: "#60a5fa" }}
-          />
-        ))}
-        {inputs.map((p) => (
-          <div key={`inl-${p}`} className="flex items-center gap-1 text-[9px] text-slate-400">
-            <span className="w-2 h-2 rounded-full bg-slate-300 border border-slate-400 shrink-0" />
-            <span className="font-mono truncate">{p}</span>
+        {(inputs.length > 0 || outputs.length > 0) && (
+          <div className="pt-1 space-y-1.5 border-t border-slate-100 relative">
+            {inputs.length > 0 && (
+              <div>
+                <div className="text-[8px] font-bold uppercase tracking-wider text-slate-400 mb-0.5">In</div>
+                <div className="flex flex-wrap gap-1">
+                  {inputs.map((p, i) => (
+                    <span
+                      key={`inl-${p}`}
+                      className="inline-flex items-center gap-1 text-[9px] font-mono text-slate-600 bg-slate-50 border border-slate-200 rounded-full px-1.5 py-0.5"
+                    >
+                      <span className="w-1.5 h-1.5 rounded-full bg-slate-300 shrink-0" />
+                      {p}
+                      <Handle
+                        type="target"
+                        position={Position.Left}
+                        id={p}
+                        className="!w-2.5 !h-2.5 !bg-slate-400 !border-2 !border-white"
+                        style={{ top: 72 + i * 18 }}
+                      />
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+            {outputs.length > 0 && (
+              <div>
+                <div className="text-[8px] font-bold uppercase tracking-wider text-slate-400 mb-0.5 text-right">Out</div>
+                <div className="flex flex-wrap gap-1 justify-end">
+                  {outputs.map((p, i) => (
+                    <span
+                      key={`outl-${p}`}
+                      className="inline-flex items-center gap-1 text-[9px] font-mono text-slate-600 bg-white border border-slate-200 rounded-full px-1.5 py-0.5"
+                    >
+                      {p}
+                      <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${style.accentDot}`} />
+                      <Handle
+                        type="source"
+                        position={Position.Right}
+                        id={p}
+                        className="!w-2.5 !h-2.5 !border-2 !border-white"
+                        style={{ top: 72 + i * 18, background: style.minimap }}
+                      />
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
-        ))}
-        {outputs.map((p) => (
-          <div key={`outl-${p}`} className="flex items-center justify-end gap-1 text-[9px] text-slate-400">
-            <span className="font-mono truncate">{p}</span>
-            <span className="w-2 h-2 rounded-full bg-blue-300 border border-blue-400 shrink-0" />
-          </div>
-        ))}
+        )}
+        {inputs.length === 0 && outputs.length === 0 && (
+          <>
+            <Handle type="target" position={Position.Left} className="!w-2.5 !h-2.5 !bg-slate-400 !border-2 !border-white" />
+            <Handle
+              type="source"
+              position={Position.Right}
+              className="!w-2.5 !h-2.5 !border-2 !border-white"
+              style={{ background: style.minimap }}
+            />
+          </>
+        )}
       </div>
     </div>
   );

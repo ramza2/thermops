@@ -47,10 +47,12 @@ import { useToast } from "@/hooks/useToast";
 import type { ComponentCatalogItem, ConnectionRule, VisualPipelineDetail, VisualPipelineVersion } from "@/types/visualPipeline";
 import {
   defaultNodeData,
+  edgeLabelStyleProps,
   findConnectionRuleWarning,
   flowToGraph,
   graphToFlow,
   newNodeId,
+  NODE_STYLE,
   serializeGraphBody,
 } from "@/utils/visualPipelineGraph";
 
@@ -155,7 +157,15 @@ function StudioCanvasInner() {
         const warn = findConnectionRuleWarning(connectionRules, String(sourceNode.type), String(targetNode.type));
         if (warn) showToast("warning", warn);
       }
-      setEdges((eds) => addEdge({ ...connection, type: "smoothstep" }, eds));
+      setEdges((eds) =>
+        addEdge(
+          {
+            ...connection,
+            ...edgeLabelStyleProps(),
+          },
+          eds,
+        ),
+      );
     },
     [nodes, connectionRules, setEdges, showToast],
   );
@@ -266,14 +276,26 @@ function StudioCanvasInner() {
   if (!pipeline) return null;
 
   return (
-    <div className="-m-6 p-6 min-h-[calc(100vh-4rem)] flex flex-col">
-      <div className="bg-white border border-slate-200 rounded-lg px-3 py-2 flex flex-wrap items-center justify-between gap-2 mb-3">
-        <div className="flex items-center gap-2 flex-wrap">
+    <div className="-m-6 p-4 md:p-5 min-h-[calc(100vh-4rem)] flex flex-col bg-slate-100/60">
+      <div className="bg-white border border-slate-200 rounded-lg shadow-sm px-3 py-2.5 flex flex-wrap items-center justify-between gap-2 mb-3">
+        <div className="flex items-center gap-2 flex-wrap min-w-0">
           <Button variant="ghost" icon={<ChevronLeft className="w-4 h-4" />} onClick={goList}>목록</Button>
-          <span className="text-sm font-semibold text-slate-800 truncate max-w-[240px]">{pipeline.pipeline_name}</span>
+          <span className="w-px h-4 bg-slate-200 shrink-0" aria-hidden />
+          <span className="text-sm font-semibold text-slate-800 truncate max-w-[260px]">{pipeline.pipeline_name}</span>
           <StatusBadge status={pipeline.status} />
-          {dirty && <span className="text-[10px] text-amber-600 font-medium">● 저장되지 않음</span>}
-          {!dirty && lastSavedAt && <span className="text-[10px] text-emerald-600">✓ 저장됨</span>}
+          <span className="inline-flex items-center text-[9px] font-bold uppercase tracking-wide bg-violet-50 text-violet-700 border border-violet-200 rounded px-1.5 py-0.5">
+            PoC
+          </span>
+          {dirty && (
+            <span className="text-[10px] text-amber-700 font-medium bg-amber-50 border border-amber-100 rounded-full px-2 py-0.5">
+              ● 저장되지 않음
+            </span>
+          )}
+          {!dirty && lastSavedAt && (
+            <span className="text-[10px] text-emerald-700 font-medium bg-emerald-50 border border-emerald-100 rounded-full px-2 py-0.5">
+              ✓ 저장됨
+            </span>
+          )}
           {saving && <span className="text-[10px] text-blue-600 animate-pulse">저장 중…</span>}
         </div>
         <div className="flex items-center gap-2 flex-wrap">
@@ -294,23 +316,50 @@ function StudioCanvasInner() {
           >
             버전 저장
           </Button>
-          <Button variant="secondary" icon={<Maximize2 className="w-4 h-4" />} onClick={() => fitView({ padding: 0.2 })}>Fit View</Button>
+          <Button variant="secondary" icon={<Maximize2 className="w-4 h-4" />} onClick={() => fitView({ padding: 0.2 })}>
+            Fit View
+          </Button>
           <Button variant="secondary" onClick={() => void openVersions()}>이력</Button>
-          <button type="button" disabled title="현재 단계에서는 Compile/Run을 지원하지 않습니다." className="inline-flex items-center gap-1 px-2 py-1.5 bg-slate-100 text-slate-400 text-xs font-medium rounded cursor-not-allowed">
+          <span className="w-px h-4 bg-slate-200 shrink-0 mx-0.5" aria-hidden />
+          <button
+            type="button"
+            disabled
+            title="현재 단계에서는 Compile/Run을 지원하지 않습니다."
+            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-100 text-slate-400 text-xs font-medium rounded-md cursor-not-allowed border border-slate-200"
+          >
             <Zap className="w-3 h-3" /> Compile
+            <span className="text-[9px] bg-slate-300 text-slate-600 px-1 rounded font-bold">Soon</span>
           </button>
-          <button type="button" disabled title="현재 단계에서는 Compile/Run을 지원하지 않습니다." className="inline-flex items-center gap-1 px-2 py-1.5 bg-slate-100 text-slate-400 text-xs font-medium rounded cursor-not-allowed">
+          <button
+            type="button"
+            disabled
+            title="현재 단계에서는 Compile/Run을 지원하지 않습니다."
+            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-100 text-slate-400 text-xs font-medium rounded-md cursor-not-allowed border border-slate-200"
+          >
             <Play className="w-3 h-3" /> Run Now
+            <span className="text-[9px] bg-slate-300 text-slate-600 px-1 rounded font-bold">Soon</span>
           </button>
-          <button type="button" disabled className="inline-flex items-center gap-1 px-2 py-1.5 bg-slate-100 text-slate-400 text-xs font-medium rounded cursor-not-allowed">
+          <button
+            type="button"
+            disabled
+            title="현재 단계에서는 스케줄 활성화를 지원하지 않습니다."
+            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-100 text-slate-400 text-xs font-medium rounded-md cursor-not-allowed border border-slate-200"
+          >
             <Clock className="w-3 h-3" /> 스케줄 활성화
+            <span className="text-[9px] bg-slate-300 text-slate-600 px-1 rounded font-bold">Soon</span>
           </button>
         </div>
       </div>
 
-      <div className="flex gap-3 flex-1 min-h-[480px]">
-        <VpComponentPalette active={catalogActive} disabled={catalogDisabled} loading={catalogLoading} error={catalogError} onAdd={handleAddNode} />
-        <div className="flex-1 bg-white border border-slate-200 rounded-lg overflow-hidden min-h-[480px]">
+      <div className="flex gap-3 flex-1 min-h-[620px]">
+        <VpComponentPalette
+          active={catalogActive}
+          disabled={catalogDisabled}
+          loading={catalogLoading}
+          error={catalogError}
+          onAdd={handleAddNode}
+        />
+        <div className="flex-1 bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden min-h-[620px] relative">
           <ReactFlow
             nodes={nodes}
             edges={edges}
@@ -322,18 +371,68 @@ function StudioCanvasInner() {
             onMoveEnd={(_, vp) => setViewport({ x: vp.x, y: vp.y, zoom: vp.zoom })}
             fitView
             deleteKeyCode={["Backspace", "Delete"]}
+            className="bg-slate-50"
+            style={{
+              backgroundImage: "radial-gradient(circle, #e2e8f0 1px, transparent 1px)",
+              backgroundSize: "20px 20px",
+            }}
           >
-            <Background gap={20} size={1} />
-            <Controls />
-            <MiniMap nodeColor={() => "#94a3b8"} zoomable pannable />
-            <Panel position="top-left" className="text-[10px] text-slate-400 bg-white/80 px-2 py-1 rounded border">Canvas · React Flow</Panel>
+            <Background gap={20} size={1} color="#cbd5e1" />
+            <Controls className="!shadow-sm !border-slate-200 !rounded-md overflow-hidden" />
+            <MiniMap
+              nodeColor={(n) => NODE_STYLE[String(n.type)]?.minimap ?? "#94a3b8"}
+              maskColor="rgba(148,163,184,0.15)"
+              zoomable
+              pannable
+              className="!shadow-sm !border-slate-200 !rounded-md"
+            />
+            <Panel position="top-left" className="m-2">
+              <div className="flex items-center gap-3 bg-white/95 border border-slate-200 rounded-md shadow-sm px-2.5 py-1.5 text-[10px] text-slate-500">
+                <span className="font-bold uppercase tracking-wider text-slate-600">Canvas</span>
+                <span className="font-mono">zoom {Math.round(viewport.zoom * 100)}%</span>
+                <span className="w-px h-3 bg-slate-200" />
+                <span className="inline-flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-full bg-blue-500" /> 선택
+                </span>
+                <span className="inline-flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-full bg-slate-300" /> 일반
+                </span>
+              </div>
+            </Panel>
+            {nodes.length === 0 && (
+              <Panel position="top-center" className="m-8 pointer-events-none">
+                <div className="bg-white/95 border border-dashed border-slate-300 rounded-lg shadow-sm px-6 py-5 text-center max-w-sm">
+                  <p className="text-sm font-medium text-slate-700">왼쪽 팔레트에서 노드를 추가해 주세요.</p>
+                  <p className="text-xs text-slate-500 mt-1.5 leading-relaxed">
+                    REST API Source부터 추가한 뒤 Transform · Upsert Load를 연결하면 기본 적재 흐름을 구성할 수 있습니다.
+                  </p>
+                </div>
+              </Panel>
+            )}
           </ReactFlow>
         </div>
-        <VpNodeInspector node={selectedNode} catalogItem={selectedCatalog} onLabelChange={handleLabelChange} onDelete={handleDeleteNode} />
+        <VpNodeInspector
+          node={selectedNode}
+          catalogItem={selectedCatalog}
+          onLabelChange={handleLabelChange}
+          onDelete={handleDeleteNode}
+        />
       </div>
 
-      <VpGraphStatusPanel pipeline={pipeline} graph={currentGraph} dirty={dirty} lastSavedAt={lastSavedAt} expanded={jsonExpanded} onToggle={() => setJsonExpanded((v) => !v)} />
-      <VpVersionHistoryModal open={versionsOpen} loading={versionsLoading} versions={versions} onClose={() => setVersionsOpen(false)} />
+      <VpGraphStatusPanel
+        pipeline={pipeline}
+        graph={currentGraph}
+        dirty={dirty}
+        lastSavedAt={lastSavedAt}
+        expanded={jsonExpanded}
+        onToggle={() => setJsonExpanded((v) => !v)}
+      />
+      <VpVersionHistoryModal
+        open={versionsOpen}
+        loading={versionsLoading}
+        versions={versions}
+        onClose={() => setVersionsOpen(false)}
+      />
     </div>
   );
 }

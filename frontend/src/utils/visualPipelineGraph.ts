@@ -8,12 +8,55 @@ export const MVP_COMPONENT_TYPES = [
   "VP_CRON_SCHEDULE",
 ] as const;
 
-export const NODE_STYLE: Record<string, { border: string; header: string }> = {
-  VP_REST_API_SOURCE: { border: "border-blue-400", header: "bg-blue-500" },
-  VP_TRANSFORM: { border: "border-emerald-400", header: "bg-emerald-500" },
-  VP_UPSERT_LOAD: { border: "border-violet-400", header: "bg-violet-500" },
-  VP_CRON_SCHEDULE: { border: "border-amber-400", header: "bg-amber-400" },
+/** Visual node tokens (S3-1): CRON=indigo, REST=blue, TRANSFORM=amber, UPSERT=emerald */
+export const NODE_STYLE: Record<
+  string,
+  { border: string; header: string; tint: string; accentDot: string; minimap: string }
+> = {
+  VP_REST_API_SOURCE: {
+    border: "border-blue-400",
+    header: "bg-blue-600",
+    tint: "bg-blue-50/90",
+    accentDot: "bg-blue-400",
+    minimap: "#2563eb",
+  },
+  VP_TRANSFORM: {
+    border: "border-amber-400",
+    header: "bg-amber-500",
+    tint: "bg-amber-50/90",
+    accentDot: "bg-amber-400",
+    minimap: "#d97706",
+  },
+  VP_UPSERT_LOAD: {
+    border: "border-emerald-400",
+    header: "bg-emerald-600",
+    tint: "bg-emerald-50/90",
+    accentDot: "bg-emerald-400",
+    minimap: "#059669",
+  },
+  VP_CRON_SCHEDULE: {
+    border: "border-indigo-400",
+    header: "bg-indigo-600",
+    tint: "bg-indigo-50/90",
+    accentDot: "bg-indigo-400",
+    minimap: "#4f46e5",
+  },
 };
+
+export function edgeLabelStyleProps(label?: string): Pick<
+  Edge,
+  "label" | "labelStyle" | "labelBgStyle" | "labelBgPadding" | "labelBgBorderRadius" | "style" | "type"
+> {
+  return {
+    type: "smoothstep",
+    label,
+    labelStyle: { fill: "#475569", fontSize: 10, fontWeight: 600 },
+    labelBgStyle: { fill: "#ffffff", fillOpacity: 0.95 },
+    labelBgPadding: [3, 6],
+    labelBgBorderRadius: 4,
+    style: { stroke: "#94a3b8", strokeWidth: 1.5 },
+  };
+}
 
 export function emptyGraph(): VisualPipelineGraph {
   return { nodes: [], edges: [], viewport: { x: 0, y: 0, zoom: 1 } };
@@ -80,9 +123,8 @@ export function graphToFlow(graph: VisualPipelineGraph | undefined | null): { no
     id: e.id ?? `edge-${e.source}-${e.target}-${idx}`,
     source: e.source,
     target: e.target,
-    label: e.label,
-    type: "smoothstep",
     animated: false,
+    ...edgeLabelStyleProps(e.label),
   }));
   return { nodes, edges };
 }
