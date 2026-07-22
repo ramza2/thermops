@@ -1339,6 +1339,19 @@ cd frontend && node scripts/check-visual-pipeline-studio.mjs
 - **E2E:** Transform Form 표시·입력·dirty·저장 + Graph 검증 OK/errors 0. REST Form visibility regression 유지.
 - **제외:** Upsert/CRON Form, backend/config validation API, compile.
 
+### R11-S5-4 Upsert Load + CRON Schedule Inspector Form UI
+
+- **범위:** frontend only — MVP 4종 Inspector Form 완료 (`VP_UPSERT_LOAD`, `VP_CRON_SCHEDULE` 추가).
+- **파일:**
+  - `VpUpsertLoadConfigForm.tsx` — target / write policy / dedup
+  - `VpCronScheduleConfigForm.tsx` — schedule / window / retry
+  - `VpColumnListField.tsx` — comma-separated → `string[]` (`conflict_key_columns_json`)
+  - `VpNodeInspector.tsx` — REST / Transform / Upsert / CRON Form 분기
+- **Upsert:** `write_mode` catalog 3종; `null_update_policy` = `KEEP_EXISTING` / `OVERWRITE_WITH_NULL`.
+- **CRON:** schedule_type=CRON only; cron 5-part soft warning만 (validate API/activation 없음).
+- **E2E:** Upsert/CRON Form 표시·입력·dirty·저장 + Graph 검증 OK/errors 0. REST/Transform visibility 최소 유지.
+- **다음:** R11-S5-5 config validation API.
+
 ## 설계 문서 참조
 
 - `docs/md/THERMOps_R11-S5-0_Visual_Pipeline_Inspector_Config_Form_설계.md`

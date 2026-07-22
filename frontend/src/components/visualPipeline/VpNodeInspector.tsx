@@ -1,8 +1,10 @@
 import { Box, Trash2 } from "lucide-react";
 import type { Node } from "@xyflow/react";
 import { Button } from "@/components/Button";
+import { VpCronScheduleConfigForm } from "@/components/visualPipeline/config/VpCronScheduleConfigForm";
 import { VpRestApiSourceConfigForm } from "@/components/visualPipeline/config/VpRestApiSourceConfigForm";
 import { VpTransformConfigForm } from "@/components/visualPipeline/config/VpTransformConfigForm";
+import { VpUpsertLoadConfigForm } from "@/components/visualPipeline/config/VpUpsertLoadConfigForm";
 import type {
   ComponentCatalogItem,
   VisualPipelineConfigValidationStatus,
@@ -54,6 +56,61 @@ function ConfigValidationBadge({ validation }: { validation?: VisualPipelineNode
   );
 }
 
+function ConfigFormForType({
+  componentType,
+  values,
+  onConfigChange,
+}: {
+  componentType: string;
+  values: Record<string, unknown>;
+  onConfigChange: (patch: Record<string, unknown>) => void;
+}) {
+  if (componentType === "VP_REST_API_SOURCE") {
+    return (
+      <VpRestApiSourceConfigForm
+        values={values}
+        schema={getVisualPipelineConfigSchema("VP_REST_API_SOURCE")}
+        onChange={onConfigChange}
+      />
+    );
+  }
+  if (componentType === "VP_TRANSFORM") {
+    return (
+      <VpTransformConfigForm
+        values={values}
+        schema={getVisualPipelineConfigSchema("VP_TRANSFORM")}
+        onChange={onConfigChange}
+      />
+    );
+  }
+  if (componentType === "VP_UPSERT_LOAD") {
+    return (
+      <VpUpsertLoadConfigForm
+        values={values}
+        schema={getVisualPipelineConfigSchema("VP_UPSERT_LOAD")}
+        onChange={onConfigChange}
+      />
+    );
+  }
+  if (componentType === "VP_CRON_SCHEDULE") {
+    return (
+      <VpCronScheduleConfigForm
+        values={values}
+        schema={getVisualPipelineConfigSchema("VP_CRON_SCHEDULE")}
+        onChange={onConfigChange}
+      />
+    );
+  }
+  return null;
+}
+
+const EDITABLE_FORM_TYPES = new Set([
+  "VP_REST_API_SOURCE",
+  "VP_TRANSFORM",
+  "VP_UPSERT_LOAD",
+  "VP_CRON_SCHEDULE",
+]);
+
 export function VpNodeInspector({
   node,
   catalogItem,
@@ -83,12 +140,8 @@ export function VpNodeInspector({
 
   const componentType = String(node.type ?? node.data?.component_type ?? "");
   const label = String(node.data?.label ?? "");
-  const isRestSource = componentType === "VP_REST_API_SOURCE";
-  const isTransform = componentType === "VP_TRANSFORM";
-  const hasEditableForm = isRestSource || isTransform;
+  const hasEditableForm = EDITABLE_FORM_TYPES.has(componentType);
   const normalizedConfig = ensureNodeConfig(node, componentType);
-  const restSchema = isRestSource ? getVisualPipelineConfigSchema("VP_REST_API_SOURCE") : null;
-  const transformSchema = isTransform ? getVisualPipelineConfigSchema("VP_TRANSFORM") : null;
   const inputs = catalogItem?.input_ports?.map((p) => p.port_id) ?? [];
   const outputs = catalogItem?.output_ports?.map((p) => p.port_id) ?? [];
 
@@ -158,17 +211,11 @@ export function VpNodeInspector({
           <div className="text-[9px] font-bold text-slate-400 uppercase tracking-wide mb-2">
             {hasEditableForm ? "Config" : "Config (preview)"}
           </div>
-          {isRestSource ? (
-            <VpRestApiSourceConfigForm
+          {hasEditableForm ? (
+            <ConfigFormForType
+              componentType={componentType}
               values={normalizedConfig.values}
-              schema={restSchema}
-              onChange={onConfigChange}
-            />
-          ) : isTransform ? (
-            <VpTransformConfigForm
-              values={normalizedConfig.values}
-              schema={transformSchema}
-              onChange={onConfigChange}
+              onConfigChange={onConfigChange}
             />
           ) : (
             <>

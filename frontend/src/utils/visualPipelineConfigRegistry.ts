@@ -185,9 +185,10 @@ const CRON_FIELDS: VisualPipelineConfigFieldSchema[] = [
   field("timezone", {
     type: "string",
     field_type: "string",
-    ui_component: "text",
+    ui_component: "select",
     required: true,
     default: "Asia/Seoul",
+    options: ["Asia/Seoul", "UTC", "Asia/Tokyo", "America/Los_Angeles"],
   }),
   field("start_at", { type: "datetime", field_type: "datetime", ui_component: "datetime", required: false, advanced: true }),
   field("end_at", { type: "datetime", field_type: "datetime", ui_component: "datetime", required: false, advanced: true }),
