@@ -239,3 +239,83 @@ export interface VisualPipelineValidationRequest {
   pipeline_id?: string;
   validation_level?: ValidationLevel;
 }
+
+/** R11-S6 Compile Preview / Persist response (flat envelope). */
+export type VisualPipelineCompileStatus = "SUCCESS" | "FAILED" | "PARTIAL";
+
+export interface VisualPipelineCompileIssue {
+  severity: string;
+  code: string;
+  message: string;
+  phase?: string;
+  hint?: string;
+  field_key?: string;
+  component_type?: string;
+  node_id?: string;
+  details?: unknown;
+}
+
+export interface VisualPipelineCompileStep {
+  step_id: string;
+  type: string;
+  component_type?: string;
+  node_id?: string;
+  adapter?: string;
+  config?: Record<string, unknown>;
+  inputs?: Array<Record<string, unknown>>;
+  outputs?: Array<Record<string, unknown>>;
+}
+
+export interface VisualPipelineCompileSchedule {
+  enabled?: boolean;
+  component_type?: string;
+  node_id?: string;
+  adapter?: string;
+  schedule_type?: string;
+  cron_expression?: string | null;
+  timezone?: string | null;
+  active_yn?: boolean;
+  activation?: string;
+  binds_to_node_id?: string | null;
+  [key: string]: unknown;
+}
+
+export interface VisualPipelineCompileMetadata {
+  source_node_id?: string;
+  transform_node_id?: string | null;
+  load_node_id?: string;
+  schedule_node_id?: string | null;
+  has_transform?: boolean;
+  has_schedule?: boolean;
+  pattern?: string;
+  generated_by?: string;
+  graph_node_count?: number;
+  graph_edge_count?: number;
+  [key: string]: unknown;
+}
+
+export interface VisualPipelineCompiledArtifact {
+  version?: string;
+  kind?: string;
+  steps?: VisualPipelineCompileStep[];
+  schedule?: VisualPipelineCompileSchedule | null;
+  write_policy?: Record<string, unknown>;
+  lineage?: Array<Record<string, unknown>>;
+  metadata?: VisualPipelineCompileMetadata;
+}
+
+export interface VisualPipelineCompileResponse {
+  pipeline_id: string;
+  compile_result_id?: string | null;
+  compile_status: VisualPipelineCompileStatus | string;
+  validation_level?: string;
+  graph_version_hash?: string | null;
+  config_hash?: string | null;
+  compiled_at?: string | null;
+  compile_version?: string;
+  compiled_artifact?: VisualPipelineCompiledArtifact | null;
+  issues?: VisualPipelineCompileIssue[];
+  persisted: boolean;
+  error_message?: string | null;
+  source?: string | null;
+}

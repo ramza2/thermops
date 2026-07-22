@@ -55,7 +55,10 @@ export function VpGraphStatusPanel({
           <span className="text-slate-400">template</span>
           <span className="font-semibold text-slate-700">{pipeline?.template_id ?? "-"}</span>
         </span>
-        <StatusBadge status={pipeline?.current_sync_status ?? "NOT_COMPILED"} />
+        <StatusBadge
+          status={pipeline?.current_sync_status ?? "NOT_COMPILED"}
+          testId="visual-pipeline-sync-status"
+        />
         <span className="inline-flex items-center gap-1 text-[10px] font-mono bg-blue-50 border border-blue-100 text-blue-700 rounded-full px-2 py-0.5">
           nodes {counts.nodes}
         </span>

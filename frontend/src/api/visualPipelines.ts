@@ -1,10 +1,11 @@
-import { fetchApi, postApi, putApi } from "@/api/client";
+import { fetchApi, postApi, putApi, api } from "@/api/client";
 import type {
   ComponentCatalogItem,
   ComponentCatalogResponse,
   ConnectionRule,
   ConnectionRulesResponse,
   GraphTemplateId,
+  VisualPipelineCompileResponse,
   VisualPipelineDetail,
   VisualPipelineGraph,
   VisualPipelineListResponse,
@@ -77,6 +78,50 @@ export async function validateVisualPipelineGraph(
     pipeline_id: payload.pipeline_id,
     validation_level: payload.validation_level ?? "BASIC",
   });
+}
+
+/** R11-S6-1: preview only — no DB write / status update. */
+export async function compileVisualPipelinePreview(
+  pipelineId: string,
+): Promise<VisualPipelineCompileResponse> {
+  return postApi<VisualPipelineCompileResponse>(`/visual-pipelines/${pipelineId}/compile-preview`, {
+    validation_level: "STRICT",
+  });
+}
+
+/** R11-S6-2: persist compile result + sync status. Not a Run/activation. */
+export async function compileVisualPipeline(
+  pipelineId: string,
+): Promise<VisualPipelineCompileResponse> {
+  return postApi<VisualPipelineCompileResponse>(`/visual-pipelines/${pipelineId}/compile`, {
+    validation_level: "STRICT",
+  });
+}
+
+/**
+ * Latest compile result. Returns null when 404 COMPILE_RESULT_NOT_FOUND.
+ * Other errors are rethrown.
+ */
+export async function getVisualPipelineCompileResult(
+  pipelineId: string,
+): Promise<VisualPipelineCompileResponse | null> {
+  try {
+    const { data } = await api.get<{ success: boolean; data: VisualPipelineCompileResponse }>(
+      `/visual-pipelines/${pipelineId}/compile-result`,
+    );
+    return data.data;
+  } catch (err) {
+    const status = (err as { response?: { status?: number; data?: { detail?: string } } })?.response
+      ?.status;
+    const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+    if (status === 404 && (detail === "COMPILE_RESULT_NOT_FOUND" || detail == null || detail === "")) {
+      return null;
+    }
+    if (status === 404 && typeof detail === "string" && detail.includes("COMPILE_RESULT_NOT_FOUND")) {
+      return null;
+    }
+    throw err;
+  }
 }
 
 export async function getComponentCatalog(params?: {

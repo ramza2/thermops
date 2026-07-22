@@ -1407,6 +1407,14 @@ cd frontend && node scripts/check-visual-pipeline-studio.mjs
 - **테스트:** `python scripts/test_visual_pipeline_compile_persist.py` (quick group 미포함).
 - **다음:** R11-S6-3 Studio Compile Preview UI.
 
+### R11-S6-3 Studio Compile Preview UI
+
+- **범위:** FE UI — Compile Preview / Compile 버튼, Compile Result Panel, latest compile-result 조회, sync badge 한글 표시. backend/DB/package 변경 없음.
+- **동작:** Preview는 저장 graph 기준(no write); dirty여도 Preview 가능(안내). Compile은 dirty 시 disabled, 성공 시 result persist + `IN_SYNC` 반영.
+- **패널:** Graph Status 아래 / Validation 위 — steps·schedule·issues(`COMPILE`) 표시. Run/Schedule activation은 Still Soon.
+- **검증:** `cd frontend && npm run build` · `node scripts/check-pages.mjs` · `node scripts/check-visual-pipeline-studio.mjs`
+- **다음:** R11-S6-4 R10 materialization PoC.
+
 ## 설계 문서 참조
 
 - `docs/md/THERMOps_R11-S6-0_Visual_Pipeline_Compile_설계.md`

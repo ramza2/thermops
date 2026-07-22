@@ -21,6 +21,7 @@ import {
   ChevronLeft,
   Clock,
   History,
+  Layers,
   Maximize2,
   Play,
   Save,
@@ -29,9 +30,12 @@ import {
 } from "lucide-react";
 import {
   createVisualPipelineVersion,
+  compileVisualPipeline,
+  compileVisualPipelinePreview,
   getComponentCatalog,
   getConnectionRules,
   getVisualPipeline,
+  getVisualPipelineCompileResult,
   listVisualPipelineVersions,
   updateVisualPipeline,
   validateVisualPipelineGraph,
@@ -40,6 +44,7 @@ import { extractApiErrorMessage } from "@/api/client";
 import { Button } from "@/components/Button";
 import { StatusBadge } from "@/components/StatusBadge";
 import { ErrorState, LoadingState } from "@/components/Pagination";
+import { VpCompilePanel } from "@/components/visualPipeline/VpCompilePanel";
 import { VpComponentPalette } from "@/components/visualPipeline/VpComponentPalette";
 import { buildNodeTypes } from "@/components/visualPipeline/VpFlowNode";
 import { VpGraphStatusPanel } from "@/components/visualPipeline/VpGraphStatusPanel";
@@ -50,6 +55,7 @@ import { useToast } from "@/hooks/useToast";
 import type {
   ComponentCatalogItem,
   ConnectionRule,
+  VisualPipelineCompileResponse,
   VisualPipelineDetail,
   VisualPipelineValidationResponse,
   VisualPipelineVersion,
@@ -97,8 +103,26 @@ function StudioCanvasInner() {
   const [validating, setValidating] = useState(false);
   const [validationResult, setValidationResult] = useState<VisualPipelineValidationResponse | null>(null);
   const [validationExpanded, setValidationExpanded] = useState(true);
+  const [compiling, setCompiling] = useState(false);
+  const [compileResult, setCompileResult] = useState<VisualPipelineCompileResponse | null>(null);
+  const [compileError, setCompileError] = useState<string | null>(null);
+  const [compileExpanded, setCompileExpanded] = useState(true);
+  const [compileLoadingLatest, setCompileLoadingLatest] = useState(false);
 
   const nodeTypes = useMemo(() => buildNodeTypes(), []);
+
+  const loadLatestCompileResult = useCallback(async (id: string) => {
+    setCompileLoadingLatest(true);
+    setCompileError(null);
+    try {
+      const latest = await getVisualPipelineCompileResult(id);
+      setCompileResult(latest);
+    } catch (err) {
+      setCompileError(extractApiErrorMessage(err, "최근 컴파일 결과를 불러오지 못했습니다."));
+    } finally {
+      setCompileLoadingLatest(false);
+    }
+  }, []);
 
   const loadPipeline = useCallback(async () => {
     setLoading(true);
@@ -107,18 +131,21 @@ function StudioCanvasInner() {
       const detail = await getVisualPipeline(pipelineId);
       setPipeline(detail);
       const { nodes: n, edges: e } = graphToFlow(detail.graph);
+      const vp = detail.graph?.viewport ?? { x: 0, y: 0, zoom: 1 };
       setNodes(n);
       setEdges(e);
-      setViewport(detail.graph?.viewport ?? { x: 0, y: 0, zoom: 1 });
-      savedGraphRef.current = serializeGraphBody(detail.graph ?? { nodes: [], edges: [], viewport: { x: 0, y: 0, zoom: 1 } });
-      setGraphSaveEpoch((e) => e + 1);
+      setViewport(vp);
+      // Baseline must match canvas round-trip (normalize), not raw API JSON.
+      savedGraphRef.current = serializeGraphBody(flowToGraph(n, e, vp));
+      setGraphSaveEpoch((epoch) => epoch + 1);
       setLastSavedAt(detail.updated_at ?? null);
+      void loadLatestCompileResult(pipelineId);
     } catch (err) {
       setError(extractApiErrorMessage(err, "Visual Pipeline을 불러오지 못했습니다."));
     } finally {
       setLoading(false);
     }
-  }, [pipelineId, setNodes, setEdges]);
+  }, [pipelineId, setNodes, setEdges, loadLatestCompileResult]);
 
   useEffect(() => {
     void loadPipeline();
@@ -332,6 +359,61 @@ function StudioCanvasInner() {
     }
   };
 
+  const handleCompilePreview = async () => {
+    if (!pipelineId) return;
+    if (dirty) {
+      showToast(
+        "warning",
+        "저장된 그래프 기준으로 미리보기합니다. 현재 미저장 변경은 반영되지 않습니다.",
+      );
+    }
+    setCompiling(true);
+    setCompileError(null);
+    setCompileExpanded(true);
+    try {
+      const result = await compileVisualPipelinePreview(pipelineId);
+      setCompileResult(result);
+      if (result.compile_status === "SUCCESS") {
+        showToast("success", "컴파일 미리보기가 생성되었습니다.");
+      } else {
+        showToast("error", "컴파일 미리보기에 실패했습니다. 이슈를 확인하세요.");
+      }
+    } catch (err) {
+      setCompileError(extractApiErrorMessage(err, "컴파일 미리보기에 실패했습니다."));
+      showToast("error", extractApiErrorMessage(err, "컴파일 미리보기에 실패했습니다."));
+    } finally {
+      setCompiling(false);
+    }
+  };
+
+  const handleCompile = async () => {
+    if (!pipelineId || dirty) return;
+    setCompiling(true);
+    setCompileError(null);
+    setCompileExpanded(true);
+    try {
+      const result = await compileVisualPipeline(pipelineId);
+      setCompileResult(result);
+      try {
+        const detail = await getVisualPipeline(pipelineId);
+        setPipeline(detail);
+        setLastSavedAt(detail.updated_at ?? null);
+      } catch {
+        // panel still shows compile result even if detail refresh fails
+      }
+      if (result.compile_status === "SUCCESS") {
+        showToast("success", "컴파일 결과가 저장되었습니다. (실행/스케줄 활성화 아님)");
+      } else {
+        showToast("error", "컴파일에 실패했습니다. 이슈를 확인하세요.");
+      }
+    } catch (err) {
+      setCompileError(extractApiErrorMessage(err, "컴파일에 실패했습니다."));
+      showToast("error", extractApiErrorMessage(err, "컴파일에 실패했습니다."));
+    } finally {
+      setCompiling(false);
+    }
+  };
+
   const goList = () => {
     if (dirty && !window.confirm("저장하지 않은 변경 사항이 있습니다. 목록으로 이동할까요?")) return;
     navigate("/visual-pipelines");
@@ -408,20 +490,36 @@ function StudioCanvasInner() {
             {validating ? "검증 중…" : "Graph 검증"}
           </Button>
           <span className="w-px h-4 bg-slate-200 shrink-0 mx-0.5" aria-hidden />
-          <button
-            type="button"
-            disabled
-            title="현재 단계에서는 Compile/Run을 지원하지 않습니다."
-            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-100 text-slate-400 text-xs font-medium rounded-md cursor-not-allowed border border-slate-200"
+          <Button
+            variant="secondary"
+            icon={<Layers className="w-4 h-4" />}
+            onClick={() => void handleCompilePreview()}
+            disabled={compiling}
+            title="저장된 그래프를 기준으로 실행 계획을 미리 생성합니다. DB 저장, 스케줄 활성화, 외부 API 호출은 수행하지 않습니다."
+            data-testid="visual-pipeline-compile-preview-button"
           >
-            <Zap className="w-3 h-3" /> Compile
-            <span className="text-[9px] bg-slate-300 text-slate-600 px-1 rounded font-bold">Soon</span>
-          </button>
+            {compiling ? "처리 중…" : "Compile Preview"}
+          </Button>
+          <Button
+            variant="secondary"
+            icon={<Zap className="w-4 h-4" />}
+            onClick={() => void handleCompile()}
+            disabled={compiling || dirty}
+            title={
+              dirty
+                ? "미저장 변경사항은 Compile에 반영되지 않습니다. 저장 후 다시 시도하세요."
+                : "저장된 그래프 기준으로 컴파일 결과를 저장합니다. 실제 적재 실행이나 스케줄 활성화는 수행하지 않습니다."
+            }
+            data-testid="visual-pipeline-compile-button"
+          >
+            Compile
+          </Button>
           <button
             type="button"
             disabled
-            title="현재 단계에서는 Compile/Run을 지원하지 않습니다."
+            title="현재 단계에서는 Run을 지원하지 않습니다."
             className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-100 text-slate-400 text-xs font-medium rounded-md cursor-not-allowed border border-slate-200"
+            data-testid="visual-pipeline-run-button"
           >
             <Play className="w-3 h-3" /> Run Now
             <span className="text-[9px] bg-slate-300 text-slate-600 px-1 rounded font-bold">Soon</span>
@@ -431,6 +529,7 @@ function StudioCanvasInner() {
             disabled
             title="현재 단계에서는 스케줄 활성화를 지원하지 않습니다."
             className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-100 text-slate-400 text-xs font-medium rounded-md cursor-not-allowed border border-slate-200"
+            data-testid="visual-pipeline-schedule-activate-button"
           >
             <Clock className="w-3 h-3" /> 스케줄 활성화
             <span className="text-[9px] bg-slate-300 text-slate-600 px-1 rounded font-bold">Soon</span>
@@ -518,6 +617,15 @@ function StudioCanvasInner() {
         lastSavedAt={lastSavedAt}
         expanded={jsonExpanded}
         onToggle={() => setJsonExpanded((v) => !v)}
+      />
+      <VpCompilePanel
+        result={compileResult}
+        loading={compiling || compileLoadingLatest}
+        error={compileError}
+        dirtyHint={dirty}
+        expanded={compileExpanded}
+        onToggle={() => setCompileExpanded((v) => !v)}
+        onSelectNode={(nodeId) => setSelectedNodeId(nodeId)}
       />
       <VpValidationPanel
         result={validationResult}

@@ -26,17 +26,21 @@ const STATUS_MAP: Record<string, { label: string; className: string }> = {
   LOW: { label: "낮음", className: "bg-slate-100 text-slate-600" },
   DRAFT: { label: "DRAFT", className: "bg-slate-100 text-slate-600" },
   VALIDATED: { label: "VALIDATED", className: "bg-blue-100 text-blue-700" },
-  NOT_COMPILED: { label: "NOT_COMPILED", className: "bg-amber-100 text-amber-700" },
-  IN_SYNC: { label: "IN_SYNC", className: "bg-emerald-100 text-emerald-700" },
-  STALE: { label: "STALE", className: "bg-orange-100 text-orange-700" },
-  COMPILE_FAILED: { label: "COMPILE_FAILED", className: "bg-red-100 text-red-700" },
-  PARTIAL: { label: "PARTIAL", className: "bg-amber-100 text-amber-700" },
+  NOT_COMPILED: { label: "미컴파일", className: "bg-amber-100 text-amber-700" },
+  IN_SYNC: { label: "컴파일 최신", className: "bg-emerald-100 text-emerald-700" },
+  STALE: { label: "그래프 변경됨", className: "bg-orange-100 text-orange-700" },
+  COMPILE_FAILED: { label: "컴파일 실패", className: "bg-red-100 text-red-700" },
+  PARTIAL: { label: "부분 반영", className: "bg-amber-100 text-amber-700" },
 };
 
-export function StatusBadge({ status }: { status: string }) {
+export function StatusBadge({ status, testId }: { status: string; testId?: string }) {
   const cfg = STATUS_MAP[status] || { label: status, className: "bg-slate-100 text-slate-600" };
   return (
-    <span className={`inline-flex px-2 py-0.5 rounded text-xs font-medium ${cfg.className}`}>
+    <span
+      className={`inline-flex px-2 py-0.5 rounded text-xs font-medium ${cfg.className}`}
+      data-testid={testId}
+      data-status={status}
+    >
       {cfg.label}
     </span>
   );

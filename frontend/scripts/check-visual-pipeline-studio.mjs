@@ -34,6 +34,26 @@ const S5_CONFIG_LEGACY_FLAT_CRON = {
   active_yn: false,
 };
 
+const S5_CONFIG_SAMPLE_TRANSFORM = {
+  schema_version: "R11-S5-0",
+  values: {
+    transform_type: "WIDE_HOUR_TO_LONG",
+    mapping_config: {},
+  },
+  validation: { status: "NOT_VALIDATED", last_validated_at: null, issue_count: 0 },
+};
+
+const S5_CONFIG_SAMPLE_UPSERT = {
+  schema_version: "R11-S5-0",
+  values: {
+    standard_dataset_id: "SD-SAMPLE",
+    target_table: "tb_e2e_fact",
+    write_mode: "UPSERT",
+    conflict_key_columns_json: ["entity_id", "measured_at"],
+  },
+  validation: { status: "NOT_VALIDATED", last_validated_at: null, issue_count: 0 },
+};
+
 const FIXTURE_GRAPH = {
   nodes: [
     {
@@ -60,13 +80,21 @@ const FIXTURE_GRAPH = {
       id: "e2e-transform",
       type: "VP_TRANSFORM",
       position: { x: 600, y: 220 },
-      data: { label: "Transform", component_type: "VP_TRANSFORM" },
+      data: {
+        label: "Transform",
+        component_type: "VP_TRANSFORM",
+        config: S5_CONFIG_SAMPLE_TRANSFORM,
+      },
     },
     {
       id: "e2e-load",
       type: "VP_UPSERT_LOAD",
       position: { x: 880, y: 220 },
-      data: { label: "Upsert Load", component_type: "VP_UPSERT_LOAD" },
+      data: {
+        label: "Upsert Load",
+        component_type: "VP_UPSERT_LOAD",
+        config: S5_CONFIG_SAMPLE_UPSERT,
+      },
     },
   ],
   edges: [
@@ -257,6 +285,25 @@ async function runGraphValidationAndWait(page) {
   return validation;
 }
 
+async function runCompilePreviewAndWait(page) {
+  const panel = page.getByTestId("visual-pipeline-compile-panel");
+  await page.getByTestId("visual-pipeline-compile-preview-button").click();
+  await panel.getByTestId("visual-pipeline-compile-status").waitFor({ state: "visible", timeout: 30000 });
+  return panel;
+}
+
+async function runCompileAndWait(page) {
+  const panel = page.getByTestId("visual-pipeline-compile-panel");
+  await page.getByTestId("visual-pipeline-compile-button").click();
+  await panel.getByTestId("visual-pipeline-compile-persisted").filter({ hasText: "true" }).waitFor({
+    state: "visible",
+    timeout: 30000,
+  });
+  await panel.getByTestId("visual-pipeline-compile-result-id").waitFor({ state: "visible", timeout: 15000 });
+  await panel.getByTestId("visual-pipeline-compile-status").waitFor({ state: "visible", timeout: 10000 });
+  return panel;
+}
+
 async function openStudio(page, pipelineId) {
   const studioPath = `/visual-pipelines/${pipelineId}`;
   await page.goto(`${FRONTEND_BASE}${studioPath}`, { waitUntil: "domcontentloaded", timeout: 60000 });
@@ -364,6 +411,50 @@ async function runBrowserSmoke(pipeline) {
     }
     console.log("  [ok] S5-6 reload preserves REST operation_name");
 
+    // --- R11-S6-3 Compile Preview / Compile smoke ---
+    await page.getByTestId("visual-pipeline-compile-preview-button").waitFor({ state: "visible", timeout: 10000 });
+    await page.getByTestId("visual-pipeline-compile-button").waitFor({ state: "visible", timeout: 10000 });
+    const compilePanel = await runCompilePreviewAndWait(page);
+    const previewStatus = (await compilePanel.getByTestId("visual-pipeline-compile-status").innerText()).trim();
+    if (previewStatus !== "SUCCESS") {
+      fail(`expected Compile Preview SUCCESS, got ${previewStatus}`);
+    }
+    const previewPersisted = (await compilePanel.getByTestId("visual-pipeline-compile-persisted").innerText()).trim();
+    if (previewPersisted !== "false") {
+      fail(`expected Compile Preview persisted=false, got ${previewPersisted}`);
+    }
+    await compilePanel.getByTestId("visual-pipeline-compile-steps").waitFor({ state: "visible", timeout: 10000 });
+    console.log("  [ok] Compile Preview SUCCESS persisted=false + steps");
+
+    // Ensure clean saved state before persist Compile (dirty disables Compile).
+    const dirtyChip = toolbar.getByText("● 저장되지 않음");
+    if (await dirtyChip.count()) {
+      await saveGraphAndWait(page);
+      console.log("  [ok] cleared dirty before Compile");
+    }
+
+    await runCompileAndWait(page);
+    const compileStatus = (await compilePanel.getByTestId("visual-pipeline-compile-status").innerText()).trim();
+    if (compileStatus !== "SUCCESS") {
+      fail(`expected Compile SUCCESS, got ${compileStatus}`);
+    }
+    const compilePersisted = (await compilePanel.getByTestId("visual-pipeline-compile-persisted").innerText()).trim();
+    if (compilePersisted !== "true") {
+      fail(`expected Compile persisted=true, got ${compilePersisted}`);
+    }
+    const resultId = (await compilePanel.getByTestId("visual-pipeline-compile-result-id").innerText()).trim();
+    if (!resultId.startsWith("VPC-")) {
+      fail(`expected compile_result_id VPC-*, got ${resultId}`);
+    }
+    const syncBadge = page.getByTestId("visual-pipeline-sync-status");
+    await syncBadge.waitFor({ state: "visible", timeout: 15000 });
+    const syncText = (await syncBadge.innerText()).trim();
+    const syncCode = (await syncBadge.getAttribute("data-status")) || "";
+    if (syncCode !== "IN_SYNC" && syncText !== "컴파일 최신") {
+      fail(`expected sync IN_SYNC / 컴파일 최신 after Compile, got status=${syncCode} text=${syncText}`);
+    }
+    console.log(`  [ok] Compile persisted=true result_id=${resultId} sync=${syncText}`);
+
     // --- Graph validation smoke (errors 0) ---
     await runGraphValidationAndWait(page);
     const severityBadge = validation.locator("span").filter({ hasText: /^(OK|WARNING|ERROR|INFO)$/ }).first();
@@ -432,7 +523,7 @@ async function runBrowserSmoke(pipeline) {
 }
 
 async function main() {
-  console.log("THERMOps R11-S5-6 Visual Pipeline Studio E2E");
+  console.log("THERMOps R11-S6-3 Visual Pipeline Studio E2E");
   console.log(`  frontend=${FRONTEND_BASE}`);
   console.log(`  api=${API_BASE}`);
 
