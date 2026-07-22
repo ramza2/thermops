@@ -34,6 +34,7 @@ const HOUR_POLICY_PLACEHOLDER = `{
 export type VpTransformConfigFormProps = {
   values: VisualPipelineNodeConfigValues;
   schema?: VisualPipelineComponentConfigSchema | null;
+  fieldWarnings?: Record<string, string>;
   onChange: (patch: Record<string, unknown>) => void;
   disabled?: boolean;
 };
@@ -55,19 +56,25 @@ function previewJson(value: unknown): string {
   return String(value);
 }
 
-export function VpTransformConfigForm({ values, onChange, disabled }: VpTransformConfigFormProps) {
+export function VpTransformConfigForm({ values, fieldWarnings, onChange, disabled }: VpTransformConfigFormProps) {
   const patchSelect = (key: string) => (e: ChangeEvent<HTMLSelectElement>) => {
     const raw = e.target.value;
     onChange({ [key]: raw === "" ? undefined : raw });
   };
 
   const schemaPreview = previewJson(values.target_schema_preview);
+  const warn = (key: string) => fieldWarnings?.[key];
 
   return (
     <div className="space-y-3" data-testid="visual-pipeline-inspector-config-form">
       <section className="rounded-lg border border-slate-100 p-2.5 space-y-2.5">
         <div className="text-[9px] font-bold text-slate-400 uppercase tracking-wide">Transform</div>
-        <VpConfigFieldShell fieldKey="transform_type" label="Transform Type" required>
+        <VpConfigFieldShell
+          fieldKey="transform_type"
+          label="Transform Type"
+          required
+          warning={warn("transform_type")}
+        >
           <select
             value={strVal(values, "transform_type") || "WIDE_HOUR_TO_LONG"}
             onChange={patchSelect("transform_type")}
@@ -87,6 +94,7 @@ export function VpTransformConfigForm({ values, onChange, disabled }: VpTransfor
           value={values.mapping_config}
           placeholder={MAPPING_PLACEHOLDER}
           disabled={disabled}
+          warning={warn("mapping_config")}
           onChange={onChange}
         />
       </section>
@@ -97,6 +105,7 @@ export function VpTransformConfigForm({ values, onChange, disabled }: VpTransfor
           fieldKey="unmapped_policy"
           label="Unmapped Policy"
           help="미매핑 필드 처리 정책 (FE MVP options)"
+          warning={warn("unmapped_policy")}
         >
           <select
             value={strVal(values, "unmapped_policy")}
@@ -119,6 +128,7 @@ export function VpTransformConfigForm({ values, onChange, disabled }: VpTransfor
           placeholder={HOUR_POLICY_PLACEHOLDER}
           advanced
           disabled={disabled}
+          warning={warn("hour_policy")}
           onChange={onChange}
         />
       </section>

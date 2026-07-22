@@ -16,6 +16,7 @@ const CRON_SOFT_WARNING =
 export type VpCronScheduleConfigFormProps = {
   values: VisualPipelineNodeConfigValues;
   schema?: VisualPipelineComponentConfigSchema | null;
+  fieldWarnings?: Record<string, string>;
   onChange: (patch: Record<string, unknown>) => void;
   disabled?: boolean;
 };
@@ -54,10 +55,16 @@ function cronFivePartWarning(expr: string): string | undefined {
   return undefined;
 }
 
-export function VpCronScheduleConfigForm({ values, onChange, disabled }: VpCronScheduleConfigFormProps) {
+export function VpCronScheduleConfigForm({
+  values,
+  fieldWarnings,
+  onChange,
+  disabled,
+}: VpCronScheduleConfigFormProps) {
   const cronExpression = strVal(values, "cron_expression");
   const retryEnabled = boolVal(values, "retry_enabled_yn", false);
-  const cronWarning = cronFivePartWarning(cronExpression);
+  const cronWarning = fieldWarnings?.cron_expression || cronFivePartWarning(cronExpression);
+  const warn = (key: string) => fieldWarnings?.[key];
 
   const patchText = (key: string) => (e: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const raw = e.target.value;
@@ -105,7 +112,7 @@ export function VpCronScheduleConfigForm({ values, onChange, disabled }: VpCronS
             className={INPUT_CLASS}
           />
         </VpConfigFieldShell>
-        <VpConfigFieldShell fieldKey="timezone" label="Timezone" required>
+        <VpConfigFieldShell fieldKey="timezone" label="Timezone" required warning={warn("timezone")}>
           <select
             value={strVal(values, "timezone") || "Asia/Seoul"}
             onChange={patchText("timezone")}
@@ -123,7 +130,7 @@ export function VpCronScheduleConfigForm({ values, onChange, disabled }: VpCronS
 
       <section className="rounded-lg border border-slate-100 p-2.5 space-y-2.5">
         <div className="text-[9px] font-bold text-slate-400 uppercase tracking-wide">Window</div>
-        <VpConfigFieldShell fieldKey="start_at" label="Start At">
+        <VpConfigFieldShell fieldKey="start_at" label="Start At" warning={warn("start_at")}>
           <input
             type="datetime-local"
             value={toDatetimeLocal(values.start_at)}
@@ -132,7 +139,7 @@ export function VpCronScheduleConfigForm({ values, onChange, disabled }: VpCronS
             className={INPUT_CLASS}
           />
         </VpConfigFieldShell>
-        <VpConfigFieldShell fieldKey="end_at" label="End At">
+        <VpConfigFieldShell fieldKey="end_at" label="End At" warning={warn("end_at")}>
           <input
             type="datetime-local"
             value={toDatetimeLocal(values.end_at)}
@@ -145,6 +152,7 @@ export function VpCronScheduleConfigForm({ values, onChange, disabled }: VpCronS
           fieldKey="active_yn"
           label="Active"
           help="S5 단계에서는 저장값만 반영하며 실제 스케줄 활성화는 S6 이후입니다."
+          warning={warn("active_yn")}
         >
           <label className="inline-flex items-center gap-2 text-[11px] text-slate-600">
             <input
@@ -161,7 +169,7 @@ export function VpCronScheduleConfigForm({ values, onChange, disabled }: VpCronS
 
       <section className="rounded-lg border border-slate-100 p-2.5 space-y-2.5">
         <div className="text-[9px] font-bold text-slate-400 uppercase tracking-wide">Retry</div>
-        <VpConfigFieldShell fieldKey="retry_enabled_yn" label="Retry Enabled">
+        <VpConfigFieldShell fieldKey="retry_enabled_yn" label="Retry Enabled" warning={warn("retry_enabled_yn")}>
           <label className="inline-flex items-center gap-2 text-[11px] text-slate-600">
             <input
               type="checkbox"
@@ -173,7 +181,7 @@ export function VpCronScheduleConfigForm({ values, onChange, disabled }: VpCronS
             재시도 사용
           </label>
         </VpConfigFieldShell>
-        <VpConfigFieldShell fieldKey="max_retry_count" label="Max Retry Count">
+        <VpConfigFieldShell fieldKey="max_retry_count" label="Max Retry Count" warning={warn("max_retry_count")}>
           <input
             type="number"
             min={0}
@@ -183,7 +191,11 @@ export function VpCronScheduleConfigForm({ values, onChange, disabled }: VpCronS
             className={INPUT_CLASS}
           />
         </VpConfigFieldShell>
-        <VpConfigFieldShell fieldKey="retry_interval_minutes" label="Retry Interval (minutes)">
+        <VpConfigFieldShell
+          fieldKey="retry_interval_minutes"
+          label="Retry Interval (minutes)"
+          warning={warn("retry_interval_minutes")}
+        >
           <input
             type="number"
             min={1}

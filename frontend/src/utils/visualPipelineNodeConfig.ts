@@ -29,13 +29,29 @@ export function defaultConfigValidation(): VisualPipelineNodeConfigValidation {
   };
 }
 
+function normalizeValidationStatus(
+  status: string | undefined,
+): VisualPipelineConfigValidationStatus {
+  if (status === "VALID") return "OK";
+  if (status === "INVALID") return "ERROR";
+  if (
+    status === "NOT_VALIDATED" ||
+    status === "OK" ||
+    status === "WARNING" ||
+    status === "ERROR" ||
+    status === "STALE"
+  ) {
+    return status;
+  }
+  return "NOT_VALIDATED";
+}
+
 function mergeValidation(raw: unknown): VisualPipelineNodeConfigValidation {
   const base = defaultConfigValidation();
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return base;
   const v = raw as Record<string, unknown>;
-  const status = v.status as VisualPipelineConfigValidationStatus | undefined;
   return {
-    status: status ?? base.status,
+    status: normalizeValidationStatus(v.status as string | undefined),
     last_validated_at: (v.last_validated_at as string | null | undefined) ?? base.last_validated_at,
     issue_count: typeof v.issue_count === "number" ? v.issue_count : base.issue_count,
   };
@@ -257,3 +273,77 @@ export function buildMvpSampleNodeConfigs(): Record<string, VisualPipelineNodeCo
 }
 
 export type { VisualPipelineNodeData };
+
+/** Aggregate CONFIG-phase issues into node.data.config.validation cache (R11-S5-5). */
+export function applyConfigValidationCache(
+  nodes: Node[],
+  issues: Array<{
+    phase?: string;
+    node_id?: string;
+    severity?: string;
+  }>,
+  validatedAt: string = new Date().toISOString(),
+): Node[] {
+  const byNode = new Map<string, Array<{ severity?: string }>>();
+  for (const issue of issues) {
+    if (issue.phase !== "CONFIG" || !issue.node_id) continue;
+    const list = byNode.get(issue.node_id) ?? [];
+    list.push(issue);
+    byNode.set(issue.node_id, list);
+  }
+
+  return nodes.map((node) => {
+    const ctype = String(node.type ?? node.data?.component_type ?? "");
+    const config = normalizeNodeConfig(node.data?.config, ctype);
+    const nodeIssues = byNode.get(node.id) ?? [];
+    let status: VisualPipelineConfigValidationStatus = "OK";
+    if (nodeIssues.some((i) => i.severity === "ERROR")) status = "ERROR";
+    else if (nodeIssues.some((i) => i.severity === "WARNING")) status = "WARNING";
+
+    return {
+      ...node,
+      data: {
+        ...node.data,
+        config: {
+          ...config,
+          validation: {
+            status,
+            issue_count: nodeIssues.length,
+            last_validated_at: validatedAt,
+          },
+        },
+      },
+    };
+  });
+}
+
+/** Map CONFIG field_key → warning message for the selected node (R11-S5-5). */
+export function fieldWarningsFromConfigIssues(
+  issues: Array<{
+    phase?: string;
+    node_id?: string;
+    field_key?: string;
+    severity?: string;
+    message?: string;
+  }>,
+  nodeId: string | null | undefined,
+): Record<string, string> {
+  if (!nodeId) return {};
+  const ranked: Record<string, { message: string; rank: number }> = {};
+  const rank = (s?: string) => (s === "ERROR" ? 3 : s === "WARNING" ? 2 : 1);
+  for (const issue of issues) {
+    if (issue.phase !== "CONFIG" || issue.node_id !== nodeId || !issue.field_key || !issue.message) {
+      continue;
+    }
+    const nextRank = rank(issue.severity);
+    const prev = ranked[issue.field_key];
+    if (!prev || nextRank >= prev.rank) {
+      ranked[issue.field_key] = { message: issue.message, rank: nextRank };
+    }
+  }
+  const out: Record<string, string> = {};
+  for (const [key, val] of Object.entries(ranked)) {
+    out[key] = val.message;
+  }
+  return out;
+}

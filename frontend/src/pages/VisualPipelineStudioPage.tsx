@@ -65,7 +65,7 @@ import {
   parsePortHandleId,
   serializeGraphBody,
 } from "@/utils/visualPipelineGraph";
-import { applyNodeConfigPatch } from "@/utils/visualPipelineNodeConfig";
+import { applyConfigValidationCache, applyNodeConfigPatch, fieldWarningsFromConfigIssues } from "@/utils/visualPipelineNodeConfig";
 
 function StudioCanvasInner() {
   const { pipelineId = "" } = useParams<{ pipelineId: string }>();
@@ -167,6 +167,20 @@ function StudioCanvasInner() {
 
   const selectedNode = useMemo(() => nodes.find((n) => n.id === selectedNodeId) ?? null, [nodes, selectedNodeId]);
   const selectedCatalog = selectedNode ? catalogMap.get(String(selectedNode.type)) ?? null : null;
+  const selectedConfigStatus = useMemo(() => {
+    if (!selectedNode) return "NOT_VALIDATED";
+    const raw = (selectedNode.data as { config?: { validation?: { status?: string } } } | undefined)?.config
+      ?.validation?.status;
+    if (raw === "VALID") return "OK";
+    if (raw === "INVALID") return "ERROR";
+    return raw ?? "NOT_VALIDATED";
+  }, [selectedNode]);
+  const fieldWarnings = useMemo(() => {
+    if (!validationResult || selectedConfigStatus === "NOT_VALIDATED" || selectedConfigStatus === "STALE") {
+      return {};
+    }
+    return fieldWarningsFromConfigIssues(validationResult.issues ?? [], selectedNodeId);
+  }, [validationResult, selectedNodeId, selectedConfigStatus]);
 
   const onConnect: OnConnect = useCallback(
     (connection: Connection) => {
@@ -303,6 +317,7 @@ function StudioCanvasInner() {
       });
       setValidationResult(result);
       setValidationExpanded(true);
+      setNodes((nds) => applyConfigValidationCache(nds, result.issues ?? []));
       if (result.severity === "ERROR") {
         showToast("error", "Graph 검증 오류가 있습니다.");
       } else if (result.severity === "WARNING") {
@@ -489,6 +504,7 @@ function StudioCanvasInner() {
         <VpNodeInspector
           node={selectedNode}
           catalogItem={selectedCatalog}
+          fieldWarnings={fieldWarnings}
           onLabelChange={handleLabelChange}
           onConfigChange={handleNodeConfigChange}
           onDelete={handleDeleteNode}

@@ -24,6 +24,7 @@ interface VpJsonTextareaFieldProps {
   help?: string;
   advanced?: boolean;
   disabled?: boolean;
+  warning?: string;
   onChange: (patch: Record<string, unknown>) => void;
 }
 
@@ -35,6 +36,7 @@ export function VpJsonTextareaField({
   help,
   advanced,
   disabled,
+  warning,
   onChange,
 }: VpJsonTextareaFieldProps) {
   const [draft, setDraft] = useState(() => valueToDraft(value));
@@ -71,7 +73,7 @@ export function VpJsonTextareaField({
       fieldKey={fieldKey}
       label={advanced ? `${label} (advanced)` : label}
       help={help}
-      warning={parseWarning}
+      warning={parseWarning || warning}
     >
       <textarea
         value={draft}

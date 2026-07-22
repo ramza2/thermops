@@ -9,6 +9,7 @@ from app.services.visual_pipeline.component_catalog_service import (
     list_components,
     list_connection_rules,
 )
+from app.services.visual_pipeline.config_validation_service import validate_node_configs
 from app.services.visual_pipeline.graph_schema_service import (
     VisualPipelineGraphError,
     empty_graph,
@@ -26,6 +27,9 @@ def _issue(
     code: str,
     message: str,
     hint: str | None = None,
+    phase: str | None = None,
+    field_key: str | None = None,
+    component_type: str | None = None,
     node_id: str | None = None,
     edge_id: str | None = None,
     source_node_id: str | None = None,
@@ -47,6 +51,12 @@ def _issue(
     }
     if hint:
         item["hint"] = hint
+    if phase:
+        item["phase"] = phase
+    if field_key:
+        item["field_key"] = field_key
+    if component_type:
+        item["component_type"] = component_type
     if node_id:
         item["node_id"] = node_id
     if edge_id:
@@ -747,6 +757,9 @@ def validate_visual_pipeline_graph(
                     )
                 )
 
+    # R11-S5-5 Node config validation (after topology / port / edge)
+    issues.extend(validate_node_configs(nodes, catalog, validation_level=level))
+
     return _finalize(issues, normalized, level, pipeline_id)
 
 
@@ -764,6 +777,8 @@ def _finalize(
             iss.get("severity"),
             iss.get("code"),
             iss.get("message"),
+            iss.get("phase"),
+            iss.get("field_key"),
             iss.get("node_id"),
             iss.get("edge_id"),
             iss.get("source_node_id"),

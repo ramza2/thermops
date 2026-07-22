@@ -302,6 +302,142 @@ def test_service_direct() -> None:
     assert "EDGE_CONNECTION_DISALLOWED" in codes(deny) or "EDGE_CONNECTION_RULE_NOT_FOUND" in codes(deny)
     print("  [ok] disallowed connection")
 
+    # --- R11-S5-5 config validation ---
+    cfg_missing = validate_visual_pipeline_graph(
+        {
+            "nodes": [{"id": "r", "type": "VP_REST_API_SOURCE", "position": {"x": 0, "y": 0}, "data": {}}],
+            "edges": [],
+        },
+        validation_level="BASIC",
+    )
+    assert cfg_missing["valid"] is True
+    assert "NODE_CONFIG_MISSING" in codes(cfg_missing)
+    assert "NODE_CONFIG_REST_OPERATION_MISSING" in codes(cfg_missing)
+    assert any(i.get("phase") == "CONFIG" and i.get("field_key") == "operation_name" for i in cfg_missing["issues"])
+    print("  [ok] BASIC config missing → WARNING, valid=true")
+
+    rest_secret = validate_visual_pipeline_graph(
+        {
+            "nodes": [
+                {
+                    "id": "r",
+                    "type": "VP_REST_API_SOURCE",
+                    "position": {"x": 0, "y": 0},
+                    "data": {
+                        "config": {
+                            "schema_version": "R11-S5-0",
+                            "values": {
+                                "data_source_id": "DS-1",
+                                "operation_name": "op",
+                                "endpoint_path": "/x",
+                                "http_method": "GET",
+                                "api_key": "sk-secret-inline",
+                            },
+                        }
+                    },
+                }
+            ],
+            "edges": [],
+        },
+        validation_level="BASIC",
+    )
+    assert rest_secret["valid"] is True
+    assert "NODE_CONFIG_SECRET_INLINE_NOT_ALLOWED" in codes(rest_secret)
+    assert any(i.get("field_key") == "api_key" for i in rest_secret["issues"])
+    # secret not stripped from normalized graph values
+    nv = rest_secret["normalized_graph"]["nodes"][0]["data"]["config"]["values"]
+    assert nv.get("api_key") == "sk-secret-inline"
+    print("  [ok] secret inline issue only (value retained)")
+
+    upsert_keys = validate_visual_pipeline_graph(
+        {
+            "nodes": [
+                {
+                    "id": "u",
+                    "type": "VP_UPSERT_LOAD",
+                    "position": {"x": 0, "y": 0},
+                    "data": {
+                        "config": {
+                            "schema_version": "R11-S5-0",
+                            "values": {
+                                "standard_dataset_id": "SD-1",
+                                "target_table": "tb_x",
+                                "write_mode": "UPSERT",
+                            },
+                        }
+                    },
+                }
+            ],
+            "edges": [],
+        },
+        validation_level="STRICT",
+    )
+    assert upsert_keys["valid"] is False
+    assert "NODE_CONFIG_KEY_COLUMNS_MISSING" in codes(upsert_keys)
+    assert any(i.get("severity") == "ERROR" and i.get("code") == "NODE_CONFIG_KEY_COLUMNS_MISSING" for i in upsert_keys["issues"])
+    print("  [ok] STRICT upsert key columns ERROR")
+
+    cron_bad = validate_visual_pipeline_graph(
+        {
+            "nodes": [
+                {
+                    "id": "c",
+                    "type": "VP_CRON_SCHEDULE",
+                    "position": {"x": 0, "y": 0},
+                    "data": {
+                        "config": {
+                            "schema_version": "R11-S5-0",
+                            "values": {
+                                "schedule_type": "CRON",
+                                "cron_expression": "not a cron",
+                                "timezone": "Mars/Phobos",
+                            },
+                        }
+                    },
+                }
+            ],
+            "edges": [],
+        },
+        validation_level="BASIC",
+    )
+    assert cron_bad["valid"] is True
+    assert "NODE_CONFIG_CRON_INVALID" in codes(cron_bad)
+    assert "NODE_CONFIG_TIMEZONE_INVALID" in codes(cron_bad)
+    print("  [ok] BASIC cron/timezone WARNING")
+
+    good_cfg = validate_visual_pipeline_graph(
+        {
+            "nodes": [
+                {
+                    "id": "r",
+                    "type": "VP_REST_API_SOURCE",
+                    "position": {"x": 0, "y": 0},
+                    "data": {
+                        "config": {
+                            "schema_version": "R11-S5-0",
+                            "values": {
+                                "data_source_id": "DS-1",
+                                "operation_name": "op",
+                                "endpoint_path": "/x",
+                                "http_method": "GET",
+                                "credential_ref": "CRED-1",
+                            },
+                        }
+                    },
+                }
+            ],
+            "edges": [],
+        },
+        validation_level="BASIC",
+    )
+    assert "NODE_CONFIG_REST_OPERATION_MISSING" not in codes(good_cfg)
+    assert "NODE_CONFIG_REQUIRED_FIELD_MISSING" not in codes(good_cfg)
+    assert not any(
+        i.get("code") == "NODE_CONFIG_REQUIRED_FIELD_MISSING" and i.get("field_key") == "credential_ref"
+        for i in good_cfg["issues"]
+    )
+    print("  [ok] REST good config; credential_ref not forced required")
+
 
 def test_http() -> None:
     empty = api("POST", "/visual-pipelines/validate-graph", {"graph": {"nodes": [], "edges": []}, "validation_level": "BASIC"})

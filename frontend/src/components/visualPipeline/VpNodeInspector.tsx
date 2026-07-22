@@ -16,6 +16,7 @@ import { ensureNodeConfig, formatNodeConfigPreviewJson } from "@/utils/visualPip
 interface VpNodeInspectorProps {
   node: Node | null;
   catalogItem: ComponentCatalogItem | null;
+  fieldWarnings?: Record<string, string>;
   onLabelChange: (label: string) => void;
   onConfigChange: (patch: Record<string, unknown>) => void;
   onDelete: () => void;
@@ -29,23 +30,35 @@ const VALIDATION_BADGE: Record<
     label: "NOT_VALIDATED",
     className: "bg-slate-100 text-slate-600 border-slate-200",
   },
-  VALID: {
-    label: "VALID",
+  OK: {
+    label: "OK",
     className: "bg-emerald-50 text-emerald-700 border-emerald-200",
   },
-  INVALID: {
-    label: "INVALID",
+  WARNING: {
+    label: "WARNING",
+    className: "bg-amber-50 text-amber-700 border-amber-200",
+  },
+  ERROR: {
+    label: "ERROR",
     className: "bg-red-50 text-red-700 border-red-200",
   },
   STALE: {
     label: "STALE",
     className: "bg-amber-50 text-amber-700 border-amber-200",
   },
+  VALID: {
+    label: "OK",
+    className: "bg-emerald-50 text-emerald-700 border-emerald-200",
+  },
+  INVALID: {
+    label: "ERROR",
+    className: "bg-red-50 text-red-700 border-red-200",
+  },
 };
 
 function ConfigValidationBadge({ validation }: { validation?: VisualPipelineNodeConfigValidation }) {
   const status = validation?.status ?? "NOT_VALIDATED";
-  const badge = VALIDATION_BADGE[status];
+  const badge = VALIDATION_BADGE[status] ?? VALIDATION_BADGE.NOT_VALIDATED;
   return (
     <span
       className={`inline-flex text-[8px] font-bold uppercase tracking-wide border rounded px-1.5 py-0.5 ${badge.className}`}
@@ -59,10 +72,12 @@ function ConfigValidationBadge({ validation }: { validation?: VisualPipelineNode
 function ConfigFormForType({
   componentType,
   values,
+  fieldWarnings,
   onConfigChange,
 }: {
   componentType: string;
   values: Record<string, unknown>;
+  fieldWarnings?: Record<string, string>;
   onConfigChange: (patch: Record<string, unknown>) => void;
 }) {
   if (componentType === "VP_REST_API_SOURCE") {
@@ -70,6 +85,7 @@ function ConfigFormForType({
       <VpRestApiSourceConfigForm
         values={values}
         schema={getVisualPipelineConfigSchema("VP_REST_API_SOURCE")}
+        fieldWarnings={fieldWarnings}
         onChange={onConfigChange}
       />
     );
@@ -79,6 +95,7 @@ function ConfigFormForType({
       <VpTransformConfigForm
         values={values}
         schema={getVisualPipelineConfigSchema("VP_TRANSFORM")}
+        fieldWarnings={fieldWarnings}
         onChange={onConfigChange}
       />
     );
@@ -88,6 +105,7 @@ function ConfigFormForType({
       <VpUpsertLoadConfigForm
         values={values}
         schema={getVisualPipelineConfigSchema("VP_UPSERT_LOAD")}
+        fieldWarnings={fieldWarnings}
         onChange={onConfigChange}
       />
     );
@@ -97,6 +115,7 @@ function ConfigFormForType({
       <VpCronScheduleConfigForm
         values={values}
         schema={getVisualPipelineConfigSchema("VP_CRON_SCHEDULE")}
+        fieldWarnings={fieldWarnings}
         onChange={onConfigChange}
       />
     );
@@ -114,6 +133,7 @@ const EDITABLE_FORM_TYPES = new Set([
 export function VpNodeInspector({
   node,
   catalogItem,
+  fieldWarnings,
   onLabelChange,
   onConfigChange,
   onDelete,
@@ -215,6 +235,7 @@ export function VpNodeInspector({
             <ConfigFormForType
               componentType={componentType}
               values={normalizedConfig.values}
+              fieldWarnings={fieldWarnings}
               onConfigChange={onConfigChange}
             />
           ) : (

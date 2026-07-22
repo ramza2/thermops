@@ -27,6 +27,7 @@ interface VpColumnListFieldProps {
   help?: string;
   required?: boolean;
   disabled?: boolean;
+  warning?: string;
   onChange: (patch: Record<string, unknown>) => void;
 }
 
@@ -38,6 +39,7 @@ export function VpColumnListField({
   help,
   required,
   disabled,
+  warning,
   onChange,
 }: VpColumnListFieldProps) {
   const [draft, setDraft] = useState(() => valueToDraft(value));
@@ -57,7 +59,7 @@ export function VpColumnListField({
   };
 
   return (
-    <VpConfigFieldShell fieldKey={fieldKey} label={label} required={required} help={help}>
+    <VpConfigFieldShell fieldKey={fieldKey} label={label} required={required} help={help} warning={warning}>
       <input
         type="text"
         value={draft}

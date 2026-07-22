@@ -9,9 +9,14 @@ export interface VisualPipelineGraphViewport {
 /** R11-S5-1 config validation cache on node.data.config.validation */
 export type VisualPipelineConfigValidationStatus =
   | "NOT_VALIDATED"
+  | "OK"
+  | "WARNING"
+  | "ERROR"
+  | "STALE"
+  /** @deprecated use OK */
   | "VALID"
-  | "INVALID"
-  | "STALE";
+  /** @deprecated use ERROR */
+  | "INVALID";
 
 export interface VisualPipelineNodeConfigValidation {
   status: VisualPipelineConfigValidationStatus;
@@ -193,6 +198,9 @@ export interface VisualPipelineValidationIssue {
   code: string;
   message: string;
   hint?: string;
+  phase?: string;
+  field_key?: string;
+  component_type?: string;
   node_id?: string;
   edge_id?: string;
   source_node_id?: string;

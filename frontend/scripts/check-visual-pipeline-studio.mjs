@@ -400,6 +400,36 @@ async function runBrowserSmoke(pipeline) {
     }
     console.log(`  [ok] Graph 검증 result severity=${severity}, ${errorsText}`);
 
+    // R11-S5-5: clear REST operation_name → config WARNING + badge
+    await page.getByTestId("visual-pipeline-node-e2e-rest").click();
+    await inspector.getByTestId("visual-pipeline-inspector-config-field-operation_name").waitFor({
+      state: "visible",
+      timeout: 10000,
+    });
+    await inspector
+      .getByTestId("visual-pipeline-inspector-config-field-operation_name")
+      .locator("input")
+      .fill("");
+    await page.getByTestId("visual-pipeline-validate-button").click();
+    await validation.getByText("NODE_CONFIG_REST_OPERATION_MISSING").first().waitFor({
+      state: "visible",
+      timeout: 30000,
+    });
+    await validation.getByText("CONFIG").first().waitFor({ state: "visible", timeout: 10000 });
+    await validation.getByText(/field=operation_name/).first().waitFor({ state: "visible", timeout: 10000 });
+    const badge = inspector.getByTestId("visual-pipeline-inspector-validation-badge");
+    await badge.waitFor({ state: "visible", timeout: 10000 });
+    const badgeText = (await badge.innerText()).trim();
+    if (badgeText !== "WARNING" && badgeText !== "ERROR") {
+      fail(`expected REST config badge WARNING/ERROR after clearing operation_name, got ${badgeText}`);
+    }
+    const fieldWarn = inspector
+      .getByTestId("visual-pipeline-inspector-config-field-operation_name")
+      .locator("p")
+      .filter({ hasText: /operation_name/i });
+    await fieldWarn.first().waitFor({ state: "visible", timeout: 10000 });
+    console.log(`  [ok] S5-5 config issue + badge=${badgeText} + field warning`);
+
     await toolbar.getByRole("button", { name: "이력" }).click();
     await page.getByText("버전 이력").first().waitFor({ state: "visible", timeout: 15000 });
     await page.getByRole("button", { name: "닫기" }).click();

@@ -1352,6 +1352,22 @@ cd frontend && node scripts/check-visual-pipeline-studio.mjs
 - **E2E:** Upsert/CRON Form 표시·입력·dirty·저장 + Graph 검증 OK/errors 0. REST/Transform visibility 최소 유지.
 - **다음:** R11-S5-5 config validation API.
 
+### R11-S5-5 Config Validation API + Inspector badge 연동
+
+- **범위:** 기존 Graph Validation API 확장 + Studio Inspector config badge / field warning 연동.
+- **Backend:**
+  - `config_validation_service.py` — REST / Transform / Upsert / CRON config + secret inline detection
+  - `graph_validation_service.py` — topology/port 이후 CONFIG phase 추가
+  - issue optional `phase` / `field_key` / `component_type`, `NODE_CONFIG_*` codes
+  - `validation_level` BASIC/STRICT 재사용 (`valid` = ERROR 유무)
+- **Frontend:**
+  - validation issue type 확장, badge `OK|WARNING|ERROR|NOT_VALIDATED|STALE`
+  - Graph 검증 후 `phase===CONFIG`만 `node.data.config.validation` cache 반영
+  - Form field warning은 CONFIG + `field_key`만 연결; config 변경 시 cache `NOT_VALIDATED`
+  - Validation Panel에 CONFIG / field_key 표시
+- **정책:** BASIC config는 WARNING/INFO 중심(저장 비차단). STRICT required/type/enum/secret/cron/upsert key는 ERROR. secret inline은 issue만(자동 삭제 없음). `credential_ref` non-required 유지.
+- **제외:** STRICT UI 버튼, compile/run/activation, DB/migration, package 변경, 저장 UX 변경, R10 본기능 수정.
+
 ## 설계 문서 참조
 
 - `docs/md/THERMOps_R11-S5-0_Visual_Pipeline_Inspector_Config_Form_설계.md`

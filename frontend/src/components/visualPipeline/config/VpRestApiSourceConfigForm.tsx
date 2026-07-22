@@ -12,6 +12,7 @@ const INPUT_CLASS =
 export type VpRestApiSourceConfigFormProps = {
   values: VisualPipelineNodeConfigValues;
   schema?: VisualPipelineComponentConfigSchema | null;
+  fieldWarnings?: Record<string, string>;
   onChange: (patch: Record<string, unknown>) => void;
   disabled?: boolean;
 };
@@ -23,6 +24,7 @@ function strVal(values: VisualPipelineNodeConfigValues, key: string): string {
 
 export function VpRestApiSourceConfigForm({
   values,
+  fieldWarnings,
   onChange,
   disabled,
 }: VpRestApiSourceConfigFormProps) {
@@ -30,6 +32,7 @@ export function VpRestApiSourceConfigForm({
     const raw = e.target.value;
     onChange({ [key]: raw === "" ? undefined : raw });
   };
+  const warn = (key: string) => fieldWarnings?.[key];
 
   return (
     <div className="space-y-3" data-testid="visual-pipeline-inspector-config-form">
@@ -40,6 +43,7 @@ export function VpRestApiSourceConfigForm({
           label="Data Source ID"
           required
           help="REST Connector / Data Source 참조 ID"
+          warning={warn("data_source_id")}
         >
           <input
             type="text"
@@ -50,7 +54,12 @@ export function VpRestApiSourceConfigForm({
             className={INPUT_CLASS}
           />
         </VpConfigFieldShell>
-        <VpConfigFieldShell fieldKey="operation_name" label="Operation Name" required>
+        <VpConfigFieldShell
+          fieldKey="operation_name"
+          label="Operation Name"
+          required
+          warning={warn("operation_name")}
+        >
           <input
             type="text"
             value={strVal(values, "operation_name")}
@@ -64,6 +73,7 @@ export function VpRestApiSourceConfigForm({
           fieldKey="credential_ref"
           label="Credential Ref"
           help="API key/token/password 원문이 아닌 credential 참조 ID만 입력하세요."
+          warning={warn("credential_ref")}
         >
           <input
             type="text"
@@ -79,7 +89,12 @@ export function VpRestApiSourceConfigForm({
 
       <section className="rounded-lg border border-slate-100 p-2.5 space-y-2.5">
         <div className="text-[9px] font-bold text-slate-400 uppercase tracking-wide">Request</div>
-        <VpConfigFieldShell fieldKey="endpoint_path" label="Endpoint Path" required>
+        <VpConfigFieldShell
+          fieldKey="endpoint_path"
+          label="Endpoint Path"
+          required
+          warning={warn("endpoint_path")}
+        >
           <input
             type="text"
             value={strVal(values, "endpoint_path")}
@@ -89,7 +104,12 @@ export function VpRestApiSourceConfigForm({
             className={INPUT_CLASS}
           />
         </VpConfigFieldShell>
-        <VpConfigFieldShell fieldKey="http_method" label="HTTP Method" required>
+        <VpConfigFieldShell
+          fieldKey="http_method"
+          label="HTTP Method"
+          required
+          warning={warn("http_method")}
+        >
           <select
             value={strVal(values, "http_method") || "GET"}
             onChange={patchText("http_method")}
@@ -107,6 +127,7 @@ export function VpRestApiSourceConfigForm({
           placeholder={'{ "branch": "P001" }'}
           advanced
           disabled={disabled}
+          warning={warn("request_params")}
           onChange={onChange}
         />
         <VpJsonTextareaField
@@ -116,6 +137,7 @@ export function VpRestApiSourceConfigForm({
           placeholder={'{\n  "type": "NONE"\n}'}
           advanced
           disabled={disabled}
+          warning={warn("pagination")}
           onChange={onChange}
         />
       </section>
@@ -126,6 +148,7 @@ export function VpRestApiSourceConfigForm({
           fieldKey="response_item_path"
           label="Response Item Path"
           help="JSON 응답에서 row array 위치 (JSONPath)"
+          warning={warn("response_item_path")}
         >
           <input
             type="text"

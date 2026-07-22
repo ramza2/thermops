@@ -30,7 +30,15 @@ function IssueRow({
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-1.5">
             <span className="font-bold uppercase text-[9px] tracking-wide">{issue.severity}</span>
+            {issue.phase && (
+              <span className="font-bold uppercase text-[8px] tracking-wide bg-white/70 border border-current/20 rounded px-1 py-0.5 opacity-80">
+                {issue.phase}
+              </span>
+            )}
             <span className="font-mono text-[10px] opacity-80">{issue.code}</span>
+            {issue.field_key && (
+              <span className="font-mono text-[9px] opacity-70">field={issue.field_key}</span>
+            )}
           </div>
           <p className="mt-1 text-[11px] leading-snug">{issue.message}</p>
           {issue.hint && <p className="mt-1 text-[10px] opacity-80">{issue.hint}</p>}
@@ -42,6 +50,12 @@ function IssueRow({
               {issue.data_type || issue.source_data_type
                 ? ` · ${issue.data_type || issue.source_data_type}`
                 : ""}
+            </p>
+          )}
+          {issue.phase === "CONFIG" && issue.component_type && (
+            <p className="mt-1 font-mono text-[10px] opacity-70">
+              {issue.component_type}
+              {issue.node_id ? ` · ${issue.node_id}` : ""}
             </p>
           )}
         </div>

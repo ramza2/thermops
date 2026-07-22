@@ -16,6 +16,7 @@ const NULL_UPDATE_OPTIONS = ["KEEP_EXISTING", "OVERWRITE_WITH_NULL"] as const;
 export type VpUpsertLoadConfigFormProps = {
   values: VisualPipelineNodeConfigValues;
   schema?: VisualPipelineComponentConfigSchema | null;
+  fieldWarnings?: Record<string, string>;
   onChange: (patch: Record<string, unknown>) => void;
   disabled?: boolean;
 };
@@ -31,9 +32,10 @@ function boolVal(values: VisualPipelineNodeConfigValues, key: string, fallback =
   return fallback;
 }
 
-export function VpUpsertLoadConfigForm({ values, onChange, disabled }: VpUpsertLoadConfigFormProps) {
+export function VpUpsertLoadConfigForm({ values, fieldWarnings, onChange, disabled }: VpUpsertLoadConfigFormProps) {
   const writeMode = strVal(values, "write_mode") || "INSERT_ONLY";
   const conflictRequired = writeMode === "DEDUPLICATE" || writeMode === "UPSERT";
+  const warn = (key: string) => fieldWarnings?.[key];
 
   const patchText = (key: string) => (e: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const raw = e.target.value;
@@ -48,6 +50,7 @@ export function VpUpsertLoadConfigForm({ values, onChange, disabled }: VpUpsertL
           fieldKey="standard_dataset_id"
           label="Standard Dataset ID"
           help="표준 데이터셋 참조 ID. 실제 selector/API 연동은 후속."
+          warning={warn("standard_dataset_id")}
         >
           <input
             type="text"
@@ -63,6 +66,7 @@ export function VpUpsertLoadConfigForm({ values, onChange, disabled }: VpUpsertL
           label="Target Table"
           required
           help="적재 대상 물리 테이블명 또는 compiled target hint"
+          warning={warn("target_table")}
         >
           <input
             type="text"
@@ -77,7 +81,7 @@ export function VpUpsertLoadConfigForm({ values, onChange, disabled }: VpUpsertL
 
       <section className="rounded-lg border border-slate-100 p-2.5 space-y-2.5">
         <div className="text-[9px] font-bold text-slate-400 uppercase tracking-wide">Write Policy</div>
-        <VpConfigFieldShell fieldKey="write_mode" label="Write Mode" required>
+        <VpConfigFieldShell fieldKey="write_mode" label="Write Mode" required warning={warn("write_mode")}>
           <select
             value={writeMode}
             onChange={patchText("write_mode")}
@@ -102,6 +106,7 @@ export function VpUpsertLoadConfigForm({ values, onChange, disabled }: VpUpsertL
               ? "DEDUPLICATE/UPSERT 시 conflict key가 필요합니다 (저장은 차단하지 않음)."
               : "쉼표로 구분된 컬럼 목록 → string[]로 저장"
           }
+          warning={warn("conflict_key_columns_json")}
           disabled={disabled}
           onChange={onChange}
         />
@@ -109,7 +114,11 @@ export function VpUpsertLoadConfigForm({ values, onChange, disabled }: VpUpsertL
 
       <section className="rounded-lg border border-slate-100 p-2.5 space-y-2.5">
         <div className="text-[9px] font-bold text-slate-400 uppercase tracking-wide">Dedup</div>
-        <VpConfigFieldShell fieldKey="duplicate_within_batch_policy" label="Duplicate Within Batch">
+        <VpConfigFieldShell
+          fieldKey="duplicate_within_batch_policy"
+          label="Duplicate Within Batch"
+          warning={warn("duplicate_within_batch_policy")}
+        >
           <select
             value={strVal(values, "duplicate_within_batch_policy") || "KEEP_LAST"}
             onChange={patchText("duplicate_within_batch_policy")}
@@ -123,7 +132,11 @@ export function VpUpsertLoadConfigForm({ values, onChange, disabled }: VpUpsertL
             ))}
           </select>
         </VpConfigFieldShell>
-        <VpConfigFieldShell fieldKey="null_update_policy" label="Null Update Policy">
+        <VpConfigFieldShell
+          fieldKey="null_update_policy"
+          label="Null Update Policy"
+          warning={warn("null_update_policy")}
+        >
           <select
             value={strVal(values, "null_update_policy") || "KEEP_EXISTING"}
             onChange={patchText("null_update_policy")}
@@ -137,7 +150,11 @@ export function VpUpsertLoadConfigForm({ values, onChange, disabled }: VpUpsertL
             ))}
           </select>
         </VpConfigFieldShell>
-        <VpConfigFieldShell fieldKey="save_dedup_summary_yn" label="Save Dedup Summary">
+        <VpConfigFieldShell
+          fieldKey="save_dedup_summary_yn"
+          label="Save Dedup Summary"
+          warning={warn("save_dedup_summary_yn")}
+        >
           <label className="inline-flex items-center gap-2 text-[11px] text-slate-600">
             <input
               type="checkbox"
