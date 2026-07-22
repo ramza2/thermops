@@ -1377,8 +1377,19 @@ cd frontend && node scripts/check-visual-pipeline-studio.mjs
 - **S5 단계 완료:** Config registry → 4 Form → Validation/badge → round-trip/E2E 정리.
 - **다음:** R11-S6-0 Compile 설계.
 
+### R11-S6-0 Visual Pipeline Compile 설계
+
+- **범위:** docs-only — Compile API/Run/activation 구현 없음.
+- **문서:** [`docs/md/THERMOps_R11-S6-0_Visual_Pipeline_Compile_설계.md`](docs/md/THERMOps_R11-S6-0_Visual_Pipeline_Compile_설계.md)
+- **작성 기준 커밋:** `3706bdc` (R11-S5-6)
+- **요지:** `current_graph_json` → R10 Data Load/API Connector/Transform/Write/Schedule 변환 계층 설계.
+- **S6-1 권장:** `POST .../compile-preview` (no persistence). 장기 persistence는 별도 compile result 테이블(C) 권장.
+- **정책:** STRICT gate for compile; CRON `active_yn`은 activation 아님; REST→Upsert MVP 허용; secret ref-only.
+- **다음:** R11-S6-1 Compile Preview API PoC.
+
 ## 설계 문서 참조
 
+- `docs/md/THERMOps_R11-S6-0_Visual_Pipeline_Compile_설계.md`
 - `docs/md/THERMOps_R11-S5-0_Visual_Pipeline_Inspector_Config_Form_설계.md`
 - `docs/md/THERMOps_API_설계서.md`
 - `docs/md/THERMOps_DB_설계서.md`
