@@ -94,7 +94,15 @@ const TRANSFORM_FIELDS: VisualPipelineConfigFieldSchema[] = [
     ],
   }),
   field("mapping_config", { type: "object", field_type: "object", ui_component: "object_editor", required: false }),
-  field("unmapped_policy", { type: "enum", field_type: "enum", ui_component: "select", required: false, advanced: true }),
+  field("unmapped_policy", {
+    type: "enum",
+    field_type: "enum",
+    ui_component: "select",
+    required: false,
+    advanced: true,
+    // Backend catalog has no enum values yet — FE overlay MVP for S5-3.
+    options: ["KEEP", "DROP", "ERROR"],
+  }),
   field("hour_policy", {
     type: "object",
     field_type: "object",

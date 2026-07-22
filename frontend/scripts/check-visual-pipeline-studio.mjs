@@ -271,22 +271,44 @@ async function runBrowserSmoke(pipeline) {
         timeout: 10000,
       });
     }
-    await inspector.getByText("API key/token/password 원문이 아닌 credential 참조 ID만 입력하세요.").first().waitFor({
+    console.log("  [ok] REST config form fields visible (regression)");
+
+    await page.getByTestId("visual-pipeline-node-e2e-transform").click();
+    await inspector.getByText("VP_TRANSFORM").first().waitFor({ state: "visible", timeout: 10000 });
+    await inspector.getByTestId("visual-pipeline-inspector-config-form").waitFor({
       state: "visible",
       timeout: 10000,
     });
-    console.log("  [ok] REST config form fields visible");
+    for (const fieldKey of ["transform_type", "mapping_config", "hour_policy", "target_schema_preview"]) {
+      await inspector.getByTestId(`visual-pipeline-inspector-config-field-${fieldKey}`).waitFor({
+        state: "visible",
+        timeout: 10000,
+      });
+    }
+    await inspector.getByText("미리보기 전용 필드이며 graph 저장 대상이 아닙니다.").first().waitFor({
+      state: "visible",
+      timeout: 10000,
+    });
+    console.log("  [ok] Transform config form fields visible");
 
-    const operationInput = inspector
-      .getByTestId("visual-pipeline-inspector-config-field-operation_name")
-      .locator("input");
-    await operationInput.fill("sample_fetch_e2e");
-    const endpointInput = inspector
-      .getByTestId("visual-pipeline-inspector-config-field-endpoint_path")
-      .locator("input");
-    await endpointInput.fill("/api/v1/e2e/sample");
+    const transformTypeSelect = inspector
+      .getByTestId("visual-pipeline-inspector-config-field-transform_type")
+      .locator("select");
+    await transformTypeSelect.selectOption("WIDE_HOUR_TO_LONG");
+    const mappingTextarea = inspector
+      .getByTestId("visual-pipeline-inspector-config-field-mapping_config")
+      .locator("textarea");
+    await mappingTextarea.fill(
+      JSON.stringify({ mappings: [{ source: "value", target: "demand_value", type: "number" }] }, null, 2),
+    );
+    const hourTextarea = inspector
+      .getByTestId("visual-pipeline-inspector-config-field-hour_policy")
+      .locator("textarea");
+    await hourTextarea.fill(
+      JSON.stringify({ hour_columns: ["h01", "h02"], target_hour_column: "hour" }, null, 2),
+    );
     await toolbar.getByText("● 저장되지 않음").first().waitFor({ state: "visible", timeout: 10000 });
-    console.log("  [ok] config edit -> graph dirty");
+    console.log("  [ok] Transform config edit -> graph dirty");
 
     await toolbar.getByRole("button", { name: "저장", exact: true }).click();
     await page.getByText("현재 Graph가 저장되었습니다.").first().waitFor({ state: "visible", timeout: 30000 });

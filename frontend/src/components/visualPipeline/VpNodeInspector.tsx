@@ -2,6 +2,7 @@ import { Box, Trash2 } from "lucide-react";
 import type { Node } from "@xyflow/react";
 import { Button } from "@/components/Button";
 import { VpRestApiSourceConfigForm } from "@/components/visualPipeline/config/VpRestApiSourceConfigForm";
+import { VpTransformConfigForm } from "@/components/visualPipeline/config/VpTransformConfigForm";
 import type {
   ComponentCatalogItem,
   VisualPipelineConfigValidationStatus,
@@ -83,8 +84,11 @@ export function VpNodeInspector({
   const componentType = String(node.type ?? node.data?.component_type ?? "");
   const label = String(node.data?.label ?? "");
   const isRestSource = componentType === "VP_REST_API_SOURCE";
+  const isTransform = componentType === "VP_TRANSFORM";
+  const hasEditableForm = isRestSource || isTransform;
   const normalizedConfig = ensureNodeConfig(node, componentType);
   const restSchema = isRestSource ? getVisualPipelineConfigSchema("VP_REST_API_SOURCE") : null;
+  const transformSchema = isTransform ? getVisualPipelineConfigSchema("VP_TRANSFORM") : null;
   const inputs = catalogItem?.input_ports?.map((p) => p.port_id) ?? [];
   const outputs = catalogItem?.output_ports?.map((p) => p.port_id) ?? [];
 
@@ -152,12 +156,18 @@ export function VpNodeInspector({
 
         <section className="rounded-lg border border-slate-100 p-2.5">
           <div className="text-[9px] font-bold text-slate-400 uppercase tracking-wide mb-2">
-            {isRestSource ? "Config" : "Config (preview)"}
+            {hasEditableForm ? "Config" : "Config (preview)"}
           </div>
           {isRestSource ? (
             <VpRestApiSourceConfigForm
               values={normalizedConfig.values}
               schema={restSchema}
+              onChange={onConfigChange}
+            />
+          ) : isTransform ? (
+            <VpTransformConfigForm
+              values={normalizedConfig.values}
+              schema={transformSchema}
               onChange={onConfigChange}
             />
           ) : (

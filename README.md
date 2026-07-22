@@ -1326,6 +1326,19 @@ cd frontend && node scripts/check-visual-pipeline-studio.mjs
 - **E2E:** Studio script — REST Form 표시, 입력, dirty, 저장 toast, Graph 검증 OK/errors 0.
 - **제외:** backend/config validation API, Transform/Upsert/CRON Form, secret 원문 입력 UI.
 
+### R11-S5-3 Transform Inspector Form UI
+
+- **범위:** frontend only — `VP_TRANSFORM` editable Form 추가. REST Form 유지. Upsert/CRON은 JSON preview 유지.
+- **파일:**
+  - `frontend/src/components/visualPipeline/config/VpTransformConfigForm.tsx` — transform_type, mapping_config, unmapped_policy, hour_policy, target_schema_preview
+  - `VpNodeInspector.tsx` — REST / Transform / preview 분기
+  - `visualPipelineConfigRegistry.ts` — `unmapped_policy` FE overlay options (`KEEP`/`DROP`/`ERROR`)
+- **동작:** 기존 `handleNodeConfigChange` / `applyNodeConfigPatch` 재사용. `VpJsonTextareaField`로 mapping/hour JSON 편집.
+- **target_schema_preview:** readonly, `store_in_graph=false`, values 기본값 미포함.
+- **unmapped_policy:** backend catalog enum values 없음 → S5-3 FE MVP overlay.
+- **E2E:** Transform Form 표시·입력·dirty·저장 + Graph 검증 OK/errors 0. REST Form visibility regression 유지.
+- **제외:** Upsert/CRON Form, backend/config validation API, compile.
+
 ## 설계 문서 참조
 
 - `docs/md/THERMOps_R11-S5-0_Visual_Pipeline_Inspector_Config_Form_설계.md`
