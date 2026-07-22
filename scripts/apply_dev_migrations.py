@@ -358,6 +358,10 @@ MIGRATIONS = [
         "R11-S6-2 visual pipeline compile result",
         _load_sql("r11s6_visual_pipeline_compile_result.sql"),
     ),
+    (
+        "R11-S6-4 visual pipeline materialization result",
+        _load_sql("r11s6_visual_pipeline_materialization.sql"),
+    ),
 ]
 
 

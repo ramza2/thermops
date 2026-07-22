@@ -70,6 +70,11 @@ class VisualPipelineCompileBody(BaseModel):
     validation_level: str = Field(default="STRICT", description="STRICT only (R11-S6-2)")
 
 
+class VisualPipelineMaterializeBody(BaseModel):
+    compile_result_id: str | None = None
+    mode: str = Field(default="UPSERT", description="UPSERT only (R11-S6-4)")
+
+
 # --- S1 Catalog (static paths before /{pipeline_id}) ---
 
 
@@ -287,6 +292,59 @@ async def get_compile_visual_pipeline_result(
         if detail == "VISUAL_PIPELINE_NOT_FOUND":
             raise HTTPException(status_code=404, detail="VISUAL_PIPELINE_NOT_FOUND") from None
         raise HTTPException(status_code=404, detail="COMPILE_RESULT_NOT_FOUND") from None
+    return ok(result)
+
+
+@router.post("/visual-pipelines/{pipeline_id}/materialize")
+async def post_materialize_visual_pipeline(
+    pipeline_id: str,
+    body: VisualPipelineMaterializeBody | None = None,
+    db: AsyncSession = Depends(get_db),
+):
+    """Materialize SUCCESS compile artifact into R10 config rows. No run/activation."""
+    from app.services.visual_pipeline.materialization_service import (
+        MaterializePreconditionError,
+        materialize_visual_pipeline,
+    )
+
+    payload = body.model_dump() if body else {}
+    mode = str(payload.get("mode") or "UPSERT").strip().upper() or "UPSERT"
+    if mode != "UPSERT":
+        raise HTTPException(status_code=400, detail="MATERIALIZE_MODE_MUST_BE_UPSERT")
+
+    try:
+        result = await materialize_visual_pipeline(
+            db,
+            pipeline_id,
+            compile_result_id=payload.get("compile_result_id"),
+            mode=mode,
+        )
+    except LookupError:
+        raise HTTPException(status_code=404, detail="VISUAL_PIPELINE_NOT_FOUND") from None
+    except MaterializePreconditionError as exc:
+        raise HTTPException(status_code=409, detail=exc.code) from None
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from None
+    return ok(result)
+
+
+@router.get("/visual-pipelines/{pipeline_id}/materialization-result")
+async def get_materialize_visual_pipeline_result(
+    pipeline_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """Return latest materialization result for a visual pipeline."""
+    from app.services.visual_pipeline.materialization_service import (
+        get_latest_visual_pipeline_materialization_result,
+    )
+
+    try:
+        result = await get_latest_visual_pipeline_materialization_result(db, pipeline_id)
+    except LookupError as exc:
+        detail = str(exc) if str(exc) else "MATERIALIZATION_RESULT_NOT_FOUND"
+        if detail == "VISUAL_PIPELINE_NOT_FOUND":
+            raise HTTPException(status_code=404, detail="VISUAL_PIPELINE_NOT_FOUND") from None
+        raise HTTPException(status_code=404, detail="MATERIALIZATION_RESULT_NOT_FOUND") from None
     return ok(result)
 
 

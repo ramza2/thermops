@@ -952,6 +952,28 @@ class VisualPipelineCompileResult(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime)
 
 
+class VisualPipelineMaterializationResult(Base):
+    """R11-S6-4 materialization history. Config rows only — no Run/activation."""
+
+    __tablename__ = "tb_visual_pipeline_materialization_result"
+    materialization_result_id: Mapped[str] = mapped_column(String(50), primary_key=True)
+    pipeline_id: Mapped[str] = mapped_column(String(50))
+    compile_result_id: Mapped[str] = mapped_column(String(50))
+    materialization_status: Mapped[str] = mapped_column(String(30))
+    graph_version_hash: Mapped[str | None] = mapped_column(String(100))
+    materialization_version: Mapped[str] = mapped_column(String(30), default="R11-S6-4")
+    objects_json: Mapped[dict] = mapped_column(JSONB, default=dict)
+    created_json: Mapped[dict] = mapped_column(JSONB, default=dict)
+    updated_json: Mapped[dict] = mapped_column(JSONB, default=dict)
+    skipped_json: Mapped[Any] = mapped_column(JSONB, default=list)
+    issues_json: Mapped[Any] = mapped_column(JSONB, default=list)
+    warnings_json: Mapped[Any] = mapped_column(JSONB, default=list)
+    activation: Mapped[str] = mapped_column(String(40), default="NOT_REQUESTED")
+    run_created: Mapped[bool] = mapped_column(Boolean, default=False)
+    error_message: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime)
+
+
 class PipelineRunLink(Base):
     __tablename__ = "tb_pipeline_run_link"
     link_id: Mapped[str] = mapped_column(String(50), primary_key=True)

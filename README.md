@@ -1415,6 +1415,17 @@ cd frontend && node scripts/check-visual-pipeline-studio.mjs
 - **검증:** `cd frontend && npm run build` · `node scripts/check-pages.mjs` · `node scripts/check-visual-pipeline-studio.mjs`
 - **다음:** R11-S6-4 R10 materialization PoC.
 
+### R11-S6-4 R10 operation/write/schedule materialization PoC
+
+- **범위:** Backend — SUCCESS compile artifact → R10 설정 row materialization. FE/Run/activation/외부 호출 없음.
+- **API:**
+  - `POST /api/v1/visual-pipelines/{pipeline_id}/materialize` — Operation / Transform Config / Write Policy / Schedule upsert (`materialization_version=R11-S6-4`)
+  - `GET /api/v1/visual-pipelines/{pipeline_id}/materialization-result` — 최신 결과 (없으면 404)
+- **DB:** `tb_visual_pipeline_materialization_result` + R10 `metadata_json.visual_pipeline_origin` idempotency.
+- **안전:** schedule 항상 `active_yn=false`, `activation=NOT_REQUESTED`, `run_created=false`. REST→Upsert direct는 transform_config 생략. `current_sync_status` 미변경.
+- **테스트:** `python scripts/test_visual_pipeline_materialization.py` (quick group 미포함).
+- **다음:** R11-S6-5+ Run / activation (별도 승인).
+
 ## 설계 문서 참조
 
 - `docs/md/THERMOps_R11-S6-0_Visual_Pipeline_Compile_설계.md`
