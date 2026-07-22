@@ -20,6 +20,7 @@ import "@xyflow/react/dist/style.css";
 import {
   ChevronLeft,
   Clock,
+  Database,
   History,
   Layers,
   Maximize2,
@@ -36,7 +37,9 @@ import {
   getConnectionRules,
   getVisualPipeline,
   getVisualPipelineCompileResult,
+  getVisualPipelineMaterializationResult,
   listVisualPipelineVersions,
+  materializeVisualPipeline,
   updateVisualPipeline,
   validateVisualPipelineGraph,
 } from "@/api/visualPipelines";
@@ -45,6 +48,7 @@ import { Button } from "@/components/Button";
 import { StatusBadge } from "@/components/StatusBadge";
 import { ErrorState, LoadingState } from "@/components/Pagination";
 import { VpCompilePanel } from "@/components/visualPipeline/VpCompilePanel";
+import { VpMaterializationPanel } from "@/components/visualPipeline/VpMaterializationPanel";
 import { VpComponentPalette } from "@/components/visualPipeline/VpComponentPalette";
 import { buildNodeTypes } from "@/components/visualPipeline/VpFlowNode";
 import { VpGraphStatusPanel } from "@/components/visualPipeline/VpGraphStatusPanel";
@@ -57,6 +61,7 @@ import type {
   ConnectionRule,
   VisualPipelineCompileResponse,
   VisualPipelineDetail,
+  VisualPipelineMaterializationResponse,
   VisualPipelineValidationResponse,
   VisualPipelineVersion,
 } from "@/types/visualPipeline";
@@ -108,8 +113,28 @@ function StudioCanvasInner() {
   const [compileError, setCompileError] = useState<string | null>(null);
   const [compileExpanded, setCompileExpanded] = useState(true);
   const [compileLoadingLatest, setCompileLoadingLatest] = useState(false);
+  const [materializing, setMaterializing] = useState(false);
+  const [materializationResult, setMaterializationResult] = useState<VisualPipelineMaterializationResponse | null>(
+    null,
+  );
+  const [materializationError, setMaterializationError] = useState<string | null>(null);
+  const [materializationExpanded, setMaterializationExpanded] = useState(true);
+  const [materializationLoadingLatest, setMaterializationLoadingLatest] = useState(false);
 
   const nodeTypes = useMemo(() => buildNodeTypes(), []);
+
+  const loadLatestMaterializationResult = useCallback(async (id: string) => {
+    setMaterializationLoadingLatest(true);
+    setMaterializationError(null);
+    try {
+      const latest = await getVisualPipelineMaterializationResult(id);
+      setMaterializationResult(latest);
+    } catch (err) {
+      setMaterializationError(extractApiErrorMessage(err, "최근 Materialization 결과를 불러오지 못했습니다."));
+    } finally {
+      setMaterializationLoadingLatest(false);
+    }
+  }, []);
 
   const loadLatestCompileResult = useCallback(async (id: string) => {
     setCompileLoadingLatest(true);
@@ -140,12 +165,13 @@ function StudioCanvasInner() {
       setGraphSaveEpoch((epoch) => epoch + 1);
       setLastSavedAt(detail.updated_at ?? null);
       void loadLatestCompileResult(pipelineId);
+      void loadLatestMaterializationResult(pipelineId);
     } catch (err) {
       setError(extractApiErrorMessage(err, "Visual Pipeline을 불러오지 못했습니다."));
     } finally {
       setLoading(false);
     }
-  }, [pipelineId, setNodes, setEdges, loadLatestCompileResult]);
+  }, [pipelineId, setNodes, setEdges, loadLatestCompileResult, loadLatestMaterializationResult]);
 
   useEffect(() => {
     void loadPipeline();
@@ -414,6 +440,40 @@ function StudioCanvasInner() {
     }
   };
 
+  const canMaterialize = useMemo(() => {
+    if (dirty || compiling || materializing) return false;
+    if (compileResult?.compile_status !== "SUCCESS") return false;
+    if (!compileResult.persisted) return false;
+    if (pipeline?.current_sync_status !== "IN_SYNC") return false;
+    return true;
+  }, [dirty, compiling, materializing, compileResult, pipeline?.current_sync_status]);
+
+  const handleMaterialize = async () => {
+    if (!pipelineId || !canMaterialize) return;
+    const confirmed = window.confirm(
+      "R10 설정 row를 생성/갱신합니다. 외부 API 호출, 적재 실행, 스케줄 활성화는 수행하지 않습니다.",
+    );
+    if (!confirmed) return;
+
+    setMaterializing(true);
+    setMaterializationError(null);
+    setMaterializationExpanded(true);
+    try {
+      const result = await materializeVisualPipeline(pipelineId);
+      setMaterializationResult(result);
+      if (result.materialization_status === "SUCCESS") {
+        showToast("success", "R10 설정이 반영되었습니다. (실행/스케줄 활성화 아님)");
+      } else {
+        showToast("error", "R10 설정 반영에 실패했습니다. 이슈를 확인하세요.");
+      }
+    } catch (err) {
+      setMaterializationError(extractApiErrorMessage(err, "R10 설정 반영에 실패했습니다."));
+      showToast("error", extractApiErrorMessage(err, "R10 설정 반영에 실패했습니다."));
+    } finally {
+      setMaterializing(false);
+    }
+  };
+
   const goList = () => {
     if (dirty && !window.confirm("저장하지 않은 변경 사항이 있습니다. 목록으로 이동할까요?")) return;
     navigate("/visual-pipelines");
@@ -514,12 +574,28 @@ function StudioCanvasInner() {
           >
             Compile
           </Button>
+          <Button
+            variant="secondary"
+            icon={<Database className="w-4 h-4" />}
+            onClick={() => void handleMaterialize()}
+            disabled={!canMaterialize || materializing}
+            title={
+              dirty
+                ? "미저장 변경사항이 있습니다. 저장 후 persisted SUCCESS Compile + IN_SYNC 상태에서 실행하세요."
+                : !canMaterialize
+                  ? "persisted SUCCESS Compile + IN_SYNC 상태에서만 R10 설정을 반영할 수 있습니다."
+                  : "R10 Operation/Write/Schedule 설정 row를 upsert합니다. 외부 API 호출, 적재 실행, 스케줄 활성화는 수행하지 않습니다."
+            }
+            data-testid="visual-pipeline-materialize-button"
+          >
+            {materializing ? "반영 중…" : "R10 설정 반영"}
+          </Button>
           <button
             type="button"
             disabled
             title="현재 단계에서는 Run을 지원하지 않습니다."
             className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-100 text-slate-400 text-xs font-medium rounded-md cursor-not-allowed border border-slate-200"
-            data-testid="visual-pipeline-run-button"
+            data-testid="visual-pipeline-run-now-button"
           >
             <Play className="w-3 h-3" /> Run Now
             <span className="text-[9px] bg-slate-300 text-slate-600 px-1 rounded font-bold">Soon</span>
@@ -529,7 +605,7 @@ function StudioCanvasInner() {
             disabled
             title="현재 단계에서는 스케줄 활성화를 지원하지 않습니다."
             className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-100 text-slate-400 text-xs font-medium rounded-md cursor-not-allowed border border-slate-200"
-            data-testid="visual-pipeline-schedule-activate-button"
+            data-testid="visual-pipeline-schedule-activation-button"
           >
             <Clock className="w-3 h-3" /> 스케줄 활성화
             <span className="text-[9px] bg-slate-300 text-slate-600 px-1 rounded font-bold">Soon</span>
@@ -626,6 +702,15 @@ function StudioCanvasInner() {
         expanded={compileExpanded}
         onToggle={() => setCompileExpanded((v) => !v)}
         onSelectNode={(nodeId) => setSelectedNodeId(nodeId)}
+      />
+      <VpMaterializationPanel
+        result={materializationResult}
+        loading={materializing || materializationLoadingLatest}
+        error={materializationError}
+        dirtyHint={dirty}
+        compileReady={canMaterialize}
+        expanded={materializationExpanded}
+        onToggle={() => setMaterializationExpanded((v) => !v)}
       />
       <VpValidationPanel
         result={validationResult}

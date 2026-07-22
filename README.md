@@ -1446,6 +1446,17 @@ cd frontend && node scripts/check-visual-pipeline-studio.mjs
 - **미포함:** Run API, 외부 REST, Transform/Upsert 실행, Activation, due worker, FE, DB migration, package.
 - **다음:** R11-S7-1 Manual Run API PoC (별도 승인) · 병행 후보 R11-S6-6 Materialization UI.
 
+### R11-S6-6 Studio Materialization UI
+
+- **범위:** FE-only — Studio toolbar **「R10 설정 반영」**, `VpMaterializationPanel`, API client/type. backend/schema/package/Run/activation 변경 없음.
+- **활성 조건:** `!dirty` + persisted SUCCESS Compile + `current_sync_status=IN_SYNC` + 컴파일/반영 중 아님.
+- **confirm:** R10 설정 row upsert; 외부 API 호출·적재 실행·스케줄 활성화 없음.
+- **패널:** Graph Status → Compile → **Materialization** → Validation. latest `materialization-result` non-blocking 조회 (404 → null).
+- **안전 표시:** `activation=NOT_REQUESTED`, `run_created=false`, schedule inactive 정책. Run Now / 스케줄 활성화는 disabled + Soon 유지.
+- **E2E:** `node scripts/check-visual-pipeline-studio.mjs` — REST data source + `heat_demand_actual` fixture setup 후 materialize SUCCESS smoke.
+- **테스트:** `python scripts/test_visual_pipeline_materialization.py` (quick 미포함, 회귀와 병행 권장).
+- **다음:** R11-S7-1 Manual Run API PoC (별도 승인).
+
 ## 설계 문서 참조
 
 - `docs/md/THERMOps_R11-S7-0_Visual_Pipeline_Run_설계.md`

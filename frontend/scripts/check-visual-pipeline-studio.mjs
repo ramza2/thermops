@@ -1,14 +1,26 @@
 /**
- * R11-S4-3 / S5-6 Visual Pipeline Studio detail route browser smoke.
+ * R11-S4-3 / S5-6 / S6-6 Visual Pipeline Studio detail route browser smoke.
  *
  * Env:
  *   CHECK_PAGES_BASE     frontend base (default http://localhost:5173)
  *   THERMOOPS_API_BASE   API base including /api/v1 (default http://localhost:8000/api/v1)
  */
+import { spawnSync } from "node:child_process";
+import { existsSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
 
 const FRONTEND_BASE = process.env.CHECK_PAGES_BASE || "http://localhost:5173";
 const API_BASE = process.env.THERMOOPS_API_BASE || "http://localhost:8000/api/v1";
+const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
+
+function resolveScriptsDir() {
+  const fromRepo = path.join(REPO_ROOT, "scripts");
+  if (existsSync(fromRepo)) return fromRepo;
+  if (existsSync("/scripts")) return "/scripts";
+  return fromRepo;
+}
 
 const PIPELINE_NAME_PREFIX = "E2E R11-S4-3 Visual Pipeline";
 const PIPELINE_DESCRIPTION = "Created by R11-S4-3 Studio route E2E";
@@ -190,6 +202,88 @@ async function createFixture() {
   return created;
 }
 
+function ensureMaterializeSeedData() {
+  const scriptsDir = resolveScriptsDir();
+  const r = spawnSync(
+    "python",
+    ["-c", "from test_fixtures import ensure_test_standard_datasets; ensure_test_standard_datasets()"],
+    { cwd: scriptsDir, env: process.env, encoding: "utf8" },
+  );
+  if (r.status !== 0) {
+    console.warn(`  [warn] ensure_test_standard_datasets failed: ${(r.stderr || r.stdout || "").slice(0, 300)}`);
+    return false;
+  }
+  console.log("  [ok] materialize seed datasets ensured");
+  return true;
+}
+
+async function createRestDataSource() {
+  const tag = Date.now().toString(36);
+  const created = await api("POST", "/data-sources", {
+    source_name: `E2E R11-S6-6 REST ${tag}`,
+    source_type: "REST_API",
+    data_domain: "HEAT_DEMAND",
+    connection_info: {
+      base_url: "https://example.invalid/api",
+      timeout_seconds: 10,
+    },
+    active_yn: true,
+  });
+  if (!created?.source_id) fail("REST data source create missing source_id");
+  console.log(`  [ok] REST data source ${created.source_id}`);
+  return created.source_id;
+}
+
+function patchNodeConfigValues(graph, nodeId, valuesPatch) {
+  const nodes = (graph?.nodes ?? []).map((node) => {
+    if (node.id !== nodeId) return node;
+    const config = node.data?.config ?? {};
+    const isWrapped = config.schema_version != null || config.values != null;
+    if (isWrapped) {
+      return {
+        ...node,
+        data: {
+          ...node.data,
+          config: {
+            ...config,
+            values: { ...(config.values ?? {}), ...valuesPatch },
+          },
+        },
+      };
+    }
+    return {
+      ...node,
+      data: {
+        ...node.data,
+        config: { ...config, ...valuesPatch },
+      },
+    };
+  });
+  return { ...graph, nodes };
+}
+
+async function ensureMaterializeReadyViaApi(pipelineId) {
+  const sourceId = await createRestDataSource();
+  const detail = await api("GET", `/visual-pipelines/${pipelineId}`);
+  let graph = detail.graph ?? FIXTURE_GRAPH;
+  graph = patchNodeConfigValues(graph, "e2e-rest", {
+    data_source_id: sourceId,
+    operation_name: "vp-materialize-op",
+    endpoint_path: "/heat/demand",
+    http_method: "GET",
+    credential_ref: "CRED-REF-1",
+  });
+  graph = patchNodeConfigValues(graph, "e2e-load", {
+    standard_dataset_id: "TEST-DST-HEAT",
+    target_table: "heat_demand_actual",
+    write_mode: "UPSERT",
+    conflict_key_columns_json: ["site_id", "measured_at"],
+  });
+  await api("PUT", `/visual-pipelines/${pipelineId}`, { graph, create_version: false });
+  console.log(`  [ok] materialize-ready graph patched (source=${sourceId})`);
+  return sourceId;
+}
+
 async function archiveFixture(pipelineId) {
   try {
     const archived = await api("POST", `/visual-pipelines/${pipelineId}/archive`, undefined, { soft: true });
@@ -304,6 +398,14 @@ async function runCompileAndWait(page) {
   return panel;
 }
 
+async function runMaterializeAndWait(page) {
+  const panel = page.getByTestId("visual-pipeline-materialization-panel");
+  page.once("dialog", (dialog) => dialog.accept());
+  await page.getByTestId("visual-pipeline-materialize-button").click();
+  await panel.getByTestId("visual-pipeline-materialization-status").waitFor({ state: "visible", timeout: 45000 });
+  return panel;
+}
+
 async function openStudio(page, pipelineId) {
   const studioPath = `/visual-pipelines/${pipelineId}`;
   await page.goto(`${FRONTEND_BASE}${studioPath}`, { waitUntil: "domcontentloaded", timeout: 60000 });
@@ -381,7 +483,7 @@ async function runBrowserSmoke(pipeline) {
     console.log("  [ok] Upsert config form visible");
 
     // --- Representative input + dirty/save ---
-    await fillTextField(page, "target_table", "tb_e2e_fact");
+    await fillTextField(page, "target_table", "tb_e2e_dirty_smoke");
     await selectFieldOption(page, "write_mode", "UPSERT");
     await fillTextField(page, "conflict_key_columns_json", "entity_id, measured_at");
     await toolbar.getByText("● 저장되지 않음").first().waitFor({ state: "visible", timeout: 10000 });
@@ -410,6 +512,13 @@ async function runBrowserSmoke(pipeline) {
       fail(`expected REST operation_name=${RELOAD_OPERATION_NAME} after reload, got ${opValue}`);
     }
     console.log("  [ok] S5-6 reload preserves REST operation_name");
+
+    // --- R11-S6-6 materialize fixture (API) before Compile ---
+    await ensureMaterializeReadyViaApi(pipeline.pipeline_id);
+    await page.reload({ waitUntil: "domcontentloaded", timeout: 60000 });
+    await page.waitForTimeout(1200);
+    await page.getByTestId("visual-pipeline-studio-page").waitFor({ state: "visible", timeout: 60000 });
+    console.log("  [ok] materialize-ready graph via API + reload");
 
     // --- R11-S6-3 Compile Preview / Compile smoke ---
     await page.getByTestId("visual-pipeline-compile-preview-button").waitFor({ state: "visible", timeout: 10000 });
@@ -455,6 +564,38 @@ async function runBrowserSmoke(pipeline) {
     }
     console.log(`  [ok] Compile persisted=true result_id=${resultId} sync=${syncText}`);
 
+    // --- R11-S6-6 Materialization smoke ---
+    const materializeBtn = page.getByTestId("visual-pipeline-materialize-button");
+    await materializeBtn.scrollIntoViewIfNeeded();
+    await materializeBtn.waitFor({ state: "visible", timeout: 30000 });
+    if (await materializeBtn.isDisabled()) {
+      fail("expected materialize button enabled after persisted SUCCESS Compile + IN_SYNC");
+    }
+    const matPanel = await runMaterializeAndWait(page);
+    const matStatus = (await matPanel.getByTestId("visual-pipeline-materialization-status").innerText()).trim();
+    if (matStatus !== "SUCCESS") {
+      fail(`expected Materialization SUCCESS, got ${matStatus}`);
+    }
+    const matResultId = (await matPanel.getByTestId("visual-pipeline-materialization-result-id").innerText()).trim();
+    if (!matResultId.startsWith("VPM-")) {
+      fail(`expected materialization_result_id VPM-*, got ${matResultId}`);
+    }
+    const activation = (await matPanel.getByTestId("visual-pipeline-materialization-activation").innerText()).trim();
+    if (activation !== "NOT_REQUESTED") {
+      fail(`expected activation=NOT_REQUESTED, got ${activation}`);
+    }
+    const runCreated = (await matPanel.getByTestId("visual-pipeline-materialization-run-created").innerText()).trim();
+    if (runCreated !== "false") {
+      fail(`expected run_created=false, got ${runCreated}`);
+    }
+    if (!(await page.getByTestId("visual-pipeline-run-now-button").isDisabled())) {
+      fail("expected Run Now button disabled");
+    }
+    if (!(await page.getByTestId("visual-pipeline-schedule-activation-button").isDisabled())) {
+      fail("expected schedule activation button disabled");
+    }
+    console.log(`  [ok] Materialization SUCCESS result_id=${matResultId} activation=${activation} run_created=${runCreated}`);
+
     // --- Graph validation smoke (errors 0) ---
     await runGraphValidationAndWait(page);
     const severityBadge = validation.locator("span").filter({ hasText: /^(OK|WARNING|ERROR|INFO)$/ }).first();
@@ -471,6 +612,7 @@ async function runBrowserSmoke(pipeline) {
     console.log(`  [ok] Graph 검증 result severity=${severity}, ${errorsText}`);
 
     // --- CONFIG issue + badge + field warning ---
+    await selectNodeById(page, "e2e-rest");
     await fillTextField(page, "operation_name", "");
     await runGraphValidationAndWait(page);
     await validation.getByText("NODE_CONFIG_REST_OPERATION_MISSING").first().waitFor({
@@ -523,9 +665,11 @@ async function runBrowserSmoke(pipeline) {
 }
 
 async function main() {
-  console.log("THERMOps R11-S6-3 Visual Pipeline Studio E2E");
+  console.log("THERMOps R11-S6-6 Visual Pipeline Studio E2E");
   console.log(`  frontend=${FRONTEND_BASE}`);
   console.log(`  api=${API_BASE}`);
+
+  ensureMaterializeSeedData();
 
   let pipelineId = null;
   let archived = false;

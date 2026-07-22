@@ -319,3 +319,33 @@ export interface VisualPipelineCompileResponse {
   error_message?: string | null;
   source?: string | null;
 }
+
+/** R11-S6-6 Materialization response (flat envelope). */
+export type VisualPipelineMaterializationStatus = "SUCCESS" | "FAILED" | "PARTIAL";
+
+export interface VisualPipelineMaterializationIssue {
+  severity: string;
+  code: string;
+  message: string;
+  [key: string]: unknown;
+}
+
+export interface VisualPipelineMaterializationResponse {
+  materialization_result_id?: string | null;
+  pipeline_id: string;
+  compile_result_id?: string | null;
+  materialization_status: VisualPipelineMaterializationStatus | string;
+  graph_version_hash?: string | null;
+  materialization_version?: string | null;
+  materialized_at?: string | null;
+  objects?: Record<string, unknown>;
+  created?: Record<string, unknown>;
+  updated?: Record<string, unknown>;
+  skipped?: unknown[];
+  issues?: VisualPipelineMaterializationIssue[];
+  warnings?: unknown[];
+  activation?: string;
+  run_created?: boolean;
+  error_message?: string | null;
+  persisted: boolean;
+}

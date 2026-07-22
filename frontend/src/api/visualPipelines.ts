@@ -6,6 +6,7 @@ import type {
   ConnectionRulesResponse,
   GraphTemplateId,
   VisualPipelineCompileResponse,
+  VisualPipelineMaterializationResponse,
   VisualPipelineDetail,
   VisualPipelineGraph,
   VisualPipelineListResponse,
@@ -118,6 +119,43 @@ export async function getVisualPipelineCompileResult(
       return null;
     }
     if (status === 404 && typeof detail === "string" && detail.includes("COMPILE_RESULT_NOT_FOUND")) {
+      return null;
+    }
+    throw err;
+  }
+}
+
+/** R11-S6-6: upsert R10 config rows only — no run/activation/load execution. */
+export async function materializeVisualPipeline(
+  pipelineId: string,
+): Promise<VisualPipelineMaterializationResponse> {
+  return postApi<VisualPipelineMaterializationResponse>(`/visual-pipelines/${pipelineId}/materialize`, {});
+}
+
+/**
+ * Latest materialization result. Returns null when 404 MATERIALIZATION_RESULT_NOT_FOUND.
+ * Other errors are rethrown.
+ */
+export async function getVisualPipelineMaterializationResult(
+  pipelineId: string,
+): Promise<VisualPipelineMaterializationResponse | null> {
+  try {
+    const { data } = await api.get<{ success: boolean; data: VisualPipelineMaterializationResponse }>(
+      `/visual-pipelines/${pipelineId}/materialization-result`,
+    );
+    return data.data;
+  } catch (err) {
+    const status = (err as { response?: { status?: number; data?: { detail?: string } } })?.response
+      ?.status;
+    const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+    if (status === 404 && (detail === "MATERIALIZATION_RESULT_NOT_FOUND" || detail == null || detail === "")) {
+      return null;
+    }
+    if (
+      status === 404 &&
+      typeof detail === "string" &&
+      detail.includes("MATERIALIZATION_RESULT_NOT_FOUND")
+    ) {
       return null;
     }
     throw err;
