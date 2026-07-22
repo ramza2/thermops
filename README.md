@@ -1368,6 +1368,15 @@ cd frontend && node scripts/check-visual-pipeline-studio.mjs
 - **정책:** BASIC config는 WARNING/INFO 중심(저장 비차단). STRICT required/type/enum/secret/cron/upsert key는 ERROR. secret inline은 issue만(자동 삭제 없음). `credential_ref` non-required 유지.
 - **제외:** STRICT UI 버튼, compile/run/activation, DB/migration, package 변경, 저장 UX 변경, R10 본기능 수정.
 
+### R11-S5-6 Config round-trip tests + Studio E2E smoke 정리
+
+- **범위:** test/doc/helper 중심 안정화 (신규 기능·validation 정책·config shape 변경 없음).
+- **Storage:** `test_visual_pipeline_graph_storage.py` — MVP 4-node structured config PUT/GET round-trip + POST `/versions` snapshot `node.data.config` 보존 (`schema_version` / `values` / `validation`).
+- **Validation:** helper화 (`build_valid_visual_pipeline_graph_with_config`, `mutate_node_config`, `assert_issue`) + legacy(no/`{}`/flat/missing schema_version) + BASIC/STRICT `operation_name` 대비.
+- **Studio E2E:** helper화 (`selectNodeById`, `assertConfigFormVisible`, `fillTextField`, `saveGraphAndWait`, …); 4 Form visibility smoke; REST `operation_name` 저장 후 reload 1회; CONFIG badge/field warning smoke 유지.
+- **S5 단계 완료:** Config registry → 4 Form → Validation/badge → round-trip/E2E 정리.
+- **다음:** R11-S6-0 Compile 설계.
+
 ## 설계 문서 참조
 
 - `docs/md/THERMOps_R11-S5-0_Visual_Pipeline_Inspector_Config_Form_설계.md`

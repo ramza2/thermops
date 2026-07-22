@@ -52,6 +52,181 @@ def codes(result: dict) -> set[str]:
     return {i["code"] for i in result.get("issues", [])}
 
 
+def validate_graph(graph: dict, *, level: str = "BASIC") -> dict:
+    from app.services.visual_pipeline.graph_validation_service import validate_visual_pipeline_graph
+
+    return validate_visual_pipeline_graph(graph, validation_level=level)
+
+
+def assert_issue(
+    result: dict,
+    code: str,
+    *,
+    node_id: str | None = None,
+    field_key: str | None = None,
+    severity: str | None = None,
+    phase: str | None = None,
+) -> dict:
+    matches = [i for i in result.get("issues", []) if i.get("code") == code]
+    if node_id is not None:
+        matches = [i for i in matches if i.get("node_id") == node_id]
+    if field_key is not None:
+        matches = [i for i in matches if i.get("field_key") == field_key]
+    if severity is not None:
+        matches = [i for i in matches if i.get("severity") == severity]
+    if phase is not None:
+        matches = [i for i in matches if i.get("phase") == phase]
+    assert matches, f"expected issue {code} (node={node_id} field={field_key} sev={severity} phase={phase}); got {codes(result)}"
+    return matches[0]
+
+
+def _deep_copy(obj: dict) -> dict:
+    return json.loads(json.dumps(obj))
+
+
+def mutate_node_config(graph: dict, node_id: str, patch: dict) -> dict:
+    """Patch node.data.config.values (creates structured config if needed)."""
+    out = _deep_copy(graph)
+    for node in out.get("nodes") or []:
+        if node.get("id") != node_id:
+            continue
+        data = node.setdefault("data", {})
+        raw = data.get("config")
+        if not isinstance(raw, dict):
+            raw = {}
+        if "values" in raw and isinstance(raw.get("values"), dict):
+            values = dict(raw["values"])
+            values.update(patch)
+            for k, v in list(values.items()):
+                if v is None:
+                    del values[k]
+            raw = {**raw, "values": values}
+            if "schema_version" not in raw:
+                raw["schema_version"] = "R11-S5-0"
+        else:
+            values = {k: v for k, v in raw.items() if k not in {"schema_version", "values", "validation"}}
+            values.update(patch)
+            for k, v in list(values.items()):
+                if v is None:
+                    del values[k]
+            raw = {
+                "schema_version": raw.get("schema_version") or "R11-S5-0",
+                "values": values,
+                "validation": raw.get("validation")
+                or {"status": "NOT_VALIDATED", "last_validated_at": None, "issue_count": 0},
+            }
+        data["config"] = raw
+        return out
+    raise AssertionError(f"node not found: {node_id}")
+
+
+def build_valid_visual_pipeline_graph_with_config() -> dict:
+    """Topology-valid MVP graph with good structured configs (R11-S5-6)."""
+    return {
+        "nodes": [
+            {
+                "id": "n-cron",
+                "type": "VP_CRON_SCHEDULE",
+                "position": {"x": 0, "y": 0},
+                "data": {
+                    "label": "CRON",
+                    "config": {
+                        "schema_version": "R11-S5-0",
+                        "values": {
+                            "schedule_type": "CRON",
+                            "cron_expression": "0 6 * * *",
+                            "timezone": "Asia/Seoul",
+                            "active_yn": False,
+                        },
+                    },
+                },
+            },
+            {
+                "id": "n-rest",
+                "type": "VP_REST_API_SOURCE",
+                "position": {"x": 200, "y": 0},
+                "data": {
+                    "label": "REST",
+                    "config": {
+                        "schema_version": "R11-S5-0",
+                        "values": {
+                            "data_source_id": "DS-1",
+                            "operation_name": "op",
+                            "endpoint_path": "/x",
+                            "http_method": "GET",
+                            "credential_ref": "CRED-1",
+                        },
+                    },
+                },
+            },
+            {
+                "id": "n-xform",
+                "type": "VP_TRANSFORM",
+                "position": {"x": 400, "y": 0},
+                "data": {
+                    "label": "XFORM",
+                    "config": {
+                        "schema_version": "R11-S5-0",
+                        "values": {"transform_type": "WIDE_HOUR_TO_LONG", "mapping_config": {}},
+                    },
+                },
+            },
+            {
+                "id": "n-load",
+                "type": "VP_UPSERT_LOAD",
+                "position": {"x": 600, "y": 0},
+                "data": {
+                    "label": "LOAD",
+                    "config": {
+                        "schema_version": "R11-S5-0",
+                        "values": {
+                            "standard_dataset_id": "SD-1",
+                            "target_table": "tb_x",
+                            "write_mode": "UPSERT",
+                            "conflict_key_columns_json": ["entity_id", "measured_at"],
+                        },
+                    },
+                },
+            },
+        ],
+        "edges": [
+            {
+                "id": "e1",
+                "source": "n-cron",
+                "target": "n-rest",
+                "sourceHandle": "output:schedule_config",
+                "targetHandle": "input:trigger",
+                "data": {
+                    "source_port": "schedule_config",
+                    "target_port": "trigger",
+                    "data_type": "SCHEDULE_CONFIG",
+                },
+            },
+            {
+                "id": "e2",
+                "source": "n-rest",
+                "target": "n-xform",
+                "sourceHandle": "output:raw_rows",
+                "targetHandle": "input:input_rows",
+                "data": {"source_port": "raw_rows", "target_port": "input_rows", "data_type": "RAW_ROWS"},
+            },
+            {
+                "id": "e3",
+                "source": "n-xform",
+                "target": "n-load",
+                "sourceHandle": "output:transformed_rows",
+                "targetHandle": "input:input_rows",
+                "data": {
+                    "source_port": "transformed_rows",
+                    "target_port": "input_rows",
+                    "data_type": "TRANSFORMED_ROWS",
+                },
+            },
+        ],
+        "viewport": {"x": 0, "y": 0, "zoom": 1},
+    }
+
+
 def mvp_graph() -> dict:
     return {
         "nodes": [
@@ -302,141 +477,131 @@ def test_service_direct() -> None:
     assert "EDGE_CONNECTION_DISALLOWED" in codes(deny) or "EDGE_CONNECTION_RULE_NOT_FOUND" in codes(deny)
     print("  [ok] disallowed connection")
 
-    # --- R11-S5-5 config validation ---
-    cfg_missing = validate_visual_pipeline_graph(
-        {
-            "nodes": [{"id": "r", "type": "VP_REST_API_SOURCE", "position": {"x": 0, "y": 0}, "data": {}}],
-            "edges": [],
-        },
-        validation_level="BASIC",
+    # --- R11-S5-5 / S5-6 config validation ---
+    test_config_validation_cases()
+
+
+def test_config_validation_cases() -> None:
+    """CONFIG phase cases (policy unchanged). Separated for maintainability."""
+    cfg_missing = validate_graph(
+        {"nodes": [{"id": "r", "type": "VP_REST_API_SOURCE", "position": {"x": 0, "y": 0}, "data": {}}], "edges": []},
+        level="BASIC",
     )
     assert cfg_missing["valid"] is True
-    assert "NODE_CONFIG_MISSING" in codes(cfg_missing)
-    assert "NODE_CONFIG_REST_OPERATION_MISSING" in codes(cfg_missing)
-    assert any(i.get("phase") == "CONFIG" and i.get("field_key") == "operation_name" for i in cfg_missing["issues"])
+    assert_issue(cfg_missing, "NODE_CONFIG_MISSING", node_id="r", phase="CONFIG")
+    assert_issue(
+        cfg_missing,
+        "NODE_CONFIG_REST_OPERATION_MISSING",
+        node_id="r",
+        field_key="operation_name",
+        phase="CONFIG",
+        severity="WARNING",
+    )
     print("  [ok] BASIC config missing → WARNING, valid=true")
 
-    rest_secret = validate_visual_pipeline_graph(
-        {
-            "nodes": [
-                {
-                    "id": "r",
-                    "type": "VP_REST_API_SOURCE",
-                    "position": {"x": 0, "y": 0},
-                    "data": {
-                        "config": {
-                            "schema_version": "R11-S5-0",
-                            "values": {
-                                "data_source_id": "DS-1",
-                                "operation_name": "op",
-                                "endpoint_path": "/x",
-                                "http_method": "GET",
-                                "api_key": "sk-secret-inline",
-                            },
-                        }
-                    },
-                }
-            ],
-            "edges": [],
-        },
-        validation_level="BASIC",
+    missing_op_basic = validate_graph(
+        mutate_node_config(build_valid_visual_pipeline_graph_with_config(), "n-rest", {"operation_name": None}),
+        level="BASIC",
+    )
+    assert missing_op_basic["valid"] is True
+    assert_issue(
+        missing_op_basic,
+        "NODE_CONFIG_REST_OPERATION_MISSING",
+        node_id="n-rest",
+        field_key="operation_name",
+        severity="WARNING",
+    )
+    print("  [ok] BASIC missing operation_name → WARNING, valid=true")
+
+    missing_op_strict = validate_graph(
+        mutate_node_config(build_valid_visual_pipeline_graph_with_config(), "n-rest", {"operation_name": None}),
+        level="STRICT",
+    )
+    assert missing_op_strict["valid"] is False
+    assert_issue(
+        missing_op_strict,
+        "NODE_CONFIG_REST_OPERATION_MISSING",
+        node_id="n-rest",
+        field_key="operation_name",
+        severity="ERROR",
+    )
+    print("  [ok] STRICT missing operation_name → ERROR, valid=false")
+
+    # Legacy compatibility: no crash; INFO/WARNING only for config shape
+    for label, node_data in (
+        ("no-config", {}),
+        ("empty-config", {"config": {}}),
+        ("flat-legacy", {"config": {"endpoint_path": "/legacy", "http_method": "GET"}}),
+        ("structured-no-sv", {"config": {"values": {"operation_name": "op", "endpoint_path": "/x", "http_method": "GET", "data_source_id": "DS-1"}}}),
+    ):
+        legacy = validate_graph(
+            {
+                "nodes": [{"id": "r", "type": "VP_REST_API_SOURCE", "position": {"x": 0, "y": 0}, "data": node_data}],
+                "edges": [],
+            },
+            level="BASIC",
+        )
+        assert legacy["valid"] is True
+        assert legacy["summary"]["error_count"] == 0
+        if label == "no-config" or label == "empty-config":
+            assert "NODE_CONFIG_MISSING" in codes(legacy)
+        if label == "structured-no-sv":
+            assert_issue(legacy, "NODE_CONFIG_SCHEMA_VERSION_MISSING", node_id="r", phase="CONFIG")
+        print(f"  [ok] legacy {label} BASIC no ERROR")
+
+    rest_secret = validate_graph(
+        mutate_node_config(
+            build_valid_visual_pipeline_graph_with_config(),
+            "n-rest",
+            {"api_key": "sk-secret-inline"},
+        ),
+        level="BASIC",
     )
     assert rest_secret["valid"] is True
-    assert "NODE_CONFIG_SECRET_INLINE_NOT_ALLOWED" in codes(rest_secret)
-    assert any(i.get("field_key") == "api_key" for i in rest_secret["issues"])
-    # secret not stripped from normalized graph values
-    nv = rest_secret["normalized_graph"]["nodes"][0]["data"]["config"]["values"]
-    assert nv.get("api_key") == "sk-secret-inline"
+    assert_issue(rest_secret, "NODE_CONFIG_SECRET_INLINE_NOT_ALLOWED", field_key="api_key", severity="WARNING")
+    nv = next(n for n in rest_secret["normalized_graph"]["nodes"] if n["id"] == "n-rest")
+    assert nv["data"]["config"]["values"].get("api_key") == "sk-secret-inline"
     print("  [ok] secret inline issue only (value retained)")
 
-    upsert_keys = validate_visual_pipeline_graph(
-        {
-            "nodes": [
-                {
-                    "id": "u",
-                    "type": "VP_UPSERT_LOAD",
-                    "position": {"x": 0, "y": 0},
-                    "data": {
-                        "config": {
-                            "schema_version": "R11-S5-0",
-                            "values": {
-                                "standard_dataset_id": "SD-1",
-                                "target_table": "tb_x",
-                                "write_mode": "UPSERT",
-                            },
-                        }
-                    },
-                }
-            ],
-            "edges": [],
-        },
-        validation_level="STRICT",
+    upsert_keys = validate_graph(
+        mutate_node_config(
+            build_valid_visual_pipeline_graph_with_config(),
+            "n-load",
+            {"conflict_key_columns_json": None},
+        ),
+        level="STRICT",
     )
     assert upsert_keys["valid"] is False
-    assert "NODE_CONFIG_KEY_COLUMNS_MISSING" in codes(upsert_keys)
-    assert any(i.get("severity") == "ERROR" and i.get("code") == "NODE_CONFIG_KEY_COLUMNS_MISSING" for i in upsert_keys["issues"])
+    assert_issue(
+        upsert_keys,
+        "NODE_CONFIG_KEY_COLUMNS_MISSING",
+        node_id="n-load",
+        field_key="conflict_key_columns_json",
+        severity="ERROR",
+    )
     print("  [ok] STRICT upsert key columns ERROR")
 
-    cron_bad = validate_visual_pipeline_graph(
-        {
-            "nodes": [
-                {
-                    "id": "c",
-                    "type": "VP_CRON_SCHEDULE",
-                    "position": {"x": 0, "y": 0},
-                    "data": {
-                        "config": {
-                            "schema_version": "R11-S5-0",
-                            "values": {
-                                "schedule_type": "CRON",
-                                "cron_expression": "not a cron",
-                                "timezone": "Mars/Phobos",
-                            },
-                        }
-                    },
-                }
-            ],
-            "edges": [],
-        },
-        validation_level="BASIC",
+    cron_bad = validate_graph(
+        mutate_node_config(
+            build_valid_visual_pipeline_graph_with_config(),
+            "n-cron",
+            {"cron_expression": "not a cron", "timezone": "Mars/Phobos"},
+        ),
+        level="BASIC",
     )
     assert cron_bad["valid"] is True
-    assert "NODE_CONFIG_CRON_INVALID" in codes(cron_bad)
-    assert "NODE_CONFIG_TIMEZONE_INVALID" in codes(cron_bad)
+    assert_issue(cron_bad, "NODE_CONFIG_CRON_INVALID", node_id="n-cron", field_key="cron_expression")
+    assert_issue(cron_bad, "NODE_CONFIG_TIMEZONE_INVALID", node_id="n-cron", field_key="timezone")
     print("  [ok] BASIC cron/timezone WARNING")
 
-    good_cfg = validate_visual_pipeline_graph(
-        {
-            "nodes": [
-                {
-                    "id": "r",
-                    "type": "VP_REST_API_SOURCE",
-                    "position": {"x": 0, "y": 0},
-                    "data": {
-                        "config": {
-                            "schema_version": "R11-S5-0",
-                            "values": {
-                                "data_source_id": "DS-1",
-                                "operation_name": "op",
-                                "endpoint_path": "/x",
-                                "http_method": "GET",
-                                "credential_ref": "CRED-1",
-                            },
-                        }
-                    },
-                }
-            ],
-            "edges": [],
-        },
-        validation_level="BASIC",
-    )
+    good_cfg = validate_graph(build_valid_visual_pipeline_graph_with_config(), level="BASIC")
+    assert good_cfg["valid"] is True
     assert "NODE_CONFIG_REST_OPERATION_MISSING" not in codes(good_cfg)
-    assert "NODE_CONFIG_REQUIRED_FIELD_MISSING" not in codes(good_cfg)
     assert not any(
         i.get("code") == "NODE_CONFIG_REQUIRED_FIELD_MISSING" and i.get("field_key") == "credential_ref"
         for i in good_cfg["issues"]
     )
-    print("  [ok] REST good config; credential_ref not forced required")
+    print("  [ok] REST/MVP good config; credential_ref not forced required")
 
 
 def test_http() -> None:

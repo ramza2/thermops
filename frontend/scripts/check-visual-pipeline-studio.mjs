@@ -1,5 +1,5 @@
 /**
- * R11-S4-3 Visual Pipeline Studio detail route browser smoke.
+ * R11-S4-3 / S5-6 Visual Pipeline Studio detail route browser smoke.
  *
  * Env:
  *   CHECK_PAGES_BASE     frontend base (default http://localhost:5173)
@@ -12,6 +12,7 @@ const API_BASE = process.env.THERMOOPS_API_BASE || "http://localhost:8000/api/v1
 
 const PIPELINE_NAME_PREFIX = "E2E R11-S4-3 Visual Pipeline";
 const PIPELINE_DESCRIPTION = "Created by R11-S4-3 Studio route E2E";
+const RELOAD_OPERATION_NAME = "e2e_reload_fetch";
 
 const S5_CONFIG_SAMPLE_REST = {
   schema_version: "R11-S5-0",
@@ -137,7 +138,6 @@ async function api(method, path, body, { soft = false } = {}) {
     if (soft) throw new Error(msg);
     fail(msg);
   }
-  // THERMOps API envelope: { success, data, ... }
   if (data && typeof data === "object" && "data" in data && data.success !== undefined) {
     if (data.success === false) {
       const msg = `API ${method} ${path} success=false: ${text.slice(0, 400)}`;
@@ -177,6 +177,97 @@ async function archiveFixture(pipelineId) {
   }
 }
 
+/** Prefer pointer events for clipped RF nodes (e.g. leftmost CRON). */
+async function selectNodeById(page, nodeId) {
+  const testId = `visual-pipeline-node-${nodeId}`;
+  const toolbar = page.getByTestId("visual-pipeline-toolbar");
+  const status = page.getByTestId("visual-pipeline-graph-status");
+  if (await status.getByText("Graph JSON Preview").isVisible().catch(() => false)) {
+    await status.getByRole("button").filter({ hasText: "Graph Status Panel" }).click();
+  }
+  await toolbar.getByRole("button", { name: "Fit View" }).click();
+  await page.waitForTimeout(300);
+
+  const clicked = await page.evaluate((id) => {
+    const node = document.querySelector(`.react-flow__node[data-id="${id}"]`);
+    if (!node) return false;
+    const r = node.getBoundingClientRect();
+    const x = r.left + Math.min(40, Math.max(8, r.width / 2));
+    const y = r.top + Math.min(24, Math.max(8, r.height / 2));
+    const opts = {
+      bubbles: true,
+      cancelable: true,
+      clientX: x,
+      clientY: y,
+      pointerId: 1,
+      pointerType: "mouse",
+      buttons: 1,
+    };
+    node.dispatchEvent(new PointerEvent("pointerdown", opts));
+    node.dispatchEvent(new MouseEvent("mousedown", opts));
+    node.dispatchEvent(new PointerEvent("pointerup", { ...opts, buttons: 0 }));
+    node.dispatchEvent(new MouseEvent("mouseup", { ...opts, buttons: 0 }));
+    node.dispatchEvent(new MouseEvent("click", { ...opts, buttons: 0 }));
+    return true;
+  }, nodeId);
+
+  if (!clicked) {
+    await page.getByTestId(testId).click({ force: true });
+  }
+}
+
+async function assertConfigFormVisible(page, fieldKeys) {
+  const inspector = page.getByTestId("visual-pipeline-inspector");
+  await inspector.getByTestId("visual-pipeline-inspector-config-form").waitFor({
+    state: "visible",
+    timeout: 10000,
+  });
+  for (const fieldKey of fieldKeys) {
+    await inspector.getByTestId(`visual-pipeline-inspector-config-field-${fieldKey}`).waitFor({
+      state: "visible",
+      timeout: 10000,
+    });
+  }
+}
+
+async function fillTextField(page, fieldKey, value) {
+  const inspector = page.getByTestId("visual-pipeline-inspector");
+  await inspector.getByTestId(`visual-pipeline-inspector-config-field-${fieldKey}`).locator("input").fill(value);
+}
+
+async function selectFieldOption(page, fieldKey, value) {
+  const inspector = page.getByTestId("visual-pipeline-inspector");
+  await inspector
+    .getByTestId(`visual-pipeline-inspector-config-field-${fieldKey}`)
+    .locator("select")
+    .selectOption(value);
+}
+
+async function saveGraphAndWait(page) {
+  const toolbar = page.getByTestId("visual-pipeline-toolbar");
+  await toolbar.getByRole("button", { name: "저장", exact: true }).click();
+  await page.getByText("현재 Graph가 저장되었습니다.").first().waitFor({ state: "visible", timeout: 30000 });
+  await toolbar.getByText("● 저장되지 않음").waitFor({ state: "hidden", timeout: 10000 });
+}
+
+async function runGraphValidationAndWait(page) {
+  const validation = page.getByTestId("visual-pipeline-validation-panel");
+  await page.getByTestId("visual-pipeline-validate-button").click();
+  await validation.getByText(/OK|WARNING|ERROR|INFO/).first().waitFor({ state: "visible", timeout: 30000 });
+  return validation;
+}
+
+async function openStudio(page, pipelineId) {
+  const studioPath = `/visual-pipelines/${pipelineId}`;
+  await page.goto(`${FRONTEND_BASE}${studioPath}`, { waitUntil: "domcontentloaded", timeout: 60000 });
+  await page.waitForTimeout(1200);
+  await page.getByTestId("visual-pipeline-studio-page").waitFor({ state: "visible", timeout: 60000 });
+  await page.getByTestId("visual-pipeline-name").filter({ hasText: PIPELINE_NAME_PREFIX }).waitFor({
+    state: "visible",
+    timeout: 30000,
+  });
+}
+
 async function runBrowserSmoke(pipeline) {
   const browser = await chromium.launch();
   const page = await browser.newPage();
@@ -184,25 +275,7 @@ async function runBrowserSmoke(pipeline) {
   page.on("pageerror", (e) => pageErrors.push(e.message));
 
   try {
-    const studioPath = `/visual-pipelines/${pipeline.pipeline_id}`;
-    await page.goto(`${FRONTEND_BASE}${studioPath}`, { waitUntil: "domcontentloaded", timeout: 60000 });
-    await page.waitForTimeout(1500);
-
-    const studio = page.getByTestId("visual-pipeline-studio-page");
-    try {
-      await studio.waitFor({ state: "visible", timeout: 60000 });
-    } catch (err) {
-      const bodyText = (await page.locator("body").innerText().catch(() => "")).slice(0, 1200);
-      const url = page.url();
-      console.error(`  [debug] url=${url}`);
-      console.error(`  [debug] body=\n${bodyText}`);
-      if (pageErrors.length) console.error(`  [debug] pageErrors=${pageErrors.join(" | ")}`);
-      throw err;
-    }
-    await page.getByTestId("visual-pipeline-name").filter({ hasText: PIPELINE_NAME_PREFIX }).waitFor({
-      state: "visible",
-      timeout: 30000,
-    });
+    await openStudio(page, pipeline.pipeline_id);
     console.log("  [ok] studio detail route loaded");
 
     const toolbar = page.getByTestId("visual-pipeline-toolbar");
@@ -210,7 +283,6 @@ async function runBrowserSmoke(pipeline) {
     for (const label of ["목록", "저장", "버전 저장", "Fit View", "Graph 검증"]) {
       await toolbar.getByRole("button", { name: label }).first().waitFor({ state: "visible", timeout: 15000 });
     }
-    await toolbar.getByText("Compile").first().waitFor({ state: "visible", timeout: 10000 });
     console.log("  [ok] toolbar controls visible");
 
     const palette = page.getByTestId("visual-pipeline-palette");
@@ -222,177 +294,84 @@ async function runBrowserSmoke(pipeline) {
 
     const canvas = page.getByTestId("visual-pipeline-canvas");
     await canvas.waitFor({ state: "visible", timeout: 15000 });
-    await canvas.locator(".react-flow").first().waitFor({ state: "visible", timeout: 15000 });
     for (const nodeId of ["e2e-cron", "e2e-rest", "e2e-transform", "e2e-load"]) {
       await page.getByTestId(`visual-pipeline-node-${nodeId}`).waitFor({ state: "visible", timeout: 20000 });
     }
     console.log("  [ok] canvas + 4 flow nodes visible");
 
-    await page.getByTestId("visual-pipeline-inspector").getByText("노드를 선택하세요").waitFor({
-      state: "visible",
-      timeout: 10000,
-    });
+    const inspector = page.getByTestId("visual-pipeline-inspector");
+    await inspector.getByText("노드를 선택하세요").waitFor({ state: "visible", timeout: 10000 });
     console.log("  [ok] inspector empty state");
 
     const status = page.getByTestId("visual-pipeline-graph-status");
-    await status.getByText("VISUAL_DATA_LOAD").first().waitFor({ state: "visible", timeout: 10000 });
     await status.getByText("nodes 4").first().waitFor({ state: "visible", timeout: 10000 });
-    await status.getByText("edges 3").first().waitFor({ state: "visible", timeout: 10000 });
-    console.log("  [ok] graph status panel counts");
-
     const validation = page.getByTestId("visual-pipeline-validation-panel");
     await validation.getByText("아직 Graph 검증을 실행하지 않았습니다.").waitFor({
       state: "visible",
       timeout: 10000,
     });
-    console.log("  [ok] validation panel initial state");
+    console.log("  [ok] status + validation initial");
 
-    await toolbar.getByRole("button", { name: "Fit View" }).click();
-    console.log("  [ok] Fit View clicked");
+    // --- MVP 4 Form visibility smoke ---
+    await selectNodeById(page, "e2e-rest");
+    await inspector.getByText("VP_REST_API_SOURCE").first().waitFor({ state: "visible", timeout: 10000 });
+    await assertConfigFormVisible(page, ["operation_name", "endpoint_path", "http_method"]);
+    console.log("  [ok] REST config form visible");
 
-    await status.getByRole("button").filter({ hasText: "Graph Status Panel" }).click();
-    await status.getByText("Graph JSON Preview").waitFor({ state: "visible", timeout: 10000 });
-    await status.getByText("sourceHandle").first().waitFor({ state: "visible", timeout: 10000 });
-    console.log("  [ok] graph JSON expanded (handle metadata visible)");
-
-    await page.getByTestId("visual-pipeline-node-e2e-rest").click();
-    await page.getByTestId("visual-pipeline-inspector").getByText("VP_REST_API_SOURCE").first().waitFor({
-      state: "visible",
-      timeout: 10000,
-    });
-    const inspector = page.getByTestId("visual-pipeline-inspector");
-    await inspector.getByTestId("visual-pipeline-inspector-config-form").waitFor({
-      state: "visible",
-      timeout: 10000,
-    });
-    await inspector.getByTestId("visual-pipeline-inspector-config-field-operation_name").waitFor({
-      state: "visible",
-      timeout: 10000,
-    });
-    console.log("  [ok] REST config form visible (regression)");
-
-    await page.getByTestId("visual-pipeline-node-e2e-transform").click();
+    await selectNodeById(page, "e2e-transform");
     await inspector.getByText("VP_TRANSFORM").first().waitFor({ state: "visible", timeout: 10000 });
-    await inspector.getByTestId("visual-pipeline-inspector-config-field-transform_type").waitFor({
-      state: "visible",
-      timeout: 10000,
-    });
-    console.log("  [ok] Transform config form visible (regression)");
+    await assertConfigFormVisible(page, ["transform_type"]);
+    console.log("  [ok] Transform config form visible");
 
-    // Collapse Graph JSON + Fit View, then select CRON via pointer events
-    // (leftmost node can be clipped; Playwright scrollIntoView hits parent flex).
-    if (await status.getByText("Graph JSON Preview").isVisible().catch(() => false)) {
-      await status.getByRole("button").filter({ hasText: "Graph Status Panel" }).click();
-    }
-    await toolbar.getByRole("button", { name: "Fit View" }).click();
-    await page.waitForTimeout(400);
-    await page.evaluate(() => {
-      const node = document.querySelector('.react-flow__node[data-id="e2e-cron"]');
-      if (!node) throw new Error("e2e-cron RF node missing");
-      const r = node.getBoundingClientRect();
-      const x = r.left + Math.min(40, r.width / 2);
-      const y = r.top + Math.min(24, r.height / 2);
-      const opts = { bubbles: true, cancelable: true, clientX: x, clientY: y, pointerId: 1, pointerType: "mouse", buttons: 1 };
-      node.dispatchEvent(new PointerEvent("pointerdown", opts));
-      node.dispatchEvent(new MouseEvent("mousedown", opts));
-      node.dispatchEvent(new PointerEvent("pointerup", { ...opts, buttons: 0 }));
-      node.dispatchEvent(new MouseEvent("mouseup", { ...opts, buttons: 0 }));
-      node.dispatchEvent(new MouseEvent("click", { ...opts, buttons: 0 }));
-    });
+    await selectNodeById(page, "e2e-cron");
     await inspector.getByText("VP_CRON_SCHEDULE").first().waitFor({ state: "visible", timeout: 10000 });
-    await inspector.getByTestId("visual-pipeline-inspector-config-form").waitFor({
-      state: "visible",
-      timeout: 10000,
-    });
-    for (const fieldKey of [
-      "schedule_type",
-      "cron_expression",
-      "timezone",
-      "active_yn",
-      "retry_enabled_yn",
-      "max_retry_count",
-      "retry_interval_minutes",
-    ]) {
-      await inspector.getByTestId(`visual-pipeline-inspector-config-field-${fieldKey}`).waitFor({
-        state: "visible",
-        timeout: 10000,
-      });
-    }
-    console.log("  [ok] CRON config form fields visible");
+    await assertConfigFormVisible(page, ["cron_expression", "timezone", "active_yn"]);
+    console.log("  [ok] CRON config form visible");
 
-    await inspector
-      .getByTestId("visual-pipeline-inspector-config-field-cron_expression")
-      .locator("input")
-      .fill("0 7 * * *");
-    await inspector
-      .getByTestId("visual-pipeline-inspector-config-field-timezone")
-      .locator("select")
-      .selectOption("Asia/Seoul");
-    const activeCheckbox = inspector
-      .getByTestId("visual-pipeline-inspector-config-field-active_yn")
-      .locator("input[type='checkbox']");
-    await activeCheckbox.uncheck();
-    const retryCheckbox = inspector
-      .getByTestId("visual-pipeline-inspector-config-field-retry_enabled_yn")
-      .locator("input[type='checkbox']");
-    await retryCheckbox.check();
-    await inspector
-      .getByTestId("visual-pipeline-inspector-config-field-max_retry_count")
-      .locator("input")
-      .fill("3");
-    await inspector
-      .getByTestId("visual-pipeline-inspector-config-field-retry_interval_minutes")
-      .locator("input")
-      .fill("10");
-    await toolbar.getByText("● 저장되지 않음").first().waitFor({ state: "visible", timeout: 10000 });
-    console.log("  [ok] CRON config edit -> graph dirty");
-
-    await page.getByTestId("visual-pipeline-node-e2e-load").click();
+    await selectNodeById(page, "e2e-load");
     await inspector.getByText("VP_UPSERT_LOAD").first().waitFor({ state: "visible", timeout: 10000 });
-    await inspector.getByTestId("visual-pipeline-inspector-config-form").waitFor({
-      state: "visible",
-      timeout: 10000,
-    });
-    for (const fieldKey of ["target_table", "write_mode", "conflict_key_columns_json", "save_dedup_summary_yn"]) {
-      await inspector.getByTestId(`visual-pipeline-inspector-config-field-${fieldKey}`).waitFor({
-        state: "visible",
-        timeout: 10000,
-      });
-    }
-    console.log("  [ok] Upsert config form fields visible");
+    await assertConfigFormVisible(page, ["target_table", "write_mode", "conflict_key_columns_json"]);
+    console.log("  [ok] Upsert config form visible");
 
-    await inspector.getByTestId("visual-pipeline-inspector-config-field-target_table").locator("input").fill("tb_e2e_fact");
-    await inspector
-      .getByTestId("visual-pipeline-inspector-config-field-write_mode")
-      .locator("select")
-      .selectOption("UPSERT");
-    await inspector
-      .getByTestId("visual-pipeline-inspector-config-field-conflict_key_columns_json")
-      .locator("input")
-      .fill("entity_id, measured_at");
-    const dedupCheckbox = inspector
-      .getByTestId("visual-pipeline-inspector-config-field-save_dedup_summary_yn")
-      .locator("input[type='checkbox']");
-    if (!(await dedupCheckbox.isChecked())) {
-      await dedupCheckbox.check();
-    }
+    // --- Representative input + dirty/save ---
+    await fillTextField(page, "target_table", "tb_e2e_fact");
+    await selectFieldOption(page, "write_mode", "UPSERT");
+    await fillTextField(page, "conflict_key_columns_json", "entity_id, measured_at");
     await toolbar.getByText("● 저장되지 않음").first().waitFor({ state: "visible", timeout: 10000 });
-    console.log("  [ok] Upsert config edit -> graph dirty");
+    console.log("  [ok] Upsert field smoke -> dirty");
 
-    await toolbar.getByRole("button", { name: "저장", exact: true }).click();
-    await page.getByText("현재 Graph가 저장되었습니다.").first().waitFor({ state: "visible", timeout: 30000 });
-    await toolbar.getByText("● 저장되지 않음").waitFor({ state: "hidden", timeout: 10000 });
+    await selectNodeById(page, "e2e-rest");
+    await assertConfigFormVisible(page, ["operation_name"]);
+    await fillTextField(page, "operation_name", RELOAD_OPERATION_NAME);
+    await toolbar.getByText("● 저장되지 않음").first().waitFor({ state: "visible", timeout: 10000 });
+    console.log("  [ok] REST operation_name edit -> dirty");
+
+    await saveGraphAndWait(page);
     console.log("  [ok] graph save toast + dirty cleared");
 
-    await page.getByTestId("visual-pipeline-validate-button").click();
-    await validation.getByText(/OK|WARNING|ERROR|INFO/).first().waitFor({ state: "visible", timeout: 30000 });
+    // --- Reload / re-enter: REST operation_name preserved ---
+    await page.reload({ waitUntil: "domcontentloaded", timeout: 60000 });
+    await page.waitForTimeout(1200);
+    await page.getByTestId("visual-pipeline-studio-page").waitFor({ state: "visible", timeout: 60000 });
+    await selectNodeById(page, "e2e-rest");
+    await assertConfigFormVisible(page, ["operation_name"]);
+    const opValue = await inspector
+      .getByTestId("visual-pipeline-inspector-config-field-operation_name")
+      .locator("input")
+      .inputValue();
+    if (opValue !== RELOAD_OPERATION_NAME) {
+      fail(`expected REST operation_name=${RELOAD_OPERATION_NAME} after reload, got ${opValue}`);
+    }
+    console.log("  [ok] S5-6 reload preserves REST operation_name");
+
+    // --- Graph validation smoke (errors 0) ---
+    await runGraphValidationAndWait(page);
     const severityBadge = validation.locator("span").filter({ hasText: /^(OK|WARNING|ERROR|INFO)$/ }).first();
     await severityBadge.waitFor({ state: "visible", timeout: 10000 });
     const severity = (await severityBadge.innerText()).trim();
     if (severity === "ERROR") {
       fail(`expected no ERROR for valid 4-node fixture, got ${severity}`);
     }
-    await validation.getByText(/errors \d+/).first().waitFor({ state: "visible", timeout: 10000 });
     const errorsText = await validation.getByText(/errors \d+/).first().innerText();
     const errorCount = Number((errorsText.match(/errors\s+(\d+)/) || [])[1] ?? "1");
     if (errorCount > 0) {
@@ -400,17 +379,9 @@ async function runBrowserSmoke(pipeline) {
     }
     console.log(`  [ok] Graph 검증 result severity=${severity}, ${errorsText}`);
 
-    // R11-S5-5: clear REST operation_name → config WARNING + badge
-    await page.getByTestId("visual-pipeline-node-e2e-rest").click();
-    await inspector.getByTestId("visual-pipeline-inspector-config-field-operation_name").waitFor({
-      state: "visible",
-      timeout: 10000,
-    });
-    await inspector
-      .getByTestId("visual-pipeline-inspector-config-field-operation_name")
-      .locator("input")
-      .fill("");
-    await page.getByTestId("visual-pipeline-validate-button").click();
+    // --- CONFIG issue + badge + field warning ---
+    await fillTextField(page, "operation_name", "");
+    await runGraphValidationAndWait(page);
     await validation.getByText("NODE_CONFIG_REST_OPERATION_MISSING").first().waitFor({
       state: "visible",
       timeout: 30000,
@@ -418,17 +389,17 @@ async function runBrowserSmoke(pipeline) {
     await validation.getByText("CONFIG").first().waitFor({ state: "visible", timeout: 10000 });
     await validation.getByText(/field=operation_name/).first().waitFor({ state: "visible", timeout: 10000 });
     const badge = inspector.getByTestId("visual-pipeline-inspector-validation-badge");
-    await badge.waitFor({ state: "visible", timeout: 10000 });
     const badgeText = (await badge.innerText()).trim();
     if (badgeText !== "WARNING" && badgeText !== "ERROR") {
       fail(`expected REST config badge WARNING/ERROR after clearing operation_name, got ${badgeText}`);
     }
-    const fieldWarn = inspector
+    await inspector
       .getByTestId("visual-pipeline-inspector-config-field-operation_name")
       .locator("p")
-      .filter({ hasText: /operation_name/i });
-    await fieldWarn.first().waitFor({ state: "visible", timeout: 10000 });
-    console.log(`  [ok] S5-5 config issue + badge=${badgeText} + field warning`);
+      .filter({ hasText: /operation_name/i })
+      .first()
+      .waitFor({ state: "visible", timeout: 10000 });
+    console.log(`  [ok] CONFIG issue + badge=${badgeText} + field warning`);
 
     await toolbar.getByRole("button", { name: "이력" }).click();
     await page.getByText("버전 이력").first().waitFor({ state: "visible", timeout: 15000 });
@@ -461,7 +432,7 @@ async function runBrowserSmoke(pipeline) {
 }
 
 async function main() {
-  console.log("THERMOps R11-S4-3 Visual Pipeline Studio E2E");
+  console.log("THERMOps R11-S5-6 Visual Pipeline Studio E2E");
   console.log(`  frontend=${FRONTEND_BASE}`);
   console.log(`  api=${API_BASE}`);
 

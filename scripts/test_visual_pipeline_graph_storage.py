@@ -301,6 +301,215 @@ def test_isolation_and_errors(visual_pid: str) -> None:
         print("  [skip] no MLOps definition for non-visual 404 check")
 
 
+def _structured_config(values: dict, *, schema_version: str = "R11-S5-0") -> dict:
+    return {
+        "schema_version": schema_version,
+        "values": values,
+        "validation": {"status": "NOT_VALIDATED", "last_validated_at": None, "issue_count": 0},
+    }
+
+
+def _node_by_id(graph: dict, node_id: str) -> dict:
+    for node in graph.get("nodes") or []:
+        if node.get("id") == node_id:
+            return node
+    raise AssertionError(f"node not found: {node_id}")
+
+
+def _config_of(graph: dict, node_id: str) -> dict:
+    data = _node_by_id(graph, node_id).get("data") or {}
+    config = data.get("config")
+    assert isinstance(config, dict), f"config missing/invalid for {node_id}"
+    return config
+
+
+def mvp_structured_config_graph() -> dict:
+    """R11-S5-6: MVP 4-node graph with structured node.data.config."""
+    return {
+        "nodes": [
+            {
+                "id": "n-cron",
+                "type": "VP_CRON_SCHEDULE",
+                "position": {"x": 0, "y": 0},
+                "data": {
+                    "label": "CRON",
+                    "config": _structured_config(
+                        {
+                            "schedule_type": "CRON",
+                            "cron_expression": "0 6 * * *",
+                            "timezone": "Asia/Seoul",
+                            "active_yn": False,
+                            "retry_enabled_yn": True,
+                            "max_retry_count": 2,
+                            "retry_interval_minutes": 15,
+                        }
+                    ),
+                },
+            },
+            {
+                "id": "n-rest",
+                "type": "VP_REST_API_SOURCE",
+                "position": {"x": 200, "y": 0},
+                "data": {
+                    "label": "REST",
+                    "config": _structured_config(
+                        {
+                            "data_source_id": "DS-SAMPLE",
+                            "operation_name": "sample_fetch",
+                            "endpoint_path": "/api/v1/sample",
+                            "http_method": "GET",
+                            "request_params": {"branch": "P001"},
+                            "credential_ref": "CRED-SAMPLE",
+                        }
+                    ),
+                },
+            },
+            {
+                "id": "n-xform",
+                "type": "VP_TRANSFORM",
+                "position": {"x": 400, "y": 0},
+                "data": {
+                    "label": "XFORM",
+                    "config": _structured_config(
+                        {
+                            "transform_type": "WIDE_HOUR_TO_LONG",
+                            "mapping_config": {
+                                "mappings": [{"source": "value", "target": "demand_value"}],
+                            },
+                        }
+                    ),
+                },
+            },
+            {
+                "id": "n-load",
+                "type": "VP_UPSERT_LOAD",
+                "position": {"x": 600, "y": 0},
+                "data": {
+                    "label": "LOAD",
+                    "config": _structured_config(
+                        {
+                            "standard_dataset_id": "SD-001",
+                            "target_table": "tb_sample_fact",
+                            "write_mode": "UPSERT",
+                            "conflict_key_columns_json": ["entity_id", "measured_at"],
+                            "save_dedup_summary_yn": True,
+                        }
+                    ),
+                },
+            },
+        ],
+        "edges": [
+            {
+                "id": "e1",
+                "source": "n-cron",
+                "target": "n-rest",
+                "sourceHandle": "output:schedule_config",
+                "targetHandle": "input:trigger",
+                "data": {
+                    "source_port": "schedule_config",
+                    "target_port": "trigger",
+                    "data_type": "SCHEDULE_CONFIG",
+                },
+            },
+            {
+                "id": "e2",
+                "source": "n-rest",
+                "target": "n-xform",
+                "sourceHandle": "output:raw_rows",
+                "targetHandle": "input:input_rows",
+                "data": {"source_port": "raw_rows", "target_port": "input_rows", "data_type": "RAW_ROWS"},
+            },
+            {
+                "id": "e3",
+                "source": "n-xform",
+                "target": "n-load",
+                "sourceHandle": "output:transformed_rows",
+                "targetHandle": "input:input_rows",
+                "data": {
+                    "source_port": "transformed_rows",
+                    "target_port": "input_rows",
+                    "data_type": "TRANSFORMED_ROWS",
+                },
+            },
+        ],
+        "viewport": {"x": 0, "y": 0, "zoom": 1},
+    }
+
+
+def _assert_structured_config_preserved(graph: dict) -> None:
+    rest = _config_of(graph, "n-rest")
+    assert rest.get("schema_version") == "R11-S5-0"
+    assert rest.get("values", {}).get("operation_name") == "sample_fetch"
+    assert rest.get("values", {}).get("endpoint_path") == "/api/v1/sample"
+    assert rest.get("values", {}).get("request_params", {}).get("branch") == "P001"
+    assert isinstance(rest.get("validation"), dict)
+    assert "status" in rest["validation"]
+
+    xform = _config_of(graph, "n-xform")
+    assert xform.get("schema_version") == "R11-S5-0"
+    assert xform.get("values", {}).get("transform_type") == "WIDE_HOUR_TO_LONG"
+    assert isinstance(xform.get("values", {}).get("mapping_config"), dict)
+
+    load = _config_of(graph, "n-load")
+    assert load.get("values", {}).get("target_table") == "tb_sample_fact"
+    assert load.get("values", {}).get("write_mode") == "UPSERT"
+    assert load.get("values", {}).get("conflict_key_columns_json") == ["entity_id", "measured_at"]
+
+    cron = _config_of(graph, "n-cron")
+    assert cron.get("values", {}).get("cron_expression") == "0 6 * * *"
+    assert cron.get("values", {}).get("timezone") == "Asia/Seoul"
+    assert cron.get("values", {}).get("active_yn") is False
+    assert cron.get("values", {}).get("retry_enabled_yn") is True
+    assert cron.get("values", {}).get("max_retry_count") == 2
+
+
+def test_config_round_trip_and_snapshot() -> None:
+    """R11-S5-6: structured config PUT/GET + version snapshot preservation."""
+    graph = mvp_structured_config_graph()
+    created = api(
+        "POST",
+        "/visual-pipelines",
+        {
+            "pipeline_name": "R11-S5-6 Config Round-Trip",
+            "description": "structured config storage",
+            "graph": graph,
+        },
+    )
+    pid = created["pipeline_id"]
+    try:
+        versions_after_create = api("GET", f"/visual-pipelines/{pid}/versions")
+        count_after_create = versions_after_create["total"]
+
+        # mutate a label-only viewport bump via PUT create_version=false
+        put_graph = json.loads(json.dumps(graph))
+        put_graph["viewport"] = {"x": 2, "y": 3, "zoom": 1.05}
+        api("PUT", f"/visual-pipelines/{pid}", {"graph": put_graph, "create_version": False})
+        after_put = api("GET", f"/visual-pipelines/{pid}/versions")
+        assert after_put["total"] == count_after_create
+        print("  [ok] S5-6 PUT create_version=false keeps version count")
+
+        detail = api("GET", f"/visual-pipelines/{pid}")
+        _assert_structured_config_preserved(detail["graph"])
+        print("  [ok] S5-6 GET preserves schema_version/values/validation")
+
+        snap = api(
+            "POST",
+            f"/visual-pipelines/{pid}/versions",
+            {"change_summary": "S5-6 config snapshot"},
+        )
+        after_snap = api("GET", f"/visual-pipelines/{pid}/versions")
+        assert after_snap["total"] == count_after_create + 1
+        snap_graph = snap["snapshot"]["graph"]
+        _assert_structured_config_preserved(snap_graph)
+        print("  [ok] S5-6 POST /versions snapshot preserves node.data.config")
+
+        one = api("GET", f"/visual-pipelines/{pid}/versions/{snap['version_id']}")
+        _assert_structured_config_preserved(one["snapshot"]["graph"])
+        print("  [ok] S5-6 GET version detail config matches snapshot")
+    finally:
+        api("POST", f"/visual-pipelines/{pid}/archive")
+
+
 def main() -> int:
     print("THERMOps R11-S2 Visual Pipeline graph storage test")
     try:
@@ -315,6 +524,7 @@ def main() -> int:
         test_catalog_still_works()
         pid = test_crud_and_versions()
         test_isolation_and_errors(pid)
+        test_config_round_trip_and_snapshot()
         # repeat key create once more for idempotent behavior
         again = api(
             "POST",
