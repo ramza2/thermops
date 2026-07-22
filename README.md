@@ -1396,6 +1396,17 @@ cd frontend && node scripts/check-visual-pipeline-studio.mjs
 - **테스트:** `python scripts/test_visual_pipeline_compile_preview.py` (quick group 미포함).
 - **다음:** R11-S6-2 Persistence + `current_sync_status` 전이.
 
+### R11-S6-2 Compile Persist + sync status + compile-result
+
+- **범위:** Option C — `tb_visual_pipeline_compile_result` 저장 + `current_sync_status` 전이. R10 materialization / Run / Schedule activation / FE UI 없음.
+- **API:**
+  - `POST /api/v1/visual-pipelines/{pipeline_id}/compile` — STRICT compile + result persist (`persisted=true`, `compile_version=R11-S6-2`)
+  - `GET /api/v1/visual-pipelines/{pipeline_id}/compile-result` — 최신 result (없으면 404 `COMPILE_RESULT_NOT_FOUND`)
+- **sync:** compile success→`IN_SYNC`, fail→`COMPILE_FAILED`; PUT graph는 S6-1 hash로 `STALE`/`NOT_COMPILED`/`IN_SYNC`/`COMPILE_FAILED` 전이 (label/position/viewport는 hash 제외).
+- **preview:** `compile-preview`는 계속 no write / status 미변경 (`compile_version=R11-S6-1`).
+- **테스트:** `python scripts/test_visual_pipeline_compile_persist.py` (quick group 미포함).
+- **다음:** R11-S6-3 Studio Compile Preview UI.
+
 ## 설계 문서 참조
 
 - `docs/md/THERMOps_R11-S6-0_Visual_Pipeline_Compile_설계.md`

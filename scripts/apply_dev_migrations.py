@@ -354,6 +354,10 @@ MIGRATIONS = [
         "R11-S2 visual pipeline graph schema",
         _load_sql("r11s2_visual_pipeline_graph_schema.sql"),
     ),
+    (
+        "R11-S6-2 visual pipeline compile result",
+        _load_sql("r11s6_visual_pipeline_compile_result.sql"),
+    ),
 ]
 
 

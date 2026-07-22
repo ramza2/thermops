@@ -22,6 +22,9 @@ VISUAL_PIPELINE_KIND = "VISUAL_DATA_LOAD"
 VISUAL_PIPELINE_TYPE = "DATA_LOAD"
 VISUAL_TEMPLATE_ID = "PT-VISUAL-DATA-LOAD"
 SYNC_NOT_COMPILED = "NOT_COMPILED"
+SYNC_IN_SYNC = "IN_SYNC"
+SYNC_STALE = "STALE"
+SYNC_COMPILE_FAILED = "COMPILE_FAILED"
 
 
 class VisualPipelineError(ValueError):
@@ -267,10 +270,19 @@ async def update_visual_pipeline(
             defn.active_yn = "Y"
     if "graph" in payload:
         try:
-            defn.current_graph_json = normalize_graph(payload.get("graph"))
+            new_graph = normalize_graph(payload.get("graph"))
         except VisualPipelineGraphError:
             raise
-        defn.current_sync_status = SYNC_NOT_COMPILED
+        defn.current_graph_json = new_graph
+        from app.services.visual_pipeline.compile_result_service import (
+            resolve_sync_status_after_graph_update,
+        )
+
+        defn.current_sync_status = await resolve_sync_status_after_graph_update(
+            db,
+            pipeline_id,
+            new_graph,
+        )
 
     defn.updated_at = utc_now()
     await db.flush()

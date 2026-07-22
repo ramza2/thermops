@@ -933,6 +933,25 @@ class PipelineDefinitionVersion(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime)
 
 
+class VisualPipelineCompileResult(Base):
+    """R11-S6-2 compile persist history (Option C). No R10 materialization."""
+
+    __tablename__ = "tb_visual_pipeline_compile_result"
+    compile_result_id: Mapped[str] = mapped_column(String(50), primary_key=True)
+    pipeline_id: Mapped[str] = mapped_column(String(50))
+    compile_status: Mapped[str] = mapped_column(String(30))
+    validation_level: Mapped[str] = mapped_column(String(20), default="STRICT")
+    graph_version_hash: Mapped[str | None] = mapped_column(String(100))
+    config_hash: Mapped[str | None] = mapped_column(String(100))
+    compile_version: Mapped[str] = mapped_column(String(30), default="R11-S6-2")
+    compiled_artifact_json: Mapped[dict | None] = mapped_column(JSONB)
+    issues_json: Mapped[Any] = mapped_column(JSONB, default=list)
+    error_message: Mapped[str | None] = mapped_column(Text)
+    source: Mapped[str] = mapped_column(String(40), default="COMPILE_API")
+    created_by: Mapped[str | None] = mapped_column(String(100))
+    created_at: Mapped[datetime] = mapped_column(DateTime)
+
+
 class PipelineRunLink(Base):
     __tablename__ = "tb_pipeline_run_link"
     link_id: Mapped[str] = mapped_column(String(50), primary_key=True)

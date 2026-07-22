@@ -66,6 +66,10 @@ class VisualPipelineCompilePreviewBody(BaseModel):
     validation_level: str = Field(default="STRICT", description="STRICT only (R11-S6-1)")
 
 
+class VisualPipelineCompileBody(BaseModel):
+    validation_level: str = Field(default="STRICT", description="STRICT only (R11-S6-2)")
+
+
 # --- S1 Catalog (static paths before /{pipeline_id}) ---
 
 
@@ -235,6 +239,54 @@ async def post_compile_visual_pipeline_preview(
 
     graph = detail.get("graph")
     result = compile_visual_pipeline_preview(pipeline_id, graph, validation_level=level)
+    return ok(result)
+
+
+@router.post("/visual-pipelines/{pipeline_id}/compile")
+async def post_compile_visual_pipeline(
+    pipeline_id: str,
+    body: VisualPipelineCompileBody | None = None,
+    db: AsyncSession = Depends(get_db),
+):
+    """Compile saved graph, persist result, update sync status. No R10 materialization."""
+    from app.services.visual_pipeline.compile_result_service import compile_and_persist_visual_pipeline
+
+    payload = body.model_dump() if body else {}
+    level = str(payload.get("validation_level") or "STRICT").strip().upper() or "STRICT"
+    if level != "STRICT":
+        raise HTTPException(
+            status_code=400,
+            detail="COMPILE_VALIDATION_LEVEL_MUST_BE_STRICT",
+        )
+
+    try:
+        result = await compile_and_persist_visual_pipeline(
+            db,
+            pipeline_id,
+            validation_level=level,
+        )
+    except LookupError:
+        raise HTTPException(status_code=404, detail="VISUAL_PIPELINE_NOT_FOUND") from None
+    return ok(result)
+
+
+@router.get("/visual-pipelines/{pipeline_id}/compile-result")
+async def get_compile_visual_pipeline_result(
+    pipeline_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """Return latest compile result for a visual pipeline."""
+    from app.services.visual_pipeline.compile_result_service import (
+        get_latest_visual_pipeline_compile_result,
+    )
+
+    try:
+        result = await get_latest_visual_pipeline_compile_result(db, pipeline_id)
+    except LookupError as exc:
+        detail = str(exc) if str(exc) else "COMPILE_RESULT_NOT_FOUND"
+        if detail == "VISUAL_PIPELINE_NOT_FOUND":
+            raise HTTPException(status_code=404, detail="VISUAL_PIPELINE_NOT_FOUND") from None
+        raise HTTPException(status_code=404, detail="COMPILE_RESULT_NOT_FOUND") from None
     return ok(result)
 
 
