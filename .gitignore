@@ -27,3 +27,4 @@ Thumbs.db
 
 # Regression test logs
 logs/regression/
+.cursor

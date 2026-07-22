@@ -9,6 +9,7 @@ import {
   Search, RotateCcw, X, LogOut, Settings, User, Activity, Database,
   Cpu, BarChart2, Zap, TrendingUp, TrendingDown, Pause, StopCircle,
   FileText, Filter, MoreHorizontal, ArrowRight, Layers,
+  GitBranch, Box, Save, History, Maximize2, Workflow, Info,
 } from "lucide-react";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -17,11 +18,13 @@ type Screen =
   | "SCR-001" | "SCR-002" | "SCR-003" | "SCR-004" | "SCR-005"
   | "SCR-006" | "SCR-007" | "SCR-008" | "SCR-009" | "SCR-010"
   | "SCR-011" | "SCR-012" | "SCR-013" | "SCR-014" | "SCR-015"
-  | "SCR-016" | "SCR-017" | "SCR-018";
+  | "SCR-016" | "SCR-017" | "SCR-018"
+  | "SCR-R11-001" | "SCR-R11-002";
 
 type Modal =
   | null | "MOD-001" | "MOD-002" | "MOD-003" | "MOD-004" | "MOD-005"
-  | "MOD-006" | "MOD-007" | "MOD-008" | "MOD-009" | "MOD-010";
+  | "MOD-006" | "MOD-007" | "MOD-008" | "MOD-009" | "MOD-010"
+  | "MOD-R11-NEW" | "MOD-R11-VERSIONS";
 
 type ToastType = "success" | "error" | "warning" | "info";
 interface Toast { id: number; type: ToastType; message: string; }
@@ -30,7 +33,8 @@ type StatusKey =
   | "READY" | "RUNNING" | "SUCCESS" | "FAILED" | "WARNING"
   | "REGISTERED" | "CHAMPION" | "CANDIDATE" | "DISABLED"
   | "DRIFT_DETECTED" | "RETRAIN_REQUIRED" | "정상" | "오류" | "비활성"
-  | "검토중" | "요청완료" | "보류" | "제외";
+  | "검토중" | "요청완료" | "보류" | "제외"
+  | "DRAFT" | "NOT_COMPILED" | "ACTIVE" | "ARCHIVED";
 
 // ─── Dummy Data ───────────────────────────────────────────────────────────────
 
@@ -151,6 +155,10 @@ const STATUS_CONFIG: Record<StatusKey, { label: string; bg: string; text: string
   요청완료:         { label: "요청완료",   bg: "bg-blue-100",    text: "text-blue-700" },
   보류:             { label: "보류",       bg: "bg-slate-100",   text: "text-slate-600" },
   제외:             { label: "제외",       bg: "bg-slate-100",   text: "text-slate-400" },
+  DRAFT:            { label: "DRAFT",       bg: "bg-slate-100",   text: "text-slate-600" },
+  NOT_COMPILED:     { label: "미컴파일",    bg: "bg-amber-100",   text: "text-amber-700" },
+  ACTIVE:           { label: "ACTIVE",      bg: "bg-emerald-100", text: "text-emerald-700" },
+  ARCHIVED:         { label: "보관됨",      bg: "bg-slate-100",   text: "text-slate-500" },
 };
 
 function StatusBadge({ status }: { status: string }) {
@@ -339,6 +347,463 @@ function Table({
   );
 }
 
+// ─── R11 Visual Pipeline Studio ──────────────────────────────────────────────
+
+const VP_PIPELINES = [
+  {
+    id: "VP-001", name: "ASOS 관측 기상 적재 파이프라인",
+    desc: "기상청 ASOS REST API → Transform → DB 적재",
+    status: "DRAFT", syncStatus: "NOT_COMPILED", nodes: 4, edges: 3,
+    updatedAt: "2026-06-24 10:15",
+  },
+  {
+    id: "VP-002", name: "열수요 API 적재 파이프라인",
+    desc: "열수요 실적 API → Transform → 표준 테이블 적재",
+    status: "DRAFT", syncStatus: "NOT_COMPILED", nodes: 3, edges: 2,
+    updatedAt: "2026-06-23 17:30",
+  },
+];
+
+const ACTIVE_NODES = [
+  { type: "VP_REST_API_SOURCE", label: "REST API Source", desc: "REST API 호출 결과를 원천 rows로 가져옵니다.", color: "border-blue-400 bg-blue-50" },
+  { type: "VP_TRANSFORM", label: "Transform", desc: "원천 rows를 적재 가능한 형태로 변환합니다.", color: "border-emerald-400 bg-emerald-50" },
+  { type: "VP_UPSERT_LOAD", label: "Upsert Load", desc: "변환된 rows를 표준 데이터셋에 적재합니다.", color: "border-violet-400 bg-violet-50" },
+  { type: "VP_CRON_SCHEDULE", label: "CRON Schedule", desc: "주기적으로 Source를 트리거하는 일정을 정의합니다.", color: "border-amber-400 bg-amber-50" },
+];
+
+const DISABLED_NODES = [
+  { type: "VP_NOTIFICATION", label: "Notification" },
+  { type: "VP_DATA_QUALITY", label: "Data Quality" },
+  { type: "VP_FEATURE_BUILD", label: "Feature Build" },
+  { type: "VP_MODEL_TRAINING", label: "Model Training" },
+  { type: "VP_BATCH_PREDICTION", label: "Batch Prediction" },
+  { type: "VP_FORECAST_PROVIDER", label: "Forecast Provider" },
+  { type: "VP_DB_SOURCE", label: "DB Source" },
+  { type: "VP_CSV_SOURCE", label: "CSV Source" },
+];
+
+const CANVAS_NODES = [
+  {
+    id: "n1", type: "VP_CRON_SCHEDULE", label: "CRON Schedule", x: 20, y: 100,
+    color: "border-amber-400", headerBg: "bg-amber-400", desc: "0 2 * * *",
+    inputs: [], outputs: ["schedule_config"], status: "READY",
+  },
+  {
+    id: "n2", type: "VP_REST_API_SOURCE", label: "REST API Source", x: 220, y: 100,
+    color: "border-blue-400", headerBg: "bg-blue-500", desc: "KMA ASOS API",
+    inputs: ["trigger"], outputs: ["raw_rows"], status: "READY",
+  },
+  {
+    id: "n3", type: "VP_TRANSFORM", label: "Transform", x: 420, y: 100,
+    color: "border-emerald-400", headerBg: "bg-emerald-500", desc: "컬럼 매핑 + 단위 변환",
+    inputs: ["input_rows"], outputs: ["transformed_rows"], status: "READY",
+  },
+  {
+    id: "n4", type: "VP_UPSERT_LOAD", label: "Upsert Load", x: 620, y: 100,
+    color: "border-violet-400", headerBg: "bg-violet-500", desc: "→ weather_hourly",
+    inputs: ["input_rows"], outputs: ["load_result"], status: "READY",
+  },
+];
+
+const CANVAS_EDGES = [
+  { id: "e1", from: "n1", to: "n2", label: "trigger", fromX: 170, fromY: 148, toX: 220, toY: 148 },
+  { id: "e2", from: "n2", to: "n3", label: "raw_rows", fromX: 370, fromY: 148, toX: 420, toY: 148 },
+  { id: "e3", from: "n3", to: "n4", label: "transformed_rows", fromX: 570, fromY: 148, toX: 620, toY: 148 },
+];
+
+function SCR_R11_001({ navigate, openModal, addToast }: AppActions) {
+  const [search, setSearch] = useState("");
+  const filtered = VP_PIPELINES.filter((p) =>
+    p.name.toLowerCase().includes(search.toLowerCase())
+  );
+  return (
+    <div>
+      <div className="flex items-center gap-2 mb-1">
+        <PageHeader
+          breadcrumb={["Visual Pipeline Studio"]}
+          title="Visual Pipeline Studio"
+          sub="REST API 데이터 적재 파이프라인을 노드와 연결선으로 구성합니다."
+        />
+        <span className="mb-auto mt-1 px-1.5 py-0.5 bg-violet-100 text-violet-700 rounded text-[10px] font-bold font-mono">R11-S2</span>
+      </div>
+      <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-2.5 mb-4 flex items-center gap-2 text-xs text-amber-800">
+        <Info size={13} className="shrink-0" />
+        <span><strong>Prototype only</strong> — R11-S3 UI Draft. Compile / Run 기능은 미구현입니다. UI/UX 비교용 프로토타입입니다.</span>
+      </div>
+      <div className="bg-white border border-slate-200 rounded-lg overflow-hidden">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
+          <div className="flex items-center gap-2">
+            <div className="relative">
+              <Search size={13} className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="파이프라인 이름 검색"
+                className="h-8 pl-7 pr-3 text-sm border border-slate-300 rounded bg-white w-56 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
+            </div>
+            <SelectBox options={["전체 상태", "DRAFT", "ACTIVE", "ARCHIVED"]} />
+          </div>
+          <div className="flex gap-2">
+            <PrimaryBtn onClick={() => openModal("MOD-R11-NEW")} icon={<Plus size={13} />}>새 Visual Pipeline</PrimaryBtn>
+            <SecondaryBtn onClick={() => addToast("info", "목록을 새로고침합니다.")}><RefreshCw size={13} /></SecondaryBtn>
+          </div>
+        </div>
+        {filtered.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16 text-slate-400">
+            <Workflow size={32} className="mb-3 text-slate-300" />
+            <p className="text-sm font-medium text-slate-500">아직 생성된 Visual Pipeline이 없습니다.</p>
+            <p className="text-xs mt-1">새 Visual Pipeline을 만들어 REST API 적재 흐름을 구성해 보세요.</p>
+            <PrimaryBtn onClick={() => openModal("MOD-R11-NEW")} icon={<Plus size={13} />} >새 Visual Pipeline</PrimaryBtn>
+          </div>
+        ) : (
+          <Table
+            headers={["pipeline_name", "description", "status", "current_sync_status", "nodes", "edges", "updated_at", "열기", "archive"]}
+            rows={filtered.map((p) => [
+              <div key="name">
+                <div className="font-medium text-sm text-slate-800">{p.name}</div>
+                <div className="font-mono text-[10px] text-slate-400 mt-0.5">{p.id}</div>
+              </div>,
+              <span key="desc" className="text-xs text-slate-500">{p.desc}</span>,
+              <StatusBadge key="s" status={p.status} />,
+              <StatusBadge key="sync" status={p.syncStatus} />,
+              <span key="n" className="font-mono text-xs">{p.nodes}</span>,
+              <span key="e" className="font-mono text-xs">{p.edges}</span>,
+              <span key="t" className="font-mono text-xs">{p.updatedAt}</span>,
+              <GhostBtn key="open" onClick={() => navigate("SCR-R11-002")}><ArrowRight size={12} /> 열기</GhostBtn>,
+              <GhostBtn key="arch" onClick={() => addToast("warning", "보관 처리하겠습니까?")}><StopCircle size={12} /> archive</GhostBtn>,
+            ])}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
+function NodeCard({
+  node, selected, onClick,
+}: {
+  node: typeof CANVAS_NODES[0];
+  selected: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <div
+      onClick={onClick}
+      style={{ left: node.x, top: node.y, width: 160 }}
+      className={`absolute cursor-pointer rounded-lg border-2 bg-white shadow-sm transition-all select-none
+        ${selected ? "border-blue-500 shadow-blue-200 shadow-md" : node.color + " hover:shadow-md"}`}
+    >
+      <div className={`${node.headerBg} rounded-t px-2.5 py-1.5 flex items-center justify-between`}>
+        <span className="text-white text-[10px] font-bold uppercase tracking-wide truncate">{node.type}</span>
+        <button className="text-white/70 hover:text-white ml-1 shrink-0"><MoreHorizontal size={11} /></button>
+      </div>
+      <div className="px-2.5 py-2">
+        <div className="text-xs font-semibold text-slate-700 leading-tight">{node.label}</div>
+        <div className="text-[10px] text-slate-400 mt-0.5 truncate">{node.desc}</div>
+      </div>
+      <div className="px-2.5 pb-2 flex flex-col gap-0.5">
+        {node.inputs.map((p) => (
+          <div key={p} className="flex items-center gap-1 text-[9px] text-slate-400">
+            <div className="w-2 h-2 rounded-full bg-slate-300 border border-slate-400" />
+            <span className="font-mono">{p}</span>
+          </div>
+        ))}
+        {node.outputs.map((p) => (
+          <div key={p} className="flex items-center justify-end gap-1 text-[9px] text-slate-400">
+            <span className="font-mono">{p}</span>
+            <div className="w-2 h-2 rounded-full bg-blue-300 border border-blue-400" />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function SCR_R11_002({ navigate, openModal, addToast }: AppActions) {
+  const [selectedNode, setSelectedNode] = useState<string | null>("n2");
+  const [saveState, setSaveState] = useState<"saved" | "unsaved" | "saving">("saved");
+  const [showJsonPreview, setShowJsonPreview] = useState(false);
+
+  const selected = CANVAS_NODES.find((n) => n.id === selectedNode) ?? null;
+
+  const handleSave = () => {
+    setSaveState("saving");
+    setTimeout(() => { setSaveState("saved"); addToast("success", "Graph가 저장되었습니다."); }, 900);
+  };
+
+  return (
+    <div className="flex flex-col gap-0" style={{ minHeight: "calc(100vh - 120px)" }}>
+      {/* Prototype banner */}
+      <div className="bg-violet-50 border border-violet-200 rounded-lg px-4 py-2 mb-3 flex items-center gap-2 text-xs text-violet-800">
+        <Info size={13} className="shrink-0" />
+        <span><strong>R11-S3 UI Draft · Prototype only</strong> — React Flow 미구현. 정적 Canvas 배치로 UI/UX를 검토합니다. Compile/Run은 Coming Soon입니다.</span>
+      </div>
+
+      {/* Toolbar */}
+      <div className="bg-white border border-slate-200 rounded-lg px-3 py-2 flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <GhostBtn onClick={() => navigate("SCR-R11-001")}><ChevronRight size={12} className="rotate-180" /> 목록</GhostBtn>
+          <div className="w-px h-4 bg-slate-200" />
+          <span className="text-sm font-semibold text-slate-800 truncate max-w-[200px]">ASOS 관측 기상 적재 파이프라인</span>
+          <StatusBadge status="DRAFT" />
+          {saveState === "unsaved" && <span className="text-[10px] text-amber-600 font-medium">● 저장되지 않음</span>}
+          {saveState === "saved" && <span className="text-[10px] text-emerald-600">✓ 저장됨</span>}
+          {saveState === "saving" && <span className="text-[10px] text-blue-600 animate-pulse">저장 중…</span>}
+        </div>
+        <div className="flex items-center gap-2">
+          <PrimaryBtn onClick={handleSave} icon={<Save size={13} />}>저장</PrimaryBtn>
+          <SecondaryBtn onClick={() => { addToast("success", "현재 Graph가 version snapshot으로 저장되었습니다."); openModal("MOD-R11-VERSIONS"); }}>
+            <History size={13} /> 버전 저장
+          </SecondaryBtn>
+          <SecondaryBtn onClick={() => addToast("info", "Canvas를 Fit View합니다.")}><Maximize2 size={13} /> Fit View</SecondaryBtn>
+          <div className="w-px h-4 bg-slate-200" />
+          <button disabled className="inline-flex items-center gap-1 px-3 py-1.5 bg-slate-100 text-slate-400 text-sm font-medium rounded cursor-not-allowed text-xs" title="현재 단계에서는 Compile/Run을 지원하지 않습니다.">
+            <Zap size={12} /> Compile
+            <span className="text-[9px] bg-slate-300 text-slate-500 px-1 py-0.5 rounded ml-1 font-bold">Soon</span>
+          </button>
+          <button disabled className="inline-flex items-center gap-1 px-3 py-1.5 bg-slate-100 text-slate-400 text-sm font-medium rounded cursor-not-allowed text-xs">
+            <Play size={12} /> Run Now
+            <span className="text-[9px] bg-slate-300 text-slate-500 px-1 py-0.5 rounded ml-1 font-bold">Soon</span>
+          </button>
+          <button disabled className="inline-flex items-center gap-1 px-3 py-1.5 bg-slate-100 text-slate-400 text-sm font-medium rounded cursor-not-allowed text-xs">
+            <Clock size={12} /> 스케줄 활성화
+            <span className="text-[9px] bg-slate-300 text-slate-500 px-1 py-0.5 rounded ml-1 font-bold">Soon</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Main 3-column layout */}
+      <div className="flex gap-3 flex-1" style={{ minHeight: 480 }}>
+        {/* Left: Component Palette */}
+        <div className="w-44 shrink-0 bg-white border border-slate-200 rounded-lg flex flex-col overflow-hidden">
+          <div className="px-3 py-2 border-b border-slate-100 bg-slate-50">
+            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Component Palette</span>
+          </div>
+          <div className="flex-1 overflow-y-auto py-2 px-2 flex flex-col gap-1">
+            <div className="text-[9px] font-bold text-slate-400 uppercase tracking-wide px-1 mb-1">ACTIVE</div>
+            {ACTIVE_NODES.map((n) => (
+              <div
+                key={n.type}
+                className={`p-2 rounded border cursor-grab active:cursor-grabbing text-xs ${n.color} hover:shadow-sm transition-all`}
+                title={n.desc}
+                onClick={() => { setSaveState("unsaved"); addToast("info", `${n.label} 노드를 Canvas에 추가합니다. (Prototype: 실제 추가 미구현)`); }}
+              >
+                <div className="font-semibold text-slate-700 text-[10px] leading-tight">{n.label}</div>
+                <div className="font-mono text-[9px] text-slate-400 mt-0.5 truncate">{n.type}</div>
+              </div>
+            ))}
+            <div className="text-[9px] font-bold text-slate-400 uppercase tracking-wide px-1 mt-2 mb-1">DISABLED</div>
+            {DISABLED_NODES.map((n) => (
+              <div
+                key={n.type}
+                className="p-2 rounded border border-slate-200 bg-slate-50 opacity-60 cursor-not-allowed relative group"
+                title="이 컴포넌트는 현재 사용할 수 없습니다."
+              >
+                <div className="font-semibold text-slate-400 text-[10px] leading-tight">{n.label}</div>
+                <div className="font-mono text-[9px] text-slate-300 mt-0.5 truncate">{n.type}</div>
+                <span className="absolute top-1 right-1 text-[8px] bg-slate-200 text-slate-400 px-1 rounded font-bold">Later</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Center: Canvas */}
+        <div className="flex-1 bg-white border border-slate-200 rounded-lg overflow-hidden flex flex-col">
+          <div className="px-3 py-1.5 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
+            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Canvas</span>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] text-slate-400 font-mono">zoom: 100%</span>
+              <div className="flex items-center gap-1 text-[10px] text-slate-400">
+                <div className="w-2 h-2 rounded-full bg-blue-400" /> 선택됨
+                <div className="w-2 h-2 rounded-full bg-slate-300 ml-2" /> 일반
+              </div>
+            </div>
+          </div>
+          {/* Grid canvas area */}
+          <div
+            className="flex-1 relative overflow-hidden select-none"
+            style={{
+              backgroundImage: "radial-gradient(circle, #cbd5e1 1px, transparent 1px)",
+              backgroundSize: "20px 20px",
+              backgroundColor: "#f8fafc",
+            }}
+            onClick={(e) => { if (e.target === e.currentTarget) setSelectedNode(null); }}
+          >
+            {/* SVG edges */}
+            <svg className="absolute inset-0 w-full h-full pointer-events-none" style={{ overflow: "visible" }}>
+              {CANVAS_EDGES.map((edge) => {
+                const midX = (edge.fromX + edge.toX) / 2;
+                return (
+                  <g key={edge.id}>
+                    <path
+                      d={`M ${edge.fromX} ${edge.fromY} C ${midX} ${edge.fromY}, ${midX} ${edge.toY}, ${edge.toX} ${edge.toY}`}
+                      stroke="#94a3b8" strokeWidth="1.5" fill="none"
+                      markerEnd="url(#arrowhead)"
+                    />
+                    <rect x={midX - 28} y={edge.fromY - 10} width={56} height={14} rx="3" fill="white" stroke="#e2e8f0" />
+                    <text x={midX} y={edge.fromY} textAnchor="middle" dominantBaseline="middle" fontSize="8" fill="#64748b" fontFamily="JetBrains Mono, monospace">
+                      {edge.label}
+                    </text>
+                  </g>
+                );
+              })}
+              <defs>
+                <marker id="arrowhead" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+                  <polygon points="0 0, 6 3, 0 6" fill="#94a3b8" />
+                </marker>
+              </defs>
+            </svg>
+
+            {/* Node cards */}
+            {CANVAS_NODES.map((node) => (
+              <NodeCard
+                key={node.id}
+                node={node}
+                selected={selectedNode === node.id}
+                onClick={() => setSelectedNode(node.id)}
+              />
+            ))}
+
+            {/* MiniMap */}
+            <div className="absolute bottom-3 right-3 w-28 h-16 bg-white/90 border border-slate-200 rounded shadow-sm overflow-hidden">
+              <div className="text-[8px] text-slate-400 px-1.5 py-0.5 border-b border-slate-100 font-bold">MiniMap</div>
+              <div className="p-1 relative" style={{ height: 48 }}>
+                {CANVAS_NODES.map((n, i) => (
+                  <div
+                    key={n.id}
+                    className={`absolute w-5 h-3 rounded-sm ${selectedNode === n.id ? "bg-blue-400" : "bg-slate-300"}`}
+                    style={{ left: 4 + i * 26, top: 8 }}
+                  />
+                ))}
+                <div className="absolute inset-0 border border-blue-400/40 rounded m-0.5 pointer-events-none" />
+              </div>
+            </div>
+
+            {/* Controls */}
+            <div className="absolute bottom-3 left-3 flex flex-col gap-1">
+              {["+", "−", "⊡"].map((c) => (
+                <button key={c} className="w-6 h-6 bg-white border border-slate-200 rounded text-xs text-slate-500 hover:bg-slate-50 shadow-sm font-mono leading-none">
+                  {c}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Right: Node Inspector */}
+        <div className="w-52 shrink-0 bg-white border border-slate-200 rounded-lg flex flex-col overflow-hidden">
+          <div className="px-3 py-2 border-b border-slate-100 bg-slate-50">
+            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Node Inspector</span>
+          </div>
+          {!selected ? (
+            <div className="flex-1 flex flex-col items-center justify-center p-4 text-center text-slate-400">
+              <Box size={24} className="mb-2 text-slate-300" />
+              <p className="text-xs">노드를 선택하면 상세 정보가 표시됩니다.</p>
+            </div>
+          ) : (
+            <div className="flex-1 overflow-y-auto p-3 flex flex-col gap-3">
+              <div>
+                <div className="text-[9px] font-bold text-slate-400 uppercase tracking-wide mb-1.5">노드 정보</div>
+                {[
+                  ["node_id", selected.id],
+                  ["label", selected.label],
+                  ["component_type", selected.type],
+                  ["category", "DATA_LOAD"],
+                  ["status", selected.status],
+                ].map(([k, v]) => (
+                  <div key={k} className="flex justify-between py-1 border-b border-slate-100 last:border-0">
+                    <span className="text-[10px] text-slate-400 font-mono">{k}</span>
+                    <span className="text-[10px] font-medium text-slate-700 font-mono">{v as string}</span>
+                  </div>
+                ))}
+              </div>
+              <div>
+                <div className="text-[9px] font-bold text-slate-400 uppercase tracking-wide mb-1.5">Ports</div>
+                <div className="flex flex-col gap-1">
+                  {selected.inputs.map((p) => (
+                    <div key={p} className="flex items-center gap-1.5 text-[10px]">
+                      <div className="w-2 h-2 rounded-full bg-slate-300 border border-slate-400" />
+                      <span className="font-mono text-slate-500">IN: {p}</span>
+                    </div>
+                  ))}
+                  {selected.outputs.map((p) => (
+                    <div key={p} className="flex items-center gap-1.5 text-[10px]">
+                      <div className="w-2 h-2 rounded-full bg-blue-300 border border-blue-400" />
+                      <span className="font-mono text-slate-500">OUT: {p}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <div className="text-[9px] font-bold text-slate-400 uppercase tracking-wide mb-1.5">Config (placeholder)</div>
+                <pre className="bg-slate-50 border border-slate-200 rounded p-2 text-[9px] font-mono text-slate-600 whitespace-pre-wrap leading-relaxed">
+{`{
+  "data_source_id": "미설정",
+  "endpoint_path": "미설정",
+  "http_method": "GET"
+}`}
+                </pre>
+              </div>
+              <div>
+                <div className="text-[9px] font-bold text-slate-400 uppercase tracking-wide mb-1.5">Label 수정</div>
+                <input
+                  defaultValue={selected.label}
+                  className="h-7 px-2 text-xs border border-slate-300 rounded w-full focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  onChange={() => setSaveState("unsaved")}
+                />
+              </div>
+              <DangerBtn onClick={() => addToast("warning", "노드를 삭제합니다. (Prototype: 실제 삭제 미구현)")}><Trash2 size={12} /> 노드 삭제</DangerBtn>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Bottom: Graph Status Panel */}
+      <div className="mt-3 bg-white border border-slate-200 rounded-lg overflow-hidden">
+        <div
+          className="px-4 py-2 border-b border-slate-100 bg-slate-50 flex items-center justify-between cursor-pointer"
+          onClick={() => setShowJsonPreview(!showJsonPreview)}
+        >
+          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+            <GitBranch size={11} /> Graph Status Panel
+          </span>
+          <ChevronDown size={12} className={`text-slate-400 transition-transform ${showJsonPreview ? "rotate-180" : ""}`} />
+        </div>
+        <div className="px-4 py-3 flex flex-wrap gap-x-6 gap-y-2 text-xs font-mono">
+          {[
+            ["pipeline_id", "VP-001"],
+            ["pipeline_kind", "VISUAL_DATA_LOAD"],
+            ["template_id", "PT-VISUAL-DATA-LOAD"],
+            ["current_sync_status", "NOT_COMPILED"],
+            ["node_count", "4"],
+            ["edge_count", "3"],
+            ["dirty", saveState === "unsaved" ? "true" : "false"],
+            ["last_saved", "2026-06-24 10:15:42"],
+          ].map(([k, v]) => (
+            <div key={k} className="flex gap-1.5">
+              <span className="text-slate-400">{k}:</span>
+              <span className={`font-semibold ${k === "current_sync_status" ? "text-amber-600" : k === "dirty" && v === "true" ? "text-amber-600" : "text-slate-700"}`}>{v}</span>
+            </div>
+          ))}
+        </div>
+        {showJsonPreview && (
+          <div className="px-4 pb-3 border-t border-slate-100">
+            <div className="text-[9px] font-bold text-slate-400 uppercase tracking-wide mb-1.5 mt-2">Graph JSON Preview</div>
+            <pre className="bg-slate-50 border border-slate-200 rounded p-3 text-[10px] font-mono text-slate-600 leading-relaxed">
+{`{
+  "nodes": 4,
+  "edges": 3,
+  "viewport": { "x": 0, "y": 0, "zoom": 1 }
+}`}
+            </pre>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── Modal Shell ──────────────────────────────────────────────────────────────
 
 function ModalShell({
@@ -431,6 +896,14 @@ const MENU = [
       { label: "재학습 후보 관리", screen: "SCR-018" as Screen },
     ],
   },
+  {
+    label: "Visual Pipeline Studio", icon: <Workflow size={16} />,
+    badge: "R11",
+    children: [
+      { label: "Visual Pipeline 목록", screen: "SCR-R11-001" as Screen },
+      { label: "Pipeline Canvas", screen: "SCR-R11-002" as Screen },
+    ],
+  },
 ];
 
 // ─── Screens ──────────────────────────────────────────────────────────────────
@@ -458,8 +931,8 @@ function SCR001({ navigate, openModal, addToast }: AppActions) {
               <YAxis tick={{ fontSize: 11 }} />
               <Tooltip />
               <Legend wrapperStyle={{ fontSize: 11 }} />
-              <Line type="monotone" dataKey="예측" stroke="#3b82f6" strokeWidth={2} dot={false} />
-              <Line type="monotone" dataKey="실제" stroke="#10b981" strokeWidth={2} dot={false} />
+              <Line key="scr001-line-forecast" type="monotone" dataKey="예측" stroke="#3b82f6" strokeWidth={2} dot={false} />
+              <Line key="scr001-line-actual" type="monotone" dataKey="실제" stroke="#10b981" strokeWidth={2} dot={false} />
             </LineChart>
           </ResponsiveContainer>
         </div>
@@ -474,7 +947,7 @@ function SCR001({ navigate, openModal, addToast }: AppActions) {
               <XAxis dataKey="name" tick={{ fontSize: 11 }} />
               <YAxis tick={{ fontSize: 11 }} unit="%" />
               <Tooltip formatter={(v) => [`${v}%`, "MAPE"]} />
-              <Bar dataKey="mape" fill="#3b82f6" radius={[3, 3, 0, 0]} />
+              <Bar key="scr001-bar-mape" dataKey="mape" fill="#3b82f6" radius={[3, 3, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -934,7 +1407,7 @@ function SCR010({ navigate, openModal, addToast }: AppActions) {
               <XAxis type="number" tick={{ fontSize: 11 }} unit="%" />
               <YAxis dataKey="model" type="category" tick={{ fontSize: 11 }} width={90} />
               <Tooltip formatter={(v) => [`${v}%`, "MAPE"]} />
-              <Bar dataKey="mape" fill="#3b82f6" radius={[0, 3, 3, 0]} />
+              <Bar key="scr010-bar-mape" dataKey="mape" fill="#3b82f6" radius={[0, 3, 3, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -946,7 +1419,7 @@ function SCR010({ navigate, openModal, addToast }: AppActions) {
               <XAxis type="number" tick={{ fontSize: 11 }} />
               <YAxis dataKey="feature" type="category" tick={{ fontSize: 10 }} width={110} />
               <Tooltip />
-              <Bar dataKey="importance" fill="#10b981" radius={[0, 3, 3, 0]} />
+              <Bar key="scr010-bar-importance" dataKey="importance" fill="#10b981" radius={[0, 3, 3, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -1079,8 +1552,8 @@ function SCR013({ navigate, addToast }: AppActions) {
             <YAxis tick={{ fontSize: 11 }} unit="GJ" />
             <Tooltip />
             <Legend wrapperStyle={{ fontSize: 11 }} />
-            <Line type="monotone" dataKey="예측" stroke="#3b82f6" strokeWidth={2} dot={false} />
-            <Line type="monotone" dataKey="실제" stroke="#10b981" strokeWidth={2} dot={false} strokeDasharray="5 5" />
+            <Line key="scr013-line-forecast" type="monotone" dataKey="예측" stroke="#3b82f6" strokeWidth={2} dot={false} />
+            <Line key="scr013-line-actual" type="monotone" dataKey="실제" stroke="#10b981" strokeWidth={2} dot={false} strokeDasharray="5 5" />
           </LineChart>
         </ResponsiveContainer>
       </div>
@@ -1125,7 +1598,7 @@ function SCR014({ addToast }: AppActions) {
             <XAxis dataKey="name" tick={{ fontSize: 11 }} />
             <YAxis tick={{ fontSize: 11 }} unit="%" />
             <Tooltip formatter={(v) => [`${v}%`, "오차율"]} />
-            <Bar dataKey="mape" fill="#f59e0b" radius={[3, 3, 0, 0]} />
+            <Bar key="scr014-bar-mape" dataKey="mape" fill="#f59e0b" radius={[3, 3, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
       </div>
@@ -1207,7 +1680,7 @@ function SCR016({ navigate, openModal, addToast }: AppActions) {
               <XAxis dataKey="date" tick={{ fontSize: 11 }} />
               <YAxis tick={{ fontSize: 11 }} unit="%" domain={[3, 7]} />
               <Tooltip formatter={(v) => [`${v}%`, "MAPE"]} />
-              <Area type="monotone" dataKey="mape" stroke="#3b82f6" fill="#eff6ff" strokeWidth={2} />
+              <Area key="scr016-area-mape" type="monotone" dataKey="mape" stroke="#3b82f6" fill="#eff6ff" strokeWidth={2} />
             </AreaChart>
           </ResponsiveContainer>
         </div>
@@ -1226,8 +1699,8 @@ function SCR016({ navigate, openModal, addToast }: AppActions) {
               <YAxis tick={{ fontSize: 11 }} unit="%" />
               <Tooltip />
               <Legend wrapperStyle={{ fontSize: 11 }} />
-              <Bar dataKey="LGBM" fill="#3b82f6" radius={[2, 2, 0, 0]} />
-              <Bar dataKey="XGB" fill="#8b5cf6" radius={[2, 2, 0, 0]} />
+              <Bar key="scr016-bar-lgbm" dataKey="LGBM" fill="#3b82f6" radius={[2, 2, 0, 0]} />
+              <Bar key="scr016-bar-xgb" dataKey="XGB" fill="#8b5cf6" radius={[2, 2, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -1290,8 +1763,8 @@ function SCR017({ openModal, addToast }: AppActions) {
               <YAxis tick={{ fontSize: 10 }} />
               <Tooltip />
               <Legend wrapperStyle={{ fontSize: 10 }} />
-              <Area type="monotone" dataKey="base" stroke="#3b82f6" fill="#eff6ff" fillOpacity={0.6} strokeWidth={1.5} name="기준분포" />
-              <Area type="monotone" dataKey="recent" stroke="#f59e0b" fill="#fffbeb" fillOpacity={0.6} strokeWidth={1.5} name="최근분포" />
+              <Area key="scr017-area-base" type="monotone" dataKey="base" stroke="#3b82f6" fill="#eff6ff" fillOpacity={0.6} strokeWidth={1.5} name="기준분포" />
+              <Area key="scr017-area-recent" type="monotone" dataKey="recent" stroke="#f59e0b" fill="#fffbeb" fillOpacity={0.6} strokeWidth={1.5} name="최근분포" />
             </AreaChart>
           </ResponsiveContainer>
         </div>
@@ -1500,6 +1973,64 @@ function Modals({ modal, actions }: { modal: Modal; actions: AppActions }) {
     </ModalShell>
   );
 
+  if (modal === "MOD-R11-NEW") return (
+    <ModalShell title="새 Visual Pipeline 만들기" onClose={closeModal}
+      footer={<><PrimaryBtn onClick={() => { closeModal(); addToast("success", "Visual Pipeline이 생성되었습니다."); actions.navigate("SCR-R11-002"); }} icon={<Plus size={13} />}>생성</PrimaryBtn><SecondaryBtn onClick={closeModal}>취소</SecondaryBtn></>}>
+      <div className="flex flex-col gap-3">
+        <FormField label="pipeline_name">
+          <input className="h-8 px-2 text-sm border border-slate-300 rounded w-full focus:outline-none focus:ring-1 focus:ring-blue-500" placeholder="예: ASOS 관측 기상 적재 파이프라인" />
+        </FormField>
+        <FormField label="description">
+          <input className="h-8 px-2 text-sm border border-slate-300 rounded w-full focus:outline-none focus:ring-1 focus:ring-blue-500" placeholder="파이프라인 설명 (선택)" />
+        </FormField>
+        <FormField label="기본 Graph Template">
+          <div className="flex flex-col gap-2 mt-1">
+            {[
+              { id: "blank", label: "Blank", desc: "빈 Canvas에서 시작합니다." },
+              { id: "rest-upsert", label: "REST → Transform → Upsert", desc: "기본 API 적재 흐름" },
+              { id: "cron-full", label: "CRON → REST → Transform → Upsert", desc: "스케줄 기반 전체 흐름" },
+            ].map((t, i) => (
+              <label key={t.id} className="flex items-start gap-3 p-3 border border-slate-200 rounded-lg cursor-pointer hover:bg-blue-50 hover:border-blue-300 transition-colors">
+                <input type="radio" name="template" defaultChecked={i === 2} className="mt-0.5 accent-blue-600" />
+                <div>
+                  <div className="text-sm font-medium text-slate-800">{t.label}</div>
+                  <div className="text-xs text-slate-400 mt-0.5">{t.desc}</div>
+                </div>
+              </label>
+            ))}
+          </div>
+        </FormField>
+      </div>
+    </ModalShell>
+  );
+
+  if (modal === "MOD-R11-VERSIONS") return (
+    <ModalShell title="버전 이력" onClose={closeModal}
+      footer={<SecondaryBtn onClick={closeModal}>닫기</SecondaryBtn>}>
+      <div className="flex flex-col gap-2">
+        {[
+          { no: "v3", at: "2026-06-24 10:15", summary: "Upsert Load 노드 추가", nodes: 4, edges: 3 },
+          { no: "v2", at: "2026-06-24 09:40", summary: "Transform 노드 연결", nodes: 3, edges: 2 },
+          { no: "v1", at: "2026-06-24 09:10", summary: "초기 생성 (CRON + REST API)", nodes: 2, edges: 1 },
+        ].map((v) => (
+          <div key={v.no} className="flex items-start justify-between p-3 border border-slate-200 rounded-lg hover:bg-slate-50">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="font-mono text-xs font-bold text-blue-700">{v.no}</span>
+                <span className="text-xs text-slate-500 font-mono">{v.at}</span>
+              </div>
+              <div className="text-xs text-slate-600 mt-1">{v.summary}</div>
+            </div>
+            <div className="text-right text-xs font-mono text-slate-400">
+              <div>노드 {v.nodes}</div>
+              <div>엣지 {v.edges}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </ModalShell>
+  );
+
   if (modal === "MOD-010") return (
     <ModalShell title="권한이 없습니다" onClose={closeModal}
       footer={<PrimaryBtn onClick={closeModal}>확인</PrimaryBtn>}>
@@ -1557,6 +2088,7 @@ function Sidebar({ current, navigate }: { current: Screen; navigate: (s: Screen)
   const [open, setOpen] = useState<Record<string, boolean>>({
     "대시보드": true, "데이터 관리": false, "Feature 관리": false,
     "모델 관리": true, "예측 관리": false, "운영 관리": true,
+    "Visual Pipeline Studio": true,
   });
 
   return (
@@ -1571,7 +2103,7 @@ function Sidebar({ current, navigate }: { current: Screen; navigate: (s: Screen)
                 onClick={() => setOpen((p) => ({ ...p, [group.label]: !p[group.label] }))}
                 className={`w-full flex items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wider transition-colors ${hasActive ? "text-blue-400" : "text-slate-400 hover:text-slate-200"}`}
               >
-                <span className="flex items-center gap-2">{group.icon}{group.label}</span>
+                <span className="flex items-center gap-2">{group.icon}{group.label}{"badge" in group && group.badge && <span className="px-1 py-0.5 bg-violet-500/30 text-violet-300 rounded text-[9px] font-bold leading-none">{group.badge}</span>}</span>
                 {isOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
               </button>
               {isOpen && (
@@ -1622,25 +2154,30 @@ export default function App() {
 
   const actions: AppActions = { navigate, openModal, closeModal, addToast };
 
-  const screenMap: Record<Screen, React.ReactNode> = {
-    "SCR-001": <SCR001 {...actions} />,
-    "SCR-002": <SCR002 {...actions} />,
-    "SCR-003": <SCR003 {...actions} />,
-    "SCR-004": <SCR004 {...actions} />,
-    "SCR-005": <SCR005 {...actions} />,
-    "SCR-006": <SCR006 {...actions} />,
-    "SCR-007": <SCR007 {...actions} />,
-    "SCR-008": <SCR008 {...actions} />,
-    "SCR-009": <SCR009 {...actions} />,
-    "SCR-010": <SCR010 {...actions} />,
-    "SCR-011": <SCR011 {...actions} />,
-    "SCR-012": <SCR012 {...actions} />,
-    "SCR-013": <SCR013 {...actions} />,
-    "SCR-014": <SCR014 {...actions} />,
-    "SCR-015": <SCR015 {...actions} />,
-    "SCR-016": <SCR016 {...actions} />,
-    "SCR-017": <SCR017 {...actions} />,
-    "SCR-018": <SCR018 {...actions} />,
+  const renderScreen = (): React.ReactNode => {
+    switch (current) {
+      case "SCR-001": return <SCR001 {...actions} />;
+      case "SCR-002": return <SCR002 {...actions} />;
+      case "SCR-003": return <SCR003 {...actions} />;
+      case "SCR-004": return <SCR004 {...actions} />;
+      case "SCR-005": return <SCR005 {...actions} />;
+      case "SCR-006": return <SCR006 {...actions} />;
+      case "SCR-007": return <SCR007 {...actions} />;
+      case "SCR-008": return <SCR008 {...actions} />;
+      case "SCR-009": return <SCR009 {...actions} />;
+      case "SCR-010": return <SCR010 {...actions} />;
+      case "SCR-011": return <SCR011 {...actions} />;
+      case "SCR-012": return <SCR012 {...actions} />;
+      case "SCR-013": return <SCR013 {...actions} />;
+      case "SCR-014": return <SCR014 {...actions} />;
+      case "SCR-015": return <SCR015 {...actions} />;
+      case "SCR-016": return <SCR016 {...actions} />;
+      case "SCR-017": return <SCR017 {...actions} />;
+      case "SCR-018": return <SCR018 {...actions} />;
+      case "SCR-R11-001": return <SCR_R11_001 {...actions} />;
+      case "SCR-R11-002": return <SCR_R11_002 {...actions} />;
+      default: return null;
+    }
   };
 
   return (
@@ -1649,8 +2186,8 @@ export default function App() {
       <div className="flex flex-1 overflow-hidden">
         <Sidebar current={current} navigate={navigate} />
         <main className="flex-1 overflow-y-auto p-5 bg-slate-100">
-          <div className="max-w-6xl">
-            {screenMap[current]}
+          <div className={current === "SCR-R11-002" ? "w-full" : "max-w-6xl"}>
+            {renderScreen()}
           </div>
         </main>
       </div>
