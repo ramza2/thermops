@@ -75,6 +75,21 @@ class VisualPipelineMaterializeBody(BaseModel):
     mode: str = Field(default="UPSERT", description="UPSERT only (R11-S6-4)")
 
 
+class VisualPipelineManualRunParamsBody(BaseModel):
+    request_params_override: dict[str, Any] | None = None
+    max_pages: int | None = Field(default=1, ge=1, le=1)
+    limit: int | None = Field(default=100, ge=1, le=100)
+
+
+class VisualPipelineManualRunBody(BaseModel):
+    materialization_result_id: str | None = None
+    compile_result_id: str | None = None
+    mode: str = Field(default="MANUAL", description="MANUAL only (R11-S7-1)")
+    dry_run: bool = False
+    idempotency_key: str | None = None
+    params: VisualPipelineManualRunParamsBody | None = None
+
+
 # --- S1 Catalog (static paths before /{pipeline_id}) ---
 
 
@@ -345,6 +360,66 @@ async def get_materialize_visual_pipeline_result(
         if detail == "VISUAL_PIPELINE_NOT_FOUND":
             raise HTTPException(status_code=404, detail="VISUAL_PIPELINE_NOT_FOUND") from None
         raise HTTPException(status_code=404, detail="MATERIALIZATION_RESULT_NOT_FOUND") from None
+    return ok(result)
+
+
+@router.post("/visual-pipelines/{pipeline_id}/runs")
+async def post_visual_pipeline_manual_run(
+    pipeline_id: str,
+    body: VisualPipelineManualRunBody | None = None,
+    db: AsyncSession = Depends(get_db),
+):
+    """Manual Run: R10 run_load wrapper. Requires SUCCESS compile + materialization."""
+    from app.services.visual_pipeline.manual_run_service import (
+        RunPreconditionError,
+        RunRequestValidationError,
+        create_manual_run,
+    )
+
+    payload = body.model_dump() if body else {}
+    if payload.get("params") is None:
+        payload["params"] = {}
+    try:
+        result = await create_manual_run(db, pipeline_id, payload)
+    except LookupError:
+        raise HTTPException(status_code=404, detail="VISUAL_PIPELINE_NOT_FOUND") from None
+    except RunPreconditionError as exc:
+        raise HTTPException(status_code=409, detail=exc.code) from None
+    except RunRequestValidationError as exc:
+        raise HTTPException(status_code=400, detail=exc.code) from None
+    return ok(result)
+
+
+@router.get("/visual-pipelines/{pipeline_id}/runs")
+async def get_visual_pipeline_runs(
+    pipeline_id: str,
+    limit: int = Query(default=20, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.services.visual_pipeline.manual_run_service import list_visual_pipeline_runs
+
+    try:
+        result = await list_visual_pipeline_runs(db, pipeline_id, limit=limit)
+    except LookupError:
+        raise HTTPException(status_code=404, detail="VISUAL_PIPELINE_NOT_FOUND") from None
+    return ok(result)
+
+
+@router.get("/visual-pipelines/{pipeline_id}/runs/{run_id}")
+async def get_visual_pipeline_run_detail(
+    pipeline_id: str,
+    run_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    from app.services.visual_pipeline.manual_run_service import get_visual_pipeline_run
+
+    try:
+        result = await get_visual_pipeline_run(db, pipeline_id, run_id)
+    except LookupError as exc:
+        detail = str(exc) if str(exc) else "VISUAL_PIPELINE_RUN_NOT_FOUND"
+        if detail == "VISUAL_PIPELINE_NOT_FOUND":
+            raise HTTPException(status_code=404, detail="VISUAL_PIPELINE_NOT_FOUND") from None
+        raise HTTPException(status_code=404, detail="VISUAL_PIPELINE_RUN_NOT_FOUND") from None
     return ok(result)
 
 

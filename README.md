@@ -1457,6 +1457,16 @@ cd frontend && node scripts/check-visual-pipeline-studio.mjs
 - **테스트:** `python scripts/test_visual_pipeline_materialization.py` (quick 미포함, 회귀와 병행 권장).
 - **다음:** R11-S7-1 Manual Run API PoC (별도 승인).
 
+### R11-S7-1 Manual Run API PoC
+
+- **범위:** backend-only — `POST/GET .../runs` Manual Run API, `tb_visual_pipeline_run` mapping, R10 `run_load` adapter. Schedule Activation / due worker / FE / package 변경 없음.
+- **전제:** SUCCESS compile + SUCCESS materialization + hash 일치 + `IN_SYNC`. auto-materialize 금지.
+- **실행:** Option A 동기 — materialized `operation_id`로 `run_load` 래핑. `max_pages` 상한 1, `limit` 상한 100.
+- **안전:** schedule `active_yn` 미변경, `schedule_run`/due worker 미연결, `current_sync_status`/materialization_status 미변경.
+- **HTTP:** precondition → 409 (run row 없음, R10 실행 없음); runtime domain failure → HTTP 200 + `run_status=FAILED`.
+- **테스트:** `python scripts/test_visual_pipeline_manual_run.py` — `sample-external/heat-demand` self-call, `heat_demand_actual` fixture (quick **미포함**).
+- **다음:** R11-S7-2+ background run / S7-4 Studio Run UI (별도 승인).
+
 ## 설계 문서 참조
 
 - `docs/md/THERMOps_R11-S7-0_Visual_Pipeline_Run_설계.md`

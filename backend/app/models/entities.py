@@ -974,6 +974,28 @@ class VisualPipelineMaterializationResult(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime)
 
 
+class VisualPipelineRun(Base):
+    """R11-S7-1 Manual Run mapping — R10 load_run provenance, no schedule activation."""
+
+    __tablename__ = "tb_visual_pipeline_run"
+    visual_run_id: Mapped[str] = mapped_column(String(50), primary_key=True)
+    pipeline_id: Mapped[str] = mapped_column(String(50))
+    compile_result_id: Mapped[str] = mapped_column(String(50))
+    materialization_result_id: Mapped[str] = mapped_column(String(50))
+    graph_version_hash: Mapped[str | None] = mapped_column(String(100))
+    load_run_id: Mapped[str | None] = mapped_column(String(50))
+    mode: Mapped[str] = mapped_column(String(30), default="MANUAL")
+    execution_mode: Mapped[str] = mapped_column(String(30), default="SYNC")
+    run_status: Mapped[str] = mapped_column(String(30))
+    request_json: Mapped[dict | None] = mapped_column(JSONB)
+    result_json: Mapped[dict | None] = mapped_column(JSONB)
+    issues_json: Mapped[Any] = mapped_column(JSONB, default=list)
+    error_message: Mapped[str | None] = mapped_column(Text)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime)
+    created_at: Mapped[datetime] = mapped_column(DateTime)
+
+
 class PipelineRunLink(Base):
     __tablename__ = "tb_pipeline_run_link"
     link_id: Mapped[str] = mapped_column(String(50), primary_key=True)

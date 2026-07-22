@@ -931,6 +931,38 @@ CREATE INDEX IF NOT EXISTS ix_vp_materialization_pipeline_created
 CREATE INDEX IF NOT EXISTS ix_vp_materialization_compile_result
     ON tb_visual_pipeline_materialization_result(compile_result_id);
 
+-- R11-S7-1 Visual Pipeline Manual Run mapping
+DO $thermops_ct$
+BEGIN
+    CREATE TABLE IF NOT EXISTS tb_visual_pipeline_run (
+    visual_run_id VARCHAR(50) PRIMARY KEY,
+    pipeline_id VARCHAR(50) NOT NULL REFERENCES tb_pipeline_definition(pipeline_id),
+    compile_result_id VARCHAR(50) NOT NULL,
+    materialization_result_id VARCHAR(50) NOT NULL,
+    graph_version_hash VARCHAR(100),
+    load_run_id VARCHAR(50),
+    mode VARCHAR(30) NOT NULL DEFAULT 'MANUAL',
+    execution_mode VARCHAR(30) NOT NULL DEFAULT 'SYNC',
+    run_status VARCHAR(30) NOT NULL,
+    request_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+    result_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+    issues_json JSONB NOT NULL DEFAULT '[]'::jsonb,
+    error_message TEXT,
+    started_at TIMESTAMP,
+    finished_at TIMESTAMP,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+EXCEPTION
+    WHEN duplicate_table THEN NULL;
+    WHEN unique_violation THEN NULL;
+END $thermops_ct$;
+
+CREATE INDEX IF NOT EXISTS ix_vp_run_pipeline_created
+    ON tb_visual_pipeline_run(pipeline_id, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS ix_vp_run_pipeline_status
+    ON tb_visual_pipeline_run(pipeline_id, run_status);
+
 -- Pipeline Definition 실행 이력 연결 (R9)
 DO $thermops_ct$
 BEGIN
