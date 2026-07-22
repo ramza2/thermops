@@ -1437,8 +1437,18 @@ cd frontend && node scripts/check-visual-pipeline-studio.mjs
   - **A (권장 선행):** R11-S7-0 Visual Pipeline Run 설계
   - **B:** R11-S6-6 Materialization UI (실행 없음)
 
+### R11-S7-0 Visual Pipeline Run 설계
+
+- **범위:** docs-only — Manual Run 경계·precondition·API 후보·실행 방식·status/이력·security·로드맵. **구현 없음.**
+- **문서:** [`docs/md/THERMOps_R11-S7-0_Visual_Pipeline_Run_설계.md`](docs/md/THERMOps_R11-S7-0_Visual_Pipeline_Run_설계.md) (기준 커밋 `20692a2`)
+- **분리:** Manual Run ≠ Schedule Activation. Materialize는 계속 schedule `active_yn=false` / `NOT_REQUESTED` / `run_created=false`.
+- **S7-1 방향:** Manual Run만; materialization 필수(auto-materialize 금지); Option A(동기 `run_load` 래핑) PoC, 이후 Option B 검토; sync/materialization/run status 분리.
+- **미포함:** Run API, 외부 REST, Transform/Upsert 실행, Activation, due worker, FE, DB migration, package.
+- **다음:** R11-S7-1 Manual Run API PoC (별도 승인) · 병행 후보 R11-S6-6 Materialization UI.
+
 ## 설계 문서 참조
 
+- `docs/md/THERMOps_R11-S7-0_Visual_Pipeline_Run_설계.md`
 - `docs/md/THERMOps_R11-S6-5_Compile_Run_Boundary_정리.md`
 - `docs/md/THERMOps_R11-S6-0_Visual_Pipeline_Compile_설계.md`
 - `docs/md/THERMOps_R11-S5-0_Visual_Pipeline_Inspector_Config_Form_설계.md`
