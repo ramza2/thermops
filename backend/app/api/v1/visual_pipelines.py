@@ -62,6 +62,10 @@ class VisualPipelineValidateBody(BaseModel):
     validation_level: str = Field(default="BASIC", description="BASIC | STRICT")
 
 
+class VisualPipelineCompilePreviewBody(BaseModel):
+    validation_level: str = Field(default="STRICT", description="STRICT only (R11-S6-1)")
+
+
 # --- S1 Catalog (static paths before /{pipeline_id}) ---
 
 
@@ -204,6 +208,33 @@ async def post_validate_visual_pipeline(
             raise HTTPException(status_code=404, detail="VISUAL_PIPELINE_NOT_FOUND") from None
         graph = detail.get("graph")
     result = validate_visual_pipeline_graph(graph, validation_level=level, pipeline_id=pipeline_id)
+    return ok(result)
+
+
+@router.post("/visual-pipelines/{pipeline_id}/compile-preview")
+async def post_compile_visual_pipeline_preview(
+    pipeline_id: str,
+    body: VisualPipelineCompilePreviewBody | None = None,
+    db: AsyncSession = Depends(get_db),
+):
+    """Compile saved current_graph_json to artifact preview. No DB write / status update."""
+    from app.services.visual_pipeline.compile_preview_service import compile_visual_pipeline_preview
+
+    payload = body.model_dump() if body else {}
+    level = str(payload.get("validation_level") or "STRICT").strip().upper() or "STRICT"
+    if level != "STRICT":
+        raise HTTPException(
+            status_code=400,
+            detail="COMPILE_PREVIEW_VALIDATION_LEVEL_MUST_BE_STRICT",
+        )
+
+    try:
+        detail = await get_visual_pipeline(db, pipeline_id)
+    except LookupError:
+        raise HTTPException(status_code=404, detail="VISUAL_PIPELINE_NOT_FOUND") from None
+
+    graph = detail.get("graph")
+    result = compile_visual_pipeline_preview(pipeline_id, graph, validation_level=level)
     return ok(result)
 
 

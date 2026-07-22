@@ -1387,6 +1387,15 @@ cd frontend && node scripts/check-visual-pipeline-studio.mjs
 - **정책:** STRICT gate for compile; CRON `active_yn`은 activation 아님; REST→Upsert MVP 허용; secret ref-only.
 - **다음:** R11-S6-1 Compile Preview API PoC.
 
+### R11-S6-1 Visual Pipeline Compile Preview API PoC
+
+- **범위:** preview-only — DB write / `current_sync_status` 갱신 / version 생성 / R10 materialization / 외부 호출 / FE UI 없음.
+- **API:** `POST /api/v1/visual-pipelines/{pipeline_id}/compile-preview` (저장 `current_graph_json` + STRICT gate).
+- **동작:** STRICT ERROR 또는 MVP shape/transform 문제 시 HTTP 200 + `compile_status=FAILED` + issues; 성공 시 artifact JSON (`persisted=false`).
+- **정책:** `validation_level`은 STRICT만 (그 외 400); CRON `activation=NOT_REQUESTED`; secret 원문 미포함.
+- **테스트:** `python scripts/test_visual_pipeline_compile_preview.py` (quick group 미포함).
+- **다음:** R11-S6-2 Persistence + `current_sync_status` 전이.
+
 ## 설계 문서 참조
 
 - `docs/md/THERMOps_R11-S6-0_Visual_Pipeline_Compile_설계.md`
