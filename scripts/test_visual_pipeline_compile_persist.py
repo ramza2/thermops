@@ -126,6 +126,14 @@ def r10_schedule_count() -> int:
     return int(_psql_scalar("SELECT COUNT(*) FROM tb_data_load_schedule") or "0")
 
 
+def materialization_result_count() -> int:
+    return int(_psql_scalar("SELECT COUNT(*) FROM tb_visual_pipeline_materialization_result") or "0")
+
+
+def active_schedule_count() -> int:
+    return int(_psql_scalar("SELECT COUNT(*) FROM tb_data_load_schedule WHERE active_yn IS TRUE") or "0")
+
+
 def test_schema_exists() -> None:
     assert (
         _psql_scalar(
@@ -145,6 +153,8 @@ def test_successful_compile_persists() -> None:
     before_ops = r10_operation_count()
     before_wp = r10_write_policy_count()
     before_sched = r10_schedule_count()
+    before_mat = materialization_result_count()
+    before_active = active_schedule_count()
     try:
         err = get_compile_result(pid, expect_fail=True)
         assert err.get("_http_status") == 404
@@ -164,7 +174,9 @@ def test_successful_compile_persists() -> None:
         assert r10_operation_count() == before_ops
         assert r10_write_policy_count() == before_wp
         assert r10_schedule_count() == before_sched
-        print("  [ok] successful compile persists + IN_SYNC + no version/R10 change")
+        assert materialization_result_count() == before_mat
+        assert active_schedule_count() == before_active
+        print("  [ok] successful compile persists + IN_SYNC + no version/R10/materialization change")
     finally:
         archive_pipeline(pid)
 
@@ -192,13 +204,17 @@ def test_preview_does_not_persist() -> None:
     try:
         before_status = get_pipeline(pid)["current_sync_status"]
         before_count = result_count(pid)
+        before_mat = materialization_result_count()
+        before_ops = r10_operation_count()
         preview = compile_preview(pid)
         assert preview["compile_status"] == "SUCCESS"
         assert preview["persisted"] is False
         assert "compile_result_id" not in preview or preview.get("compile_result_id") is None
         assert result_count(pid) == before_count
+        assert materialization_result_count() == before_mat
+        assert r10_operation_count() == before_ops
         assert get_pipeline(pid)["current_sync_status"] == before_status == "NOT_COMPILED"
-        print("  [ok] compile-preview does not persist / change status")
+        print("  [ok] compile-preview does not persist / change status / R10 / materialization")
     finally:
         archive_pipeline(pid)
 

@@ -19,6 +19,7 @@ for p in (str(_SCRIPTS), str(_BACKEND)):
 
 API_BASE = os.environ.get("THERMOOPS_API_BASE", "http://localhost:8000/api/v1")
 
+from test_fixtures import psql_scalar  # noqa: E402
 from test_visual_pipeline_graph_validation import (  # noqa: E402
     build_valid_visual_pipeline_graph_with_config,
     mutate_node_config,
@@ -146,11 +147,29 @@ def snapshot_pipeline(pipeline_id: str) -> dict:
     }
 
 
+def _psql_count(sql: str) -> int:
+    return int(str(psql_scalar(sql) or "0").strip() or "0")
+
+
+def boundary_counts() -> dict[str, int]:
+    """S6-5: preview must not touch compile/materialization/R10 tables."""
+    return {
+        "compile_result": _psql_count("SELECT COUNT(*) FROM tb_visual_pipeline_compile_result"),
+        "materialization_result": _psql_count(
+            "SELECT COUNT(*) FROM tb_visual_pipeline_materialization_result"
+        ),
+        "r10_operation": _psql_count("SELECT COUNT(*) FROM tb_api_connector_operation"),
+        "r10_write_policy": _psql_count("SELECT COUNT(*) FROM tb_api_connector_write_policy"),
+        "r10_schedule": _psql_count("SELECT COUNT(*) FROM tb_data_load_schedule"),
+    }
+
+
 def test_valid_four_node_success() -> None:
     graph = build_valid_visual_pipeline_graph_with_config()
     created = create_pipeline("R11-S6-1 Compile 4-node", graph)
     pid = created["pipeline_id"]
     before = snapshot_pipeline(pid)
+    before_counts = boundary_counts()
     try:
         result = compile_preview(pid, {"validation_level": "STRICT"})
         assert result["compile_status"] == "SUCCESS", result
@@ -172,7 +191,8 @@ def test_valid_four_node_success() -> None:
         assert after["current_sync_status"] == before["current_sync_status"]
         assert after["version_count"] == before["version_count"]
         assert after["graph"] == before["graph"]
-        print("  [ok] valid 4-node SUCCESS + no status/version/graph change")
+        assert boundary_counts() == before_counts
+        print("  [ok] valid 4-node SUCCESS + no status/version/graph/R10/materialization change")
     finally:
         archive_pipeline(pid)
 
@@ -325,6 +345,7 @@ def test_no_db_write_status_version() -> None:
     created = create_pipeline("R11-S6-1 Compile no-write", graph)
     pid = created["pipeline_id"]
     before = snapshot_pipeline(pid)
+    before_counts = boundary_counts()
     try:
         for _ in range(2):
             result = compile_preview(pid)
@@ -334,7 +355,8 @@ def test_no_db_write_status_version() -> None:
         assert after["current_sync_status"] == before["current_sync_status"] == "NOT_COMPILED"
         assert after["version_count"] == before["version_count"]
         assert after["graph"] == before["graph"]
-        print("  [ok] repeated preview leaves sync_status/version/graph unchanged")
+        assert boundary_counts() == before_counts
+        print("  [ok] repeated preview leaves sync/version/graph/compile/materialization/R10 unchanged")
     finally:
         archive_pipeline(pid)
 

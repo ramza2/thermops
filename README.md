@@ -1424,10 +1424,22 @@ cd frontend && node scripts/check-visual-pipeline-studio.mjs
 - **DB:** `tb_visual_pipeline_materialization_result` + R10 `metadata_json.visual_pipeline_origin` idempotency.
 - **안전:** schedule 항상 `active_yn=false`, `activation=NOT_REQUESTED`, `run_created=false`. REST→Upsert direct는 transform_config 생략. `current_sync_status` 미변경.
 - **테스트:** `python scripts/test_visual_pipeline_materialization.py` (quick group 미포함).
-- **다음:** R11-S6-5+ Run / activation (별도 승인).
+- **다음:** R11-S6-5 compile/run boundary 정리.
+
+### R11-S6-5 Compile/Run Boundary + materialization 안정화
+
+- **범위:** 문서·테스트 중심. Preview / Compile / Materialize는 실행 준비가 아니라 **실행 아님**임을 경계로 고정. Run/activation/FE/package 변경 없음.
+- **문서:** [`docs/md/THERMOps_R11-S6-5_Compile_Run_Boundary_정리.md`](docs/md/THERMOps_R11-S6-5_Compile_Run_Boundary_정리.md) — side-effect 표, sync vs materialization status 분리, schedule inactive, no-run 보장, 다음 단계 A/B.
+- **보장:** materialize는 R10 설정 row만 upsert; schedule 항상 inactive; `activation=NOT_REQUESTED` / `run_created=false`; `current_sync_status` 미변경; load/call/schedule_run/upsert write 없음.
+- **테스트 보강:** idempotency(R10 불변 vs result 이력 +1), stale/failed/no-compile 409, secret safety, migration 재실행. preview/persist는 materialization_result·R10 불변 assert.
+- **regression:** materialization 테스트는 quick **미포함** 유지.
+- **다음 단계 후보:**
+  - **A (권장 선행):** R11-S7-0 Visual Pipeline Run 설계
+  - **B:** R11-S6-6 Materialization UI (실행 없음)
 
 ## 설계 문서 참조
 
+- `docs/md/THERMOps_R11-S6-5_Compile_Run_Boundary_정리.md`
 - `docs/md/THERMOps_R11-S6-0_Visual_Pipeline_Compile_설계.md`
 - `docs/md/THERMOps_R11-S5-0_Visual_Pipeline_Inspector_Config_Form_설계.md`
 - `docs/md/THERMOps_API_설계서.md`
