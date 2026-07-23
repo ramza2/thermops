@@ -1520,10 +1520,23 @@ cd frontend && node scripts/check-visual-pipeline-studio.mjs
   ```
 - **Known limitation:** 자동 retry/cancel/progress/stuck recovery 없음 · heartbeat는 claim/terminal 중심 · worker mode + worker 미기동 시 PENDING stuck · lock TTL 내 long-run 한도.
 - **테스트:** `python scripts/test_visual_pipeline_run_worker.py` (quick **미포함**).
-- **다음:** R11-S7-7 Schedule Activation 설계 (별도 승인).
+- **다음:** R11-S7-8 Schedule Activation PoC (별도 승인).
+
+### R11-S7-7 Schedule Activation 설계
+
+- **범위:** docs-only — Schedule Activation 상태·provenance·due trigger·scheduled run·worker 분리·UI/API 계약 확정. code/DB/API/FE/package 변경 없음.
+- **문서:** [`docs/md/THERMOps_R11-S7-7_Schedule_Activation_설계.md`](docs/md/THERMOps_R11-S7-7_Schedule_Activation_설계.md) (기준 커밋 `40a4fe3`)
+- **핵심:** Activation은 `run_load` 미실행 · due trigger는 `tb_visual_pipeline_run` PENDING 생성 · 실행은 **VP run-worker** · R10 `run-due-worker` 재사용 **비권장**.
+- **DB 권장:** 별도 `tb_visual_pipeline_schedule_activation` · `materialization.activation`은 mirror/표시용 · run `mode` 확장 `MANUAL`/`SCHEDULED` + `activation_id`/`scheduled_for`/`r10_schedule_id`/`dedup_key`.
+- **Worker 권장:** `vp-schedule-worker`(due enqueue) ≠ `vp-run-worker`(실행) · Traefik 미노출 · Due SoT = materialized R10 schedule + activation record.
+- **S7-8 PoC 범위:** activation table · activation API · scheduled enqueue · `vp-schedule-worker` · Studio activation UI 최소 · `dedup_key`+unique 권장.
+- **S7-9 hardening:** catch-up · pause/resume · retry/cancel/progress · audit/notification · missed run.
+- **미포함:** Activation 구현, API/DB/FE/worker/`run_load`/package 변경.
+- **다음:** R11-S7-8 Schedule Activation PoC (별도 승인).
 
 ## 설계 문서 참조
 
+- `docs/md/THERMOps_R11-S7-7_Schedule_Activation_설계.md`
 - `docs/md/THERMOps_R11-S7-5_Option_C_Run_Worker_검토.md`
 - `docs/md/THERMOps_R11-S7-2_Background_Run_전환_검토.md`
 - `docs/md/THERMOps_R11-S7-0_Visual_Pipeline_Run_설계.md`
