@@ -35,11 +35,14 @@ import {
   compileVisualPipelinePreview,
   getComponentCatalog,
   getConnectionRules,
+  getLatestVisualPipelineRun,
   getVisualPipeline,
   getVisualPipelineCompileResult,
   getVisualPipelineMaterializationResult,
+  getVisualPipelineRun,
   listVisualPipelineVersions,
   materializeVisualPipeline,
+  runVisualPipeline,
   updateVisualPipeline,
   validateVisualPipelineGraph,
 } from "@/api/visualPipelines";
@@ -53,6 +56,7 @@ import { VpComponentPalette } from "@/components/visualPipeline/VpComponentPalet
 import { buildNodeTypes } from "@/components/visualPipeline/VpFlowNode";
 import { VpGraphStatusPanel } from "@/components/visualPipeline/VpGraphStatusPanel";
 import { VpNodeInspector } from "@/components/visualPipeline/VpNodeInspector";
+import { VpRunPanel } from "@/components/visualPipeline/VpRunPanel";
 import { VpValidationPanel } from "@/components/visualPipeline/VpValidationPanel";
 import { VpVersionHistoryModal } from "@/components/visualPipeline/VpVersionHistoryModal";
 import { useToast } from "@/hooks/useToast";
@@ -62,6 +66,7 @@ import type {
   VisualPipelineCompileResponse,
   VisualPipelineDetail,
   VisualPipelineMaterializationResponse,
+  VisualPipelineRunResponse,
   VisualPipelineValidationResponse,
   VisualPipelineVersion,
 } from "@/types/visualPipeline";
@@ -77,6 +82,13 @@ import {
   serializeGraphBody,
 } from "@/utils/visualPipelineGraph";
 import { applyConfigValidationCache, applyNodeConfigPatch, fieldWarningsFromConfigIssues } from "@/utils/visualPipelineNodeConfig";
+
+const RUN_ACTIVE_STATUSES = new Set(["PENDING", "RUNNING"]);
+const RUN_TERMINAL_STATUSES = new Set(["SUCCESS", "FAILED", "PARTIAL", "CANCELLED"]);
+const RUN_POLL_INTERVAL_MS = 1000;
+const RUN_POLL_TIMEOUT_MS = 90_000;
+const RUN_POLL_TIMEOUT_MESSAGE =
+  "상태 확인 시간이 초과되었습니다. 실행은 계속 진행 중일 수 있으니 새로고침하거나 실행 이력을 확인하세요.";
 
 function StudioCanvasInner() {
   const { pipelineId = "" } = useParams<{ pipelineId: string }>();
@@ -120,8 +132,79 @@ function StudioCanvasInner() {
   const [materializationError, setMaterializationError] = useState<string | null>(null);
   const [materializationExpanded, setMaterializationExpanded] = useState(true);
   const [materializationLoadingLatest, setMaterializationLoadingLatest] = useState(false);
+  const [running, setRunning] = useState(false);
+  const [runResult, setRunResult] = useState<VisualPipelineRunResponse | null>(null);
+  const [runError, setRunError] = useState<string | null>(null);
+  const [runPollError, setRunPollError] = useState<string | null>(null);
+  const [runExpanded, setRunExpanded] = useState(true);
+  const [runLoadingLatest, setRunLoadingLatest] = useState(false);
+  const [runPolling, setRunPolling] = useState(false);
+  const runPollGenRef = useRef(0);
 
   const nodeTypes = useMemo(() => buildNodeTypes(), []);
+
+  const stopRunPolling = useCallback(() => {
+    runPollGenRef.current += 1;
+    setRunPolling(false);
+  }, []);
+
+  const startRunPolling = useCallback(
+    (runId: string) => {
+      const gen = ++runPollGenRef.current;
+      setRunPolling(true);
+      setRunPollError(null);
+      const startedAt = Date.now();
+
+      const tick = async () => {
+        if (runPollGenRef.current !== gen) return;
+        if (Date.now() - startedAt > RUN_POLL_TIMEOUT_MS) {
+          setRunPollError(RUN_POLL_TIMEOUT_MESSAGE);
+          setRunPolling(false);
+          return;
+        }
+        try {
+          const detail = await getVisualPipelineRun(pipelineId, runId);
+          if (runPollGenRef.current !== gen) return;
+          setRunResult(detail);
+          setRunPollError(null);
+          if (RUN_TERMINAL_STATUSES.has(String(detail.run_status))) {
+            setRunPolling(false);
+            return;
+          }
+        } catch (err) {
+          if (runPollGenRef.current !== gen) return;
+          setRunPollError(extractApiErrorMessage(err, "실행 상태 조회에 실패했습니다."));
+        }
+        if (runPollGenRef.current === gen) {
+          window.setTimeout(() => {
+            void tick();
+          }, RUN_POLL_INTERVAL_MS);
+        }
+      };
+
+      void tick();
+    },
+    [pipelineId],
+  );
+
+  const loadLatestRunResult = useCallback(
+    async (id: string) => {
+      setRunLoadingLatest(true);
+      setRunError(null);
+      try {
+        const latest = await getLatestVisualPipelineRun(id);
+        setRunResult(latest);
+        if (latest && RUN_ACTIVE_STATUSES.has(String(latest.run_status))) {
+          startRunPolling(latest.visual_run_id);
+        }
+      } catch (err) {
+        setRunError(extractApiErrorMessage(err, "최근 Manual Run 결과를 불러오지 못했습니다."));
+      } finally {
+        setRunLoadingLatest(false);
+      }
+    },
+    [startRunPolling],
+  );
 
   const loadLatestMaterializationResult = useCallback(async (id: string) => {
     setMaterializationLoadingLatest(true);
@@ -166,16 +249,23 @@ function StudioCanvasInner() {
       setLastSavedAt(detail.updated_at ?? null);
       void loadLatestCompileResult(pipelineId);
       void loadLatestMaterializationResult(pipelineId);
+      void loadLatestRunResult(pipelineId);
     } catch (err) {
       setError(extractApiErrorMessage(err, "Visual Pipeline을 불러오지 못했습니다."));
     } finally {
       setLoading(false);
     }
-  }, [pipelineId, setNodes, setEdges, loadLatestCompileResult, loadLatestMaterializationResult]);
+  }, [pipelineId, setNodes, setEdges, loadLatestCompileResult, loadLatestMaterializationResult, loadLatestRunResult]);
 
   useEffect(() => {
     void loadPipeline();
   }, [loadPipeline]);
+
+  useEffect(() => {
+    return () => {
+      runPollGenRef.current += 1;
+    };
+  }, []);
 
   useEffect(() => {
     (async () => {
@@ -441,12 +531,67 @@ function StudioCanvasInner() {
   };
 
   const canMaterialize = useMemo(() => {
-    if (dirty || compiling || materializing) return false;
+    if (dirty || compiling || materializing || running || runPolling) return false;
     if (compileResult?.compile_status !== "SUCCESS") return false;
     if (!compileResult.persisted) return false;
     if (pipeline?.current_sync_status !== "IN_SYNC") return false;
     return true;
-  }, [dirty, compiling, materializing, compileResult, pipeline?.current_sync_status]);
+  }, [dirty, compiling, materializing, running, runPolling, compileResult, pipeline?.current_sync_status]);
+
+  const isRunActive = Boolean(
+    running ||
+      runPolling ||
+      (runResult && RUN_ACTIVE_STATUSES.has(String(runResult.run_status))),
+  );
+
+  const canRun = useMemo(() => {
+    if (dirty || compiling || materializing || running || runPolling) return false;
+    if (compileResult?.compile_status !== "SUCCESS") return false;
+    if (!compileResult.persisted) return false;
+    if (pipeline?.current_sync_status !== "IN_SYNC") return false;
+    if (materializationResult?.materialization_status !== "SUCCESS") return false;
+    if ((materializationResult.activation ?? "NOT_REQUESTED") !== "NOT_REQUESTED") return false;
+    if (materializationResult.run_created !== false) return false;
+    if (runResult && RUN_ACTIVE_STATUSES.has(String(runResult.run_status))) return false;
+    return true;
+  }, [
+    dirty,
+    compiling,
+    materializing,
+    running,
+    runPolling,
+    compileResult,
+    pipeline?.current_sync_status,
+    materializationResult,
+    runResult,
+  ]);
+
+  const runDisabledReason = useMemo(() => {
+    if (canRun) {
+      return "Manual Run을 실행합니다. 실제 REST 호출과 대상 테이블 적재가 발생할 수 있습니다. 스케줄은 활성화하지 않습니다.";
+    }
+    if (dirty) return "미저장 변경사항이 있습니다. 저장 후 Compile → R10 설정 반영을 완료하세요.";
+    if (compiling || materializing || running) return "다른 작업이 진행 중입니다.";
+    if (isRunActive) return "이미 실행 중인 Manual Run이 있습니다.";
+    if (compileResult?.compile_status !== "SUCCESS" || !compileResult?.persisted) {
+      return "persisted SUCCESS Compile이 필요합니다.";
+    }
+    if (pipeline?.current_sync_status !== "IN_SYNC") return "컴파일 동기화 상태(IN_SYNC)가 필요합니다.";
+    if (materializationResult?.materialization_status !== "SUCCESS") {
+      return "SUCCESS Materialization(R10 설정 반영)이 필요합니다.";
+    }
+    return "Manual Run 조건을 충족하지 않습니다.";
+  }, [
+    canRun,
+    dirty,
+    compiling,
+    materializing,
+    running,
+    isRunActive,
+    compileResult,
+    pipeline?.current_sync_status,
+    materializationResult,
+  ]);
 
   const handleMaterialize = async () => {
     if (!pipelineId || !canMaterialize) return;
@@ -471,6 +616,42 @@ function StudioCanvasInner() {
       showToast("error", extractApiErrorMessage(err, "R10 설정 반영에 실패했습니다."));
     } finally {
       setMaterializing(false);
+    }
+  };
+
+  const handleRunNow = async () => {
+    if (!pipelineId || !canRun) return;
+    const confirmed = window.confirm(
+      "Manual Run을 실행합니다. 이 작업은 실제 REST API 호출과 대상 테이블 적재/갱신을 수행할 수 있습니다. 스케줄 활성화는 하지 않습니다. 계속 진행하시겠습니까?",
+    );
+    if (!confirmed) return;
+
+    stopRunPolling();
+    setRunning(true);
+    setRunError(null);
+    setRunPollError(null);
+    setRunExpanded(true);
+    try {
+      const accepted = await runVisualPipeline(pipelineId, { mode: "MANUAL" });
+      setRunResult(accepted);
+      showToast("success", "Manual Run이 접수되었습니다. 상태를 확인합니다.");
+      if (RUN_TERMINAL_STATUSES.has(String(accepted.run_status))) {
+        setRunPolling(false);
+      } else {
+        startRunPolling(accepted.visual_run_id);
+      }
+    } catch (err) {
+      const detail = extractApiErrorMessage(err, "Manual Run 요청에 실패했습니다.");
+      if (detail === "RUN_CONCURRENT_RUN_EXISTS") {
+        setRunError("이미 실행 중인 Run이 있습니다. 현재 실행 상태를 확인해 주세요.");
+        showToast("error", "이미 실행 중인 Run이 있습니다. 현재 실행 상태를 확인해 주세요.");
+        void loadLatestRunResult(pipelineId);
+      } else {
+        setRunError(detail);
+        showToast("error", detail || "Manual Run 요청에 실패했습니다.");
+      }
+    } finally {
+      setRunning(false);
     }
   };
 
@@ -590,16 +771,28 @@ function StudioCanvasInner() {
           >
             {materializing ? "반영 중…" : "R10 설정 반영"}
           </Button>
-          <button
-            type="button"
-            disabled
-            title="현재 단계에서는 Run을 지원하지 않습니다."
-            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-100 text-slate-400 text-xs font-medium rounded-md cursor-not-allowed border border-slate-200"
-            data-testid="visual-pipeline-run-now-button"
-          >
-            <Play className="w-3 h-3" /> Run Now
-            <span className="text-[9px] bg-slate-300 text-slate-600 px-1 rounded font-bold">Soon</span>
-          </button>
+          {canRun ? (
+            <Button
+              variant="secondary"
+              icon={<Play className="w-3 h-3" />}
+              onClick={() => void handleRunNow()}
+              disabled={!canRun || running}
+              title={runDisabledReason}
+              data-testid="visual-pipeline-run-now-button"
+            >
+              {running ? "접수 중…" : "Run Now"}
+            </Button>
+          ) : (
+            <button
+              type="button"
+              disabled
+              title={runDisabledReason}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-100 text-slate-400 text-xs font-medium rounded-md cursor-not-allowed border border-slate-200"
+              data-testid="visual-pipeline-run-now-button"
+            >
+              <Play className="w-3 h-3" /> {isRunActive ? "실행 중…" : "Run Now"}
+            </button>
+          )}
           <button
             type="button"
             disabled
@@ -711,6 +904,16 @@ function StudioCanvasInner() {
         compileReady={canMaterialize}
         expanded={materializationExpanded}
         onToggle={() => setMaterializationExpanded((v) => !v)}
+      />
+      <VpRunPanel
+        result={runResult}
+        loading={running || runLoadingLatest}
+        polling={runPolling}
+        error={runError}
+        pollError={runPollError}
+        canRunHint={canRun ? null : runDisabledReason}
+        expanded={runExpanded}
+        onToggle={() => setRunExpanded((v) => !v)}
       />
       <VpValidationPanel
         result={validationResult}

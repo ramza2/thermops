@@ -1,9 +1,11 @@
 /**
- * R11-S4-3 / S5-6 / S6-6 Visual Pipeline Studio detail route browser smoke.
+ * R11-S4-3 / S5-6 / S6-6 / S7-4 Visual Pipeline Studio detail route browser smoke.
  *
  * Env:
  *   CHECK_PAGES_BASE     frontend base (default http://localhost:5173)
  *   THERMOOPS_API_BASE   API base including /api/v1 (default http://localhost:8000/api/v1)
+ *   THERMOOPS_INTERNAL_API_BASE  backend self-call base for Manual Run fixture
+ *     (default http://127.0.0.1:8000/api/v1 — sample-external, no external APIs)
  */
 import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
@@ -13,6 +15,8 @@ import { chromium } from "playwright";
 
 const FRONTEND_BASE = process.env.CHECK_PAGES_BASE || "http://localhost:5173";
 const API_BASE = process.env.THERMOOPS_API_BASE || "http://localhost:8000/api/v1";
+const INTERNAL_API =
+  process.env.THERMOOPS_INTERNAL_API_BASE || "http://127.0.0.1:8000/api/v1";
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
 function resolveScriptsDir() {
@@ -220,18 +224,42 @@ function ensureMaterializeSeedData() {
 async function createRestDataSource() {
   const tag = Date.now().toString(36);
   const created = await api("POST", "/data-sources", {
-    source_name: `E2E R11-S6-6 REST ${tag}`,
+    source_name: `E2E R11-S7-4 REST ${tag}`,
     source_type: "REST_API",
     data_domain: "HEAT_DEMAND",
     connection_info: {
-      base_url: "https://example.invalid/api",
-      timeout_seconds: 10,
+      base_url: INTERNAL_API,
+      timeout_seconds: 30,
     },
     active_yn: true,
   });
   if (!created?.source_id) fail("REST data source create missing source_id");
   console.log(`  [ok] REST data source ${created.source_id}`);
   return created.source_id;
+}
+
+async function ensureHeatDemandMapping(sourceId) {
+  const listed = await api("GET", "/mappings?page=1&size=100");
+  const items = listed?.items ?? [];
+  const existing = items.find((m) => m.source_id === sourceId && m.target_table === "heat_demand_actual");
+  if (existing?.mapping_id) return existing.mapping_id;
+  await api("POST", "/mappings", {
+    source_id: sourceId,
+    mapping_name: `E2E R11-S7-4 mapping ${Date.now().toString(36)}`,
+    target_table: "heat_demand_actual",
+    columns: [
+      { source_column: "site_id", target_column: "site_id", required_yn: true },
+      { source_column: "measured_at", target_column: "measured_at", required_yn: true },
+      { source_column: "heat_demand", target_column: "heat_demand", required_yn: true },
+      { source_column: "supply_temp", target_column: "supply_temp", required_yn: false },
+    ],
+  });
+  const again = await api("GET", "/mappings?page=1&size=100");
+  const created = (again?.items ?? []).find(
+    (m) => m.source_id === sourceId && m.target_table === "heat_demand_actual",
+  );
+  if (!created?.mapping_id) fail("mapping create failed for Manual Run fixture");
+  return created.mapping_id;
 }
 
 function patchNodeConfigValues(graph, nodeId, valuesPatch) {
@@ -264,13 +292,15 @@ function patchNodeConfigValues(graph, nodeId, valuesPatch) {
 
 async function ensureMaterializeReadyViaApi(pipelineId) {
   const sourceId = await createRestDataSource();
+  await ensureHeatDemandMapping(sourceId);
   const detail = await api("GET", `/visual-pipelines/${pipelineId}`);
   let graph = detail.graph ?? FIXTURE_GRAPH;
   graph = patchNodeConfigValues(graph, "e2e-rest", {
     data_source_id: sourceId,
-    operation_name: "vp-materialize-op",
-    endpoint_path: "/heat/demand",
+    operation_name: "vp-manual-run-op",
+    endpoint_path: "/sample-external/heat-demand",
     http_method: "GET",
+    response_item_path: "data.items",
     credential_ref: "CRED-REF-1",
   });
   graph = patchNodeConfigValues(graph, "e2e-load", {
@@ -404,6 +434,28 @@ async function runMaterializeAndWait(page) {
   await page.getByTestId("visual-pipeline-materialize-button").click();
   await panel.getByTestId("visual-pipeline-materialization-status").waitFor({ state: "visible", timeout: 45000 });
   return panel;
+}
+
+async function runManualAndWait(page) {
+  const panel = page.getByTestId("visual-pipeline-run-panel");
+  page.once("dialog", (dialog) => dialog.accept());
+  const runBtn = page.getByTestId("visual-pipeline-run-now-button");
+  await runBtn.scrollIntoViewIfNeeded();
+  if (await runBtn.isDisabled()) {
+    fail("expected Run Now button enabled after SUCCESS materialization");
+  }
+  await runBtn.click();
+  await panel.getByTestId("visual-pipeline-run-status").waitFor({ state: "visible", timeout: 30000 });
+  const deadline = Date.now() + 90000;
+  while (Date.now() < deadline) {
+    const status = (await panel.getByTestId("visual-pipeline-run-status").innerText()).trim();
+    if (status === "SUCCESS" || status === "FAILED" || status === "PARTIAL") {
+      return { panel, status };
+    }
+    await page.waitForTimeout(1000);
+  }
+  const last = (await panel.getByTestId("visual-pipeline-run-status").innerText()).trim();
+  fail(`expected Manual Run terminal status within 90s, last=${last}`);
 }
 
 async function openStudio(page, pipelineId) {
@@ -588,13 +640,37 @@ async function runBrowserSmoke(pipeline) {
     if (runCreated !== "false") {
       fail(`expected run_created=false, got ${runCreated}`);
     }
-    if (!(await page.getByTestId("visual-pipeline-run-now-button").isDisabled())) {
-      fail("expected Run Now button disabled");
+    console.log(`  [ok] Materialization SUCCESS result_id=${matResultId} activation=${activation} run_created=${runCreated}`);
+
+    // --- R11-S7-4 Manual Run smoke ---
+    await page.getByTestId("visual-pipeline-run-panel").waitFor({ state: "visible", timeout: 15000 });
+    const runBtn = page.getByTestId("visual-pipeline-run-now-button");
+    await runBtn.scrollIntoViewIfNeeded();
+    if (await runBtn.isDisabled()) {
+      fail("expected Run Now button enabled after Compile+Materialize SUCCESS");
     }
+    const { panel: runPanel, status: runStatus } = await runManualAndWait(page);
+    if (runStatus !== "SUCCESS") {
+      const issuesText = await runPanel
+        .getByTestId("visual-pipeline-run-issues")
+        .innerText()
+        .catch(() => "(no issues panel)");
+      fail(`expected Manual Run SUCCESS, got ${runStatus}; issues=${issuesText.slice(0, 400)}`);
+    }
+    const visualRunId = (await runPanel.getByTestId("visual-pipeline-run-id").innerText()).trim();
+    if (!visualRunId.startsWith("VPR-")) {
+      fail(`expected visual_run_id VPR-*, got ${visualRunId}`);
+    }
+    const loadRunId = (await runPanel.getByTestId("visual-pipeline-run-load-run-id").innerText()).trim();
+    if (!loadRunId.startsWith("ACLR-")) {
+      fail(`expected load_run_id ACLR-*, got ${loadRunId}`);
+    }
+    await runPanel.getByTestId("visual-pipeline-run-result").waitFor({ state: "visible", timeout: 10000 });
+    await runPanel.getByTestId("visual-pipeline-run-safety").waitFor({ state: "visible", timeout: 10000 });
     if (!(await page.getByTestId("visual-pipeline-schedule-activation-button").isDisabled())) {
       fail("expected schedule activation button disabled");
     }
-    console.log(`  [ok] Materialization SUCCESS result_id=${matResultId} activation=${activation} run_created=${runCreated}`);
+    console.log(`  [ok] Manual Run SUCCESS visual_run_id=${visualRunId} load_run_id=${loadRunId}`);
 
     // --- Graph validation smoke (errors 0) ---
     await runGraphValidationAndWait(page);
@@ -665,7 +741,7 @@ async function runBrowserSmoke(pipeline) {
 }
 
 async function main() {
-  console.log("THERMOps R11-S6-6 Visual Pipeline Studio E2E");
+  console.log("THERMOps R11-S7-4 Visual Pipeline Studio E2E");
   console.log(`  frontend=${FRONTEND_BASE}`);
   console.log(`  api=${API_BASE}`);
 

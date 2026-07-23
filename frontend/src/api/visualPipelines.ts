@@ -10,6 +10,9 @@ import type {
   VisualPipelineDetail,
   VisualPipelineGraph,
   VisualPipelineListResponse,
+  VisualPipelineRunListResponse,
+  VisualPipelineRunRequest,
+  VisualPipelineRunResponse,
   VisualPipelineSummary,
   VisualPipelineValidationRequest,
   VisualPipelineValidationResponse,
@@ -160,6 +163,43 @@ export async function getVisualPipelineMaterializationResult(
     }
     throw err;
   }
+}
+
+/** R11-S7-4: accept BACKGROUND Manual Run (HTTP 202). Does not wait for completion. */
+export async function runVisualPipeline(
+  pipelineId: string,
+  body?: VisualPipelineRunRequest,
+): Promise<VisualPipelineRunResponse> {
+  return postApi<VisualPipelineRunResponse>(`/visual-pipelines/${pipelineId}/runs`, body ?? {});
+}
+
+export async function getVisualPipelineRun(
+  pipelineId: string,
+  runId: string,
+): Promise<VisualPipelineRunResponse> {
+  return fetchApi<VisualPipelineRunResponse>(
+    `/visual-pipelines/${pipelineId}/runs/${encodeURIComponent(runId)}`,
+  );
+}
+
+export async function listVisualPipelineRuns(
+  pipelineId: string,
+  limit = 20,
+): Promise<VisualPipelineRunListResponse> {
+  return fetchApi<VisualPipelineRunListResponse>(`/visual-pipelines/${pipelineId}/runs`, { limit });
+}
+
+/**
+ * Latest Manual Run detail. Returns null when no runs exist.
+ * Does not start a run (GET-only). Latest list empty → null; other errors rethrown.
+ */
+export async function getLatestVisualPipelineRun(
+  pipelineId: string,
+): Promise<VisualPipelineRunResponse | null> {
+  const listed = await listVisualPipelineRuns(pipelineId, 1);
+  const latest = listed.items?.[0];
+  if (!latest?.visual_run_id) return null;
+  return getVisualPipelineRun(pipelineId, latest.visual_run_id);
 }
 
 export async function getComponentCatalog(params?: {

@@ -167,7 +167,8 @@ export function VpMaterializationPanel({
                   </span>
                 </div>
                 <p className="text-[10px] text-violet-800 leading-snug">
-                  Schedule은 inactive로 유지됩니다. Run Now / 스케줄 활성화는 S7 이후 범위입니다.
+                  Schedule은 inactive로 유지됩니다. Manual Run은 Run Now로 실행할 수 있으며, 스케줄 활성화는 후속
+                  범위입니다.
                 </p>
               </div>
 

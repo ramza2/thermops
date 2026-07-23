@@ -1487,6 +1487,15 @@ cd frontend && node scripts/check-visual-pipeline-studio.mjs
 - **테스트:** `python scripts/test_visual_pipeline_manual_run.py` (polling 기준, quick **미포함**).
 - **다음:** R11-S7-4 Studio Run UI (polling) 또는 Option C worker (별도 승인).
 
+### R11-S7-4 Studio Run UI (polling)
+
+- **범위:** FE-only — Studio **Run Now** 조건부 활성화 + confirm + POST `/runs` 202 + GET polling + Run Panel. backend/DB/package 변경 없음.
+- **활성 조건:** dirty 아님 · persisted SUCCESS Compile · IN_SYNC · Materialization SUCCESS · `activation=NOT_REQUESTED` · `run_created=false` · PENDING/RUNNING 없음.
+- **UX:** confirm 후 BACKGROUND 접수 → `PENDING`/`RUNNING`/`SUCCESS`/`FAILED`/`PARTIAL` polling; latest run 조회 시 활성 run 자동 재개; Schedule Activation은 **disabled + Soon** 유지.
+- **안전:** page load / latest / polling에서 POST 금지; GET 조회 실패와 `run_status=FAILED` 구분.
+- **검증:** `cd frontend && npm run build` · `node scripts/check-pages.mjs` · `node scripts/check-visual-pipeline-studio.mjs` · `python scripts/test_visual_pipeline_manual_run.py` · quick regression.
+- **다음:** Schedule Activation UI 또는 Option C worker (별도 승인).
+
 ## 설계 문서 참조
 
 - `docs/md/THERMOps_R11-S7-2_Background_Run_전환_검토.md`

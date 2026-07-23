@@ -349,3 +349,77 @@ export interface VisualPipelineMaterializationResponse {
   error_message?: string | null;
   persisted: boolean;
 }
+
+/** R11-S7-4 Manual Run (Background polling). */
+export type VisualPipelineRunStatus =
+  | "PENDING"
+  | "RUNNING"
+  | "SUCCESS"
+  | "FAILED"
+  | "PARTIAL"
+  | "CANCELLED";
+
+export interface VisualPipelineRunRequest {
+  materialization_result_id?: string | null;
+  compile_result_id?: string | null;
+  mode?: "MANUAL";
+  dry_run?: boolean;
+  idempotency_key?: string | null;
+  params?: {
+    request_params_override?: Record<string, unknown>;
+    max_pages?: number;
+    limit?: number;
+  };
+}
+
+export interface VisualPipelineRunIssue {
+  severity?: string;
+  code?: string;
+  message?: string;
+  phase?: string;
+  step_id?: string | null;
+  node_id?: string | null;
+  details?: Record<string, unknown>;
+  [key: string]: unknown;
+}
+
+export interface VisualPipelineRunResponse {
+  visual_run_id: string;
+  pipeline_id: string;
+  mode: "MANUAL" | string;
+  execution_mode: "BACKGROUND" | "SYNC" | string;
+  run_status: VisualPipelineRunStatus | string;
+  compile_result_id?: string | null;
+  materialization_result_id?: string | null;
+  graph_version_hash?: string | null;
+  load_run_id?: string | null;
+  started_at?: string | null;
+  finished_at?: string | null;
+  result?: Record<string, unknown> | null;
+  issues?: VisualPipelineRunIssue[];
+  poll_url?: string | null;
+  schedule_active_changed?: boolean;
+  current_sync_status_changed?: boolean;
+  error_message?: string | null;
+  persisted?: boolean;
+}
+
+export interface VisualPipelineRunSummary {
+  visual_run_id: string;
+  pipeline_id: string;
+  mode?: string;
+  execution_mode?: string;
+  run_status: VisualPipelineRunStatus | string;
+  compile_result_id?: string | null;
+  materialization_result_id?: string | null;
+  load_run_id?: string | null;
+  started_at?: string | null;
+  finished_at?: string | null;
+  created_at?: string | null;
+  result_summary?: Record<string, unknown> | null;
+}
+
+export interface VisualPipelineRunListResponse {
+  items: VisualPipelineRunSummary[];
+  limit?: number;
+}
