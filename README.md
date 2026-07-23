@@ -1465,10 +1465,21 @@ cd frontend && node scripts/check-visual-pipeline-studio.mjs
 - **안전:** schedule `active_yn` 미변경, `schedule_run`/due worker 미연결, `current_sync_status`/materialization_status 미변경.
 - **HTTP:** precondition → 409 (run row 없음, R10 실행 없음); runtime domain failure → HTTP 200 + `run_status=FAILED`.
 - **테스트:** `python scripts/test_visual_pipeline_manual_run.py` — `sample-external/heat-demand` self-call, `heat_demand_actual` fixture (quick **미포함**).
-- **다음:** R11-S7-2+ background run / S7-4 Studio Run UI (별도 승인).
+- **다음:** R11-S7-2 Background Run 전환 검토.
+
+### R11-S7-2 Background Run 전환 검토
+
+- **범위:** docs-only — S7-1 동기 Manual Run 한계 정리, Option A/B/C/D/E 비교, polling API 계약·DB/worker/UI 영향·로드맵. **구현 없음.**
+- **문서:** [`docs/md/THERMOps_R11-S7-2_Background_Run_전환_검토.md`](docs/md/THERMOps_R11-S7-2_Background_Run_전환_검토.md) (기준 커밋 `3f6840b`)
+- **권장:** S7-3 Background Backend PoC — **Option B transitional** 우선, **Option C 운영 목표**; S7-4 Studio Run UI는 **polling / background-ready**.
+- **API 계약(후속):** POST `/runs` → **202 Accepted** + `execution_mode=BACKGROUND`; GET `/runs/{id}`로 PENDING/RUNNING/terminal polling.
+- **경계:** Manual Run ≠ Schedule Activation; due worker 재사용 비권장; sync/materialization/schedule active 불변.
+- **미포함:** worker/queue, API/DB/FE 변경, Activation, package, R10 `run_load` 변경.
+- **다음:** R11-S7-3 Background Run Backend PoC (별도 승인).
 
 ## 설계 문서 참조
 
+- `docs/md/THERMOps_R11-S7-2_Background_Run_전환_검토.md`
 - `docs/md/THERMOps_R11-S7-0_Visual_Pipeline_Run_설계.md`
 - `docs/md/THERMOps_R11-S6-5_Compile_Run_Boundary_정리.md`
 - `docs/md/THERMOps_R11-S6-0_Visual_Pipeline_Compile_설계.md`
