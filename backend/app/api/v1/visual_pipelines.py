@@ -4,12 +4,14 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
+from fastapi.encoders import jsonable_encoder
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.core.response import ok
+from app.core.response import accepted, ok
 from app.services.visual_pipeline.component_catalog_service import (
     get_component,
     list_components,
@@ -366,14 +368,16 @@ async def get_materialize_visual_pipeline_result(
 @router.post("/visual-pipelines/{pipeline_id}/runs")
 async def post_visual_pipeline_manual_run(
     pipeline_id: str,
+    background_tasks: BackgroundTasks,
     body: VisualPipelineManualRunBody | None = None,
     db: AsyncSession = Depends(get_db),
 ):
-    """Manual Run: R10 run_load wrapper. Requires SUCCESS compile + materialization."""
+    """Manual Run (R11-S7-3): accept BACKGROUND job; R10 run_load runs in BackgroundTasks."""
     from app.services.visual_pipeline.manual_run_service import (
         RunPreconditionError,
         RunRequestValidationError,
         create_manual_run,
+        execute_visual_pipeline_run_background,
     )
 
     payload = body.model_dump() if body else {}
@@ -387,7 +391,14 @@ async def post_visual_pipeline_manual_run(
         raise HTTPException(status_code=409, detail=exc.code) from None
     except RunRequestValidationError as exc:
         raise HTTPException(status_code=400, detail=exc.code) from None
-    return ok(result)
+
+    background_tasks.add_task(execute_visual_pipeline_run_background, result["visual_run_id"])
+    return JSONResponse(
+        status_code=202,
+        content=jsonable_encoder(
+            accepted(result, message="Visual Pipeline Manual Run이 접수되었습니다.")
+        ),
+    )
 
 
 @router.get("/visual-pipelines/{pipeline_id}/runs")

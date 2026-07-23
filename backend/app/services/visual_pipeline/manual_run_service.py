@@ -1,11 +1,12 @@
-"""R11-S7-1 Visual Pipeline Manual Run PoC.
+"""R11-S7-3 Visual Pipeline Manual Run — Background PoC (Option B).
 
-Wraps R10 run_load for a materialized operation. Execution occurs only via POST /runs.
-Does not activate schedules, call due worker, or change sync/materialization status.
+POST /runs creates a PENDING row and returns immediately; BackgroundTasks runs
+R10 run_load in a fresh DB session. Does not activate schedules or change sync status.
 """
 
 from __future__ import annotations
 
+import logging
 import re
 from typing import Any
 from uuid import uuid4
@@ -13,6 +14,7 @@ from uuid import uuid4
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.database import async_session
 from app.core.time import utc_now
 from app.models.entities import (
     ApiConnectorOperation,
@@ -24,21 +26,21 @@ from app.models.entities import (
 )
 from app.services.api_connector_service import ApiConnectorError, run_load
 from app.services.visual_pipeline.compile_preview_service import calculate_graph_version_hash
-from app.services.visual_pipeline.compile_result_service import (
-    SYNC_IN_SYNC,
-    get_latest_compile_result_row,
-)
+from app.services.visual_pipeline.compile_result_service import SYNC_IN_SYNC
 from app.services.visual_pipeline.visual_pipeline_service import (
     VISUAL_PIPELINE_KIND,
     _get_visual_definition,
     get_visual_pipeline,
 )
 
-RUN_VERSION = "R11-S7-1"
+logger = logging.getLogger(__name__)
+
+RUN_VERSION = "R11-S7-3"
 MANUAL_MODE = "MANUAL"
-EXECUTION_SYNC = "SYNC"
+EXECUTION_BACKGROUND = "BACKGROUND"
 MANUAL_MAX_PAGES = 1
 MANUAL_MAX_LIMIT = 100
+ACTIVE_RUN_STATUSES = ("PENDING", "RUNNING")
 
 SECRET_KEY_PATTERN = re.compile(
     r"(authorization|token|api[_-]?key|password|secret|credential)",
@@ -280,14 +282,14 @@ async def _resolve_compile_row(
     return row
 
 
-async def _assert_no_running(db: AsyncSession, pipeline_id: str) -> None:
+async def _assert_no_active_run(db: AsyncSession, pipeline_id: str) -> None:
     count = (
         await db.execute(
             select(func.count())
             .select_from(VisualPipelineRun)
             .where(
                 VisualPipelineRun.pipeline_id == pipeline_id,
-                VisualPipelineRun.run_status == "RUNNING",
+                VisualPipelineRun.run_status.in_(ACTIVE_RUN_STATUSES),
             )
         )
     ).scalar_one()
@@ -332,7 +334,7 @@ async def _validate_preconditions(
     if (defn.current_sync_status or "") != SYNC_IN_SYNC:
         raise RunPreconditionError("RUN_COMPILE_STALE")
 
-    await _assert_no_running(db, pipeline_id)
+    await _assert_no_active_run(db, pipeline_id)
 
     mat_row = await _resolve_materialization_row(
         db, pipeline_id, request.get("materialization_result_id")
@@ -406,9 +408,17 @@ def _build_runtime_params(request: dict[str, Any]) -> dict[str, Any]:
     return runtime
 
 
+def _poll_url(pipeline_id: str, visual_run_id: str) -> str:
+    return f"/api/v1/visual-pipelines/{pipeline_id}/runs/{visual_run_id}"
+
+
 def _row_to_response(row: VisualPipelineRun) -> dict[str, Any]:
     result_json = dict(row.result_json or {})
-    summary = result_json.get("summary") if isinstance(result_json.get("summary"), dict) else result_json
+    summary = result_json.get("summary") if isinstance(result_json.get("summary"), dict) else None
+    if summary is not None and not summary:
+        summary = None
+    if row.run_status in ACTIVE_RUN_STATUSES and not summary:
+        summary = None
     return {
         "visual_run_id": row.visual_run_id,
         "pipeline_id": row.pipeline_id,
@@ -421,9 +431,10 @@ def _row_to_response(row: VisualPipelineRun) -> dict[str, Any]:
         "load_run_id": row.load_run_id,
         "started_at": _iso(row.started_at),
         "finished_at": _iso(row.finished_at),
-        "result": summary,
+        "result": summary if summary else None,
         "issues": list(row.issues_json or []),
         "error_message": row.error_message,
+        "poll_url": _poll_url(row.pipeline_id, row.visual_run_id),
         "schedule_active_changed": False,
         "current_sync_status_changed": False,
         "persisted": True,
@@ -460,24 +471,23 @@ async def create_manual_run(
     pipeline_id: str,
     body: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    """Validate preconditions, insert PENDING BACKGROUND run, commit so tasks can see it."""
     request = _validate_request_body(body)
-    defn, compile_row, mat_row, objects, current_hash = await _validate_preconditions(
+    _defn, compile_row, mat_row, objects, current_hash = await _validate_preconditions(
         db, pipeline_id, request
     )
-    sync_before = defn.current_sync_status
 
-    operation_id = str(objects["operation_id"])
-    write_policy_id = str(objects["write_policy_id"])
-    transform_config_id = objects.get("transform_config_id")
+    # Snapshot resolved object ids into request for audit (execution reloads from mat row).
+    request_store = {
+        **request,
+        "resolved_objects": {
+            "operation_id": objects.get("operation_id"),
+            "write_policy_id": objects.get("write_policy_id"),
+            "transform_config_id": objects.get("transform_config_id"),
+        },
+    }
 
-    op = (
-        await db.execute(
-            select(ApiConnectorOperation).where(ApiConnectorOperation.operation_id == operation_id)
-        )
-    ).scalar_one()
-    target_table = op.target_table
-
-    started = utc_now()
+    now = utc_now()
     run_row = VisualPipelineRun(
         visual_run_id=_new_visual_run_id(),
         pipeline_id=pipeline_id,
@@ -485,17 +495,65 @@ async def create_manual_run(
         materialization_result_id=mat_row.materialization_result_id,
         graph_version_hash=current_hash,
         mode=MANUAL_MODE,
-        execution_mode=EXECUTION_SYNC,
-        run_status="RUNNING",
-        request_json=request,
+        execution_mode=EXECUTION_BACKGROUND,
+        run_status="PENDING",
+        request_json=request_store,
         result_json={},
         issues_json=[],
-        started_at=started,
-        created_at=started,
+        started_at=None,
+        finished_at=None,
+        created_at=now,
     )
     db.add(run_row)
     await db.flush()
+    # Background task uses a new session; commit so PENDING is visible.
+    await db.commit()
+    await db.refresh(run_row)
+    return _row_to_response(run_row)
 
+
+async def _run_load_and_update_result(db: AsyncSession, run_row: VisualPipelineRun) -> None:
+    """Execute R10 run_load and update run_row to a terminal status. Caller commits."""
+    request = dict(run_row.request_json or {})
+    mat_row = (
+        await db.execute(
+            select(VisualPipelineMaterializationResult).where(
+                VisualPipelineMaterializationResult.materialization_result_id
+                == run_row.materialization_result_id,
+                VisualPipelineMaterializationResult.pipeline_id == run_row.pipeline_id,
+            )
+        )
+    ).scalar_one_or_none()
+    objects = dict(mat_row.objects_json or {}) if mat_row else {}
+    resolved = request.get("resolved_objects") if isinstance(request.get("resolved_objects"), dict) else {}
+    operation_id = str(objects.get("operation_id") or resolved.get("operation_id") or "").strip()
+    write_policy_id = str(objects.get("write_policy_id") or resolved.get("write_policy_id") or "").strip()
+    transform_config_id = objects.get("transform_config_id") or resolved.get("transform_config_id")
+
+    if not operation_id or not write_policy_id:
+        run_row.run_status = "FAILED"
+        run_row.finished_at = utc_now()
+        run_row.error_message = "RUN_OBJECT_NOT_FOUND"
+        run_row.issues_json = [
+            _issue("RUN_OBJECT_NOT_FOUND", "Materialized operation/write_policy missing at run time.")
+        ]
+        await db.flush()
+        return
+
+    op = (
+        await db.execute(
+            select(ApiConnectorOperation).where(ApiConnectorOperation.operation_id == operation_id)
+        )
+    ).scalar_one_or_none()
+    if op is None:
+        run_row.run_status = "FAILED"
+        run_row.finished_at = utc_now()
+        run_row.error_message = "RUN_OBJECT_NOT_FOUND"
+        run_row.issues_json = [_issue("RUN_OBJECT_NOT_FOUND", f"Operation {operation_id} not found.")]
+        await db.flush()
+        return
+
+    target_table = op.target_table
     runtime_params = _build_runtime_params(request)
     issues: list[dict[str, Any]] = []
     load_result: dict[str, Any] | None = None
@@ -541,7 +599,9 @@ async def create_manual_run(
         run_status = "FAILED"
 
     finished = utc_now()
-    fetched = int((load_result or {}).get("api_item_count") or (load_result or {}).get("raw_item_count") or 0)
+    fetched = int(
+        (load_result or {}).get("api_item_count") or (load_result or {}).get("raw_item_count") or 0
+    )
     summary = {
         "operation_id": operation_id,
         "write_policy_id": write_policy_id,
@@ -578,10 +638,77 @@ async def create_manual_run(
     }
     await db.flush()
 
-    defn.current_sync_status = sync_before
-    await db.flush()
 
-    return _row_to_response(run_row)
+async def execute_visual_pipeline_run_background(visual_run_id: str) -> None:
+    """BackgroundTasks entrypoint — opens a fresh DB session; never use request-scoped db."""
+    async with async_session() as db:
+        try:
+            run_row = (
+                await db.execute(
+                    select(VisualPipelineRun).where(VisualPipelineRun.visual_run_id == visual_run_id)
+                )
+            ).scalar_one_or_none()
+            if run_row is None:
+                logger.warning("visual run %s not found for background execution", visual_run_id)
+                return
+            if run_row.run_status != "PENDING":
+                logger.info(
+                    "visual run %s status=%s — skip background start",
+                    visual_run_id,
+                    run_row.run_status,
+                )
+                return
+
+            sync_before = None
+            try:
+                defn = await _get_visual_definition(db, run_row.pipeline_id)
+                sync_before = defn.current_sync_status
+            except LookupError:
+                sync_before = None
+
+            run_row.run_status = "RUNNING"
+            run_row.started_at = utc_now()
+            # Commit so GET polling can observe RUNNING before run_load finishes.
+            await db.commit()
+            await db.refresh(run_row)
+
+            await _run_load_and_update_result(db, run_row)
+
+            if sync_before is not None:
+                try:
+                    defn = await _get_visual_definition(db, run_row.pipeline_id)
+                    defn.current_sync_status = sync_before
+                    await db.flush()
+                except LookupError:
+                    pass
+
+            await db.commit()
+        except Exception as exc:  # noqa: BLE001 — never leave RUNNING without terminal update
+            logger.exception("background visual run %s failed", visual_run_id)
+            await db.rollback()
+            try:
+                async with async_session() as db2:
+                    row = (
+                        await db2.execute(
+                            select(VisualPipelineRun).where(
+                                VisualPipelineRun.visual_run_id == visual_run_id
+                            )
+                        )
+                    ).scalar_one_or_none()
+                    if row is not None and row.run_status in ACTIVE_RUN_STATUSES:
+                        row.run_status = "FAILED"
+                        row.finished_at = utc_now()
+                        row.error_message = _sanitize_error_message(str(exc))
+                        row.issues_json = [
+                            _issue(
+                                "RUN_BACKGROUND_TASK_FAILED",
+                                _sanitize_error_message(str(exc)) or "Background task failed",
+                                step_id="background",
+                            )
+                        ]
+                        await db2.commit()
+            except Exception:  # noqa: BLE001
+                logger.exception("failed to mark visual run %s as FAILED", visual_run_id)
 
 
 async def list_visual_pipeline_runs(

@@ -1477,6 +1477,16 @@ cd frontend && node scripts/check-visual-pipeline-studio.mjs
 - **미포함:** worker/queue, API/DB/FE 변경, Activation, package, R10 `run_load` 변경.
 - **다음:** R11-S7-3 Background Run Backend PoC (별도 승인).
 
+### R11-S7-3 Background Run Backend PoC
+
+- **범위:** backend-only — `POST /runs`를 **Option B in-process BackgroundTasks**로 전환. FE/Activation/due worker/Option C worker/package/migration 없음.
+- **API:** POST → **HTTP 202** + `execution_mode=BACKGROUND` + `run_status=PENDING` + `poll_url`; background task가 새 `async_session()`으로 R10 `run_load` 수행; GET polling으로 SUCCESS/FAILED/PARTIAL.
+- **상태:** `PENDING` → `RUNNING` → terminal. 동일 pipeline에 PENDING/RUNNING 있으면 **409** `RUN_CONCURRENT_RUN_EXISTS`.
+- **불변:** `current_sync_status` / materialization_status / schedule `active_yn` 미변경; due worker 미연결.
+- **Known limitation (Option B):** 프로세스 재시작 시 PENDING/RUNNING stuck 가능 — 자동 recovery/heartbeat/claim은 Option C 후속.
+- **테스트:** `python scripts/test_visual_pipeline_manual_run.py` (polling 기준, quick **미포함**).
+- **다음:** R11-S7-4 Studio Run UI (polling) 또는 Option C worker (별도 승인).
+
 ## 설계 문서 참조
 
 - `docs/md/THERMOps_R11-S7-2_Background_Run_전환_검토.md`
