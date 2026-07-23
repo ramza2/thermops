@@ -1,7 +1,8 @@
-"""R11-S7-3 Visual Pipeline Manual Run — Background PoC (Option B).
+"""R11-S7-3/S7-6 Visual Pipeline Manual Run — Background PoC + Option C executor flag.
 
-POST /runs creates a PENDING row and returns immediately; BackgroundTasks runs
-R10 run_load in a fresh DB session. Does not activate schedules or change sync status.
+POST /runs creates a PENDING row and returns immediately.
+- background_tasks: FastAPI BackgroundTasks runs R10 run_load in a fresh DB session.
+- worker: vp-run-worker claims PENDING and executes (no in-process task).
 """
 
 from __future__ import annotations
@@ -14,6 +15,7 @@ from uuid import uuid4
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import get_settings
 from app.core.database import async_session
 from app.core.time import utc_now
 from app.models.entities import (
@@ -35,12 +37,36 @@ from app.services.visual_pipeline.visual_pipeline_service import (
 
 logger = logging.getLogger(__name__)
 
-RUN_VERSION = "R11-S7-3"
+RUN_VERSION = "R11-S7-6"
 MANUAL_MODE = "MANUAL"
 EXECUTION_BACKGROUND = "BACKGROUND"
+EXECUTOR_BACKGROUND_TASKS = "background_tasks"
+EXECUTOR_WORKER = "worker"
 MANUAL_MAX_PAGES = 1
 MANUAL_MAX_LIMIT = 100
 ACTIVE_RUN_STATUSES = ("PENDING", "RUNNING")
+
+
+def resolve_vp_run_executor(raw: str | None = None) -> str:
+    """Return background_tasks|worker; invalid values fall back to background_tasks."""
+    value = (raw if raw is not None else get_settings().vp_run_executor) or ""
+    normalized = str(value).strip().lower()
+    if normalized == EXECUTOR_WORKER:
+        return EXECUTOR_WORKER
+    if normalized == EXECUTOR_BACKGROUND_TASKS:
+        return EXECUTOR_BACKGROUND_TASKS
+    if normalized:
+        logger.warning(
+            "invalid THERMOOPS_VP_RUN_EXECUTOR=%r — falling back to %s",
+            value,
+            EXECUTOR_BACKGROUND_TASKS,
+        )
+    return EXECUTOR_BACKGROUND_TASKS
+
+
+def _clear_run_lease(run_row: VisualPipelineRun) -> None:
+    run_row.locked_until = None
+    run_row.heartbeat_at = utc_now()
 
 SECRET_KEY_PATTERN = re.compile(
     r"(authorization|token|api[_-]?key|password|secret|credential)",
@@ -470,12 +496,15 @@ async def create_manual_run(
     db: AsyncSession,
     pipeline_id: str,
     body: dict[str, Any] | None = None,
+    *,
+    executor: str | None = None,
 ) -> dict[str, Any]:
-    """Validate preconditions, insert PENDING BACKGROUND run, commit so tasks can see it."""
+    """Validate preconditions, insert PENDING BACKGROUND run, commit so tasks/workers can see it."""
     request = _validate_request_body(body)
     _defn, compile_row, mat_row, objects, current_hash = await _validate_preconditions(
         db, pipeline_id, request
     )
+    resolved_executor = resolve_vp_run_executor(executor)
 
     # Snapshot resolved object ids into request for audit (execution reloads from mat row).
     request_store = {
@@ -485,6 +514,7 @@ async def create_manual_run(
             "write_policy_id": objects.get("write_policy_id"),
             "transform_config_id": objects.get("transform_config_id"),
         },
+        "executor": resolved_executor,
     }
 
     now = utc_now()
@@ -500,16 +530,19 @@ async def create_manual_run(
         request_json=request_store,
         result_json={},
         issues_json=[],
+        attempt_count=0,
         started_at=None,
         finished_at=None,
         created_at=now,
     )
     db.add(run_row)
     await db.flush()
-    # Background task uses a new session; commit so PENDING is visible.
+    # Background task / worker uses a new session; commit so PENDING is visible.
     await db.commit()
     await db.refresh(run_row)
-    return _row_to_response(run_row)
+    response = _row_to_response(run_row)
+    response["executor"] = resolved_executor
+    return response
 
 
 async def _run_load_and_update_result(db: AsyncSession, run_row: VisualPipelineRun) -> None:
@@ -537,6 +570,7 @@ async def _run_load_and_update_result(db: AsyncSession, run_row: VisualPipelineR
         run_row.issues_json = [
             _issue("RUN_OBJECT_NOT_FOUND", "Materialized operation/write_policy missing at run time.")
         ]
+        _clear_run_lease(run_row)
         await db.flush()
         return
 
@@ -550,6 +584,7 @@ async def _run_load_and_update_result(db: AsyncSession, run_row: VisualPipelineR
         run_row.finished_at = utc_now()
         run_row.error_message = "RUN_OBJECT_NOT_FOUND"
         run_row.issues_json = [_issue("RUN_OBJECT_NOT_FOUND", f"Operation {operation_id} not found.")]
+        _clear_run_lease(run_row)
         await db.flush()
         return
 
@@ -635,7 +670,9 @@ async def _run_load_and_update_result(db: AsyncSession, run_row: VisualPipelineR
             if load_result and k in load_result
         },
         "run_version": RUN_VERSION,
+        "executor": (request.get("executor") if isinstance(request.get("executor"), str) else None),
     }
+    _clear_run_lease(run_row)
     await db.flush()
 
 
@@ -706,6 +743,7 @@ async def execute_visual_pipeline_run_background(visual_run_id: str) -> None:
                                 step_id="background",
                             )
                         ]
+                        _clear_run_lease(row)
                         await db2.commit()
             except Exception:  # noqa: BLE001
                 logger.exception("failed to mark visual run %s as FAILED", visual_run_id)

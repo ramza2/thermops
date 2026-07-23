@@ -372,19 +372,22 @@ async def post_visual_pipeline_manual_run(
     body: VisualPipelineManualRunBody | None = None,
     db: AsyncSession = Depends(get_db),
 ):
-    """Manual Run (R11-S7-3): accept BACKGROUND job; R10 run_load runs in BackgroundTasks."""
+    """Manual Run (R11-S7-6): accept BACKGROUND job; executor=background_tasks|worker."""
     from app.services.visual_pipeline.manual_run_service import (
+        EXECUTOR_BACKGROUND_TASKS,
         RunPreconditionError,
         RunRequestValidationError,
         create_manual_run,
         execute_visual_pipeline_run_background,
+        resolve_vp_run_executor,
     )
 
     payload = body.model_dump() if body else {}
     if payload.get("params") is None:
         payload["params"] = {}
+    executor = resolve_vp_run_executor()
     try:
-        result = await create_manual_run(db, pipeline_id, payload)
+        result = await create_manual_run(db, pipeline_id, payload, executor=executor)
     except LookupError:
         raise HTTPException(status_code=404, detail="VISUAL_PIPELINE_NOT_FOUND") from None
     except RunPreconditionError as exc:
@@ -392,7 +395,8 @@ async def post_visual_pipeline_manual_run(
     except RunRequestValidationError as exc:
         raise HTTPException(status_code=400, detail=exc.code) from None
 
-    background_tasks.add_task(execute_visual_pipeline_run_background, result["visual_run_id"])
+    if result.get("executor", executor) == EXECUTOR_BACKGROUND_TASKS:
+        background_tasks.add_task(execute_visual_pipeline_run_background, result["visual_run_id"])
     return JSONResponse(
         status_code=202,
         content=jsonable_encoder(

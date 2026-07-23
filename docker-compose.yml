@@ -68,6 +68,7 @@ services:
       AIRFLOW_BASE_URL: http://airflow:8080
       AIRFLOW_USERNAME: admin
       AIRFLOW_PASSWORD: admin
+      THERMOOPS_VP_RUN_EXECUTOR: ${THERMOOPS_VP_RUN_EXECUTOR:-background_tasks}
     ports:
       - "8000:8000"
     volumes:
@@ -105,6 +106,28 @@ services:
       backend:
         condition: service_started
     command: python -m app.workers.run_due_worker --mode loop
+    restart: unless-stopped
+
+  vp-run-worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: thermops-vp-run-worker
+    environment:
+      DATABASE_URL: postgresql+asyncpg://thermops:thermops@postgres:5432/thermops
+      THERMOOPS_VP_RUN_EXECUTOR: worker
+      THERMOOPS_VP_RUN_WORKER_ENABLED: "true"
+      THERMOOPS_VP_RUN_WORKER_MODE: loop
+      THERMOOPS_VP_RUN_WORKER_POLL_INTERVAL_SECONDS: "5"
+      THERMOOPS_VP_RUN_WORKER_LOCK_TTL_SECONDS: "120"
+      THERMOOPS_VP_RUN_WORKER_MAX_BATCH_SIZE: "1"
+      GIT_PYTHON_REFRESH: quiet
+    depends_on:
+      postgres:
+        condition: service_healthy
+      backend:
+        condition: service_started
+    command: python -m app.workers.visual_pipeline_run_worker --mode loop
     restart: unless-stopped
 
   frontend:

@@ -948,6 +948,11 @@ BEGIN
     result_json JSONB NOT NULL DEFAULT '{}'::jsonb,
     issues_json JSONB NOT NULL DEFAULT '[]'::jsonb,
     error_message TEXT,
+    claimed_at TIMESTAMP,
+    claimed_by VARCHAR(120),
+    locked_until TIMESTAMP,
+    heartbeat_at TIMESTAMP,
+    attempt_count INTEGER NOT NULL DEFAULT 0,
     started_at TIMESTAMP,
     finished_at TIMESTAMP,
     created_at TIMESTAMP NOT NULL DEFAULT NOW()
@@ -962,6 +967,12 @@ CREATE INDEX IF NOT EXISTS ix_vp_run_pipeline_created
 
 CREATE INDEX IF NOT EXISTS ix_vp_run_pipeline_status
     ON tb_visual_pipeline_run(pipeline_id, run_status);
+
+CREATE INDEX IF NOT EXISTS ix_vp_run_status_created
+    ON tb_visual_pipeline_run(run_status, created_at);
+
+CREATE INDEX IF NOT EXISTS ix_vp_run_status_locked_until
+    ON tb_visual_pipeline_run(run_status, locked_until);
 
 -- Pipeline Definition 실행 이력 연결 (R9)
 DO $thermops_ct$

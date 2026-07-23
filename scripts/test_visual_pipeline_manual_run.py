@@ -28,7 +28,7 @@ for p in (str(_SCRIPTS), str(_BACKEND)):
 API_BASE = os.environ.get("THERMOOPS_API_BASE", "http://localhost:8000/api/v1")
 INTERNAL_API = os.environ.get("THERMOOPS_INTERNAL_API_BASE", "http://127.0.0.1:8000/api/v1")
 
-from test_fixtures import ensure_test_standard_datasets, psql_scalar  # noqa: E402
+from test_fixtures import ensure_test_standard_datasets, psql_run, psql_scalar  # noqa: E402
 from test_visual_pipeline_graph_validation import (  # noqa: E402
     mutate_node_config,
 )
@@ -368,7 +368,7 @@ def test_concurrent_pending_and_running() -> None:
     fake_pending = f"VPR-TPEN{uuid4().hex[:4].upper()}"
     before = snapshot_side_effects()
     try:
-        _psql(
+        psql_run(
             f"""
             INSERT INTO tb_visual_pipeline_run (
                 visual_run_id, pipeline_id, compile_result_id, materialization_result_id,
@@ -382,9 +382,9 @@ def test_concurrent_pending_and_running() -> None:
         err = run_manual(pid, expect_fail=True)
         assert err.get("_http_status") == 409
         assert http_detail(err) == "RUN_CONCURRENT_RUN_EXISTS"
-        _psql(f"DELETE FROM tb_visual_pipeline_run WHERE visual_run_id='{fake_running}'")
+        psql_run(f"DELETE FROM tb_visual_pipeline_run WHERE visual_run_id='{fake_running}'")
 
-        _psql(
+        psql_run(
             f"""
             INSERT INTO tb_visual_pipeline_run (
                 visual_run_id, pipeline_id, compile_result_id, materialization_result_id,
@@ -401,7 +401,7 @@ def test_concurrent_pending_and_running() -> None:
         assert_side_effects_unchanged(before, label="concurrent precondition")
         print("  [ok] concurrent RUNNING/PENDING fixture -> 409")
     finally:
-        _psql(
+        psql_run(
             f"DELETE FROM tb_visual_pipeline_run WHERE visual_run_id IN "
             f"('{fake_running}', '{fake_pending}')"
         )

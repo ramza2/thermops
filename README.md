@@ -1505,6 +1505,23 @@ cd frontend && node scripts/check-visual-pipeline-studio.mjs
 - **미포함:** worker 구현, queue/Redis/Celery, POST/GET 변경, migration, FE, Activation, due worker 연결, R10 `run_load` 변경.
 - **다음:** R11-S7-6 VP run-worker PoC (별도 승인).
 
+### R11-S7-6 VP Run-Worker PoC
+
+- **범위:** Option C DB polling worker — claim/lock 컬럼 + `vp-run-worker` + feature flag. FE/Activation/due worker 통합/queue/package 없음.
+- **Executor flag:** `THERMOOPS_VP_RUN_EXECUTOR=background_tasks|worker` (기본 `background_tasks`, invalid → warning 후 background_tasks).
+- **API:** POST `/runs` → **HTTP 202** + PENDING + `poll_url` 유지. `worker` mode는 BackgroundTasks 미등록(enqueue만). `background_tasks` mode는 S7-3 동작 유지.
+- **Worker:** `python -m app.workers.visual_pipeline_run_worker` / `scripts/run_visual_pipeline_worker.py` — once/loop · `FOR UPDATE SKIP LOCKED` claim · R10 `run_load` 재사용.
+- **DB:** `claimed_at` / `claimed_by` / `locked_until` / `heartbeat_at` / `attempt_count` (`scripts/r11s7_visual_pipeline_run_worker.sql`).
+- **Compose:** `vp-run-worker` (Traefik 미노출). `run-due-worker`와 역할 분리.
+- **배포 예:**
+  ```bash
+  python3 scripts/apply_dev_migrations.py
+  docker compose -f docker-compose.traefik.yml --env-file .env.deploy up -d --build backend frontend vp-run-worker
+  ```
+- **Known limitation:** 자동 retry/cancel/progress/stuck recovery 없음 · heartbeat는 claim/terminal 중심 · worker mode + worker 미기동 시 PENDING stuck · lock TTL 내 long-run 한도.
+- **테스트:** `python scripts/test_visual_pipeline_run_worker.py` (quick **미포함**).
+- **다음:** R11-S7-7 Schedule Activation 설계 (별도 승인).
+
 ## 설계 문서 참조
 
 - `docs/md/THERMOps_R11-S7-5_Option_C_Run_Worker_검토.md`

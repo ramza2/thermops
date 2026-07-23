@@ -7,7 +7,11 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
 
     # DATABASE_URL 직접 지정 시 우선. 미지정 시 POSTGRES_* 로 조합(URL 인코딩 적용).
     database_url: str | None = Field(default=None, validation_alias="DATABASE_URL")
@@ -34,6 +38,21 @@ class Settings(BaseSettings):
     run_due_notification_enabled: bool = Field(default=True, validation_alias="THERMOOPS_RUN_DUE_NOTIFICATION_ENABLED")
     run_due_graceful_timeout_seconds: int = Field(default=30, validation_alias="THERMOOPS_RUN_DUE_GRACEFUL_TIMEOUT_SECONDS")
     run_due_log_level: str = Field(default="INFO", validation_alias="THERMOOPS_RUN_DUE_LOG_LEVEL")
+    # R11-S7-6 Visual Pipeline Run Worker (Option C)
+    vp_run_executor: str = Field(default="background_tasks", validation_alias="THERMOOPS_VP_RUN_EXECUTOR")
+    vp_run_worker_enabled: bool = Field(default=False, validation_alias="THERMOOPS_VP_RUN_WORKER_ENABLED")
+    vp_run_worker_id: str = Field(default="", validation_alias="THERMOOPS_VP_RUN_WORKER_ID")
+    vp_run_worker_mode: str = Field(default="loop", validation_alias="THERMOOPS_VP_RUN_WORKER_MODE")
+    vp_run_worker_poll_interval_seconds: int = Field(
+        default=5, validation_alias="THERMOOPS_VP_RUN_WORKER_POLL_INTERVAL_SECONDS"
+    )
+    vp_run_worker_lock_ttl_seconds: int = Field(
+        default=120, validation_alias="THERMOOPS_VP_RUN_WORKER_LOCK_TTL_SECONDS"
+    )
+    vp_run_worker_max_batch_size: int = Field(
+        default=1, validation_alias="THERMOOPS_VP_RUN_WORKER_MAX_BATCH_SIZE"
+    )
+    vp_run_worker_log_level: str = Field(default="INFO", validation_alias="THERMOOPS_VP_RUN_WORKER_LOG_LEVEL")
 
     @property
     def cors_origin_list(self) -> list[str]:

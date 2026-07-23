@@ -86,6 +86,7 @@ services:
       AIRFLOW_BASE_URL: ${AIRFLOW_BASE_URL:-http://airflow:8080}
       AIRFLOW_USERNAME: ${AIRFLOW_USERNAME:-admin}
       AIRFLOW_PASSWORD: ${AIRFLOW_PASSWORD:?AIRFLOW_PASSWORD required}
+      THERMOOPS_VP_RUN_EXECUTOR: ${THERMOOPS_VP_RUN_EXECUTOR:-background_tasks}
     volumes:
       - ./ml:/ml:ro
       - ./configs:/configs:ro
@@ -149,6 +150,37 @@ services:
     labels:
       - traefik.enable=false
     command: python -m app.workers.run_due_worker --mode loop
+    restart: unless-stopped
+
+  vp-run-worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: ${COMPOSE_PROJECT_NAME:-thermops}-vp-run-worker
+    env_file:
+      - .env.deploy
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_USER: ${POSTGRES_USER:-thermops}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-thermops}
+      GIT_PYTHON_REFRESH: quiet
+      THERMOOPS_VP_RUN_EXECUTOR: ${THERMOOPS_VP_RUN_EXECUTOR:-worker}
+      THERMOOPS_VP_RUN_WORKER_ENABLED: "true"
+      THERMOOPS_VP_RUN_WORKER_MODE: loop
+      THERMOOPS_VP_RUN_WORKER_POLL_INTERVAL_SECONDS: "${THERMOOPS_VP_RUN_WORKER_POLL_INTERVAL_SECONDS:-5}"
+      THERMOOPS_VP_RUN_WORKER_LOCK_TTL_SECONDS: "${THERMOOPS_VP_RUN_WORKER_LOCK_TTL_SECONDS:-120}"
+      THERMOOPS_VP_RUN_WORKER_MAX_BATCH_SIZE: "${THERMOOPS_VP_RUN_WORKER_MAX_BATCH_SIZE:-1}"
+    networks:
+      - thermops_internal
+    depends_on:
+      postgres:
+        condition: service_healthy
+      backend:
+        condition: service_started
+    labels:
+      - traefik.enable=false
+    command: python -m app.workers.visual_pipeline_run_worker --mode loop
     restart: unless-stopped
 
   frontend:
