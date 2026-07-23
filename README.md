@@ -1494,10 +1494,20 @@ cd frontend && node scripts/check-visual-pipeline-studio.mjs
 - **UX:** confirm 후 BACKGROUND 접수 → `PENDING`/`RUNNING`/`SUCCESS`/`FAILED`/`PARTIAL` polling; latest run 조회 시 활성 run 자동 재개; Schedule Activation은 **disabled + Soon** 유지.
 - **안전:** page load / latest / polling에서 POST 금지; GET 조회 실패와 `run_status=FAILED` 구분.
 - **검증:** `cd frontend && npm run build` · `node scripts/check-pages.mjs` · `node scripts/check-visual-pipeline-studio.mjs` · `python scripts/test_visual_pipeline_manual_run.py` · quick regression.
-- **다음:** Schedule Activation UI 또는 Option C worker (별도 승인).
+- **다음:** R11-S7-5 Option C run-worker 검토 (별도 승인).
+
+### R11-S7-5 Option C Run-Worker 전환 검토
+
+- **범위:** docs-only — Option B BackgroundTasks 한계와 **별도 VP run-worker(Option C)** 필요성·claim/lock/heartbeat·배포·로드맵 정리. code/DB/API/FE/package 변경 없음.
+- **문서:** [`docs/md/THERMOps_R11-S7-5_Option_C_Run_Worker_검토.md`](docs/md/THERMOps_R11-S7-5_Option_C_Run_Worker_검토.md) (기준 커밋 `cef1c6d`)
+- **권장:** S7-6 VP run-worker PoC — feature flag(`THERMOOPS_VP_RUN_EXECUTOR=background_tasks|worker`) · POST **202**/GET polling 유지 · `run-due-worker`와 역할 분리 · Activation은 S7-6 검증 후 S7-7 설계.
+- **S7-6 최소 migration 후보:** `claimed_at` / `claimed_by` / `locked_until` / `heartbeat_at` / `attempt_count` (본 단계에서는 migration 없음).
+- **미포함:** worker 구현, queue/Redis/Celery, POST/GET 변경, migration, FE, Activation, due worker 연결, R10 `run_load` 변경.
+- **다음:** R11-S7-6 VP run-worker PoC (별도 승인).
 
 ## 설계 문서 참조
 
+- `docs/md/THERMOps_R11-S7-5_Option_C_Run_Worker_검토.md`
 - `docs/md/THERMOps_R11-S7-2_Background_Run_전환_검토.md`
 - `docs/md/THERMOps_R11-S7-0_Visual_Pipeline_Run_설계.md`
 - `docs/md/THERMOps_R11-S6-5_Compile_Run_Boundary_정리.md`
