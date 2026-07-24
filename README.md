@@ -1656,13 +1656,22 @@ cd frontend && node scripts/check-visual-pipeline-studio.mjs
 - **범위:** docs-only — S7-0~S7-14 운영 기능 맵 · 배포/점검/장애 체크리스트 · 권한 경계 · Known Limitations · R11-S8 backlog. code/DB/API/FE/worker/package 변경 없음.
 - **문서:** [`docs/md/THERMOps_R11-S7-15_Visual_Pipeline_운영기능_마감정리.md`](docs/md/THERMOps_R11-S7-15_Visual_Pipeline_운영기능_마감정리.md) (기준 커밋 `65e2884`)
 - **포함:** Manual/Scheduled/Ops/Audit 흐름 · mark-failed fail-close 정책 · `VITE_USER_ROLE`/Admin Action flag 경계 · UI 용어 backlog(「R10 설정 반영」→「실행 설정 반영」) · Full Scenario 이용가이드 후속
+- **다음:** R11-S8-0 Run History / Progress / Retry 설계 (아래 섹션)
+
+### R11-S8-0 Run History / Progress / Retry 설계
+
+- **범위:** docs-only — S7 Run 운영 모델 위에 History / Step Progress / Retry / soft-cancel / Catch-up / Notification 방향 설계. code/DB/API/FE/worker/package 변경 없음.
+- **문서:** [`docs/md/THERMOps_R11-S8-0_Run_History_Progress_Retry_설계.md`](docs/md/THERMOps_R11-S8-0_Run_History_Progress_Retry_설계.md) (기준 커밋 `a141944`)
+- **권장:** History=기존 run table list/detail(S8-2) · Progress=`tb_visual_pipeline_run_event`(S8-3) · Retry=새 `visual_run_id`+lineage(S8-4) · interrupt=soft cancel만(S8-5) · catch-up 기본 no(S8-6) · notification≠audit(S8-7)
+- **관계:** S8-1「실행 설정 반영」UI 용어 · S8-8 Full Scenario 이용가이드 · mark-failed는 운영 정리(≠retry/interrupt)
 - **다음:**
-  - R11-S8-0 Run History / Progress / Retry 설계
   - R11-S8-1 UI 용어/UX 정리
-  - R11-S8-2 열수요 예측 Full Scenario 이용가이드 설계
+  - R11-S8-2 Run History UI/API 고도화
+  - R11-S8-3 Step-level Progress PoC
 
 ## 설계 문서 참조
 
+- `docs/md/THERMOps_R11-S8-0_Run_History_Progress_Retry_설계.md`
 - `docs/md/THERMOps_R11-S7-15_Visual_Pipeline_운영기능_마감정리.md`
 - `docs/md/THERMOps_R11-S7-11_Admin_UI_Audit_설계.md`
 - `docs/md/THERMOps_R11-S7-7_Schedule_Activation_설계.md`
