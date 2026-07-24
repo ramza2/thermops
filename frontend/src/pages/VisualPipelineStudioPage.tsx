@@ -34,6 +34,7 @@ import {
   activateVisualPipelineSchedule,
   compileVisualPipeline,
   compileVisualPipelinePreview,
+  cancelVisualPipelineRun,
   deactivateVisualPipelineSchedule,
   getComponentCatalog,
   getConnectionRules,
@@ -45,6 +46,8 @@ import {
   getVisualPipelineRun,
   listVisualPipelineVersions,
   materializeVisualPipeline,
+  pauseVisualPipelineScheduleActivation,
+  resumeVisualPipelineScheduleActivation,
   runVisualPipeline,
   updateVisualPipeline,
   validateVisualPipelineGraph,
@@ -152,6 +155,9 @@ function StudioCanvasInner() {
   const [activationLoadingLatest, setActivationLoadingLatest] = useState(false);
   const [activating, setActivating] = useState(false);
   const [deactivating, setDeactivating] = useState(false);
+  const [pausing, setPausing] = useState(false);
+  const [resuming, setResuming] = useState(false);
+  const [cancellingRun, setCancellingRun] = useState(false);
   const runPollGenRef = useRef(0);
 
   const nodeTypes = useMemo(() => buildNodeTypes(), []);
@@ -618,12 +624,25 @@ function StudioCanvasInner() {
   );
 
   const canActivate = useMemo(() => {
-    if (dirty || compiling || materializing || running || runPolling || activating || deactivating) return false;
+    if (
+      dirty ||
+      compiling ||
+      materializing ||
+      running ||
+      runPolling ||
+      activating ||
+      deactivating ||
+      pausing ||
+      resuming
+    ) {
+      return false;
+    }
     if (compileResult?.compile_status !== "SUCCESS" || !compileResult.persisted) return false;
     if (pipeline?.current_sync_status !== "IN_SYNC") return false;
     if (materializationResult?.materialization_status !== "SUCCESS") return false;
     if (!hasMaterializedSchedule) return false;
     if (activationResult?.activation_status === "ACTIVE") return false;
+    if (activationResult?.activation_status === "PAUSED") return false;
     return true;
   }, [
     dirty,
@@ -633,6 +652,8 @@ function StudioCanvasInner() {
     runPolling,
     activating,
     deactivating,
+    pausing,
+    resuming,
     compileResult,
     pipeline?.current_sync_status,
     materializationResult,
@@ -645,8 +666,11 @@ function StudioCanvasInner() {
       return "스케줄 활성화를 수행합니다. due 시 PENDING scheduled run이 생성될 수 있습니다.";
     }
     if (dirty) return "미저장 변경사항이 있습니다. 저장 후 Compile → R10 설정 반영을 완료하세요.";
-    if (compiling || materializing || running || activating || deactivating) return "다른 작업이 진행 중입니다.";
+    if (compiling || materializing || running || activating || deactivating || pausing || resuming) {
+      return "다른 작업이 진행 중입니다.";
+    }
     if (activationResult?.activation_status === "ACTIVE") return "이미 활성화된 스케줄이 있습니다.";
+    if (activationResult?.activation_status === "PAUSED") return "일시중지된 스케줄이 있습니다. Resume 또는 Deactivate하세요.";
     if (compileResult?.compile_status !== "SUCCESS" || !compileResult?.persisted) {
       return "persisted SUCCESS Compile이 필요합니다.";
     }
@@ -664,6 +688,8 @@ function StudioCanvasInner() {
     running,
     activating,
     deactivating,
+    pausing,
+    resuming,
     activationResult,
     compileResult,
     pipeline?.current_sync_status,
@@ -786,7 +812,12 @@ function StudioCanvasInner() {
 
   const handleDeactivateSchedule = async () => {
     if (!pipelineId || !activationResult?.activation_id) return;
-    if (activationResult.activation_status !== "ACTIVE") return;
+    if (
+      activationResult.activation_status !== "ACTIVE" &&
+      activationResult.activation_status !== "PAUSED"
+    ) {
+      return;
+    }
     const confirmed = window.confirm(
       "스케줄 활성화를 해제합니다. 이미 생성된 PENDING/RUNNING run은 유지됩니다. 계속하시겠습니까?",
     );
@@ -805,6 +836,81 @@ function StudioCanvasInner() {
       showToast("error", detail);
     } finally {
       setDeactivating(false);
+    }
+  };
+
+  const handlePauseSchedule = async () => {
+    if (!pipelineId || !activationResult?.activation_id) return;
+    if (activationResult.activation_status !== "ACTIVE") return;
+    const confirmed = window.confirm(
+      "스케줄 자동 실행을 일시 중지합니다. 이미 생성된 Run은 취소되지 않습니다. 계속하시겠습니까?",
+    );
+    if (!confirmed) return;
+    setPausing(true);
+    setActivationError(null);
+    try {
+      const result = await pauseVisualPipelineScheduleActivation(
+        pipelineId,
+        activationResult.activation_id,
+      );
+      setActivationResult(result);
+      void loadLatestMaterializationResult(pipelineId);
+      showToast("success", "스케줄이 일시 중지되었습니다.");
+    } catch (err) {
+      const detail = extractApiErrorMessage(err, "스케줄 일시 중지에 실패했습니다.");
+      setActivationError(detail);
+      showToast("error", detail);
+    } finally {
+      setPausing(false);
+    }
+  };
+
+  const handleResumeSchedule = async () => {
+    if (!pipelineId || !activationResult?.activation_id) return;
+    if (activationResult.activation_status !== "PAUSED") return;
+    const confirmed = window.confirm(
+      "스케줄 자동 실행을 재개합니다. 다음 실행 시각은 현재 시점 기준으로 다시 계산됩니다. 계속하시겠습니까?",
+    );
+    if (!confirmed) return;
+    setResuming(true);
+    setActivationError(null);
+    try {
+      const result = await resumeVisualPipelineScheduleActivation(
+        pipelineId,
+        activationResult.activation_id,
+      );
+      setActivationResult(result);
+      void loadLatestMaterializationResult(pipelineId);
+      showToast("success", "스케줄이 재개되었습니다.");
+    } catch (err) {
+      const detail = extractApiErrorMessage(err, "스케줄 재개에 실패했습니다.");
+      setActivationError(detail);
+      showToast("error", detail);
+    } finally {
+      setResuming(false);
+    }
+  };
+
+  const handleCancelRun = async () => {
+    if (!pipelineId || !runResult?.visual_run_id) return;
+    if (runResult.run_status !== "PENDING") return;
+    const confirmed = window.confirm(
+      "아직 실행 대기 중인 Run을 취소합니다. 이미 실행 중인 Run은 중단할 수 없습니다. 계속하시겠습니까?",
+    );
+    if (!confirmed) return;
+    setCancellingRun(true);
+    setRunError(null);
+    try {
+      const result = await cancelVisualPipelineRun(pipelineId, runResult.visual_run_id);
+      setRunResult(result);
+      stopRunPolling();
+      showToast("success", "대기 중인 Run이 취소되었습니다.");
+    } catch (err) {
+      const detail = extractApiErrorMessage(err, "Run 취소에 실패했습니다.");
+      setRunError(detail);
+      showToast("error", detail);
+    } finally {
+      setCancellingRun(false);
     }
   };
 
@@ -966,7 +1072,11 @@ function StudioCanvasInner() {
               data-testid="visual-pipeline-schedule-activation-button"
             >
               <Clock className="w-3 h-3" />{" "}
-              {activationResult?.activation_status === "ACTIVE" ? "활성화됨" : "스케줄 활성화"}
+              {activationResult?.activation_status === "ACTIVE"
+                ? "활성화됨"
+                : activationResult?.activation_status === "PAUSED"
+                  ? "일시중지됨"
+                  : "스케줄 활성화"}
             </button>
           )}
         </div>
@@ -1076,24 +1186,32 @@ function StudioCanvasInner() {
         loading={activationLoadingLatest}
         activating={activating}
         deactivating={deactivating}
+        pausing={pausing}
+        resuming={resuming}
         error={activationError}
         canActivateHint={canActivate ? null : activateDisabledReason}
         staleActiveWarning={
-          activationResult?.activation_status === "ACTIVE" && pipeline?.current_sync_status !== "IN_SYNC"
+          (activationResult?.activation_status === "ACTIVE" ||
+            activationResult?.activation_status === "PAUSED") &&
+          pipeline?.current_sync_status !== "IN_SYNC"
         }
         expanded={activationExpanded}
         onToggle={() => setActivationExpanded((v) => !v)}
         onDeactivate={() => void handleDeactivateSchedule()}
+        onPause={() => void handlePauseSchedule()}
+        onResume={() => void handleResumeSchedule()}
       />
       <VpRunPanel
         result={runResult}
         loading={running || runLoadingLatest}
         polling={runPolling}
+        cancelling={cancellingRun}
         error={runError}
         pollError={runPollError}
         canRunHint={canRun ? null : runDisabledReason}
         expanded={runExpanded}
         onToggle={() => setRunExpanded((v) => !v)}
+        onCancel={() => void handleCancelRun()}
       />
       <VpValidationPanel
         result={validationResult}

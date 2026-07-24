@@ -224,6 +224,36 @@ export async function deactivateVisualPipelineSchedule(
   );
 }
 
+export async function pauseVisualPipelineScheduleActivation(
+  pipelineId: string,
+  activationId: string,
+): Promise<VisualPipelineScheduleActivationResponse> {
+  return postApi<VisualPipelineScheduleActivationResponse>(
+    `/visual-pipelines/${pipelineId}/schedule-activations/${encodeURIComponent(activationId)}/pause`,
+    {},
+  );
+}
+
+export async function resumeVisualPipelineScheduleActivation(
+  pipelineId: string,
+  activationId: string,
+): Promise<VisualPipelineScheduleActivationResponse> {
+  return postApi<VisualPipelineScheduleActivationResponse>(
+    `/visual-pipelines/${pipelineId}/schedule-activations/${encodeURIComponent(activationId)}/resume`,
+    {},
+  );
+}
+
+export async function cancelVisualPipelineRun(
+  pipelineId: string,
+  visualRunId: string,
+): Promise<VisualPipelineRunResponse> {
+  return postApi<VisualPipelineRunResponse>(
+    `/visual-pipelines/${pipelineId}/runs/${encodeURIComponent(visualRunId)}/cancel`,
+    {},
+  );
+}
+
 export async function getCurrentVisualPipelineScheduleActivation(
   pipelineId: string,
 ): Promise<VisualPipelineScheduleActivationResponse | null> {

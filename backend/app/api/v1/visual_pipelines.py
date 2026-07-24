@@ -443,6 +443,30 @@ async def get_visual_pipeline_run_detail(
     return ok(result)
 
 
+@router.post("/visual-pipelines/{pipeline_id}/runs/{run_id}/cancel")
+async def post_visual_pipeline_run_cancel(
+    pipeline_id: str,
+    run_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """Cancel PENDING run only (R11-S7-9). RUNNING cancel is not supported."""
+    from app.services.visual_pipeline.manual_run_service import (
+        RunPreconditionError,
+        cancel_visual_pipeline_run,
+    )
+
+    try:
+        result = await cancel_visual_pipeline_run(db, pipeline_id, run_id)
+    except LookupError as exc:
+        detail = str(exc) if str(exc) else "VISUAL_PIPELINE_RUN_NOT_FOUND"
+        if detail == "VISUAL_PIPELINE_NOT_FOUND":
+            raise HTTPException(status_code=404, detail="VISUAL_PIPELINE_NOT_FOUND") from None
+        raise HTTPException(status_code=404, detail="VISUAL_PIPELINE_RUN_NOT_FOUND") from None
+    except RunPreconditionError as exc:
+        raise HTTPException(status_code=409, detail=exc.code) from None
+    return ok(result, message="Visual Pipeline Run이 취소되었습니다.")
+
+
 @router.post("/visual-pipelines/{pipeline_id}/schedule-activations")
 async def post_visual_pipeline_schedule_activation(
     pipeline_id: str,
@@ -516,6 +540,54 @@ async def post_visual_pipeline_schedule_deactivation(
     except ActivationPreconditionError as exc:
         raise HTTPException(status_code=409, detail=exc.code) from None
     return ok(result, message="Visual Pipeline Schedule Activation이 비활성화되었습니다.")
+
+
+@router.post("/visual-pipelines/{pipeline_id}/schedule-activations/{activation_id}/pause")
+async def post_visual_pipeline_schedule_pause(
+    pipeline_id: str,
+    activation_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """Pause ACTIVE activation (R11-S7-9). Idempotent if already PAUSED."""
+    from app.services.visual_pipeline.schedule_activation_service import (
+        ActivationNotFoundError,
+        ActivationPreconditionError,
+        pause_schedule,
+    )
+
+    try:
+        result = await pause_schedule(db, pipeline_id, activation_id)
+    except LookupError:
+        raise HTTPException(status_code=404, detail="VISUAL_PIPELINE_NOT_FOUND") from None
+    except ActivationNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=exc.code) from None
+    except ActivationPreconditionError as exc:
+        raise HTTPException(status_code=409, detail=exc.code) from None
+    return ok(result, message="Visual Pipeline Schedule Activation이 일시 중지되었습니다.")
+
+
+@router.post("/visual-pipelines/{pipeline_id}/schedule-activations/{activation_id}/resume")
+async def post_visual_pipeline_schedule_resume(
+    pipeline_id: str,
+    activation_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """Resume PAUSED activation (R11-S7-9). Idempotent if already ACTIVE."""
+    from app.services.visual_pipeline.schedule_activation_service import (
+        ActivationNotFoundError,
+        ActivationPreconditionError,
+        resume_schedule,
+    )
+
+    try:
+        result = await resume_schedule(db, pipeline_id, activation_id)
+    except LookupError:
+        raise HTTPException(status_code=404, detail="VISUAL_PIPELINE_NOT_FOUND") from None
+    except ActivationNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=exc.code) from None
+    except ActivationPreconditionError as exc:
+        raise HTTPException(status_code=409, detail=exc.code) from None
+    return ok(result, message="Visual Pipeline Schedule Activation이 재개되었습니다.")
 
 
 @router.get("/visual-pipelines/{pipeline_id}")

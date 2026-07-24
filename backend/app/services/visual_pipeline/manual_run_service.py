@@ -792,3 +792,57 @@ async def get_visual_pipeline_run(
     if row is None:
         raise LookupError("VISUAL_PIPELINE_RUN_NOT_FOUND")
     return _row_to_response(row)
+
+
+async def cancel_visual_pipeline_run(
+    db: AsyncSession,
+    pipeline_id: str,
+    visual_run_id: str,
+) -> dict[str, Any]:
+    """Cancel PENDING run only. RUNNING is not interruptible in S7-9."""
+    await _get_visual_definition(db, pipeline_id)
+    row = (
+        await db.execute(
+            select(VisualPipelineRun).where(
+                VisualPipelineRun.pipeline_id == pipeline_id,
+                VisualPipelineRun.visual_run_id == visual_run_id,
+            )
+        )
+    ).scalar_one_or_none()
+    if row is None:
+        raise LookupError("VISUAL_PIPELINE_RUN_NOT_FOUND")
+
+    status = str(row.run_status or "").upper()
+    if status == "CANCELLED":
+        return _row_to_response(row)
+    if status == "RUNNING":
+        raise RunPreconditionError("RUN_CANCEL_RUNNING_NOT_SUPPORTED")
+    if status in {"SUCCESS", "FAILED", "PARTIAL"}:
+        raise RunPreconditionError("RUN_ALREADY_TERMINAL")
+    if status != "PENDING":
+        raise RunPreconditionError("RUN_ALREADY_TERMINAL")
+
+    now = utc_now()
+    row.run_status = "CANCELLED"
+    row.finished_at = now
+    row.error_message = "Cancelled before execution"
+    issues = list(row.issues_json or [])
+    issues.append(
+        _issue(
+            "RUN_CANCELLED_BEFORE_EXECUTION",
+            "Run was cancelled before execution.",
+            step_id="cancel",
+        )
+    )
+    row.issues_json = issues
+    row.result_json = {
+        "summary": {
+            "cancelled": True,
+            "cancel_phase": "PENDING",
+        }
+    }
+    _clear_run_lease(row)
+    await db.flush()
+    await db.commit()
+    await db.refresh(row)
+    return _row_to_response(row)

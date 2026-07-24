@@ -30,11 +30,13 @@ from app.services.visual_pipeline.visual_pipeline_service import (
     get_visual_pipeline,
 )
 
-ACTIVATION_VERSION = "R11-S7-8"
+ACTIVATION_VERSION = "R11-S7-9"
 STATUS_ACTIVE = "ACTIVE"
 STATUS_INACTIVE = "INACTIVE"
+STATUS_PAUSED = "PAUSED"
 MIRROR_ACTIVE = "ACTIVE"
 MIRROR_INACTIVE = "INACTIVE"
+MIRROR_PAUSED = "PAUSED"
 DEFAULT_TZ = "Asia/Seoul"
 
 
@@ -92,9 +94,15 @@ def _row_to_response(row: VisualPipelineScheduleActivation) -> dict[str, Any]:
         "timezone": row.timezone,
         "activated_at": _iso(row.activated_at),
         "deactivated_at": _iso(row.deactivated_at),
+        "paused_at": _iso(row.paused_at),
+        "resumed_at": _iso(row.resumed_at),
         "next_due_at": _iso(row.next_due_at),
         "last_triggered_at": _iso(row.last_triggered_at),
+        "last_due_at": _iso(row.last_due_at),
+        "last_skip_at": _iso(row.last_skip_at),
+        "last_skip_reason": row.last_skip_reason,
         "trigger_count": int(row.trigger_count or 0),
+        "missed_count": int(row.missed_count or 0),
         "metadata": meta,
         "created_at": _iso(row.created_at),
         "updated_at": _iso(row.updated_at),
@@ -160,6 +168,64 @@ async def _get_active_activation(
     ).scalar_one_or_none()
 
 
+async def _get_blocking_activation(
+    db: AsyncSession, pipeline_id: str
+) -> VisualPipelineScheduleActivation | None:
+    """ACTIVE or PAUSED blocks a new activate (pipeline one live schedule)."""
+    return (
+        await db.execute(
+            select(VisualPipelineScheduleActivation).where(
+                VisualPipelineScheduleActivation.pipeline_id == pipeline_id,
+                VisualPipelineScheduleActivation.activation_status.in_(
+                    (STATUS_ACTIVE, STATUS_PAUSED)
+                ),
+            )
+        )
+    ).scalar_one_or_none()
+
+
+async def _load_activation(
+    db: AsyncSession, pipeline_id: str, activation_id: str
+) -> VisualPipelineScheduleActivation:
+    row = (
+        await db.execute(
+            select(VisualPipelineScheduleActivation).where(
+                VisualPipelineScheduleActivation.activation_id == activation_id,
+                VisualPipelineScheduleActivation.pipeline_id == pipeline_id,
+            )
+        )
+    ).scalar_one_or_none()
+    if row is None:
+        raise ActivationNotFoundError()
+    return row
+
+
+async def _set_materialization_mirror(
+    db: AsyncSession,
+    *,
+    pipeline_id: str,
+    materialization_result_id: str,
+    mirror: str,
+) -> None:
+    mat_row = (
+        await db.execute(
+            select(VisualPipelineMaterializationResult).where(
+                VisualPipelineMaterializationResult.materialization_result_id
+                == materialization_result_id,
+                VisualPipelineMaterializationResult.pipeline_id == pipeline_id,
+            )
+        )
+    ).scalar_one_or_none()
+    if mat_row is not None:
+        mat_row.activation = mirror
+
+
+def _merge_metadata(row: VisualPipelineScheduleActivation, patch: dict[str, Any]) -> None:
+    meta = dict(row.metadata_json or {})
+    meta.update(patch)
+    row.metadata_json = meta
+
+
 async def activate_schedule(
     db: AsyncSession,
     pipeline_id: str,
@@ -180,7 +246,7 @@ async def activate_schedule(
     if (defn.current_sync_status or "") != SYNC_IN_SYNC:
         raise ActivationPreconditionError("PIPELINE_STALE")
 
-    if await _get_active_activation(db, pipeline_id) is not None:
+    if await _get_blocking_activation(db, pipeline_id) is not None:
         raise ActivationPreconditionError("ACTIVE_ACTIVATION_EXISTS")
 
     compile_row = await _latest_success_compile(db, pipeline_id)
@@ -239,6 +305,7 @@ async def activate_schedule(
         next_due_at=next_due,
         last_triggered_at=None,
         trigger_count=0,
+        missed_count=0,
         metadata_json={
             "graph_version_hash": current_hash,
             "r10_active_yn": False,
@@ -314,6 +381,104 @@ async def deactivate_schedule(
     return _row_to_response(row)
 
 
+async def pause_schedule(
+    db: AsyncSession,
+    pipeline_id: str,
+    activation_id: str,
+) -> dict[str, Any]:
+    """ACTIVE → PAUSED. Idempotent if already PAUSED. Does not call run_load or create runs."""
+    assert_schedule_activation_enabled()
+
+    defn = await _get_visual_definition(db, pipeline_id)
+    if (defn.pipeline_kind or "") != VISUAL_PIPELINE_KIND:
+        raise LookupError("VISUAL_PIPELINE_NOT_FOUND")
+
+    row = await _load_activation(db, pipeline_id, activation_id)
+    status = str(row.activation_status or "").upper()
+    if status == STATUS_INACTIVE:
+        raise ActivationPreconditionError("SCHEDULE_ACTIVATION_NOT_ACTIVE")
+    if status == STATUS_PAUSED:
+        return _row_to_response(row)
+    if status != STATUS_ACTIVE:
+        raise ActivationPreconditionError("SCHEDULE_ACTIVATION_NOT_ACTIVE")
+
+    now = utc_now()
+    row.activation_status = STATUS_PAUSED
+    row.paused_at = now
+    row.updated_at = now
+    _merge_metadata(row, {"last_action": "pause", "last_action_at": _iso(now)})
+    await _set_materialization_mirror(
+        db,
+        pipeline_id=pipeline_id,
+        materialization_result_id=row.materialization_result_id,
+        mirror=MIRROR_PAUSED,
+    )
+    await db.flush()
+    await db.commit()
+    await db.refresh(row)
+    return _row_to_response(row)
+
+
+async def resume_schedule(
+    db: AsyncSession,
+    pipeline_id: str,
+    activation_id: str,
+) -> dict[str, Any]:
+    """PAUSED → ACTIVE with next_due_at recomputed from now. Idempotent if ACTIVE."""
+    assert_schedule_activation_enabled()
+
+    defn = await _get_visual_definition(db, pipeline_id)
+    if (defn.pipeline_kind or "") != VISUAL_PIPELINE_KIND:
+        raise LookupError("VISUAL_PIPELINE_NOT_FOUND")
+
+    row = await _load_activation(db, pipeline_id, activation_id)
+    status = str(row.activation_status or "").upper()
+    if status == STATUS_INACTIVE:
+        raise ActivationPreconditionError("SCHEDULE_ACTIVATION_NOT_PAUSED")
+    if status == STATUS_ACTIVE:
+        return _row_to_response(row)
+    if status != STATUS_PAUSED:
+        raise ActivationPreconditionError("SCHEDULE_ACTIVATION_NOT_PAUSED")
+
+    schedule = (
+        await db.execute(
+            select(DataLoadSchedule).where(DataLoadSchedule.schedule_id == row.r10_schedule_id)
+        )
+    ).scalar_one_or_none()
+    if schedule is None:
+        raise ActivationPreconditionError("R10_SCHEDULE_MISSING")
+    if schedule.active_yn:
+        schedule.active_yn = False
+
+    now = utc_now()
+    next_due = compute_next_run_at(_schedule_dict_from_row(schedule), from_time=now)
+    if next_due is None:
+        raise ActivationPreconditionError("CRON_MISSING")
+
+    row.activation_status = STATUS_ACTIVE
+    row.resumed_at = now
+    row.next_due_at = next_due
+    row.updated_at = now
+    _merge_metadata(
+        row,
+        {
+            "last_action": "resume",
+            "last_action_at": _iso(now),
+            "resume_next_due_at": _iso(next_due),
+        },
+    )
+    await _set_materialization_mirror(
+        db,
+        pipeline_id=pipeline_id,
+        materialization_result_id=row.materialization_result_id,
+        mirror=MIRROR_ACTIVE,
+    )
+    await db.flush()
+    await db.commit()
+    await db.refresh(row)
+    return _row_to_response(row)
+
+
 async def get_current_activation(db: AsyncSession, pipeline_id: str) -> dict[str, Any] | None:
     defn = await _get_visual_definition(db, pipeline_id)
     if (defn.pipeline_kind or "") != VISUAL_PIPELINE_KIND:
@@ -322,6 +487,19 @@ async def get_current_activation(db: AsyncSession, pipeline_id: str) -> dict[str
     active = await _get_active_activation(db, pipeline_id)
     if active is not None:
         return _row_to_response(active)
+
+    paused = (
+        await db.execute(
+            select(VisualPipelineScheduleActivation).where(
+                VisualPipelineScheduleActivation.pipeline_id == pipeline_id,
+                VisualPipelineScheduleActivation.activation_status == STATUS_PAUSED,
+            )
+            .order_by(VisualPipelineScheduleActivation.created_at.desc())
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    if paused is not None:
+        return _row_to_response(paused)
 
     latest = (
         await db.execute(

@@ -701,6 +701,27 @@ async function runBrowserSmoke(pipeline) {
     if (!(await page.getByTestId("visual-pipeline-schedule-activation-button").isDisabled())) {
       fail("expected Schedule Activation button disabled while ACTIVE");
     }
+
+    // Pause → Resume → Deactivate
+    const pauseBtn = actPanel.getByTestId("visual-pipeline-schedule-pause-button");
+    page.once("dialog", (dialog) => dialog.accept());
+    await pauseBtn.click();
+    await page.waitForTimeout(1200);
+    const pausedStatus = (await actPanel.getByTestId("visual-pipeline-schedule-activation-status").innerText()).trim();
+    if (pausedStatus !== "PAUSED") {
+      fail(`expected activation PAUSED, got ${pausedStatus}`);
+    }
+    const resumeBtn = actPanel.getByTestId("visual-pipeline-schedule-resume-button");
+    page.once("dialog", (dialog) => dialog.accept());
+    await resumeBtn.click();
+    await page.waitForTimeout(1200);
+    const resumedStatus = (
+      await actPanel.getByTestId("visual-pipeline-schedule-activation-status").innerText()
+    ).trim();
+    if (resumedStatus !== "ACTIVE") {
+      fail(`expected activation ACTIVE after resume, got ${resumedStatus}`);
+    }
+
     const deactivateBtn = actPanel.getByTestId("visual-pipeline-schedule-deactivate-button");
     page.once("dialog", (dialog) => dialog.accept());
     await deactivateBtn.click();
@@ -709,7 +730,7 @@ async function runBrowserSmoke(pipeline) {
     if (actStatus2 !== "INACTIVE") {
       fail(`expected activation INACTIVE after deactivate, got ${actStatus2}`);
     }
-    console.log(`  [ok] Schedule Activation ACTIVE→INACTIVE activation_id=${actId}`);
+    console.log(`  [ok] Schedule Activation ACTIVE→PAUSED→ACTIVE→INACTIVE activation_id=${actId}`);
 
     // --- Graph validation smoke (errors 0) ---
     await runGraphValidationAndWait(page);

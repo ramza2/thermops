@@ -5,11 +5,13 @@ interface VpRunPanelProps {
   result: VisualPipelineRunResponse | null;
   loading?: boolean;
   polling?: boolean;
+  cancelling?: boolean;
   error?: string | null;
   pollError?: string | null;
   canRunHint?: string | null;
   expanded: boolean;
   onToggle: () => void;
+  onCancel?: () => void;
 }
 
 const SEV_STYLE: Record<string, string> = {
@@ -81,17 +83,22 @@ export function VpRunPanel({
   result,
   loading,
   polling,
+  cancelling,
   error,
   pollError,
   canRunHint,
   expanded,
   onToggle,
+  onCancel,
 }: VpRunPanelProps) {
   const issues = result?.issues ?? [];
   const summary = (result?.result ?? null) as Record<string, unknown> | null;
   const duration = formatDuration(result?.started_at, result?.finished_at);
   const active =
     result?.run_status === "PENDING" || result?.run_status === "RUNNING" || Boolean(polling);
+  const isPending = result?.run_status === "PENDING";
+  const isRunning = result?.run_status === "RUNNING";
+  const isCancelled = result?.run_status === "CANCELLED";
 
   return (
     <div
@@ -259,6 +266,33 @@ export function VpRunPanel({
                     ))}
                   </div>
                 </div>
+              )}
+
+              {isCancelled && (
+                <p
+                  className="text-xs text-slate-700 bg-slate-50 border border-slate-200 rounded-md px-2.5 py-2"
+                  data-testid="visual-pipeline-run-cancelled-message"
+                >
+                  실행 전에 취소되었습니다. (RUNNING 중 중단은 후속 지원)
+                </p>
+              )}
+
+              {isPending && onCancel && (
+                <button
+                  type="button"
+                  className="inline-flex items-center px-2.5 py-1.5 text-xs font-medium rounded-md border border-slate-300 text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                  onClick={onCancel}
+                  disabled={Boolean(cancelling) || Boolean(polling && !isPending)}
+                  data-testid="visual-pipeline-run-cancel-button"
+                >
+                  {cancelling ? "취소 중…" : "대기 Run 취소"}
+                </button>
+              )}
+
+              {isRunning && (
+                <p className="text-[11px] text-slate-500 bg-slate-50 border border-slate-100 rounded-md px-2.5 py-2">
+                  실행 중(RUNNING) 취소는 현재 지원하지 않습니다.
+                </p>
               )}
 
               {result.error_message && result.run_status === "FAILED" && (

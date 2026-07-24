@@ -450,9 +450,15 @@ export interface VisualPipelineScheduleActivationResponse {
   timezone?: string | null;
   activated_at?: string | null;
   deactivated_at?: string | null;
+  paused_at?: string | null;
+  resumed_at?: string | null;
   next_due_at?: string | null;
   last_triggered_at?: string | null;
+  last_due_at?: string | null;
+  last_skip_at?: string | null;
+  last_skip_reason?: string | null;
   trigger_count?: number;
+  missed_count?: number;
   metadata?: Record<string, unknown> | null;
   created_at?: string | null;
   updated_at?: string | null;

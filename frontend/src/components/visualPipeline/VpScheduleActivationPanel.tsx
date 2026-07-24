@@ -6,12 +6,16 @@ interface VpScheduleActivationPanelProps {
   loading?: boolean;
   activating?: boolean;
   deactivating?: boolean;
+  pausing?: boolean;
+  resuming?: boolean;
   error?: string | null;
   canActivateHint?: string | null;
   staleActiveWarning?: boolean;
   expanded: boolean;
   onToggle: () => void;
   onDeactivate?: () => void;
+  onPause?: () => void;
+  onResume?: () => void;
 }
 
 function statusTone(status: string | undefined): string {
@@ -27,14 +31,20 @@ export function VpScheduleActivationPanel({
   loading,
   activating,
   deactivating,
+  pausing,
+  resuming,
   error,
   canActivateHint,
   staleActiveWarning,
   expanded,
   onToggle,
   onDeactivate,
+  onPause,
+  onResume,
 }: VpScheduleActivationPanelProps) {
   const isActive = result?.activation_status === "ACTIVE";
+  const isPaused = result?.activation_status === "PAUSED";
+  const busy = Boolean(activating || deactivating || pausing || resuming);
 
   return (
     <div
@@ -57,9 +67,7 @@ export function VpScheduleActivationPanel({
               {result.activation_status}
             </span>
           )}
-          {(loading || activating || deactivating) && (
-            <span className="text-[10px] text-slate-400">처리 중…</span>
-          )}
+          {(loading || busy) && <span className="text-[10px] text-slate-400">처리 중…</span>}
         </div>
         <span className="text-[10px] text-slate-400">{expanded ? "접기" : "펼치기"}</span>
       </button>
@@ -77,15 +85,14 @@ export function VpScheduleActivationPanel({
               있습니다.
             </p>
           )}
-          {canActivateHint && !isActive && (
+          {canActivateHint && !isActive && !isPaused && (
             <p className="text-[11px] text-slate-500 bg-slate-50 border border-slate-100 rounded-md px-2.5 py-2">
               {canActivateHint}
             </p>
           )}
-          {staleActiveWarning && isActive && (
+          {staleActiveWarning && (isActive || isPaused) && (
             <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-100 rounded-md px-2.5 py-2">
-              그래프가 STALE 상태입니다. 활성 스케줄은 유지되지만 재컴파일/재반영을 권장합니다. (자동
-              비활성은 후속)
+              그래프가 STALE 상태입니다. 활성/일시중지 스케줄은 유지되지만 재컴파일/재반영을 권장합니다.
             </p>
           )}
           {result && (
@@ -126,24 +133,76 @@ export function VpScheduleActivationPanel({
                     {result.trigger_count ?? 0}
                   </p>
                 </div>
+                <div>
+                  <span className="text-slate-400">paused_at / resumed_at</span>
+                  <p className="font-mono text-slate-700">
+                    {result.paused_at ?? "-"} / {result.resumed_at ?? "-"}
+                  </p>
+                </div>
+                <div>
+                  <span className="text-slate-400">last_due_at</span>
+                  <p className="font-mono text-slate-700">{result.last_due_at ?? "-"}</p>
+                </div>
+                <div>
+                  <span className="text-slate-400">last_skip_reason</span>
+                  <p
+                    className="font-mono text-slate-700"
+                    data-testid="visual-pipeline-schedule-last-skip-reason"
+                  >
+                    {result.last_skip_reason ?? "-"}
+                    {result.last_skip_at ? ` · ${result.last_skip_at}` : ""}
+                  </p>
+                </div>
+                <div>
+                  <span className="text-slate-400">missed_count</span>
+                  <p
+                    className="font-mono text-slate-700"
+                    data-testid="visual-pipeline-schedule-missed-count"
+                  >
+                    {result.missed_count ?? 0}
+                  </p>
+                </div>
               </div>
               <div className="text-[11px] bg-slate-50 border border-slate-100 rounded-md px-2.5 py-2 text-slate-600 space-y-0.5">
                 <p>Activation은 run_load를 직접 실행하지 않습니다.</p>
-                <p>vp-schedule-worker가 due 시 PENDING scheduled run을 생성합니다.</p>
-                <p>vp-run-worker가 PENDING run을 실행합니다. R10 active_yn=false 유지.</p>
-                <p>due run은 즉시 생성되지 않을 수 있습니다. Run Panel에서 확인하세요.</p>
+                <p>PAUSED면 due enqueue가 중지됩니다. Resume 시 next_due_at을 현재 기준으로 재계산합니다.</p>
+                <p>skip/missed는 운영 정보이며 자동 catch-up은 후속입니다.</p>
               </div>
-              {isActive && onDeactivate && (
-                <button
-                  type="button"
-                  className="inline-flex items-center px-2.5 py-1.5 text-xs font-medium rounded-md border border-slate-300 text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-                  onClick={onDeactivate}
-                  disabled={deactivating || activating}
-                  data-testid="visual-pipeline-schedule-deactivate-button"
-                >
-                  {deactivating ? "비활성화 중…" : "비활성화"}
-                </button>
-              )}
+              <div className="flex flex-wrap gap-2">
+                {isActive && onPause && (
+                  <button
+                    type="button"
+                    className="inline-flex items-center px-2.5 py-1.5 text-xs font-medium rounded-md border border-slate-300 text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                    onClick={onPause}
+                    disabled={busy}
+                    data-testid="visual-pipeline-schedule-pause-button"
+                  >
+                    {pausing ? "일시중지 중…" : "일시중지"}
+                  </button>
+                )}
+                {isPaused && onResume && (
+                  <button
+                    type="button"
+                    className="inline-flex items-center px-2.5 py-1.5 text-xs font-medium rounded-md border border-slate-300 text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                    onClick={onResume}
+                    disabled={busy}
+                    data-testid="visual-pipeline-schedule-resume-button"
+                  >
+                    {resuming ? "재개 중…" : "재개"}
+                  </button>
+                )}
+                {(isActive || isPaused) && onDeactivate && (
+                  <button
+                    type="button"
+                    className="inline-flex items-center px-2.5 py-1.5 text-xs font-medium rounded-md border border-slate-300 text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                    onClick={onDeactivate}
+                    disabled={busy}
+                    data-testid="visual-pipeline-schedule-deactivate-button"
+                  >
+                    {deactivating ? "비활성화 중…" : "비활성화"}
+                  </button>
+                )}
+              </div>
             </>
           )}
         </div>

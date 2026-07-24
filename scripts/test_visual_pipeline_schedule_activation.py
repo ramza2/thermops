@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""R11-S7-8 Visual Pipeline Schedule Activation PoC tests.
+"""R11-S7-8/S7-9 Visual Pipeline Schedule Activation tests.
 
 Uses sample-external/heat-demand — no operational external APIs.
 quick regression group: NOT included.
@@ -279,6 +279,100 @@ def test_precondition_stale() -> None:
         archive_pipeline(pid)
 
 
+def test_pause_resume() -> None:
+    print("== pause/resume ==")
+    prev = _with_activation_enabled(True)
+    fixture = setup_compiled_materialized(f"S79-PAUSE-{uuid4().hex[:6]}")
+    pid = fixture["pipeline_id"]
+    try:
+        before = snapshot_side_effects()
+
+        async def _flow():
+            from app.core.database import async_session
+            from app.services.visual_pipeline.schedule_activation_service import (
+                ActivationPreconditionError,
+                activate_schedule,
+                deactivate_schedule,
+                pause_schedule,
+                resume_schedule,
+            )
+
+            async with async_session() as db:
+                act = await activate_schedule(db, pid, {})
+                aid = act["activation_id"]
+                paused = await pause_schedule(db, pid, aid)
+                assert paused["activation_status"] == "PAUSED"
+                assert paused.get("paused_at")
+                paused2 = await pause_schedule(db, pid, aid)
+                assert paused2["activation_status"] == "PAUSED"
+                resumed = await resume_schedule(db, pid, aid)
+                assert resumed["activation_status"] == "ACTIVE"
+                assert resumed.get("resumed_at")
+                assert resumed.get("next_due_at")
+                resumed2 = await resume_schedule(db, pid, aid)
+                assert resumed2["activation_status"] == "ACTIVE"
+                inactive = await deactivate_schedule(db, pid, aid)
+                assert inactive["activation_status"] == "INACTIVE"
+                try:
+                    await pause_schedule(db, pid, aid)
+                    raise AssertionError("expected SCHEDULE_ACTIVATION_NOT_ACTIVE")
+                except ActivationPreconditionError as exc:
+                    assert exc.code == "SCHEDULE_ACTIVATION_NOT_ACTIVE"
+                try:
+                    await resume_schedule(db, pid, aid)
+                    raise AssertionError("expected SCHEDULE_ACTIVATION_NOT_PAUSED")
+                except ActivationPreconditionError as exc:
+                    assert exc.code == "SCHEDULE_ACTIVATION_NOT_PAUSED"
+                return aid
+
+        act_id = _async_run(_flow())
+        runs = int(
+            _psql(
+                f"SELECT COUNT(*) FROM tb_visual_pipeline_run WHERE pipeline_id='{pid}'"
+            )
+            or "0"
+        )
+        assert runs == 0, "pause/resume must not create run rows"
+        after = snapshot_side_effects()
+        assert after["tb_api_connector_call_log"] == before["tb_api_connector_call_log"]
+        assert after["tb_api_connector_load_run"] == before["tb_api_connector_load_run"]
+
+        # HTTP idempotent / error codes
+        act = api(
+            "POST",
+            f"/visual-pipelines/{pid}/schedule-activations",
+            {},
+        )
+        aid = act["activation_id"]
+        p1 = api("POST", f"/visual-pipelines/{pid}/schedule-activations/{aid}/pause")
+        assert p1["activation_status"] == "PAUSED"
+        p2 = api("POST", f"/visual-pipelines/{pid}/schedule-activations/{aid}/pause")
+        assert p2["activation_status"] == "PAUSED"
+        r1 = api("POST", f"/visual-pipelines/{pid}/schedule-activations/{aid}/resume")
+        assert r1["activation_status"] == "ACTIVE"
+        r2 = api("POST", f"/visual-pipelines/{pid}/schedule-activations/{aid}/resume")
+        assert r2["activation_status"] == "ACTIVE"
+        api("POST", f"/visual-pipelines/{pid}/schedule-activations/{aid}/deactivate")
+        fail_p = api(
+            "POST",
+            f"/visual-pipelines/{pid}/schedule-activations/{aid}/pause",
+            expect_fail=True,
+        )
+        assert fail_p.get("_http_status") == 409
+        assert fail_p.get("detail") == "SCHEDULE_ACTIVATION_NOT_ACTIVE"
+        fail_r = api(
+            "POST",
+            f"/visual-pipelines/{pid}/schedule-activations/{aid}/resume",
+            expect_fail=True,
+        )
+        assert fail_r.get("_http_status") == 409
+        assert fail_r.get("detail") == "SCHEDULE_ACTIVATION_NOT_PAUSED"
+        print(f"  PASS pause/resume activation_id={act_id}")
+    finally:
+        _restore_activation_enabled(prev)
+        archive_pipeline(pid)
+
+
 def test_manual_run_does_not_change_activation() -> None:
     print("== manual run leaves activation ==")
     prev = _with_activation_enabled(True)
@@ -328,6 +422,7 @@ def main() -> int:
     test_migration_idempotent()
     test_disabled_flag()
     test_activate_deactivate_success()
+    test_pause_resume()
     test_precondition_stale()
     test_manual_run_does_not_change_activation()
     print("\nAll schedule activation tests PASSED")

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""R11-S7-8 Visual Pipeline schedule-worker enqueue + scheduled run execution tests.
+"""R11-S7-8/S7-9 Visual Pipeline schedule-worker enqueue + skip/missed tests.
 
 Uses sample-external/heat-demand — no operational external APIs.
 quick regression group: NOT included.
@@ -282,6 +282,13 @@ def test_skip_when_active_run() -> None:
                 batch_size=10,
             )
 
+        missed_before = int(
+            _psql(
+                f"SELECT missed_count FROM tb_visual_pipeline_schedule_activation "
+                f"WHERE activation_id='{act['activation_id']}'"
+            )
+            or "0"
+        )
         summary = _async_run(_enqueue())
         reasons = [i.get("reason") for i in summary.get("items") or []]
         assert "skipped_active_run" in reasons or summary["enqueued"] == 0, summary
@@ -292,11 +299,77 @@ def test_skip_when_active_run() -> None:
             or "0"
         )
         assert scheduled == 0
+        missed_after = int(
+            _psql(
+                f"SELECT missed_count FROM tb_visual_pipeline_schedule_activation "
+                f"WHERE activation_id='{act['activation_id']}'"
+            )
+            or "0"
+        )
+        assert missed_after == missed_before + 1, (missed_before, missed_after)
+        skip_reason = _psql(
+            f"SELECT last_skip_reason FROM tb_visual_pipeline_schedule_activation "
+            f"WHERE activation_id='{act['activation_id']}'"
+        )
+        assert skip_reason == "ACTIVE_RUN_EXISTS", skip_reason
         # cleanup pending so archive is clean
         psql_run(
             f"DELETE FROM tb_visual_pipeline_run WHERE visual_run_id='{pending['visual_run_id']}'"
         )
-        print("  PASS skipped_active_run")
+        print("  PASS skipped_active_run + missed_count")
+    finally:
+        _restore_flags(*prev)
+        archive_pipeline(pid)
+
+
+def test_paused_not_enqueued() -> None:
+    print("== PAUSED activation not enqueued ==")
+    prev = _enable_flags()
+    fixture = setup_compiled_materialized(f"S79-PAUSED-{uuid4().hex[:6]}")
+    pid = fixture["pipeline_id"]
+    try:
+
+        async def _setup():
+            from app.core.database import async_session
+            from app.services.visual_pipeline.schedule_activation_service import (
+                activate_schedule,
+                pause_schedule,
+            )
+
+            async with async_session() as db:
+                act = await activate_schedule(db, pid, {})
+                paused = await pause_schedule(db, pid, act["activation_id"])
+            return paused
+
+        act = _async_run(_setup())
+        assert act["activation_status"] == "PAUSED"
+        psql_run(
+            "UPDATE tb_visual_pipeline_schedule_activation "
+            "SET next_due_at = NOW() - INTERVAL '1 minute', updated_at = NOW() "
+            f"WHERE activation_id='{act['activation_id']}'"
+        )
+
+        async def _enqueue():
+            from app.services.visual_pipeline.schedule_worker_service import (
+                build_schedule_worker_id,
+                run_schedule_worker_once,
+            )
+
+            return await run_schedule_worker_once(
+                worker_id=build_schedule_worker_id("test-paused"),
+                batch_size=10,
+            )
+
+        summary = _async_run(_enqueue())
+        assert summary["enqueued"] == 0, summary
+        scheduled = int(
+            _psql(
+                f"SELECT COUNT(*) FROM tb_visual_pipeline_run WHERE pipeline_id='{pid}' AND mode='SCHEDULED'"
+            )
+            or "0"
+        )
+        assert scheduled == 0
+        print("  PASS PAUSED not enqueued")
     finally:
         _restore_flags(*prev)
         archive_pipeline(pid)
@@ -307,6 +380,7 @@ def main() -> int:
     test_no_due_enqueues_zero()
     test_due_enqueue_dedup_and_execute()
     test_skip_when_active_run()
+    test_paused_not_enqueued()
     print("\nAll schedule worker tests PASSED")
     return 0
 

@@ -1549,9 +1549,25 @@ cd frontend && node scripts/check-visual-pipeline-studio.mjs
   docker compose -f docker-compose.traefik.yml --env-file .env.deploy up -d --build \
     backend frontend vp-run-worker vp-schedule-worker
   ```
-- **Known limitation:** catch-up 없음 · pause/resume 없음 · retry/cancel/progress 없음 · STALE active 자동 비활성 없음 · audit/notification 없음 · ACTIVE 중 Manual PENDING이 있으면 due slot skip(miss)
+- **Known limitation:** catch-up 없음 · pause/resume 없음(→ S7-9) · retry/cancel/progress 없음(→ cancel은 S7-9) · STALE active 자동 비활성 없음 · audit/notification 없음 · ACTIVE 중 Manual PENDING이 있으면 due slot skip(miss)
 - **테스트:** `python scripts/test_visual_pipeline_schedule_activation.py` · `python scripts/test_visual_pipeline_schedule_worker.py` (quick **미포함**)
-- **다음:** R11-S7-9 Schedule/run hardening (별도 승인).
+- **다음:** R11-S7-9 Schedule/run hardening (아래 섹션).
+
+### R11-S7-9 Schedule/run hardening PoC
+
+- **범위:** Activation pause/resume · schedule worker skip/missed 관측 · PENDING run cancel · Studio Pause/Resume/Cancel UI. retry / RUNNING interrupt / progress / catch-up / audit 제외.
+- **DB:** `tb_visual_pipeline_schedule_activation` hardening 컬럼 — `paused_at` · `resumed_at` · `last_due_at` · `last_skip_at` · `last_skip_reason` · `missed_count` (`scripts/r11s7_schedule_run_hardening.sql`)
+- **API:**
+  - `POST .../schedule-activations/{id}/pause` — ACTIVE→PAUSED; PAUSED idempotent 200; INACTIVE → 409 `SCHEDULE_ACTIVATION_NOT_ACTIVE`
+  - `POST .../schedule-activations/{id}/resume` — PAUSED→ACTIVE(`next_due_at` 재계산); ACTIVE idempotent 200; INACTIVE → 409 `SCHEDULE_ACTIVATION_NOT_PAUSED`
+  - `POST .../runs/{visual_run_id}/cancel` — PENDING→CANCELLED; CANCELLED idempotent; RUNNING → 409 `RUN_CANCEL_RUNNING_NOT_SUPPORTED`; SUCCESS/FAILED/PARTIAL → 409 `RUN_ALREADY_TERMINAL`
+  - pause/resume/cancel 모두 **`run_load` 호출 없음** · pause/resume은 **run row 생성 없음**
+- **Worker:** ACTIVE만 enqueue · skip 시 `ACTIVE_RUN_EXISTS`/`STALE_OR_INVALID` → `missed_count+1` · `DUPLICATE_DEDUP_KEY`는 missed 증가 없음 · 모두 `next_due_at` 전진 · `trigger_count`는 enqueue 성공 시에만 증가
+- **Materialization mirror:** PAUSED / ACTIVE; deactivate는 INACTIVE 유지
+- **Studio:** Activation Panel Pause/Resume + skip/missed · Run Panel PENDING cancel · RUNNING 취소 미지원 안내
+- **경계:** R10 `run-due-worker` 미연결 · R10 `active_yn=false` · Redis/Celery/package 변경 없음
+- **테스트:** `python scripts/test_visual_pipeline_schedule_activation.py` · `python scripts/test_visual_pipeline_schedule_worker.py` · `python scripts/test_visual_pipeline_run_cancel.py` (quick **미포함**)
+- **다음:** R11-S7-10 (별도 승인).
 
 ## 설계 문서 참조
 

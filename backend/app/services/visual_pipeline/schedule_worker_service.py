@@ -1,4 +1,4 @@
-"""R11-S7-8 VP schedule-worker — due enqueue only (no run_load).
+"""R11-S7-9 VP schedule-worker — due enqueue + skip/missed observability.
 
 Separate from R10 run-due-worker and VP run-worker.
 Creates mode=SCHEDULED PENDING rows for vp-run-worker to claim.
@@ -36,6 +36,7 @@ from app.services.visual_pipeline.manual_run_service import (
 from app.services.visual_pipeline.schedule_activation_service import (
     DEFAULT_TZ,
     STATUS_ACTIVE,
+    _iso,
     _schedule_dict_from_row,
 )
 from app.services.visual_pipeline.visual_pipeline_service import _get_visual_definition
@@ -43,6 +44,9 @@ from app.services.visual_pipeline.visual_pipeline_service import _get_visual_def
 logger = logging.getLogger(__name__)
 
 SCHEDULED_MODE = "SCHEDULED"
+SKIP_ACTIVE_RUN = "ACTIVE_RUN_EXISTS"
+SKIP_STALE_OR_INVALID = "STALE_OR_INVALID"
+SKIP_DUPLICATE = "DUPLICATE_DEDUP_KEY"
 
 
 @dataclass
@@ -78,12 +82,7 @@ def _dedup_key(activation_id: str, scheduled_for: datetime) -> str:
 
 
 def _iso_for_request(dt: datetime | None) -> str | None:
-    if dt is None:
-        return None
-    text = dt.isoformat()
-    if text and not text.endswith("Z") and "+" not in text and "T" in text:
-        return f"{text}Z"
-    return text
+    return _iso(dt)
 
 
 async def _pipeline_has_active_run(db: AsyncSession, pipeline_id: str) -> bool:
@@ -113,6 +112,33 @@ async def _advance_next_due(
     await db.flush()
 
 
+def _record_skip(
+    activation: VisualPipelineScheduleActivation,
+    *,
+    worker_id: str,
+    scheduled_for: datetime,
+    reason: str,
+    increment_missed: bool,
+    now: datetime,
+) -> None:
+    activation.last_due_at = scheduled_for
+    activation.last_skip_at = now
+    activation.last_skip_reason = reason
+    if increment_missed:
+        activation.missed_count = int(activation.missed_count or 0) + 1
+    meta = dict(activation.metadata_json or {})
+    meta["last_worker_result"] = {
+        "worker_id": worker_id,
+        "checked_at": _iso(now),
+        "action": reason,
+        "scheduled_for": _iso(scheduled_for),
+        "next_due_at": _iso(activation.next_due_at),
+        "missed_count": int(activation.missed_count or 0),
+    }
+    activation.metadata_json = meta
+    activation.updated_at = now
+
+
 async def enqueue_due_activation(
     db: AsyncSession,
     activation: VisualPipelineScheduleActivation,
@@ -120,14 +146,7 @@ async def enqueue_due_activation(
     worker_id: str,
     now: datetime | None = None,
 ) -> dict[str, Any]:
-    """Enqueue one SCHEDULED PENDING run for a due ACTIVE activation.
-
-    Policies:
-    - never calls run_load
-    - R10 active_yn remains false
-    - if pipeline has PENDING/RUNNING → skip + advance next_due (missed slot)
-    - duplicate dedup_key → skip + advance next_due
-    """
+    """Enqueue one SCHEDULED PENDING run for a due ACTIVE activation."""
     now = now or utc_now()
     result: dict[str, Any] = {
         "activation_id": activation.activation_id,
@@ -135,6 +154,7 @@ async def enqueue_due_activation(
         "status": "skipped",
         "reason": None,
         "visual_run_id": None,
+        "updated_next_due": False,
     }
 
     if activation.activation_status != STATUS_ACTIVE:
@@ -154,7 +174,19 @@ async def enqueue_due_activation(
 
     if (defn.current_sync_status or "") != SYNC_IN_SYNC:
         result["reason"] = "pipeline_stale"
-        await _maybe_advance_with_schedule(db, activation, from_time=scheduled_for)
+        schedule = await _load_schedule(db, activation.r10_schedule_id)
+        if schedule is not None:
+            await _advance_next_due(db, activation, schedule, from_time=scheduled_for)
+            _record_skip(
+                activation,
+                worker_id=worker_id,
+                scheduled_for=scheduled_for,
+                reason=SKIP_STALE_OR_INVALID,
+                increment_missed=True,
+                now=now,
+            )
+            await db.commit()
+            result["updated_next_due"] = True
         return result
 
     mat_row = (
@@ -168,26 +200,42 @@ async def enqueue_due_activation(
     ).scalar_one_or_none()
     if mat_row is None or str(mat_row.materialization_status or "").upper() != "SUCCESS":
         result["reason"] = "materialization_invalid"
-        await _maybe_advance_with_schedule(db, activation, from_time=scheduled_for)
+        schedule = await _load_schedule(db, activation.r10_schedule_id)
+        if schedule is not None:
+            await _advance_next_due(db, activation, schedule, from_time=scheduled_for)
+            _record_skip(
+                activation,
+                worker_id=worker_id,
+                scheduled_for=scheduled_for,
+                reason=SKIP_STALE_OR_INVALID,
+                increment_missed=True,
+                now=now,
+            )
+            await db.commit()
+            result["updated_next_due"] = True
         return result
 
-    schedule = (
-        await db.execute(
-            select(DataLoadSchedule).where(DataLoadSchedule.schedule_id == activation.r10_schedule_id)
-        )
-    ).scalar_one_or_none()
+    schedule = await _load_schedule(db, activation.r10_schedule_id)
     if schedule is None:
         result["reason"] = "r10_schedule_missing"
         return result
 
-    # Never rely on R10 due path.
     if schedule.active_yn:
         schedule.active_yn = False
 
     if await _pipeline_has_active_run(db, activation.pipeline_id):
         result["reason"] = "skipped_active_run"
         await _advance_next_due(db, activation, schedule, from_time=scheduled_for)
+        _record_skip(
+            activation,
+            worker_id=worker_id,
+            scheduled_for=scheduled_for,
+            reason=SKIP_ACTIVE_RUN,
+            increment_missed=True,
+            now=now,
+        )
         await db.commit()
+        result["updated_next_due"] = True
         return result
 
     objects = dict(mat_row.objects_json or {})
@@ -235,15 +283,26 @@ async def enqueue_due_activation(
     db.add(run_row)
 
     activation.last_triggered_at = now
+    activation.last_due_at = scheduled_for
     activation.trigger_count = int(activation.trigger_count or 0) + 1
     await _advance_next_due(db, activation, schedule, from_time=scheduled_for)
+    meta = dict(activation.metadata_json or {})
+    meta["last_worker_result"] = {
+        "worker_id": worker_id,
+        "checked_at": _iso(now),
+        "action": "enqueued",
+        "scheduled_for": _iso(scheduled_for),
+        "next_due_at": _iso(activation.next_due_at),
+        "visual_run_id": run_row.visual_run_id,
+    }
+    activation.metadata_json = meta
+    activation.updated_at = now
 
     try:
         await db.flush()
         await db.commit()
     except IntegrityError:
         await db.rollback()
-        # Reload activation and advance due to avoid duplicate-loop.
         activation = (
             await db.execute(
                 select(VisualPipelineScheduleActivation).where(
@@ -251,20 +310,26 @@ async def enqueue_due_activation(
                 )
             )
         ).scalar_one()
-        schedule = (
-            await db.execute(
-                select(DataLoadSchedule).where(DataLoadSchedule.schedule_id == activation.r10_schedule_id)
-            )
-        ).scalar_one_or_none()
+        schedule = await _load_schedule(db, activation.r10_schedule_id)
         if schedule is not None:
             await _advance_next_due(db, activation, schedule, from_time=scheduled_for)
+            _record_skip(
+                activation,
+                worker_id=worker_id,
+                scheduled_for=scheduled_for,
+                reason=SKIP_DUPLICATE,
+                increment_missed=False,
+                now=now,
+            )
             await db.commit()
+            result["updated_next_due"] = True
         result["reason"] = "duplicate_dedup"
         return result
 
     result["status"] = "enqueued"
     result["visual_run_id"] = run_row.visual_run_id
     result["reason"] = None
+    result["updated_next_due"] = True
     logger.info(
         "enqueued scheduled run activation_id=%s visual_run_id=%s scheduled_for=%s worker_id=%s",
         activation.activation_id,
@@ -275,21 +340,10 @@ async def enqueue_due_activation(
     return result
 
 
-async def _maybe_advance_with_schedule(
-    db: AsyncSession,
-    activation: VisualPipelineScheduleActivation,
-    *,
-    from_time: datetime,
-) -> None:
-    schedule = (
-        await db.execute(
-            select(DataLoadSchedule).where(DataLoadSchedule.schedule_id == activation.r10_schedule_id)
-        )
+async def _load_schedule(db: AsyncSession, schedule_id: str) -> DataLoadSchedule | None:
+    return (
+        await db.execute(select(DataLoadSchedule).where(DataLoadSchedule.schedule_id == schedule_id))
     ).scalar_one_or_none()
-    if schedule is None:
-        return
-    await _advance_next_due(db, activation, schedule, from_time=from_time)
-    await db.commit()
 
 
 async def find_due_activations(
@@ -314,21 +368,50 @@ async def find_due_activations(
     return list(rows)
 
 
+def _empty_summary(worker_id: str) -> dict[str, Any]:
+    return {
+        "worker_id": worker_id,
+        "checked": 0,
+        "scanned": 0,
+        "enqueued": 0,
+        "skipped": 0,
+        "skipped_active_run": 0,
+        "skipped_duplicate": 0,
+        "skipped_paused": 0,
+        "skipped_invalid": 0,
+        "updated_next_due": 0,
+        "errors": 0,
+        "items": [],
+    }
+
+
+def _bump_summary(summary: dict[str, Any], item: dict[str, Any]) -> None:
+    reason = item.get("reason")
+    if item.get("status") == "enqueued":
+        summary["enqueued"] += 1
+    else:
+        summary["skipped"] += 1
+        if reason == "skipped_active_run":
+            summary["skipped_active_run"] += 1
+        elif reason == "duplicate_dedup":
+            summary["skipped_duplicate"] += 1
+        elif reason in {"pipeline_stale", "materialization_invalid", "r10_schedule_missing", "pipeline_missing"}:
+            summary["skipped_invalid"] += 1
+        elif reason == "not_active":
+            summary["skipped_paused"] += 1
+    if item.get("updated_next_due"):
+        summary["updated_next_due"] += 1
+
+
 async def run_schedule_worker_once(
     *,
     worker_id: str,
     batch_size: int = 10,
 ) -> dict[str, Any]:
-    summary: dict[str, Any] = {
-        "worker_id": worker_id,
-        "scanned": 0,
-        "enqueued": 0,
-        "skipped": 0,
-        "errors": 0,
-        "items": [],
-    }
+    summary = _empty_summary(worker_id)
     async with async_session() as db:
         due_rows = await find_due_activations(db, batch_size=batch_size)
+        summary["checked"] = len(due_rows)
         summary["scanned"] = len(due_rows)
         activation_ids = [r.activation_id for r in due_rows]
 
@@ -347,10 +430,14 @@ async def run_schedule_worker_once(
                     continue
                 item = await enqueue_due_activation(db, activation, worker_id=worker_id)
                 summary["items"].append(item)
-                if item.get("status") == "enqueued":
-                    summary["enqueued"] += 1
-                else:
-                    summary["skipped"] += 1
+                _bump_summary(summary, item)
+                logger.info(
+                    "schedule action activation_id=%s action=%s scheduled_for=%s next_due=%s",
+                    item.get("activation_id"),
+                    item.get("reason") or item.get("status"),
+                    (item.get("activation_id") and None),
+                    None,
+                )
         except Exception:
             logger.exception("schedule worker failed activation_id=%s", activation_id)
             summary["errors"] += 1
@@ -373,10 +460,14 @@ async def run_schedule_worker_loop(
             break
         summary = await run_schedule_worker_once(worker_id=worker_id, batch_size=batch_size)
         logger.info(
-            "schedule cycle scanned=%s enqueued=%s skipped=%s errors=%s",
-            summary["scanned"],
+            "schedule cycle checked=%s enqueued=%s skipped_active_run=%s skipped_duplicate=%s "
+            "skipped_invalid=%s updated_next_due=%s errors=%s",
+            summary["checked"],
             summary["enqueued"],
-            summary["skipped"],
+            summary["skipped_active_run"],
+            summary["skipped_duplicate"],
+            summary["skipped_invalid"],
+            summary["updated_next_due"],
             summary["errors"],
         )
         iterations += 1
