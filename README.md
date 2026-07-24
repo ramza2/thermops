@@ -1567,7 +1567,31 @@ cd frontend && node scripts/check-visual-pipeline-studio.mjs
 - **Studio:** Activation Panel Pause/Resume + skip/missed · Run Panel PENDING cancel · RUNNING 취소 미지원 안내
 - **경계:** R10 `run-due-worker` 미연결 · R10 `active_yn=false` · Redis/Celery/package 변경 없음
 - **테스트:** `python scripts/test_visual_pipeline_schedule_activation.py` · `python scripts/test_visual_pipeline_schedule_worker.py` · `python scripts/test_visual_pipeline_run_cancel.py` (quick **미포함**)
-- **다음:** R11-S7-10 (별도 승인).
+- **다음:** R11-S7-10 운영 배포 안정화 (아래 섹션).
+
+### R11-S7-10 운영 배포 안정화 PoC
+
+- **범위:** read-only ops summary/stuck API · stuck mark-failed CLI · env/README 운영 절차. retry / RUNNING interrupt / audit / catch-up / FE ops UI / mark-failed HTTP API 제외.
+- **API (read-only):**
+  - `GET /api/v1/visual-pipeline-ops/summary` — run/activation counts · worker_config · stuck_summary · activity_hints · recent_failures
+  - `GET /api/v1/visual-pipeline-ops/stuck-runs?pending_age_seconds=600&running_lock_grace_seconds=0`
+  - stuck 기준: `PENDING_TOO_OLD` · `RUNNING_LOCK_EXPIRED` (`locked_until` null RUNNING은 apply 제외)
+- **CLI:** `python scripts/manage_visual_pipeline_ops.py summary|stuck-runs|mark-failed`
+  - `mark-failed` 기본 dry-run · `--apply` 시에만 FAILED
+  - activation / sync / materialization **불변**
+- **DB:** migration 없음 (S7-6/8/9 컬럼 재사용)
+- **Env:** local=`.env.example`(background_tasks) · deploy=`.env.deploy.example`(worker + lock TTL 300 권장)
+- **배포 절차:**
+  1. `git pull` · env 확인(`THERMOOPS_VP_RUN_EXECUTOR=worker` 등)
+  2. `python3 scripts/apply_dev_migrations.py`
+  3. `docker compose -f docker-compose.traefik.yml --env-file .env.deploy up -d --build backend frontend vp-run-worker vp-schedule-worker`
+  4. `docker compose ... ps` · `logs -f backend|vp-run-worker|vp-schedule-worker`
+  5. `curl .../visual-pipeline-ops/summary` · stuck dry-run → 필요 시 `--apply`
+  6. smoke: `test_visual_pipeline_ops.py` · schedule/run worker · Studio E2E
+- **장애 시:** worker 미기동 → PENDING 적체 · lock 만료 → stuck RUNNING · schedule due 없음 → activation PAUSED/INACTIVE/`active_yn`/`vp-schedule-worker` 확인
+- **Known limitation:** no retry · no running interrupt · no audit/notification · no catch-up · no process liveness probe · mark-failed는 CLI만
+- **테스트:** `python scripts/test_visual_pipeline_ops.py` (quick **미포함**)
+- **다음:** R11-S7-11 (별도 승인; Admin UI/Audit 후보).
 
 ## 설계 문서 참조
 

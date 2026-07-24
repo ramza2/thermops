@@ -27,6 +27,7 @@ from app.api.v1 import (
     standard_dataset,
     system,
     training,
+    visual_pipeline_ops,
     visual_pipelines,
 )
 
@@ -72,6 +73,7 @@ app.include_router(run_due_worker.router, prefix=api_prefix)
 app.include_router(pipeline.router, prefix=api_prefix)
 app.include_router(pipeline_builder.router, prefix=api_prefix)
 app.include_router(visual_pipelines.router, prefix=api_prefix)
+app.include_router(visual_pipeline_ops.router, prefix=api_prefix)
 app.include_router(system.router, prefix=api_prefix)
 
 
