@@ -1591,10 +1591,25 @@ cd frontend && node scripts/check-visual-pipeline-studio.mjs
 - **장애 시:** worker 미기동 → PENDING 적체 · lock 만료 → stuck RUNNING · schedule due 없음 → activation PAUSED/INACTIVE/`active_yn`/`vp-schedule-worker` 확인
 - **Known limitation:** no retry · no running interrupt · no audit/notification · no catch-up · no process liveness probe · mark-failed는 CLI만
 - **테스트:** `python scripts/test_visual_pipeline_ops.py` (quick **미포함**)
-- **다음:** R11-S7-11 (별도 승인; Admin UI/Audit 후보).
+- **다음:** R11-S7-11 Admin UI / Audit 설계 (아래 섹션).
+
+### R11-S7-11 Admin UI / Audit 설계
+
+- **범위:** docs-only — Admin Ops UI · Audit Log · mark-failed 확장 판단 · Auth 전 mock 권한 경계. code/DB/API/FE/package 변경 없음.
+- **문서:** [`docs/md/THERMOps_R11-S7-11_Admin_UI_Audit_설계.md`](docs/md/THERMOps_R11-S7-11_Admin_UI_Audit_설계.md)
+- **Admin UI:** 별도 read-only Ops Page 권장 (`/visual-pipeline-ops`) · Studio Run/Activation UX 유지 · S7-12 PoC는 **read-only**
+- **mark-failed:** S7-12에서도 **CLI-only** 유지 · HTTP/UI는 Audit/권한 준비 후 **S7-14** 검토
+- **Audit:** `tb_visual_pipeline_audit_log` 후보 · 최소 이벤트(activate/pause/resume/deactivate/cancel/ops mark-failed/skip) · secret redaction · S7-13 fail-open
+- **권한:** `VITE_USER_ROLE=ADMIN` mock 메뉴만 · backend Admin 검증은 Auth 후속 · **운영 권한 아님**
+- **다음:**
+  - R11-S7-12 Admin Ops UI PoC (별도 승인)
+  - R11-S7-13 Audit Log PoC (별도 승인)
+  - R11-S7-14 Admin Action PoC (별도 승인)
+  - R11-S8 Run History / Progress / Retry 설계
 
 ## 설계 문서 참조
 
+- `docs/md/THERMOps_R11-S7-11_Admin_UI_Audit_설계.md`
 - `docs/md/THERMOps_R11-S7-7_Schedule_Activation_설계.md`
 - `docs/md/THERMOps_R11-S7-5_Option_C_Run_Worker_검토.md`
 - `docs/md/THERMOps_R11-S7-2_Background_Run_전환_검토.md`
