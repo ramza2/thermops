@@ -5,8 +5,14 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { APP_TAGLINE, MENU_GROUPS } from "@/constants/displayLabels";
+import { useRole } from "@/hooks/useRole";
 
-const MENU = [
+type MenuChild = { label: string; path: string; adminOnly?: boolean };
+type MenuItem =
+  | { label: string; path: string; icon: typeof LayoutDashboard; children?: undefined }
+  | { label: string; icon: typeof LayoutDashboard; children: MenuChild[]; path?: undefined };
+
+const MENU: MenuItem[] = [
   { label: "대시보드", path: "/dashboard", icon: LayoutDashboard },
   {
     label: MENU_GROUPS.dataPrep, icon: Database, children: [
@@ -46,6 +52,7 @@ const MENU = [
       { label: "재학습 후보", path: "/ops/retraining-candidates" },
       { label: "데이터 적재 일정", path: "/data-load-schedules" },
       { label: "알림 / 장애 통보", path: "/notifications" },
+      { label: "Visual Pipeline 운영", path: "/visual-pipeline-ops", adminOnly: true },
     ],
   },
   {
@@ -61,6 +68,8 @@ const MENU = [
 ];
 
 export function Sidebar() {
+  const { canViewVpOps } = useRole();
+  // Default-open groups: keep 운영 모니터링 closed so check-pages can toggle-open it.
   const [open, setOpen] = useState<Record<string, boolean>>({
     [MENU_GROUPS.dataPrep]: true,
     [MENU_GROUPS.modelPredict]: true,
@@ -87,6 +96,7 @@ export function Sidebar() {
           }
           const Icon = item.icon;
           const isOpen = open[item.label];
+          const children = item.children.filter((c) => !c.adminOnly || canViewVpOps);
           return (
             <div key={item.label}>
               <button onClick={() => setOpen((o) => ({ ...o, [item.label]: !o[item.label] }))}
@@ -95,10 +105,12 @@ export function Sidebar() {
                 <span className="flex-1 text-left">{item.label}</span>
                 {isOpen ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
               </button>
-              {isOpen && item.children.map((c) => (
+              {isOpen && children.map((c) => (
                 <NavLink key={c.path} to={c.path} className={({ isActive }) =>
                   `block pl-10 pr-4 py-1.5 text-xs ${isActive ? "text-blue-400 bg-sidebar-accent/50" : "text-slate-500 hover:text-slate-300"}`
-                }>{c.label}</NavLink>
+                }>
+                  {c.label}
+                </NavLink>
               ))}
             </div>
           );

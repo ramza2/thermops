@@ -1602,10 +1602,21 @@ cd frontend && node scripts/check-visual-pipeline-studio.mjs
 - **Audit:** `tb_visual_pipeline_audit_log` 후보 · 최소 이벤트(activate/pause/resume/deactivate/cancel/ops mark-failed/skip) · secret redaction · S7-13 fail-open
 - **권한:** `VITE_USER_ROLE=ADMIN` mock 메뉴만 · backend Admin 검증은 Auth 후속 · **운영 권한 아님**
 - **다음:**
-  - R11-S7-12 Admin Ops UI PoC (별도 승인)
+  - R11-S7-12 Admin Ops UI PoC (아래 섹션)
   - R11-S7-13 Audit Log PoC (별도 승인)
   - R11-S7-14 Admin Action PoC (별도 승인)
   - R11-S8 Run History / Progress / Retry 설계
+
+### R11-S7-12 Admin Ops UI PoC
+
+- **범위:** 별도 read-only Admin Ops Page · S7-10 ops API 소비. mark-failed UI/API · Audit · Studio UX 변경 · Backend 권한 · package 변경 없음.
+- **Route:** `/visual-pipeline-ops` · 메뉴: 운영 모니터링 → **Visual Pipeline 운영** (`VITE_USER_ROLE=ADMIN`만)
+- **표시:** Run/Activation counts · Stuck summary · Worker config · Activity hints · Stuck Runs · Recent Failures · Manual Refresh
+- **Read-only:** `READ ONLY` / `Admin mock role` badge · CLI `manage_visual_pipeline_ops.py mark-failed` 안내만 · **액션 버튼 없음**
+- **비ADMIN:** redirect 없이 admin-required 안내 · ops API 호출 차단
+- **주의:** `VITE_USER_ROLE`은 Frontend **mock 표시 제어**이며 운영 권한 체계가 아니다.
+- **테스트:** `cd frontend && npm run build` · `node scripts/check-pages.mjs` · `node scripts/check-visual-pipeline-ops.mjs`
+- **다음:** R11-S7-13 Audit Log PoC (별도 승인)
 
 ## 설계 문서 참조
 

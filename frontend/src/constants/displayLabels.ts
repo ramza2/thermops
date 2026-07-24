@@ -76,6 +76,7 @@ export const PAGE_TITLES = {
   predictionErrors: "예측 오차 분석",
   pipelineBuilder: "작업 흐름 구성",
   visualPipelineStudio: "Visual Pipeline Studio",
+  visualPipelineOps: "Visual Pipeline 운영 현황",
   pipelineRuns: "작업 실행 이력",
   modelMonitoring: "성능 모니터링",
   driftReports: "데이터 변화 리포트",
@@ -109,6 +110,8 @@ export const PAGE_DESCRIPTIONS = {
   predictionErrors: "예측값과 실제값을 비교하여 오차를 분석합니다.",
   pipelineBuilder: "데이터 적재, 변수 생성, 모델 학습, 예측 등의 작업 순서를 구성합니다.",
   visualPipelineStudio: "REST API 데이터 적재 파이프라인을 노드와 연결선으로 구성합니다.",
+  visualPipelineOps:
+    "Visual Pipeline Run, Schedule Activation, Worker 상태를 조회하는 read-only 운영 화면입니다. 정리 작업은 CLI manage_visual_pipeline_ops.py를 사용합니다.",
   pipelineRuns: "작업 흐름이나 개별 작업이 언제 실행되었고 성공했는지 확인합니다.",
   modelMonitoring: "운영 중인 모델의 성능 지표 추이를 모니터링합니다.",
   driftReports: "학습 당시 데이터와 최근 데이터의 분포 차이를 확인합니다.",

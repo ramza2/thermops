@@ -21,6 +21,8 @@ export function useRole() {
   const canEdit = MOCK_ROLE !== "VIEWER";
   const canDelete = MOCK_ROLE === "ADMIN";
   const canRunPipeline = MOCK_ROLE !== "VIEWER";
+  /** Admin Ops UI (R11-S7-12) — mock menu/page gate only, not real auth */
+  const canViewVpOps = MOCK_ROLE === "ADMIN";
 
   return {
     /** Mock 권한값 (실제 사용자 역할 아님) */
@@ -28,5 +30,6 @@ export function useRole() {
     canEdit,
     canDelete,
     canRunPipeline,
+    canViewVpOps,
   };
 }

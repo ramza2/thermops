@@ -25,6 +25,7 @@ const PATHS = [
   "/data-load-schedules",
   "/notifications",
   "/visual-pipelines",
+  "/visual-pipeline-ops",
   "/system/configs",
 ];
 
@@ -92,6 +93,14 @@ for (const path of PATHS) {
     await page.getByRole("button", { name: "새 Visual Pipeline" }).first().waitFor({ state: "visible", timeout: 30000 });
     if (!(await hasEmptyOrTable(/아직 생성된 Visual Pipeline이 없습니다/))) {
       errors.push(`${path}: empty message or table rows expected`);
+    }
+  } else if (path === "/visual-pipeline-ops") {
+    await waitMainHeading("Visual Pipeline 운영 현황");
+    const hasOps =
+      (await page.getByTestId("visual-pipeline-ops-read-only-notice").count()) > 0 ||
+      (await page.getByTestId("visual-pipeline-ops-admin-required").count()) > 0;
+    if (!hasOps) {
+      errors.push(`${path}: read-only notice or admin-required expected`);
     }
   } else {
     await page.locator("main h1").first().waitFor({ state: "visible", timeout: 60000 });
