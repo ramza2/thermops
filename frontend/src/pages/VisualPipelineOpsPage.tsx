@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { RefreshCw } from "lucide-react";
 import {
+  getVisualPipelineOpsAuditLogs,
   getVisualPipelineOpsStuckRuns,
   getVisualPipelineOpsSummary,
 } from "@/api/visualPipelineOps";
@@ -11,12 +12,26 @@ import { PageHeader } from "@/layouts/MainLayout";
 import { useRole } from "@/hooks/useRole";
 import { PAGE_DESCRIPTIONS, PAGE_TITLES } from "@/constants/displayLabels";
 import type {
+  VisualPipelineAuditLogListItem,
   VisualPipelineOpsStuckRun,
   VisualPipelineOpsSummary,
 } from "@/types/visualPipelineOps";
 
 const RUN_STATUSES = ["PENDING", "RUNNING", "SUCCESS", "FAILED", "PARTIAL", "CANCELLED"] as const;
 const ACT_STATUSES = ["ACTIVE", "PAUSED", "INACTIVE", "ERROR"] as const;
+
+const AUDIT_EVENT_FILTERS = [
+  "",
+  "SCHEDULE_ACTIVATE",
+  "SCHEDULE_DEACTIVATE",
+  "SCHEDULE_PAUSE",
+  "SCHEDULE_RESUME",
+  "RUN_CANCELLED",
+  "OPS_MARK_FAILED_DRY_RUN",
+  "OPS_MARK_FAILED_APPLY",
+  "RUN_MARK_FAILED_BY_OPS",
+  "SCHEDULE_WORKER_SKIPPED_ACTIVE_RUN",
+] as const;
 
 function fmt(value: string | number | null | undefined): string {
   if (value === null || value === undefined || value === "") return "-";
@@ -63,6 +78,34 @@ export default function VisualPipelineOpsPage() {
   const [summaryError, setSummaryError] = useState<string | null>(null);
   const [stuckError, setStuckError] = useState<string | null>(null);
 
+  const [auditItems, setAuditItems] = useState<VisualPipelineAuditLogListItem[]>([]);
+  const [auditTotal, setAuditTotal] = useState(0);
+  const [auditLoading, setAuditLoading] = useState(false);
+  const [auditError, setAuditError] = useState<string | null>(null);
+  const [auditEventType, setAuditEventType] = useState("");
+
+  const loadAudit = useCallback(async () => {
+    if (!canViewVpOps) return;
+    setAuditLoading(true);
+    setAuditError(null);
+    try {
+      const data = await getVisualPipelineOpsAuditLogs({
+        event_type: auditEventType || undefined,
+        limit: 50,
+      });
+      setAuditItems(data.items ?? []);
+      setAuditTotal(data.total ?? (data.items?.length ?? 0));
+    } catch (err) {
+      setAuditItems([]);
+      setAuditTotal(0);
+      setAuditError(
+        extractApiErrorMessage(err, "Audit logs를 불러오지 못했습니다."),
+      );
+    } finally {
+      setAuditLoading(false);
+    }
+  }, [canViewVpOps, auditEventType]);
+
   const load = useCallback(async () => {
     if (!canViewVpOps) return;
     setLoading(true);
@@ -102,6 +145,10 @@ export default function VisualPipelineOpsPage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    void loadAudit();
+  }, [loadAudit]);
 
   if (!canViewVpOps) {
     return (
@@ -391,6 +438,102 @@ export default function VisualPipelineOpsPage() {
           </section>
         </>
       )}
+
+      <section
+        className="bg-white border border-slate-200 rounded-lg p-4 shadow-sm"
+        data-testid="visual-pipeline-ops-audit-section"
+      >
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+          <div>
+            <h2 className="text-sm font-semibold text-slate-800">Audit Logs</h2>
+            <p className="text-[11px] text-slate-500 mt-0.5">
+              read-only list · detail modal / mark-failed 액션 없음 · total={auditTotal}
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <label className="text-[11px] text-slate-500 flex items-center gap-1.5">
+              event_type
+              <select
+                className="border border-slate-200 rounded px-2 py-1 text-xs font-mono text-slate-700 bg-white"
+                value={auditEventType}
+                onChange={(e) => setAuditEventType(e.target.value)}
+                data-testid="visual-pipeline-ops-audit-event-filter"
+              >
+                {AUDIT_EVENT_FILTERS.map((ev) => (
+                  <option key={ev || "ALL"} value={ev}>
+                    {ev || "(all)"}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <Button
+              variant="secondary"
+              icon={<RefreshCw className={`w-3.5 h-3.5 ${auditLoading ? "animate-spin" : ""}`} />}
+              onClick={() => void loadAudit()}
+              disabled={auditLoading}
+              data-testid="visual-pipeline-ops-audit-refresh-button"
+            >
+              {auditLoading ? "Audit 새로고침…" : "Audit 새로고침"}
+            </Button>
+          </div>
+        </div>
+        {auditError && !auditItems.length ? (
+          <p className="text-xs text-red-600">{auditError}</p>
+        ) : auditLoading && !auditItems.length ? (
+          <p className="text-sm text-slate-500">Audit logs 로딩 중…</p>
+        ) : auditItems.length === 0 ? (
+          <p className="text-sm text-slate-500">표시할 audit log가 없습니다.</p>
+        ) : (
+          <div className="overflow-x-auto" data-testid="visual-pipeline-ops-audit-table">
+            <table className="min-w-full text-xs text-left">
+              <thead className="bg-slate-50 text-slate-500">
+                <tr>
+                  {[
+                    "created_at",
+                    "event_type",
+                    "action_status",
+                    "pipeline_id",
+                    "visual_run_id",
+                    "activation_id",
+                    "actor",
+                    "reason",
+                  ].map((h) => (
+                    <th key={h} className="px-2 py-1.5 font-medium whitespace-nowrap">
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {auditItems.map((row) => (
+                  <tr key={row.audit_id} className="border-t border-slate-100">
+                    <td className="px-2 py-1.5 font-mono whitespace-nowrap">
+                      {fmt(row.created_at)}
+                    </td>
+                    <td className="px-2 py-1.5 font-mono whitespace-nowrap">{row.event_type}</td>
+                    <td className="px-2 py-1.5">{fmt(row.action_status)}</td>
+                    <td className="px-2 py-1.5 font-mono whitespace-nowrap">
+                      {fmt(row.pipeline_id)}
+                    </td>
+                    <td className="px-2 py-1.5 font-mono whitespace-nowrap">
+                      {fmt(row.visual_run_id)}
+                    </td>
+                    <td className="px-2 py-1.5 font-mono whitespace-nowrap">
+                      {fmt(row.activation_id)}
+                    </td>
+                    <td className="px-2 py-1.5 font-mono whitespace-nowrap">
+                      {fmt(row.actor_type)}/{fmt(row.actor_id)}
+                    </td>
+                    <td className="px-2 py-1.5 max-w-xs truncate" title={row.reason ?? ""}>
+                      {fmt(row.reason)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
     </div>
   );
 }

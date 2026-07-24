@@ -378,6 +378,10 @@ MIGRATIONS = [
         "R11-S7-9 schedule/run hardening columns",
         _load_sql("r11s7_schedule_run_hardening.sql"),
     ),
+    (
+        "R11-S7-13 visual pipeline audit log",
+        _load_sql("r11s7_visual_pipeline_audit_log.sql"),
+    ),
 ]
 
 

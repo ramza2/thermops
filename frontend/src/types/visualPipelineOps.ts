@@ -94,3 +94,54 @@ export interface VisualPipelineOpsStuckRunsParams {
   running_lock_grace_seconds?: number;
   limit?: number;
 }
+
+/** R11-S7-13 Audit Log — list item (payload minimized). */
+export type VisualPipelineAuditEventType =
+  | "SCHEDULE_ACTIVATE"
+  | "SCHEDULE_DEACTIVATE"
+  | "SCHEDULE_PAUSE"
+  | "SCHEDULE_RESUME"
+  | "RUN_CANCELLED"
+  | "OPS_MARK_FAILED_DRY_RUN"
+  | "OPS_MARK_FAILED_APPLY"
+  | "RUN_MARK_FAILED_BY_OPS"
+  | "SCHEDULE_WORKER_SKIPPED_ACTIVE_RUN"
+  | string;
+
+export interface VisualPipelineAuditLogListItem {
+  audit_id: string;
+  event_type: VisualPipelineAuditEventType;
+  event_source?: string | null;
+  pipeline_id?: string | null;
+  visual_run_id?: string | null;
+  activation_id?: string | null;
+  actor_type?: string | null;
+  actor_id?: string | null;
+  action_status?: string | null;
+  reason?: string | null;
+  created_at?: string | null;
+}
+
+export interface VisualPipelineAuditLogsResponse {
+  items: VisualPipelineAuditLogListItem[];
+  total: number;
+  criteria?: {
+    event_type?: string | null;
+    pipeline_id?: string | null;
+    visual_run_id?: string | null;
+    activation_id?: string | null;
+    created_from?: string | null;
+    created_to?: string | null;
+    limit?: number;
+  };
+}
+
+export interface VisualPipelineAuditLogsParams {
+  event_type?: string;
+  pipeline_id?: string;
+  visual_run_id?: string;
+  activation_id?: string;
+  created_from?: string;
+  created_to?: string;
+  limit?: number;
+}

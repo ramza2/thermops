@@ -1034,6 +1034,29 @@ class VisualPipelineScheduleActivation(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime)
 
 
+class VisualPipelineAuditLog(Base):
+    """R11-S7-13 Visual Pipeline audit log — independent of source row lifecycle."""
+
+    __tablename__ = "tb_visual_pipeline_audit_log"
+    audit_id: Mapped[str] = mapped_column(String(40), primary_key=True)
+    event_type: Mapped[str] = mapped_column(String(80))
+    event_source: Mapped[str] = mapped_column(String(40))
+    pipeline_id: Mapped[str | None] = mapped_column(String(40))
+    visual_run_id: Mapped[str | None] = mapped_column(String(40))
+    activation_id: Mapped[str | None] = mapped_column(String(40))
+    materialization_result_id: Mapped[str | None] = mapped_column(String(40))
+    r10_schedule_id: Mapped[str | None] = mapped_column(String(40))
+    actor_type: Mapped[str | None] = mapped_column(String(40))
+    actor_id: Mapped[str | None] = mapped_column(String(120))
+    action_status: Mapped[str] = mapped_column(String(30))
+    request_id: Mapped[str | None] = mapped_column(String(120))
+    reason: Mapped[str | None] = mapped_column(String(200))
+    before_json: Mapped[dict | None] = mapped_column(JSONB)
+    after_json: Mapped[dict | None] = mapped_column(JSONB)
+    metadata_json: Mapped[dict | None] = mapped_column(JSONB)
+    created_at: Mapped[datetime] = mapped_column(DateTime)
+
+
 class PipelineRunLink(Base):
     __tablename__ = "tb_pipeline_run_link"
     link_id: Mapped[str] = mapped_column(String(50), primary_key=True)

@@ -27,6 +27,7 @@ from app.models.entities import (
     VisualPipelineRun,
 )
 from app.services.api_connector_service import ApiConnectorError, run_load
+from app.services.visual_pipeline.audit_service import record_run_cancel_event
 from app.services.visual_pipeline.compile_preview_service import calculate_graph_version_hash
 from app.services.visual_pipeline.compile_result_service import SYNC_IN_SYNC
 from app.services.visual_pipeline.visual_pipeline_service import (
@@ -843,6 +844,13 @@ async def cancel_visual_pipeline_run(
     }
     _clear_run_lease(row)
     await db.flush()
+    await record_run_cancel_event(
+        db,
+        pipeline_id=pipeline_id,
+        visual_run_id=visual_run_id,
+        activation_id=row.activation_id,
+        finished_at=now,
+    )
     await db.commit()
     await db.refresh(row)
     return _row_to_response(row)

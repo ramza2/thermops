@@ -1,5 +1,5 @@
 /**
- * R11-S7-12 Visual Pipeline Admin Ops UI smoke.
+ * R11-S7-12/S7-13 Visual Pipeline Admin Ops UI smoke (+ Audit Logs section).
  *
  * Expects:
  *   frontend at CHECK_PAGES_BASE (default http://localhost:5173)
@@ -83,6 +83,22 @@ try {
     const markFailedButtons = await page.getByRole("button", { name: /mark-failed|실패 처리|정리 적용/i }).count();
     if (markFailedButtons > 0) fail("mark-failed / destructive action buttons must not exist");
     console.log("  [ok] no mark-failed action buttons");
+
+    await page.getByTestId("visual-pipeline-ops-audit-section").waitFor({
+      state: "visible",
+      timeout: 30000,
+    });
+    await page.getByTestId("visual-pipeline-ops-audit-event-filter").waitFor({ state: "visible" });
+    await page.getByTestId("visual-pipeline-ops-audit-refresh-button").waitFor({ state: "visible" });
+    const auditTable = page.getByTestId("visual-pipeline-ops-audit-table");
+    const auditEmpty = page.getByText("표시할 audit log가 없습니다.");
+    const auditLoading = page.getByText("Audit logs 로딩 중…");
+    const auditVisible =
+      (await auditTable.count()) > 0 ||
+      (await auditEmpty.count()) > 0 ||
+      (await auditLoading.count()) > 0;
+    if (!auditVisible) fail("audit table, empty message, or loading expected");
+    console.log("  [ok] audit logs section");
 
     await refresh.click();
     await page.waitForTimeout(800);

@@ -22,6 +22,13 @@ from app.models.entities import (
     VisualPipelineScheduleActivation,
 )
 from app.services.schedule_time_service import compute_next_run_at
+from app.services.visual_pipeline.audit_service import (
+    EVENT_SCHEDULE_ACTIVATE,
+    EVENT_SCHEDULE_DEACTIVATE,
+    EVENT_SCHEDULE_PAUSE,
+    EVENT_SCHEDULE_RESUME,
+    record_activation_event,
+)
 from app.services.visual_pipeline.compile_preview_service import calculate_graph_version_hash
 from app.services.visual_pipeline.compile_result_service import SYNC_IN_SYNC
 from app.services.visual_pipeline.visual_pipeline_service import (
@@ -320,6 +327,19 @@ async def activate_schedule(
 
     mat_row.activation = MIRROR_ACTIVE
     await db.flush()
+    await record_activation_event(
+        db,
+        event_type=EVENT_SCHEDULE_ACTIVATE,
+        pipeline_id=pipeline_id,
+        activation_id=activation.activation_id,
+        materialization_result_id=mat_row.materialization_result_id,
+        r10_schedule_id=r10_schedule_id,
+        before_status=None,
+        after_status=STATUS_ACTIVE,
+        before_next_due_at=None,
+        after_next_due_at=next_due,
+        metadata_json={"schedule_type": schedule_type},
+    )
     await db.commit()
     await db.refresh(activation)
     return _row_to_response(activation)
@@ -350,6 +370,8 @@ async def deactivate_schedule(
 
     now = utc_now()
     if row.activation_status != STATUS_INACTIVE:
+        before_status = str(row.activation_status or "")
+        before_next_due = row.next_due_at
         row.activation_status = STATUS_INACTIVE
         row.deactivated_at = now
         row.updated_at = now
@@ -376,6 +398,18 @@ async def deactivate_schedule(
             schedule.active_yn = False
 
         await db.flush()
+        await record_activation_event(
+            db,
+            event_type=EVENT_SCHEDULE_DEACTIVATE,
+            pipeline_id=pipeline_id,
+            activation_id=row.activation_id,
+            materialization_result_id=row.materialization_result_id,
+            r10_schedule_id=row.r10_schedule_id,
+            before_status=before_status,
+            after_status=STATUS_INACTIVE,
+            before_next_due_at=before_next_due,
+            after_next_due_at=row.next_due_at,
+        )
         await db.commit()
         await db.refresh(row)
     return _row_to_response(row)
@@ -403,6 +437,7 @@ async def pause_schedule(
         raise ActivationPreconditionError("SCHEDULE_ACTIVATION_NOT_ACTIVE")
 
     now = utc_now()
+    before_next_due = row.next_due_at
     row.activation_status = STATUS_PAUSED
     row.paused_at = now
     row.updated_at = now
@@ -414,6 +449,19 @@ async def pause_schedule(
         mirror=MIRROR_PAUSED,
     )
     await db.flush()
+    await record_activation_event(
+        db,
+        event_type=EVENT_SCHEDULE_PAUSE,
+        pipeline_id=pipeline_id,
+        activation_id=row.activation_id,
+        materialization_result_id=row.materialization_result_id,
+        r10_schedule_id=row.r10_schedule_id,
+        before_status=STATUS_ACTIVE,
+        after_status=STATUS_PAUSED,
+        before_next_due_at=before_next_due,
+        after_next_due_at=row.next_due_at,
+        paused_at=now,
+    )
     await db.commit()
     await db.refresh(row)
     return _row_to_response(row)
@@ -455,6 +503,7 @@ async def resume_schedule(
     if next_due is None:
         raise ActivationPreconditionError("CRON_MISSING")
 
+    before_next_due = row.next_due_at
     row.activation_status = STATUS_ACTIVE
     row.resumed_at = now
     row.next_due_at = next_due
@@ -474,6 +523,19 @@ async def resume_schedule(
         mirror=MIRROR_ACTIVE,
     )
     await db.flush()
+    await record_activation_event(
+        db,
+        event_type=EVENT_SCHEDULE_RESUME,
+        pipeline_id=pipeline_id,
+        activation_id=row.activation_id,
+        materialization_result_id=row.materialization_result_id,
+        r10_schedule_id=row.r10_schedule_id,
+        before_status=STATUS_PAUSED,
+        after_status=STATUS_ACTIVE,
+        before_next_due_at=before_next_due,
+        after_next_due_at=next_due,
+        resumed_at=now,
+    )
     await db.commit()
     await db.refresh(row)
     return _row_to_response(row)

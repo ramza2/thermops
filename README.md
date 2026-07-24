@@ -1616,7 +1616,20 @@ cd frontend && node scripts/check-visual-pipeline-studio.mjs
 - **비ADMIN:** redirect 없이 admin-required 안내 · ops API 호출 차단
 - **주의:** `VITE_USER_ROLE`은 Frontend **mock 표시 제어**이며 운영 권한 체계가 아니다.
 - **테스트:** `cd frontend && npm run build` · `node scripts/check-pages.mjs` · `node scripts/check-visual-pipeline-ops.mjs`
-- **다음:** R11-S7-13 Audit Log PoC (별도 승인)
+- **다음:** R11-S7-13 Audit Log PoC (아래 섹션)
+
+### R11-S7-13 Audit Log PoC
+
+- **범위:** `tb_visual_pipeline_audit_log` · audit_service(fail-open) · 최소 이벤트 기록 · audit read API · Admin Ops Audit list section. mark-failed HTTP/UI · Admin Action · Auth · fail-close · Studio UX · package 변경 없음.
+- **DB:** `scripts/r11s7_visual_pipeline_audit_log.sql` · `01_schema.sql` 반영 · `apply_dev_migrations.py` 등록 · **FK 없음**(audit 독립성) · idempotent
+- **이벤트 (상태 변경 시에만):** `SCHEDULE_ACTIVATE|DEACTIVATE|PAUSE|RESUME` · `RUN_CANCELLED`(PENDING→CANCELLED만) · `OPS_MARK_FAILED_DRY_RUN` · `OPS_MARK_FAILED_APPLY` + `RUN_MARK_FAILED_BY_OPS` · `SCHEDULE_WORKER_SKIPPED_ACTIVE_RUN`(ACTIVE_RUN_EXISTS만)
+- **정책:** idempotent no-op / CANCELLED·409 cancel / STALE·DUPLICATE skip → audit 제외 · dry-run도 audit row 기록 · secret key recursive redaction · request/result JSON 전체 복사 금지 · before/after/metadata는 최소 상태값
+- **Actor:** API=`USER/mock_admin` · CLI=`CLI/cli` · WORKER=`WORKER/{worker_id}` · SYSTEM=`SYSTEM/system`
+- **API:** `GET /api/v1/visual-pipeline-ops/audit-logs` · `GET .../audit-logs/{audit_id}` · list는 JSON payload 최소화
+- **UI:** `/visual-pipeline-ops` 하단 Audit Logs(read-only list · event_type filter · Audit 새로고침) · detail modal/mark-failed 버튼 없음 · ADMIN mock만 로드
+- **Fail-open:** audit write 실패 → warning log 후 main action 계속
+- **테스트:** `python scripts/test_visual_pipeline_audit_log.py` · `python scripts/test_visual_pipeline_ops.py` · FE `npm run build` · `node scripts/check-visual-pipeline-ops.mjs` (quick **미포함**)
+- **다음:** R11-S7-14 Admin Action PoC (별도 승인)
 
 ## 설계 문서 참조
 

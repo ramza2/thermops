@@ -15,6 +15,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import Settings, get_settings
 from app.core.time import utc_now
 from app.models.entities import VisualPipelineRun, VisualPipelineScheduleActivation
+from app.services.visual_pipeline.audit_service import (
+    record_ops_mark_failed_batch_event,
+    record_ops_mark_failed_run_event,
+)
 from app.services.visual_pipeline.manual_run_service import (
     _clear_run_lease,
     _iso,
@@ -359,7 +363,17 @@ async def mark_stuck_runs_failed(
         "updated": [],
         "updated_count": 0,
     }
-    if not apply or not targets:
+
+    if not apply:
+        await record_ops_mark_failed_batch_event(
+            db,
+            apply=False,
+            reason=reason,
+            criteria=stuck["criteria"],
+            target_count=len(targets),
+            changed_count=0,
+        )
+        await db.commit()
         return result
 
     updated: list[dict[str, Any]] = []
@@ -382,11 +396,26 @@ async def mark_stuck_runs_failed(
                 continue
             if row.locked_until is None:
                 continue
+        before_locked_until = row.locked_until
+        before_heartbeat_at = row.heartbeat_at
         _apply_mark_failed(
             row,
             stuck_reason=str(item["reason"]),
             reason=reason,
             now=now,
+        )
+        await record_ops_mark_failed_run_event(
+            db,
+            pipeline_id=row.pipeline_id,
+            visual_run_id=row.visual_run_id,
+            activation_id=row.activation_id,
+            stuck_reason=str(item["reason"]),
+            reason=reason,
+            before_status=status,
+            before_locked_until=before_locked_until,
+            before_heartbeat_at=before_heartbeat_at,
+            finished_at=now,
+            error_message=row.error_message,
         )
         updated.append(
             {
@@ -398,8 +427,15 @@ async def mark_stuck_runs_failed(
             }
         )
 
-    if updated:
-        await db.commit()
+    await record_ops_mark_failed_batch_event(
+        db,
+        apply=True,
+        reason=reason,
+        criteria=stuck["criteria"],
+        target_count=len(targets),
+        changed_count=len(updated),
+    )
+    await db.commit()
     result["updated"] = updated
     result["updated_count"] = len(updated)
     return result

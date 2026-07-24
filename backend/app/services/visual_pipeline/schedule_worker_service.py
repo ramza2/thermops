@@ -33,6 +33,7 @@ from app.services.visual_pipeline.manual_run_service import (
     EXECUTOR_WORKER,
     _new_visual_run_id,
 )
+from app.services.visual_pipeline.audit_service import record_schedule_worker_skip_event
 from app.services.visual_pipeline.schedule_activation_service import (
     DEFAULT_TZ,
     STATUS_ACTIVE,
@@ -225,6 +226,8 @@ async def enqueue_due_activation(
 
     if await _pipeline_has_active_run(db, activation.pipeline_id):
         result["reason"] = "skipped_active_run"
+        before_missed = int(activation.missed_count or 0)
+        before_next_due = activation.next_due_at
         await _advance_next_due(db, activation, schedule, from_time=scheduled_for)
         _record_skip(
             activation,
@@ -233,6 +236,19 @@ async def enqueue_due_activation(
             reason=SKIP_ACTIVE_RUN,
             increment_missed=True,
             now=now,
+        )
+        await record_schedule_worker_skip_event(
+            db,
+            worker_id=worker_id,
+            pipeline_id=activation.pipeline_id,
+            activation_id=activation.activation_id,
+            r10_schedule_id=activation.r10_schedule_id,
+            scheduled_for=scheduled_for,
+            before_missed_count=before_missed,
+            after_missed_count=int(activation.missed_count or 0),
+            before_next_due_at=before_next_due,
+            after_next_due_at=activation.next_due_at,
+            last_skip_at=now,
         )
         await db.commit()
         result["updated_next_due"] = True
