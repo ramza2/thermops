@@ -74,6 +74,10 @@ class Settings(BaseSettings):
     vp_schedule_worker_log_level: str = Field(
         default="INFO", validation_alias="THERMOOPS_VP_SCHEDULE_WORKER_LOG_LEVEL"
     )
+    # R11-S7-14 Admin Action PoC (not Auth — feature exposure only)
+    vp_admin_actions_enabled: bool = Field(
+        default=False, validation_alias="THERMOOPS_VP_ADMIN_ACTIONS_ENABLED"
+    )
 
     @property
     def cors_origin_list(self) -> list[str]:

@@ -1629,7 +1629,27 @@ cd frontend && node scripts/check-visual-pipeline-studio.mjs
 - **UI:** `/visual-pipeline-ops` 하단 Audit Logs(read-only list · event_type filter · Audit 새로고침) · detail modal/mark-failed 버튼 없음 · ADMIN mock만 로드
 - **Fail-open:** audit write 실패 → warning log 후 main action 계속
 - **테스트:** `python scripts/test_visual_pipeline_audit_log.py` · `python scripts/test_visual_pipeline_ops.py` · FE `npm run build` · `node scripts/check-visual-pipeline-ops.mjs` (quick **미포함**)
-- **다음:** R11-S7-14 Admin Action PoC (별도 승인)
+- **다음:** R11-S7-14 Admin Action PoC (아래 섹션)
+
+### R11-S7-14 Admin mark-failed Action PoC
+
+- **범위:** stuck run 단건 mark-failed Admin API/UI · strong confirm · audit required fail-close. Auth/ACL · batch · retry · RUNNING interrupt · Studio UX · package 변경 없음.
+- **API:** `POST /api/v1/visual-pipeline-ops/stuck-runs/{visual_run_id}/mark-failed`
+  - body: `reason`(5~200) · `confirm_visual_run_id`(path와 일치) · optional thresholds
+  - codes: `VP_ADMIN_ACTIONS_DISABLED`(409) · `RUN_MARK_FAILED_CONFIRM_MISMATCH`(400) · `RUN_MARK_FAILED_NOT_ELIGIBLE`(409) · `RUN_MARK_FAILED_AUDIT_REQUIRED_FAILED`(409)
+- **Feature flag:** `THERMOOPS_VP_ADMIN_ACTIONS_ENABLED` (기본 false) — Admin HTTP만 제어. CLI apply는 flag 비연동.
+- **Fail-close:** mark-failed apply는 CLI/API/UI 모두 audit 성공 후에만 `run_status=FAILED`. audit 실패 시 rollback · run 변경 금지. (activate/cancel/skip/dry-run은 fail-open 유지)
+- **CLI:** `mark-failed --apply` per-run fail-close · `audit_failed_count` / `failed_ids` 요약 · batch `OPS_MARK_FAILED_APPLY`는 fail-open 요약
+- **UI:** `/visual-pipeline-ops` Stuck table 행별 `실패 처리` · confirm modal(Run ID 재입력 + reason) · 성공 후 summary/stuck/audit 재조회
+- **주의:**
+  ```text
+  S7-14 Admin Action은 PoC이며 실제 운영 권한 체계가 아니다.
+  mark-failed apply는 audit 기록 성공 시에만 run 상태를 FAILED로 변경한다.
+  THERMOOPS_VP_ADMIN_ACTIONS_ENABLED는 기능 노출 안전장치일 뿐 Auth를 대체하지 않는다.
+  ```
+- **제외:** batch multi-select · pause/resume/deactivate/cancel/retry · Auth · notification · R10 due-worker/`active_yn`
+- **테스트:** `python scripts/test_visual_pipeline_admin_action.py` · audit/ops/schedule/run/manual/materialization · `npm run build` · `check-pages.mjs` · `check-visual-pipeline-ops.mjs` · quick 9/9
+- **다음:** R11-S8 Run History / Progress / Retry 설계 또는 R11-S7 마감 정리
 
 ## 설계 문서 참조
 

@@ -4,9 +4,12 @@ import {
   getVisualPipelineOpsAuditLogs,
   getVisualPipelineOpsStuckRuns,
   getVisualPipelineOpsSummary,
+  markFailedErrorMessage,
+  markVisualPipelineStuckRunFailed,
 } from "@/api/visualPipelineOps";
 import { extractApiErrorMessage } from "@/api/client";
 import { Button } from "@/components/Button";
+import { Modal } from "@/components/Modal";
 import { LoadingState, ErrorState } from "@/components/Pagination";
 import { PageHeader } from "@/layouts/MainLayout";
 import { useRole } from "@/hooks/useRole";
@@ -84,6 +87,13 @@ export default function VisualPipelineOpsPage() {
   const [auditError, setAuditError] = useState<string | null>(null);
   const [auditEventType, setAuditEventType] = useState("");
 
+  const [markTarget, setMarkTarget] = useState<VisualPipelineOpsStuckRun | null>(null);
+  const [confirmRunId, setConfirmRunId] = useState("");
+  const [markReason, setMarkReason] = useState("");
+  const [markSubmitting, setMarkSubmitting] = useState(false);
+  const [actionMessage, setActionMessage] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+
   const loadAudit = useCallback(async () => {
     if (!canViewVpOps) return;
     setAuditLoading(true);
@@ -150,6 +160,50 @@ export default function VisualPipelineOpsPage() {
     void loadAudit();
   }, [loadAudit]);
 
+  const openMarkFailed = (row: VisualPipelineOpsStuckRun) => {
+    setMarkTarget(row);
+    setConfirmRunId("");
+    setMarkReason("");
+    setActionError(null);
+    setActionMessage(null);
+  };
+
+  const closeMarkFailed = () => {
+    if (markSubmitting) return;
+    setMarkTarget(null);
+    setConfirmRunId("");
+    setMarkReason("");
+  };
+
+  const canConfirmMarkFailed =
+    !!markTarget &&
+    confirmRunId.trim() === markTarget.visual_run_id &&
+    markReason.trim().length >= 5;
+
+  const submitMarkFailed = async () => {
+    if (!markTarget || !canConfirmMarkFailed) return;
+    setMarkSubmitting(true);
+    setActionError(null);
+    setActionMessage(null);
+    try {
+      await markVisualPipelineStuckRunFailed(markTarget.visual_run_id, {
+        reason: markReason.trim(),
+        confirm_visual_run_id: confirmRunId.trim(),
+        pending_age_seconds: 600,
+        running_lock_grace_seconds: 0,
+      });
+      setMarkTarget(null);
+      setConfirmRunId("");
+      setMarkReason("");
+      setActionMessage("Run이 FAILED로 처리되었습니다. Audit Log에 기록되었습니다.");
+      await Promise.all([load(), loadAudit()]);
+    } catch (err) {
+      setActionError(markFailedErrorMessage(err));
+    } finally {
+      setMarkSubmitting(false);
+    }
+  };
+
   if (!canViewVpOps) {
     return (
       <div data-testid="visual-pipeline-ops-page">
@@ -202,10 +256,27 @@ export default function VisualPipelineOpsPage() {
           Admin mock role
         </span>
         <span className="text-xs text-slate-500">
-          stuck 정리는 CLI `manage_visual_pipeline_ops.py mark-failed --dry-run` 후 `--apply`를
-          사용하세요. 이 화면에는 액션 버튼이 없습니다.
+          stuck run에 한정해 `실패 처리`(strong confirm + audit required)를 지원합니다. pause /
+          resume / deactivate / cancel / retry 버튼은 없습니다. CLI도 계속 사용할 수 있습니다.
         </span>
       </div>
+
+      {actionMessage && (
+        <div
+          className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900"
+          data-testid="visual-pipeline-ops-mark-failed-success"
+        >
+          {actionMessage}
+        </div>
+      )}
+      {actionError && !markTarget && (
+        <div
+          className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800"
+          data-testid="visual-pipeline-ops-mark-failed-error"
+        >
+          {actionError}
+        </div>
+      )}
 
       {loading && !summary && !summaryError && <LoadingState />}
       {summaryError && !summary && (
@@ -332,8 +403,8 @@ export default function VisualPipelineOpsPage() {
               <span className="text-[11px] text-slate-400">total={stuckTotal}</span>
             </div>
             <p className="text-[11px] text-slate-500 mb-3">
-              정리가 필요한 경우 서버에서 `manage_visual_pipeline_ops.py mark-failed --dry-run` 후
-              `--apply`를 사용하세요.
+              행별 `실패 처리`는 Audit 기록 성공 시에만 FAILED로 전환됩니다. CLI
+              `manage_visual_pipeline_ops.py mark-failed`도 동일 fail-close 정책입니다.
             </p>
             {stuckError && !stuckItems.length ? (
               <p className="text-xs text-red-600">{stuckError}</p>
@@ -356,6 +427,7 @@ export default function VisualPipelineOpsPage() {
                         "heartbeat_at",
                         "claimed_by",
                         "attempt_count",
+                        "action",
                       ].map((h) => (
                         <th key={h} className="px-2 py-1.5 font-medium whitespace-nowrap">
                           {h}
@@ -383,6 +455,15 @@ export default function VisualPipelineOpsPage() {
                         </td>
                         <td className="px-2 py-1.5 font-mono">{fmt(row.claimed_by)}</td>
                         <td className="px-2 py-1.5 tabular-nums">{fmt(row.attempt_count)}</td>
+                        <td className="px-2 py-1.5 whitespace-nowrap">
+                          <Button
+                            variant="secondary"
+                            onClick={() => openMarkFailed(row)}
+                            data-testid="visual-pipeline-ops-mark-failed-button"
+                          >
+                            실패 처리
+                          </Button>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -534,6 +615,69 @@ export default function VisualPipelineOpsPage() {
           </div>
         )}
       </section>
+
+      <Modal
+        open={!!markTarget}
+        title="Stuck Run 실패 처리"
+        onClose={closeMarkFailed}
+        size="md"
+        footer={
+          <>
+            <Button
+              variant="secondary"
+              onClick={closeMarkFailed}
+              disabled={markSubmitting}
+              data-testid="visual-pipeline-ops-mark-failed-cancel-button"
+            >
+              취소
+            </Button>
+            <Button
+              onClick={() => void submitMarkFailed()}
+              disabled={!canConfirmMarkFailed || markSubmitting}
+              data-testid="visual-pipeline-ops-mark-failed-confirm-button"
+            >
+              {markSubmitting ? "처리 중…" : "Audit 기록 후 실패 처리"}
+            </Button>
+          </>
+        }
+      >
+        <div data-testid="visual-pipeline-ops-mark-failed-dialog" className="space-y-3 text-sm">
+          <p className="text-slate-700 whitespace-pre-line">
+            {`이 작업은 선택한 Run을 FAILED 상태로 변경합니다.
+Audit Log 기록에 성공한 경우에만 상태가 변경됩니다.
+실행 중인 정상 Run이나 조건을 만족하지 않는 Run은 처리되지 않습니다.
+계속하려면 Run ID를 정확히 입력하세요.`}
+          </p>
+          <p className="font-mono text-xs text-slate-500">
+            target: {markTarget?.visual_run_id}
+          </p>
+          <label className="block text-xs text-slate-600">
+            confirm_visual_run_id
+            <input
+              className="mt-1 w-full border border-slate-200 rounded px-2 py-1.5 text-sm font-mono"
+              value={confirmRunId}
+              onChange={(e) => setConfirmRunId(e.target.value)}
+              placeholder={markTarget?.visual_run_id}
+              data-testid="visual-pipeline-ops-mark-failed-confirm-input"
+              autoComplete="off"
+            />
+          </label>
+          <label className="block text-xs text-slate-600">
+            reason (5자 이상)
+            <textarea
+              className="mt-1 w-full border border-slate-200 rounded px-2 py-1.5 text-sm min-h-[72px]"
+              value={markReason}
+              onChange={(e) => setMarkReason(e.target.value)}
+              data-testid="visual-pipeline-ops-mark-failed-reason-input"
+            />
+          </label>
+          {actionError && markTarget && (
+            <p className="text-xs text-red-600" data-testid="visual-pipeline-ops-mark-failed-dialog-error">
+              {actionError}
+            </p>
+          )}
+        </div>
+      </Modal>
     </div>
   );
 }

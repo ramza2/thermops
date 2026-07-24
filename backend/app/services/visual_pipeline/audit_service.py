@@ -138,41 +138,51 @@ async def record_visual_pipeline_audit_event(
     metadata_json: dict[str, Any] | None = None,
     fail_open: bool = True,
 ) -> VisualPipelineAuditLog | None:
-    """Add audit row to the current session. Fail-open by default.
+    """Add audit row to the current session.
 
-    Uses a nested savepoint so a failed audit flush does not undo the main action.
+    fail_open=True (default): nested savepoint; failure logs warning and returns None.
+    fail_open=False: direct flush; failure raises so caller can rollback (fail-close).
     """
+
+    def _build_row() -> VisualPipelineAuditLog:
+        return VisualPipelineAuditLog(
+            audit_id=_new_audit_id(),
+            event_type=str(event_type),
+            event_source=str(event_source),
+            pipeline_id=pipeline_id,
+            visual_run_id=visual_run_id,
+            activation_id=activation_id,
+            materialization_result_id=materialization_result_id,
+            r10_schedule_id=r10_schedule_id,
+            actor_type=actor_type,
+            actor_id=actor_id,
+            action_status=str(action_status),
+            request_id=request_id,
+            reason=(str(reason)[:200] if reason else None),
+            before_json=(
+                sanitize_audit_payload(before_json) if before_json is not None else None
+            ),
+            after_json=(
+                sanitize_audit_payload(after_json) if after_json is not None else None
+            ),
+            metadata_json=(
+                sanitize_audit_payload(metadata_json) if metadata_json is not None else None
+            ),
+            created_at=utc_now(),
+        )
+
     try:
-        async with db.begin_nested():
-            row = VisualPipelineAuditLog(
-                audit_id=_new_audit_id(),
-                event_type=str(event_type),
-                event_source=str(event_source),
-                pipeline_id=pipeline_id,
-                visual_run_id=visual_run_id,
-                activation_id=activation_id,
-                materialization_result_id=materialization_result_id,
-                r10_schedule_id=r10_schedule_id,
-                actor_type=actor_type,
-                actor_id=actor_id,
-                action_status=str(action_status),
-                request_id=request_id,
-                reason=(str(reason)[:200] if reason else None),
-                before_json=(
-                    sanitize_audit_payload(before_json) if before_json is not None else None
-                ),
-                after_json=(
-                    sanitize_audit_payload(after_json) if after_json is not None else None
-                ),
-                metadata_json=(
-                    sanitize_audit_payload(metadata_json) if metadata_json is not None else None
-                ),
-                created_at=utc_now(),
-            )
-            db.add(row)
-            await db.flush()
-            return row
-    except Exception as exc:  # noqa: BLE001 — fail-open PoC
+        if fail_open:
+            async with db.begin_nested():
+                row = _build_row()
+                db.add(row)
+                await db.flush()
+                return row
+        row = _build_row()
+        db.add(row)
+        await db.flush()
+        return row
+    except Exception as exc:  # noqa: BLE001 — fail-open PoC / fail-close raise
         logger.warning(
             "audit write failed (fail_open=%s) event_type=%s: %s",
             fail_open,
@@ -259,6 +269,8 @@ async def record_ops_mark_failed_batch_event(
     criteria: dict[str, Any] | None,
     target_count: int,
     changed_count: int,
+    audit_failed_count: int = 0,
+    fail_open: bool = True,
 ) -> VisualPipelineAuditLog | None:
     event_type = EVENT_OPS_MARK_FAILED_APPLY if apply else EVENT_OPS_MARK_FAILED_DRY_RUN
     action_status = STATUS_SUCCESS if apply else STATUS_DRY_RUN
@@ -274,7 +286,9 @@ async def record_ops_mark_failed_batch_event(
             "criteria": criteria or {},
             "target_count": int(target_count),
             "changed_count": int(changed_count),
+            "audit_failed_count": int(audit_failed_count),
         },
+        fail_open=fail_open,
     )
 
 
@@ -289,31 +303,52 @@ async def record_ops_mark_failed_run_event(
     before_status: str,
     before_locked_until: Any = None,
     before_heartbeat_at: Any = None,
+    before_attempt_count: int | None = None,
     finished_at: Any = None,
     error_message: str | None = None,
+    event_source: str = SOURCE_CLI,
+    actor_type: str = ACTOR_CLI,
+    actor_id: str = "cli",
+    trigger: str = "cli",
+    criteria: dict[str, Any] | None = None,
+    confirm_visual_run_id: str | None = None,
+    fail_open: bool = False,
 ) -> VisualPipelineAuditLog | None:
+    """Record per-run mark-failed audit. Default fail_open=False (S7-14 fail-close)."""
+    meta: dict[str, Any] = {
+        "stuck_reason": stuck_reason,
+        "trigger": trigger,
+    }
+    if criteria is not None:
+        meta["criteria"] = criteria
+    if confirm_visual_run_id is not None:
+        meta["confirm_visual_run_id"] = confirm_visual_run_id
+    before: dict[str, Any] = {
+        "run_status": before_status,
+        "locked_until": _iso(before_locked_until),
+        "heartbeat_at": _iso(before_heartbeat_at),
+    }
+    if before_attempt_count is not None:
+        before["attempt_count"] = int(before_attempt_count)
     return await record_visual_pipeline_audit_event(
         db,
         event_type=EVENT_RUN_MARK_FAILED_BY_OPS,
-        event_source=SOURCE_CLI,
+        event_source=event_source,
         action_status=STATUS_SUCCESS,
         pipeline_id=pipeline_id,
         visual_run_id=visual_run_id,
         activation_id=activation_id,
-        actor_type=ACTOR_CLI,
-        actor_id="cli",
+        actor_type=actor_type,
+        actor_id=actor_id,
         reason=reason,
-        before_json={
-            "run_status": before_status,
-            "locked_until": _iso(before_locked_until),
-            "heartbeat_at": _iso(before_heartbeat_at),
-        },
+        before_json=before,
         after_json={
             "run_status": "FAILED",
             "finished_at": _iso(finished_at),
             "error_message": error_message,
         },
-        metadata_json={"stuck_reason": stuck_reason},
+        metadata_json=meta,
+        fail_open=fail_open,
     )
 
 

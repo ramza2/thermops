@@ -16,6 +16,10 @@ from app.core.config import Settings, get_settings
 from app.core.time import utc_now
 from app.models.entities import VisualPipelineRun, VisualPipelineScheduleActivation
 from app.services.visual_pipeline.audit_service import (
+    ACTOR_CLI,
+    ACTOR_USER,
+    SOURCE_API,
+    SOURCE_CLI,
     record_ops_mark_failed_batch_event,
     record_ops_mark_failed_run_event,
 )
@@ -40,6 +44,58 @@ ACTIVATION_STATUSES = ("ACTIVE", "PAUSED", "INACTIVE", "ERROR")
 
 OPS_ISSUE_CODE = "OPS_CLEANUP_MARKED_FAILED"
 
+CODE_NOT_ELIGIBLE = "RUN_MARK_FAILED_NOT_ELIGIBLE"
+CODE_AUDIT_REQUIRED_FAILED = "RUN_MARK_FAILED_AUDIT_REQUIRED_FAILED"
+CODE_CONFIRM_MISMATCH = "RUN_MARK_FAILED_CONFIRM_MISMATCH"
+CODE_REASON_INVALID = "RUN_MARK_FAILED_REASON_INVALID"
+CODE_RUN_NOT_FOUND = "VISUAL_PIPELINE_RUN_NOT_FOUND"
+CODE_ADMIN_ACTIONS_DISABLED = "VP_ADMIN_ACTIONS_DISABLED"
+
+MIN_MARK_FAILED_REASON_LEN = 5
+MAX_MARK_FAILED_REASON_LEN = 200
+
+
+class MarkFailedError(Exception):
+    """Raised for mark-failed precondition / fail-close failures."""
+
+    def __init__(self, code: str):
+        self.code = code
+        super().__init__(code)
+
+
+def validate_mark_failed_reason(reason: str | None) -> str:
+    text = str(reason or "").strip()
+    if len(text) < MIN_MARK_FAILED_REASON_LEN or len(text) > MAX_MARK_FAILED_REASON_LEN:
+        raise MarkFailedError(CODE_REASON_INVALID)
+    return text
+
+
+def evaluate_stuck_eligibility(
+    row: VisualPipelineRun,
+    *,
+    now: Any,
+    pending_age_seconds: int = DEFAULT_PENDING_AGE_SECONDS,
+    running_lock_grace_seconds: int = DEFAULT_RUNNING_LOCK_GRACE_SECONDS,
+) -> str | None:
+    """Return stuck_reason if eligible, else None."""
+    status = str(row.run_status or "").upper()
+    pending_age = max(0, int(pending_age_seconds))
+    lock_grace = max(0, int(running_lock_grace_seconds))
+    pending_cutoff = now - timedelta(seconds=pending_age)
+    lock_cutoff = now - timedelta(seconds=lock_grace)
+
+    if status == "PENDING":
+        if row.created_at is not None and row.created_at < pending_cutoff:
+            return REASON_PENDING_TOO_OLD
+        return None
+    if status == "RUNNING":
+        if row.locked_until is None:
+            return None
+        if row.locked_until < lock_cutoff:
+            return REASON_RUNNING_LOCK_EXPIRED
+        return None
+    return None
+
 
 def _worker_config(settings: Settings | None = None) -> dict[str, Any]:
     s = settings or get_settings()
@@ -57,6 +113,7 @@ def _worker_config(settings: Settings | None = None) -> dict[str, Any]:
             s.vp_schedule_worker_poll_interval_seconds or 30
         ),
         "schedule_worker_max_batch_size": int(s.vp_schedule_worker_max_batch_size or 10),
+        "admin_actions_enabled": bool(s.vp_admin_actions_enabled),
     }
 
 
@@ -335,6 +392,139 @@ def _apply_mark_failed(
     # _clear_run_lease sets heartbeat_at=now and locked_until=null
 
 
+async def _mark_one_run_failed_fail_close(
+    db: AsyncSession,
+    row: VisualPipelineRun,
+    *,
+    stuck_reason: str,
+    reason: str,
+    now: Any,
+    criteria: dict[str, Any] | None,
+    event_source: str,
+    actor_type: str,
+    actor_id: str,
+    trigger: str,
+    confirm_visual_run_id: str | None = None,
+) -> dict[str, Any]:
+    """Audit (fail-close) then mutate. Caller owns commit/rollback."""
+    before_status = str(row.run_status or "").upper()
+    before_locked_until = row.locked_until
+    before_heartbeat_at = row.heartbeat_at
+    before_attempt_count = int(row.attempt_count or 0)
+    # Build after message preview for audit after_json
+    preview_msg = f"Marked failed by ops cleanup: {reason}"[:500]
+    try:
+        audit_row = await record_ops_mark_failed_run_event(
+            db,
+            pipeline_id=row.pipeline_id,
+            visual_run_id=row.visual_run_id,
+            activation_id=row.activation_id,
+            stuck_reason=stuck_reason,
+            reason=reason,
+            before_status=before_status,
+            before_locked_until=before_locked_until,
+            before_heartbeat_at=before_heartbeat_at,
+            before_attempt_count=before_attempt_count,
+            finished_at=now,
+            error_message=preview_msg,
+            event_source=event_source,
+            actor_type=actor_type,
+            actor_id=actor_id,
+            trigger=trigger,
+            criteria=criteria,
+            confirm_visual_run_id=confirm_visual_run_id,
+            fail_open=False,
+        )
+    except Exception as exc:  # noqa: BLE001
+        raise MarkFailedError(CODE_AUDIT_REQUIRED_FAILED) from exc
+
+    if audit_row is None:
+        raise MarkFailedError(CODE_AUDIT_REQUIRED_FAILED)
+
+    _apply_mark_failed(
+        row,
+        stuck_reason=stuck_reason,
+        reason=reason,
+        now=now,
+    )
+    return {
+        "visual_run_id": row.visual_run_id,
+        "pipeline_id": row.pipeline_id,
+        "previous_status": before_status,
+        "run_status": "FAILED",
+        "reason": reason,
+        "stuck_reason": stuck_reason,
+        "audit_id": audit_row.audit_id,
+        "changed": True,
+    }
+
+
+async def mark_single_stuck_run_failed(
+    db: AsyncSession,
+    visual_run_id: str,
+    *,
+    reason: str,
+    confirm_visual_run_id: str,
+    pending_age_seconds: int = DEFAULT_PENDING_AGE_SECONDS,
+    running_lock_grace_seconds: int = DEFAULT_RUNNING_LOCK_GRACE_SECONDS,
+    require_admin_flag: bool = True,
+) -> dict[str, Any]:
+    """Admin API single-run mark-failed with fail-close audit."""
+    if require_admin_flag and not get_settings().vp_admin_actions_enabled:
+        raise MarkFailedError(CODE_ADMIN_ACTIONS_DISABLED)
+
+    reason_text = validate_mark_failed_reason(reason)
+    if str(confirm_visual_run_id or "").strip() != str(visual_run_id).strip():
+        raise MarkFailedError(CODE_CONFIRM_MISMATCH)
+
+    now = utc_now()
+    criteria = {
+        "pending_age_seconds": max(0, int(pending_age_seconds)),
+        "running_lock_grace_seconds": max(0, int(running_lock_grace_seconds)),
+    }
+    row = (
+        await db.execute(
+            select(VisualPipelineRun)
+            .where(VisualPipelineRun.visual_run_id == visual_run_id)
+            .with_for_update()
+        )
+    ).scalar_one_or_none()
+    if row is None:
+        raise MarkFailedError(CODE_RUN_NOT_FOUND)
+
+    stuck_reason = evaluate_stuck_eligibility(
+        row,
+        now=now,
+        pending_age_seconds=pending_age_seconds,
+        running_lock_grace_seconds=running_lock_grace_seconds,
+    )
+    if stuck_reason is None:
+        raise MarkFailedError(CODE_NOT_ELIGIBLE)
+
+    try:
+        result = await _mark_one_run_failed_fail_close(
+            db,
+            row,
+            stuck_reason=stuck_reason,
+            reason=reason_text,
+            now=now,
+            criteria=criteria,
+            event_source=SOURCE_API,
+            actor_type=ACTOR_USER,
+            actor_id="mock_admin",
+            trigger="admin_api",
+            confirm_visual_run_id=str(confirm_visual_run_id).strip(),
+        )
+        await db.commit()
+        return result
+    except MarkFailedError:
+        await db.rollback()
+        raise
+    except Exception:
+        await db.rollback()
+        raise
+
+
 async def mark_stuck_runs_failed(
     db: AsyncSession,
     *,
@@ -344,7 +534,7 @@ async def mark_stuck_runs_failed(
     limit: int = DEFAULT_STUCK_LIMIT,
     reason: str = "manual ops cleanup",
 ) -> dict[str, Any]:
-    """Dry-run or apply FAILED for eligible stuck runs. Does not touch activations."""
+    """Dry-run or apply FAILED for eligible stuck runs. Apply uses per-run fail-close."""
     now = utc_now()
     stuck = await list_stuck_runs(
         db,
@@ -362,6 +552,9 @@ async def mark_stuck_runs_failed(
         "candidates": targets,
         "updated": [],
         "updated_count": 0,
+        "audit_failed_count": 0,
+        "skipped_due_to_audit_failure": [],
+        "failed_ids": [],
     }
 
     if not apply:
@@ -372,60 +565,65 @@ async def mark_stuck_runs_failed(
             criteria=stuck["criteria"],
             target_count=len(targets),
             changed_count=0,
+            audit_failed_count=0,
+            fail_open=True,
         )
         await db.commit()
         return result
 
     updated: list[dict[str, Any]] = []
+    audit_failed: list[str] = []
     for item in targets:
         rid = item["visual_run_id"]
-        row = (
-            await db.execute(
-                select(VisualPipelineRun).where(VisualPipelineRun.visual_run_id == rid)
-            )
-        ).scalar_one_or_none()
-        if row is None:
-            continue
-        status = str(row.run_status or "").upper()
-        if status in {"SUCCESS", "FAILED", "PARTIAL", "CANCELLED"}:
-            continue
-        if status == "PENDING" and item["reason"] != REASON_PENDING_TOO_OLD:
-            continue
-        if status == "RUNNING":
-            if item["reason"] != REASON_RUNNING_LOCK_EXPIRED:
+        try:
+            async with db.begin_nested():
+                row = (
+                    await db.execute(
+                        select(VisualPipelineRun)
+                        .where(VisualPipelineRun.visual_run_id == rid)
+                        .with_for_update()
+                    )
+                ).scalar_one_or_none()
+                if row is None:
+                    continue
+                stuck_reason = evaluate_stuck_eligibility(
+                    row,
+                    now=now,
+                    pending_age_seconds=pending_age_seconds,
+                    running_lock_grace_seconds=running_lock_grace_seconds,
+                )
+                if stuck_reason is None:
+                    continue
+                one = await _mark_one_run_failed_fail_close(
+                    db,
+                    row,
+                    stuck_reason=stuck_reason,
+                    reason=reason,
+                    now=now,
+                    criteria=stuck["criteria"],
+                    event_source=SOURCE_CLI,
+                    actor_type=ACTOR_CLI,
+                    actor_id="cli",
+                    trigger="cli",
+                )
+                updated.append(
+                    {
+                        "visual_run_id": one["visual_run_id"],
+                        "pipeline_id": one["pipeline_id"],
+                        "previous_status": one["previous_status"],
+                        "reason": item.get("reason") or stuck_reason,
+                        "run_status": "FAILED",
+                        "audit_id": one["audit_id"],
+                    }
+                )
+        except MarkFailedError as exc:
+            if exc.code == CODE_AUDIT_REQUIRED_FAILED:
+                audit_failed.append(rid)
                 continue
-            if row.locked_until is None:
-                continue
-        before_locked_until = row.locked_until
-        before_heartbeat_at = row.heartbeat_at
-        _apply_mark_failed(
-            row,
-            stuck_reason=str(item["reason"]),
-            reason=reason,
-            now=now,
-        )
-        await record_ops_mark_failed_run_event(
-            db,
-            pipeline_id=row.pipeline_id,
-            visual_run_id=row.visual_run_id,
-            activation_id=row.activation_id,
-            stuck_reason=str(item["reason"]),
-            reason=reason,
-            before_status=status,
-            before_locked_until=before_locked_until,
-            before_heartbeat_at=before_heartbeat_at,
-            finished_at=now,
-            error_message=row.error_message,
-        )
-        updated.append(
-            {
-                "visual_run_id": row.visual_run_id,
-                "pipeline_id": row.pipeline_id,
-                "previous_status": status,
-                "reason": item["reason"],
-                "run_status": "FAILED",
-            }
-        )
+            raise
+        except Exception:
+            audit_failed.append(rid)
+            continue
 
     await record_ops_mark_failed_batch_event(
         db,
@@ -434,8 +632,13 @@ async def mark_stuck_runs_failed(
         criteria=stuck["criteria"],
         target_count=len(targets),
         changed_count=len(updated),
+        audit_failed_count=len(audit_failed),
+        fail_open=True,
     )
     await db.commit()
     result["updated"] = updated
     result["updated_count"] = len(updated)
+    result["audit_failed_count"] = len(audit_failed)
+    result["skipped_due_to_audit_failure"] = list(audit_failed)
+    result["failed_ids"] = list(audit_failed)
     return result

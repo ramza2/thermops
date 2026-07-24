@@ -102,7 +102,8 @@ def cmd_mark_failed(args: argparse.Namespace) -> int:
     mode = "APPLY" if result.get("apply") else "DRY-RUN"
     print(
         f"\n[{mode}] candidates={len(result.get('candidates') or [])} "
-        f"updated={result.get('updated_count', 0)}",
+        f"updated={result.get('updated_count', 0)} "
+        f"audit_failed={result.get('audit_failed_count', 0)}",
         file=sys.stderr,
     )
     return 0

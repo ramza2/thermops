@@ -1,8 +1,9 @@
-"""R11-S7-10/S7-13 Visual Pipeline Ops API — summary, stuck runs, audit logs."""
+"""R11-S7-10/S7-13/S7-14 Visual Pipeline Ops API — summary, stuck, audit, mark-failed."""
 
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -17,11 +18,20 @@ from app.services.visual_pipeline.ops_service import (
     DEFAULT_PENDING_AGE_SECONDS,
     DEFAULT_RUNNING_LOCK_GRACE_SECONDS,
     DEFAULT_STUCK_LIMIT,
+    MarkFailedError,
     get_ops_summary,
     list_stuck_runs,
+    mark_single_stuck_run_failed,
 )
 
 router = APIRouter(prefix="/visual-pipeline-ops", tags=["Visual Pipeline Ops"])
+
+
+class MarkStuckRunFailedBody(BaseModel):
+    reason: str = Field(..., min_length=1, max_length=200)
+    confirm_visual_run_id: str = Field(..., min_length=1, max_length=50)
+    pending_age_seconds: int | None = Field(default=None, ge=0, le=86400)
+    running_lock_grace_seconds: int | None = Field(default=None, ge=0, le=86400)
 
 
 @router.get("/summary")
@@ -57,6 +67,41 @@ async def get_visual_pipeline_ops_stuck_runs(
         running_lock_grace_seconds=running_lock_grace_seconds,
         limit=limit,
     )
+    return ok(data)
+
+
+@router.post("/stuck-runs/{visual_run_id}/mark-failed")
+async def post_visual_pipeline_ops_mark_failed(
+    visual_run_id: str,
+    body: MarkStuckRunFailedBody,
+    db: AsyncSession = Depends(get_db),
+):
+    """Mark one eligible stuck run FAILED. Audit required (fail-close). Feature-flagged."""
+    try:
+        data = await mark_single_stuck_run_failed(
+            db,
+            visual_run_id,
+            reason=body.reason,
+            confirm_visual_run_id=body.confirm_visual_run_id,
+            pending_age_seconds=(
+                body.pending_age_seconds
+                if body.pending_age_seconds is not None
+                else DEFAULT_PENDING_AGE_SECONDS
+            ),
+            running_lock_grace_seconds=(
+                body.running_lock_grace_seconds
+                if body.running_lock_grace_seconds is not None
+                else DEFAULT_RUNNING_LOCK_GRACE_SECONDS
+            ),
+            require_admin_flag=True,
+        )
+    except MarkFailedError as exc:
+        code = exc.code
+        if code in {"RUN_MARK_FAILED_CONFIRM_MISMATCH", "RUN_MARK_FAILED_REASON_INVALID"}:
+            raise HTTPException(status_code=400, detail=code) from None
+        if code == "VISUAL_PIPELINE_RUN_NOT_FOUND":
+            raise HTTPException(status_code=404, detail=code) from None
+        raise HTTPException(status_code=409, detail=code) from None
     return ok(data)
 
 

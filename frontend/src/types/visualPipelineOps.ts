@@ -24,6 +24,7 @@ export interface VisualPipelineOpsWorkerConfig {
   run_worker_max_batch_size?: number;
   schedule_worker_poll_interval_seconds?: number;
   schedule_worker_max_batch_size?: number;
+  admin_actions_enabled?: boolean;
 }
 
 export interface VisualPipelineOpsStuckSummary {
@@ -144,4 +145,23 @@ export interface VisualPipelineAuditLogsParams {
   created_from?: string;
   created_to?: string;
   limit?: number;
+}
+
+/** R11-S7-14 Admin mark-failed */
+export interface MarkVisualPipelineRunFailedRequest {
+  reason: string;
+  confirm_visual_run_id: string;
+  pending_age_seconds?: number;
+  running_lock_grace_seconds?: number;
+}
+
+export interface MarkVisualPipelineRunFailedResponse {
+  visual_run_id: string;
+  pipeline_id?: string;
+  previous_status?: string;
+  run_status: "FAILED";
+  reason?: string;
+  audit_id?: string;
+  changed: boolean;
+  stuck_reason?: string;
 }

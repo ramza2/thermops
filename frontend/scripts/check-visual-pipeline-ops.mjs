@@ -1,5 +1,5 @@
 /**
- * R11-S7-12/S7-13 Visual Pipeline Admin Ops UI smoke (+ Audit Logs section).
+ * R11-S7-12/S7-13/S7-14 Visual Pipeline Admin Ops UI smoke (+ Audit + mark-failed).
  *
  * Expects:
  *   frontend at CHECK_PAGES_BASE (default http://localhost:5173)
@@ -24,7 +24,7 @@ const page = await browser.newPage();
 const pageErrors = [];
 page.on("pageerror", (e) => pageErrors.push(e.message));
 
-console.log("THERMOps R11-S7-12 Visual Pipeline Ops smoke");
+console.log("THERMOps R11-S7-14 Visual Pipeline Ops smoke");
 console.log(`  frontend=${BASE}`);
 console.log(`  expectAdmin=${EXPECT_ADMIN}`);
 
@@ -44,6 +44,8 @@ try {
     });
     const refreshCount = await page.getByTestId("visual-pipeline-ops-refresh-button").count();
     if (refreshCount > 0) fail("non-admin should not show refresh button");
+    const markCount = await page.getByTestId("visual-pipeline-ops-mark-failed-button").count();
+    if (markCount > 0) fail("non-admin should not show mark-failed buttons");
     console.log("  [ok] admin-required notice (non-ADMIN mode)");
   } else {
     await page.getByTestId("visual-pipeline-ops-read-only-notice").waitFor({
@@ -80,9 +82,40 @@ try {
     if (!failVisible) fail("recent failures table or empty message expected");
     console.log("  [ok] recent failures section");
 
-    const markFailedButtons = await page.getByRole("button", { name: /mark-failed|실패 처리|정리 적용/i }).count();
-    if (markFailedButtons > 0) fail("mark-failed / destructive action buttons must not exist");
-    console.log("  [ok] no mark-failed action buttons");
+    // Non-stuck destructive actions must not exist
+    const badActions = await page.getByRole("button", {
+      name: /pause|resume|deactivate|cancel|retry|정리 적용/i,
+    }).count();
+    if (badActions > 0) fail("unexpected destructive action buttons present");
+    console.log("  [ok] no pause/resume/deactivate/cancel/retry buttons");
+
+    const markButtons = page.getByTestId("visual-pipeline-ops-mark-failed-button");
+    const markCount = await markButtons.count();
+    if (markCount > 0) {
+      await markButtons.first().click();
+      await page.getByTestId("visual-pipeline-ops-mark-failed-dialog").waitFor({
+        state: "visible",
+        timeout: 10000,
+      });
+      const confirmBtn = page.getByTestId("visual-pipeline-ops-mark-failed-confirm-button");
+      if (await confirmBtn.isEnabled()) fail("confirm should be disabled before id/reason");
+      await page.getByTestId("visual-pipeline-ops-mark-failed-confirm-input").fill("VPR-WRONG");
+      await page.getByTestId("visual-pipeline-ops-mark-failed-reason-input").fill("smoke reason ok");
+      if (await confirmBtn.isEnabled()) fail("confirm should stay disabled for wrong id");
+      const targetText = await page
+        .getByTestId("visual-pipeline-ops-mark-failed-dialog")
+        .locator("p.font-mono")
+        .innerText();
+      const targetId = targetText.replace("target:", "").trim();
+      await page.getByTestId("visual-pipeline-ops-mark-failed-confirm-input").fill(targetId);
+      await page.waitForTimeout(200);
+      if (!(await confirmBtn.isEnabled())) fail("confirm should enable with matching id + reason");
+      await page.getByTestId("visual-pipeline-ops-mark-failed-cancel-button").click();
+      await page.waitForTimeout(300);
+      console.log("  [ok] mark-failed dialog confirm gating");
+    } else {
+      console.log("  [skip] no stuck rows — mark-failed dialog smoke skipped");
+    }
 
     await page.getByTestId("visual-pipeline-ops-audit-section").waitFor({
       state: "visible",
@@ -105,7 +138,6 @@ try {
     await page.getByTestId("visual-pipeline-ops-run-counts").waitFor({ state: "visible", timeout: 30000 });
     console.log("  [ok] refresh reloads summary");
 
-    // 운영 모니터링 그룹은 기본 접힘 — toggle 후 메뉴 확인
     const opsGroup = page.getByText("운영 모니터링", { exact: true });
     await opsGroup.click();
     await page.waitForTimeout(300);
