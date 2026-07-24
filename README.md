@@ -1649,10 +1649,21 @@ cd frontend && node scripts/check-visual-pipeline-studio.mjs
   ```
 - **제외:** batch multi-select · pause/resume/deactivate/cancel/retry · Auth · notification · R10 due-worker/`active_yn`
 - **테스트:** `python scripts/test_visual_pipeline_admin_action.py` · audit/ops/schedule/run/manual/materialization · `npm run build` · `check-pages.mjs` · `check-visual-pipeline-ops.mjs` · quick 9/9
-- **다음:** R11-S8 Run History / Progress / Retry 설계 또는 R11-S7 마감 정리
+- **다음:** R11-S7-15 Visual Pipeline 운영 기능 마감 정리 (아래 섹션)
+
+### R11-S7-15 Visual Pipeline 운영 기능 마감 정리
+
+- **범위:** docs-only — S7-0~S7-14 운영 기능 맵 · 배포/점검/장애 체크리스트 · 권한 경계 · Known Limitations · R11-S8 backlog. code/DB/API/FE/worker/package 변경 없음.
+- **문서:** [`docs/md/THERMOps_R11-S7-15_Visual_Pipeline_운영기능_마감정리.md`](docs/md/THERMOps_R11-S7-15_Visual_Pipeline_운영기능_마감정리.md) (기준 커밋 `65e2884`)
+- **포함:** Manual/Scheduled/Ops/Audit 흐름 · mark-failed fail-close 정책 · `VITE_USER_ROLE`/Admin Action flag 경계 · UI 용어 backlog(「R10 설정 반영」→「실행 설정 반영」) · Full Scenario 이용가이드 후속
+- **다음:**
+  - R11-S8-0 Run History / Progress / Retry 설계
+  - R11-S8-1 UI 용어/UX 정리
+  - R11-S8-2 열수요 예측 Full Scenario 이용가이드 설계
 
 ## 설계 문서 참조
 
+- `docs/md/THERMOps_R11-S7-15_Visual_Pipeline_운영기능_마감정리.md`
 - `docs/md/THERMOps_R11-S7-11_Admin_UI_Audit_설계.md`
 - `docs/md/THERMOps_R11-S7-7_Schedule_Activation_설계.md`
 - `docs/md/THERMOps_R11-S7-5_Option_C_Run_Worker_검토.md`
