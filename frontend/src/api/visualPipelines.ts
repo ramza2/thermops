@@ -13,6 +13,8 @@ import type {
   VisualPipelineRunListResponse,
   VisualPipelineRunRequest,
   VisualPipelineRunResponse,
+  VisualPipelineScheduleActivationListResponse,
+  VisualPipelineScheduleActivationResponse,
   VisualPipelineSummary,
   VisualPipelineValidationRequest,
   VisualPipelineValidationResponse,
@@ -200,6 +202,44 @@ export async function getLatestVisualPipelineRun(
   const latest = listed.items?.[0];
   if (!latest?.visual_run_id) return null;
   return getVisualPipelineRun(pipelineId, latest.visual_run_id);
+}
+
+/** R11-S7-8: activate schedule — no run_load / no immediate run row. */
+export async function activateVisualPipelineSchedule(
+  pipelineId: string,
+): Promise<VisualPipelineScheduleActivationResponse> {
+  return postApi<VisualPipelineScheduleActivationResponse>(
+    `/visual-pipelines/${pipelineId}/schedule-activations`,
+    {},
+  );
+}
+
+export async function deactivateVisualPipelineSchedule(
+  pipelineId: string,
+  activationId: string,
+): Promise<VisualPipelineScheduleActivationResponse> {
+  return postApi<VisualPipelineScheduleActivationResponse>(
+    `/visual-pipelines/${pipelineId}/schedule-activations/${encodeURIComponent(activationId)}/deactivate`,
+    {},
+  );
+}
+
+export async function getCurrentVisualPipelineScheduleActivation(
+  pipelineId: string,
+): Promise<VisualPipelineScheduleActivationResponse | null> {
+  return fetchApi<VisualPipelineScheduleActivationResponse | null>(
+    `/visual-pipelines/${pipelineId}/schedule-activations/current`,
+  );
+}
+
+export async function listVisualPipelineScheduleActivations(
+  pipelineId: string,
+  limit = 20,
+): Promise<VisualPipelineScheduleActivationListResponse> {
+  return fetchApi<VisualPipelineScheduleActivationListResponse>(
+    `/visual-pipelines/${pipelineId}/schedule-activations`,
+    { limit },
+  );
 }
 
 export async function getComponentCatalog(params?: {

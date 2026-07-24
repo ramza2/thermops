@@ -31,10 +31,13 @@ import {
 } from "lucide-react";
 import {
   createVisualPipelineVersion,
+  activateVisualPipelineSchedule,
   compileVisualPipeline,
   compileVisualPipelinePreview,
+  deactivateVisualPipelineSchedule,
   getComponentCatalog,
   getConnectionRules,
+  getCurrentVisualPipelineScheduleActivation,
   getLatestVisualPipelineRun,
   getVisualPipeline,
   getVisualPipelineCompileResult,
@@ -57,6 +60,7 @@ import { buildNodeTypes } from "@/components/visualPipeline/VpFlowNode";
 import { VpGraphStatusPanel } from "@/components/visualPipeline/VpGraphStatusPanel";
 import { VpNodeInspector } from "@/components/visualPipeline/VpNodeInspector";
 import { VpRunPanel } from "@/components/visualPipeline/VpRunPanel";
+import { VpScheduleActivationPanel } from "@/components/visualPipeline/VpScheduleActivationPanel";
 import { VpValidationPanel } from "@/components/visualPipeline/VpValidationPanel";
 import { VpVersionHistoryModal } from "@/components/visualPipeline/VpVersionHistoryModal";
 import { useToast } from "@/hooks/useToast";
@@ -67,6 +71,7 @@ import type {
   VisualPipelineDetail,
   VisualPipelineMaterializationResponse,
   VisualPipelineRunResponse,
+  VisualPipelineScheduleActivationResponse,
   VisualPipelineValidationResponse,
   VisualPipelineVersion,
 } from "@/types/visualPipeline";
@@ -139,6 +144,14 @@ function StudioCanvasInner() {
   const [runExpanded, setRunExpanded] = useState(true);
   const [runLoadingLatest, setRunLoadingLatest] = useState(false);
   const [runPolling, setRunPolling] = useState(false);
+  const [activationResult, setActivationResult] = useState<VisualPipelineScheduleActivationResponse | null>(
+    null,
+  );
+  const [activationError, setActivationError] = useState<string | null>(null);
+  const [activationExpanded, setActivationExpanded] = useState(true);
+  const [activationLoadingLatest, setActivationLoadingLatest] = useState(false);
+  const [activating, setActivating] = useState(false);
+  const [deactivating, setDeactivating] = useState(false);
   const runPollGenRef = useRef(0);
 
   const nodeTypes = useMemo(() => buildNodeTypes(), []);
@@ -232,6 +245,19 @@ function StudioCanvasInner() {
     }
   }, []);
 
+  const loadLatestActivation = useCallback(async (id: string) => {
+    setActivationLoadingLatest(true);
+    setActivationError(null);
+    try {
+      const latest = await getCurrentVisualPipelineScheduleActivation(id);
+      setActivationResult(latest);
+    } catch (err) {
+      setActivationError(extractApiErrorMessage(err, "최근 Schedule Activation을 불러오지 못했습니다."));
+    } finally {
+      setActivationLoadingLatest(false);
+    }
+  }, []);
+
   const loadPipeline = useCallback(async () => {
     setLoading(true);
     setError("");
@@ -249,13 +275,22 @@ function StudioCanvasInner() {
       setLastSavedAt(detail.updated_at ?? null);
       void loadLatestCompileResult(pipelineId);
       void loadLatestMaterializationResult(pipelineId);
+      void loadLatestActivation(pipelineId);
       void loadLatestRunResult(pipelineId);
     } catch (err) {
       setError(extractApiErrorMessage(err, "Visual Pipeline을 불러오지 못했습니다."));
     } finally {
       setLoading(false);
     }
-  }, [pipelineId, setNodes, setEdges, loadLatestCompileResult, loadLatestMaterializationResult, loadLatestRunResult]);
+  }, [
+    pipelineId,
+    setNodes,
+    setEdges,
+    loadLatestCompileResult,
+    loadLatestMaterializationResult,
+    loadLatestActivation,
+    loadLatestRunResult,
+  ]);
 
   useEffect(() => {
     void loadPipeline();
@@ -531,12 +566,22 @@ function StudioCanvasInner() {
   };
 
   const canMaterialize = useMemo(() => {
-    if (dirty || compiling || materializing || running || runPolling) return false;
+    if (dirty || compiling || materializing || running || runPolling || activating || deactivating) return false;
     if (compileResult?.compile_status !== "SUCCESS") return false;
     if (!compileResult.persisted) return false;
     if (pipeline?.current_sync_status !== "IN_SYNC") return false;
     return true;
-  }, [dirty, compiling, materializing, running, runPolling, compileResult, pipeline?.current_sync_status]);
+  }, [
+    dirty,
+    compiling,
+    materializing,
+    running,
+    runPolling,
+    activating,
+    deactivating,
+    compileResult,
+    pipeline?.current_sync_status,
+  ]);
 
   const isRunActive = Boolean(
     running ||
@@ -545,13 +590,11 @@ function StudioCanvasInner() {
   );
 
   const canRun = useMemo(() => {
-    if (dirty || compiling || materializing || running || runPolling) return false;
+    if (dirty || compiling || materializing || running || runPolling || activating || deactivating) return false;
     if (compileResult?.compile_status !== "SUCCESS") return false;
     if (!compileResult.persisted) return false;
     if (pipeline?.current_sync_status !== "IN_SYNC") return false;
     if (materializationResult?.materialization_status !== "SUCCESS") return false;
-    if ((materializationResult.activation ?? "NOT_REQUESTED") !== "NOT_REQUESTED") return false;
-    if (materializationResult.run_created !== false) return false;
     if (runResult && RUN_ACTIVE_STATUSES.has(String(runResult.run_status))) return false;
     return true;
   }, [
@@ -560,10 +603,72 @@ function StudioCanvasInner() {
     materializing,
     running,
     runPolling,
+    activating,
+    deactivating,
     compileResult,
     pipeline?.current_sync_status,
     materializationResult,
     runResult,
+  ]);
+
+  const hasMaterializedSchedule = Boolean(
+    materializationResult?.objects &&
+      typeof materializationResult.objects === "object" &&
+      (materializationResult.objects as Record<string, unknown>).schedule_id,
+  );
+
+  const canActivate = useMemo(() => {
+    if (dirty || compiling || materializing || running || runPolling || activating || deactivating) return false;
+    if (compileResult?.compile_status !== "SUCCESS" || !compileResult.persisted) return false;
+    if (pipeline?.current_sync_status !== "IN_SYNC") return false;
+    if (materializationResult?.materialization_status !== "SUCCESS") return false;
+    if (!hasMaterializedSchedule) return false;
+    if (activationResult?.activation_status === "ACTIVE") return false;
+    return true;
+  }, [
+    dirty,
+    compiling,
+    materializing,
+    running,
+    runPolling,
+    activating,
+    deactivating,
+    compileResult,
+    pipeline?.current_sync_status,
+    materializationResult,
+    hasMaterializedSchedule,
+    activationResult,
+  ]);
+
+  const activateDisabledReason = useMemo(() => {
+    if (canActivate) {
+      return "스케줄 활성화를 수행합니다. due 시 PENDING scheduled run이 생성될 수 있습니다.";
+    }
+    if (dirty) return "미저장 변경사항이 있습니다. 저장 후 Compile → R10 설정 반영을 완료하세요.";
+    if (compiling || materializing || running || activating || deactivating) return "다른 작업이 진행 중입니다.";
+    if (activationResult?.activation_status === "ACTIVE") return "이미 활성화된 스케줄이 있습니다.";
+    if (compileResult?.compile_status !== "SUCCESS" || !compileResult?.persisted) {
+      return "persisted SUCCESS Compile이 필요합니다.";
+    }
+    if (pipeline?.current_sync_status !== "IN_SYNC") return "컴파일 동기화 상태(IN_SYNC)가 필요합니다.";
+    if (materializationResult?.materialization_status !== "SUCCESS") {
+      return "SUCCESS Materialization(R10 설정 반영)이 필요합니다.";
+    }
+    if (!hasMaterializedSchedule) return "Materialized CRON schedule이 없습니다.";
+    return "Schedule Activation 조건을 충족하지 않습니다.";
+  }, [
+    canActivate,
+    dirty,
+    compiling,
+    materializing,
+    running,
+    activating,
+    deactivating,
+    activationResult,
+    compileResult,
+    pipeline?.current_sync_status,
+    materializationResult,
+    hasMaterializedSchedule,
   ]);
 
   const runDisabledReason = useMemo(() => {
@@ -652,6 +757,54 @@ function StudioCanvasInner() {
       }
     } finally {
       setRunning(false);
+    }
+  };
+
+  const handleActivateSchedule = async () => {
+    if (!pipelineId || !canActivate) return;
+    const confirmed = window.confirm(
+      "스케줄 활성화를 수행합니다. 활성화 후 설정된 CRON 주기에 따라 자동 실행 Run이 생성될 수 있습니다. 실제 적재 실행은 VP run-worker가 처리합니다. 계속 진행하시겠습니까?",
+    );
+    if (!confirmed) return;
+
+    setActivating(true);
+    setActivationError(null);
+    setActivationExpanded(true);
+    try {
+      const result = await activateVisualPipelineSchedule(pipelineId);
+      setActivationResult(result);
+      void loadLatestMaterializationResult(pipelineId);
+      showToast("success", "스케줄이 활성화되었습니다. (run_load 미실행)");
+    } catch (err) {
+      const detail = extractApiErrorMessage(err, "스케줄 활성화에 실패했습니다.");
+      setActivationError(detail);
+      showToast("error", detail);
+    } finally {
+      setActivating(false);
+    }
+  };
+
+  const handleDeactivateSchedule = async () => {
+    if (!pipelineId || !activationResult?.activation_id) return;
+    if (activationResult.activation_status !== "ACTIVE") return;
+    const confirmed = window.confirm(
+      "스케줄 활성화를 해제합니다. 이미 생성된 PENDING/RUNNING run은 유지됩니다. 계속하시겠습니까?",
+    );
+    if (!confirmed) return;
+
+    setDeactivating(true);
+    setActivationError(null);
+    try {
+      const result = await deactivateVisualPipelineSchedule(pipelineId, activationResult.activation_id);
+      setActivationResult(result);
+      void loadLatestMaterializationResult(pipelineId);
+      showToast("success", "스케줄이 비활성화되었습니다.");
+    } catch (err) {
+      const detail = extractApiErrorMessage(err, "스케줄 비활성화에 실패했습니다.");
+      setActivationError(detail);
+      showToast("error", detail);
+    } finally {
+      setDeactivating(false);
     }
   };
 
@@ -793,16 +946,29 @@ function StudioCanvasInner() {
               <Play className="w-3 h-3" /> {isRunActive ? "실행 중…" : "Run Now"}
             </button>
           )}
-          <button
-            type="button"
-            disabled
-            title="현재 단계에서는 스케줄 활성화를 지원하지 않습니다."
-            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-100 text-slate-400 text-xs font-medium rounded-md cursor-not-allowed border border-slate-200"
-            data-testid="visual-pipeline-schedule-activation-button"
-          >
-            <Clock className="w-3 h-3" /> 스케줄 활성화
-            <span className="text-[9px] bg-slate-300 text-slate-600 px-1 rounded font-bold">Soon</span>
-          </button>
+          {canActivate ? (
+            <Button
+              variant="secondary"
+              icon={<Clock className="w-3 h-3" />}
+              onClick={() => void handleActivateSchedule()}
+              disabled={!canActivate || activating}
+              title={activateDisabledReason}
+              data-testid="visual-pipeline-schedule-activation-button"
+            >
+              {activating ? "활성화 중…" : "스케줄 활성화"}
+            </Button>
+          ) : (
+            <button
+              type="button"
+              disabled
+              title={activateDisabledReason}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-100 text-slate-400 text-xs font-medium rounded-md cursor-not-allowed border border-slate-200"
+              data-testid="visual-pipeline-schedule-activation-button"
+            >
+              <Clock className="w-3 h-3" />{" "}
+              {activationResult?.activation_status === "ACTIVE" ? "활성화됨" : "스케줄 활성화"}
+            </button>
+          )}
         </div>
       </div>
 
@@ -904,6 +1070,20 @@ function StudioCanvasInner() {
         compileReady={canMaterialize}
         expanded={materializationExpanded}
         onToggle={() => setMaterializationExpanded((v) => !v)}
+      />
+      <VpScheduleActivationPanel
+        result={activationResult}
+        loading={activationLoadingLatest}
+        activating={activating}
+        deactivating={deactivating}
+        error={activationError}
+        canActivateHint={canActivate ? null : activateDisabledReason}
+        staleActiveWarning={
+          activationResult?.activation_status === "ACTIVE" && pipeline?.current_sync_status !== "IN_SYNC"
+        }
+        expanded={activationExpanded}
+        onToggle={() => setActivationExpanded((v) => !v)}
+        onDeactivate={() => void handleDeactivateSchedule()}
       />
       <VpRunPanel
         result={runResult}

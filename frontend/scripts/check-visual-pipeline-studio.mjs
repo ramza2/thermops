@@ -667,10 +667,49 @@ async function runBrowserSmoke(pipeline) {
     }
     await runPanel.getByTestId("visual-pipeline-run-result").waitFor({ state: "visible", timeout: 10000 });
     await runPanel.getByTestId("visual-pipeline-run-safety").waitFor({ state: "visible", timeout: 10000 });
-    if (!(await page.getByTestId("visual-pipeline-schedule-activation-button").isDisabled())) {
-      fail("expected schedule activation button disabled");
+    const runMode = (await runPanel.getByTestId("visual-pipeline-run-mode").innerText()).trim();
+    if (runMode !== "MANUAL") {
+      fail(`expected Manual Run mode=MANUAL, got ${runMode}`);
     }
     console.log(`  [ok] Manual Run SUCCESS visual_run_id=${visualRunId} load_run_id=${loadRunId}`);
+
+    // --- R11-S7-8 Schedule Activation smoke (panel only; due enqueue in backend tests) ---
+    await page.getByTestId("visual-pipeline-schedule-activation-panel").waitFor({ state: "visible", timeout: 15000 });
+    const activateBtn = page.getByTestId("visual-pipeline-schedule-activation-button");
+    await activateBtn.scrollIntoViewIfNeeded();
+    if (await activateBtn.isDisabled()) {
+      fail(
+        "expected Schedule Activation button enabled after SUCCESS materialization (set THERMOOPS_VP_SCHEDULE_ACTIVATION_ENABLED=true on backend)",
+      );
+    }
+    page.once("dialog", (dialog) => dialog.accept());
+    await activateBtn.click();
+    const actPanel = page.getByTestId("visual-pipeline-schedule-activation-panel");
+    await actPanel.getByTestId("visual-pipeline-schedule-activation-status").waitFor({
+      state: "visible",
+      timeout: 30000,
+    });
+    const actStatus = (await actPanel.getByTestId("visual-pipeline-schedule-activation-status").innerText()).trim();
+    if (actStatus !== "ACTIVE") {
+      const actErr = await actPanel.locator("p.text-red-600").innerText().catch(() => "");
+      fail(`expected activation ACTIVE, got ${actStatus}; err=${actErr.slice(0, 300)}`);
+    }
+    const actId = (await actPanel.getByTestId("visual-pipeline-schedule-activation-id").innerText()).trim();
+    if (!actId.startsWith("VPA-")) {
+      fail(`expected activation_id VPA-*, got ${actId}`);
+    }
+    if (!(await page.getByTestId("visual-pipeline-schedule-activation-button").isDisabled())) {
+      fail("expected Schedule Activation button disabled while ACTIVE");
+    }
+    const deactivateBtn = actPanel.getByTestId("visual-pipeline-schedule-deactivate-button");
+    page.once("dialog", (dialog) => dialog.accept());
+    await deactivateBtn.click();
+    await page.waitForTimeout(1500);
+    const actStatus2 = (await actPanel.getByTestId("visual-pipeline-schedule-activation-status").innerText()).trim();
+    if (actStatus2 !== "INACTIVE") {
+      fail(`expected activation INACTIVE after deactivate, got ${actStatus2}`);
+    }
+    console.log(`  [ok] Schedule Activation ACTIVE→INACTIVE activation_id=${actId}`);
 
     // --- Graph validation smoke (errors 0) ---
     await runGraphValidationAndWait(page);

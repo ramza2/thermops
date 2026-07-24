@@ -953,6 +953,11 @@ BEGIN
     locked_until TIMESTAMP,
     heartbeat_at TIMESTAMP,
     attempt_count INTEGER NOT NULL DEFAULT 0,
+    activation_id VARCHAR(40),
+    r10_schedule_id VARCHAR(40),
+    scheduled_for TIMESTAMP,
+    triggered_at TIMESTAMP,
+    dedup_key VARCHAR(160),
     started_at TIMESTAMP,
     finished_at TIMESTAMP,
     created_at TIMESTAMP NOT NULL DEFAULT NOW()
@@ -973,6 +978,55 @@ CREATE INDEX IF NOT EXISTS ix_vp_run_status_created
 
 CREATE INDEX IF NOT EXISTS ix_vp_run_status_locked_until
     ON tb_visual_pipeline_run(run_status, locked_until);
+
+CREATE INDEX IF NOT EXISTS ix_vp_run_activation_scheduled_for
+    ON tb_visual_pipeline_run(activation_id, scheduled_for);
+
+CREATE UNIQUE INDEX IF NOT EXISTS ux_vp_run_dedup_key
+    ON tb_visual_pipeline_run(dedup_key)
+    WHERE dedup_key IS NOT NULL;
+
+-- R11-S7-8 Visual Pipeline Schedule Activation
+DO $thermops_ct$
+BEGIN
+    CREATE TABLE IF NOT EXISTS tb_visual_pipeline_schedule_activation (
+    activation_id VARCHAR(40) PRIMARY KEY,
+    pipeline_id VARCHAR(50) NOT NULL,
+    materialization_result_id VARCHAR(40) NOT NULL,
+    compile_result_id VARCHAR(40),
+    r10_schedule_id VARCHAR(40) NOT NULL,
+    activation_status VARCHAR(30) NOT NULL,
+    cron_expression VARCHAR(120),
+    timezone VARCHAR(80),
+    activated_at TIMESTAMP,
+    deactivated_at TIMESTAMP,
+    next_due_at TIMESTAMP,
+    last_triggered_at TIMESTAMP,
+    trigger_count INTEGER NOT NULL DEFAULT 0,
+    metadata_json JSONB,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+EXCEPTION
+    WHEN duplicate_table THEN NULL;
+    WHEN unique_violation THEN NULL;
+END $thermops_ct$;
+
+CREATE INDEX IF NOT EXISTS ix_vp_schedule_activation_pipeline_status
+    ON tb_visual_pipeline_schedule_activation(pipeline_id, activation_status);
+
+CREATE INDEX IF NOT EXISTS ix_vp_schedule_activation_status_next_due
+    ON tb_visual_pipeline_schedule_activation(activation_status, next_due_at);
+
+CREATE INDEX IF NOT EXISTS ix_vp_schedule_activation_mat_result
+    ON tb_visual_pipeline_schedule_activation(materialization_result_id);
+
+CREATE INDEX IF NOT EXISTS ix_vp_schedule_activation_r10_schedule
+    ON tb_visual_pipeline_schedule_activation(r10_schedule_id);
+
+CREATE UNIQUE INDEX IF NOT EXISTS ux_vp_schedule_activation_pipeline_active
+    ON tb_visual_pipeline_schedule_activation(pipeline_id)
+    WHERE activation_status = 'ACTIVE';
 
 -- Pipeline Definition 실행 이력 연결 (R9)
 DO $thermops_ct$

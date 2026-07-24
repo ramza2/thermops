@@ -991,6 +991,11 @@ class VisualPipelineRun(Base):
     result_json: Mapped[dict | None] = mapped_column(JSONB)
     issues_json: Mapped[Any] = mapped_column(JSONB, default=list)
     error_message: Mapped[str | None] = mapped_column(Text)
+    activation_id: Mapped[str | None] = mapped_column(String(40))
+    r10_schedule_id: Mapped[str | None] = mapped_column(String(40))
+    scheduled_for: Mapped[datetime | None] = mapped_column(DateTime)
+    triggered_at: Mapped[datetime | None] = mapped_column(DateTime)
+    dedup_key: Mapped[str | None] = mapped_column(String(160))
     claimed_at: Mapped[datetime | None] = mapped_column(DateTime)
     claimed_by: Mapped[str | None] = mapped_column(String(120))
     locked_until: Mapped[datetime | None] = mapped_column(DateTime)
@@ -999,6 +1004,28 @@ class VisualPipelineRun(Base):
     started_at: Mapped[datetime | None] = mapped_column(DateTime)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime)
     created_at: Mapped[datetime] = mapped_column(DateTime)
+
+
+class VisualPipelineScheduleActivation(Base):
+    """R11-S7-8 Schedule Activation — due enqueue authority; does not call run_load."""
+
+    __tablename__ = "tb_visual_pipeline_schedule_activation"
+    activation_id: Mapped[str] = mapped_column(String(40), primary_key=True)
+    pipeline_id: Mapped[str] = mapped_column(String(50))
+    materialization_result_id: Mapped[str] = mapped_column(String(40))
+    compile_result_id: Mapped[str | None] = mapped_column(String(40))
+    r10_schedule_id: Mapped[str] = mapped_column(String(40))
+    activation_status: Mapped[str] = mapped_column(String(30))
+    cron_expression: Mapped[str | None] = mapped_column(String(120))
+    timezone: Mapped[str | None] = mapped_column(String(80))
+    activated_at: Mapped[datetime | None] = mapped_column(DateTime)
+    deactivated_at: Mapped[datetime | None] = mapped_column(DateTime)
+    next_due_at: Mapped[datetime | None] = mapped_column(DateTime)
+    last_triggered_at: Mapped[datetime | None] = mapped_column(DateTime)
+    trigger_count: Mapped[int] = mapped_column(Integer, default=0)
+    metadata_json: Mapped[dict | None] = mapped_column(JSONB)
+    created_at: Mapped[datetime] = mapped_column(DateTime)
+    updated_at: Mapped[datetime] = mapped_column(DateTime)
 
 
 class PipelineRunLink(Base):

@@ -386,13 +386,17 @@ export interface VisualPipelineRunIssue {
 export interface VisualPipelineRunResponse {
   visual_run_id: string;
   pipeline_id: string;
-  mode: "MANUAL" | string;
+  mode: "MANUAL" | "SCHEDULED" | string;
   execution_mode: "BACKGROUND" | "SYNC" | string;
   run_status: VisualPipelineRunStatus | string;
   compile_result_id?: string | null;
   materialization_result_id?: string | null;
   graph_version_hash?: string | null;
   load_run_id?: string | null;
+  activation_id?: string | null;
+  r10_schedule_id?: string | null;
+  scheduled_for?: string | null;
+  triggered_at?: string | null;
   started_at?: string | null;
   finished_at?: string | null;
   result?: Record<string, unknown> | null;
@@ -413,6 +417,9 @@ export interface VisualPipelineRunSummary {
   compile_result_id?: string | null;
   materialization_result_id?: string | null;
   load_run_id?: string | null;
+  activation_id?: string | null;
+  r10_schedule_id?: string | null;
+  scheduled_for?: string | null;
   started_at?: string | null;
   finished_at?: string | null;
   created_at?: string | null;
@@ -422,4 +429,36 @@ export interface VisualPipelineRunSummary {
 export interface VisualPipelineRunListResponse {
   items: VisualPipelineRunSummary[];
   limit?: number;
+}
+
+/** R11-S7-8 Schedule Activation. */
+export type VisualPipelineScheduleActivationStatus =
+  | "ACTIVE"
+  | "INACTIVE"
+  | "PAUSED"
+  | "ERROR"
+  | string;
+
+export interface VisualPipelineScheduleActivationResponse {
+  activation_id: string;
+  pipeline_id: string;
+  materialization_result_id?: string | null;
+  compile_result_id?: string | null;
+  r10_schedule_id: string;
+  activation_status: VisualPipelineScheduleActivationStatus;
+  cron_expression?: string | null;
+  timezone?: string | null;
+  activated_at?: string | null;
+  deactivated_at?: string | null;
+  next_due_at?: string | null;
+  last_triggered_at?: string | null;
+  trigger_count?: number;
+  metadata?: Record<string, unknown> | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+}
+
+export interface VisualPipelineScheduleActivationListResponse {
+  items: VisualPipelineScheduleActivationResponse[];
+  total?: number;
 }

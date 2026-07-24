@@ -53,6 +53,27 @@ class Settings(BaseSettings):
         default=1, validation_alias="THERMOOPS_VP_RUN_WORKER_MAX_BATCH_SIZE"
     )
     vp_run_worker_log_level: str = Field(default="INFO", validation_alias="THERMOOPS_VP_RUN_WORKER_LOG_LEVEL")
+    # R11-S7-8 Visual Pipeline Schedule Activation
+    vp_schedule_activation_enabled: bool = Field(
+        default=False, validation_alias="THERMOOPS_VP_SCHEDULE_ACTIVATION_ENABLED"
+    )
+    vp_schedule_worker_enabled: bool = Field(
+        default=False, validation_alias="THERMOOPS_VP_SCHEDULE_WORKER_ENABLED"
+    )
+    vp_schedule_worker_mode: str = Field(default="loop", validation_alias="THERMOOPS_VP_SCHEDULE_WORKER_MODE")
+    vp_schedule_worker_poll_interval_seconds: int = Field(
+        default=30, validation_alias="THERMOOPS_VP_SCHEDULE_WORKER_POLL_INTERVAL_SECONDS"
+    )
+    vp_schedule_worker_max_batch_size: int = Field(
+        default=10, validation_alias="THERMOOPS_VP_SCHEDULE_WORKER_MAX_BATCH_SIZE"
+    )
+    vp_schedule_worker_id: str = Field(default="", validation_alias="THERMOOPS_VP_SCHEDULE_WORKER_ID")
+    vp_schedule_min_interval_seconds: int = Field(
+        default=300, validation_alias="THERMOOPS_VP_SCHEDULE_MIN_INTERVAL_SECONDS"
+    )
+    vp_schedule_worker_log_level: str = Field(
+        default="INFO", validation_alias="THERMOOPS_VP_SCHEDULE_WORKER_LOG_LEVEL"
+    )
 
     @property
     def cors_origin_list(self) -> list[str]:

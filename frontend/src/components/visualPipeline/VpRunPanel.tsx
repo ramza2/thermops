@@ -104,7 +104,7 @@ export function VpRunPanel({
         onClick={onToggle}
       >
         <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
-          <Play className="w-3.5 h-3.5" /> Manual Run
+          <Play className="w-3.5 h-3.5" /> Run
         </span>
         <span className="flex items-center gap-2">
           {(loading || polling) && (
@@ -132,8 +132,8 @@ export function VpRunPanel({
       {expanded && (
         <div className="px-4 py-3 space-y-3">
           <p className="text-[11px] text-slate-600 leading-relaxed bg-slate-50 border border-slate-100 rounded-md px-2.5 py-2">
-            Manual Run은 실제 REST 호출과 대상 테이블 적재/갱신을 수행할 수 있습니다. 스케줄 활성화와 due worker 연결은
-            수행하지 않습니다.
+            Run은 Manual 또는 Scheduled로 구분됩니다. Manual은 Run Now로, Scheduled는 Schedule Activation 후
+            vp-schedule-worker가 PENDING을 생성하고 vp-run-worker가 실행합니다.
           </p>
 
           {canRunHint && (
@@ -170,6 +170,12 @@ export function VpRunPanel({
                   </span>
                 </span>
                 <span className="inline-flex items-center gap-1 text-[10px] font-mono bg-slate-50 border border-slate-200 rounded-md px-2 py-1">
+                  <span className="text-slate-400">mode</span>
+                  <span className="font-semibold text-slate-700" data-testid="visual-pipeline-run-mode">
+                    {result.mode}
+                  </span>
+                </span>
+                <span className="inline-flex items-center gap-1 text-[10px] font-mono bg-slate-50 border border-slate-200 rounded-md px-2 py-1">
                   <span className="text-slate-400">execution_mode</span>
                   <span className="font-semibold text-slate-700">{result.execution_mode}</span>
                 </span>
@@ -182,6 +188,34 @@ export function VpRunPanel({
                     >
                       {result.load_run_id}
                     </span>
+                  </span>
+                )}
+                {result.activation_id && (
+                  <span className="inline-flex items-center gap-1 text-[10px] font-mono bg-slate-50 border border-slate-200 rounded-md px-2 py-1">
+                    <span className="text-slate-400">activation_id</span>
+                    <span
+                      className="font-semibold text-slate-700"
+                      data-testid="visual-pipeline-run-activation-id"
+                    >
+                      {result.activation_id}
+                    </span>
+                  </span>
+                )}
+                {result.scheduled_for && (
+                  <span className="inline-flex items-center gap-1 text-[10px] font-mono bg-slate-50 border border-slate-200 rounded-md px-2 py-1">
+                    <span className="text-slate-400">scheduled_for</span>
+                    <span
+                      className="font-semibold text-slate-700"
+                      data-testid="visual-pipeline-run-scheduled-for"
+                    >
+                      {result.scheduled_for}
+                    </span>
+                  </span>
+                )}
+                {result.r10_schedule_id && (
+                  <span className="inline-flex items-center gap-1 text-[10px] font-mono bg-slate-50 border border-slate-200 rounded-md px-2 py-1">
+                    <span className="text-slate-400">r10_schedule_id</span>
+                    <span className="font-semibold text-slate-700">{result.r10_schedule_id}</span>
                   </span>
                 )}
               </div>

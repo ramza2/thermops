@@ -1531,8 +1531,27 @@ cd frontend && node scripts/check-visual-pipeline-studio.mjs
 - **Worker 권장:** `vp-schedule-worker`(due enqueue) ≠ `vp-run-worker`(실행) · Traefik 미노출 · Due SoT = materialized R10 schedule + activation record.
 - **S7-8 PoC 범위:** activation table · activation API · scheduled enqueue · `vp-schedule-worker` · Studio activation UI 최소 · `dedup_key`+unique 권장.
 - **S7-9 hardening:** catch-up · pause/resume · retry/cancel/progress · audit/notification · missed run.
-- **미포함:** Activation 구현, API/DB/FE/worker/`run_load`/package 변경.
-- **다음:** R11-S7-8 Schedule Activation PoC (별도 승인).
+- **미포함 (설계 시점):** Activation 구현, API/DB/FE/worker/`run_load`/package 변경.
+- **다음:** R11-S7-8 Schedule Activation PoC (아래 섹션).
+
+### R11-S7-8 Schedule Activation PoC
+
+- **범위:** Activation table · Activation API · `vp-schedule-worker` · Studio Activation UI · scheduled PENDING enqueue · `dedup_key` unique. pause/resume/catch-up/retry 제외.
+- **문서:** [`docs/md/THERMOps_R11-S7-7_Schedule_Activation_설계.md`](docs/md/THERMOps_R11-S7-7_Schedule_Activation_설계.md)
+- **DB:** `tb_visual_pipeline_schedule_activation` · run provenance (`activation_id`/`r10_schedule_id`/`scheduled_for`/`triggered_at`/`dedup_key`) · partial unique ACTIVE · (`scripts/r11s7_schedule_activation.sql`)
+- **API:** `POST/GET .../schedule-activations` · `GET .../current` · `POST .../{id}/deactivate` — **`run_load`/run row 생성 없음**. flag off → 409 `SCHEDULE_ACTIVATION_DISABLED`.
+- **Worker:** `vp-schedule-worker` due → `mode=SCHEDULED` PENDING enqueue · `vp-run-worker`가 실행 · R10 `run-due-worker` **미사용** · R10 `active_yn=false` 유지.
+- **Studio:** Soon 제거 · Activation Panel · Run Panel provenance(`mode`/`scheduled_for`/`activation_id`)
+- **배포 예:**
+  ```bash
+  python3 scripts/apply_dev_migrations.py
+  # .env: THERMOOPS_VP_SCHEDULE_ACTIVATION_ENABLED=true
+  docker compose -f docker-compose.traefik.yml --env-file .env.deploy up -d --build \
+    backend frontend vp-run-worker vp-schedule-worker
+  ```
+- **Known limitation:** catch-up 없음 · pause/resume 없음 · retry/cancel/progress 없음 · STALE active 자동 비활성 없음 · audit/notification 없음 · ACTIVE 중 Manual PENDING이 있으면 due slot skip(miss)
+- **테스트:** `python scripts/test_visual_pipeline_schedule_activation.py` · `python scripts/test_visual_pipeline_schedule_worker.py` (quick **미포함**)
+- **다음:** R11-S7-9 Schedule/run hardening (별도 승인).
 
 ## 설계 문서 참조
 

@@ -69,6 +69,7 @@ services:
       AIRFLOW_USERNAME: admin
       AIRFLOW_PASSWORD: admin
       THERMOOPS_VP_RUN_EXECUTOR: ${THERMOOPS_VP_RUN_EXECUTOR:-background_tasks}
+      THERMOOPS_VP_SCHEDULE_ACTIVATION_ENABLED: ${THERMOOPS_VP_SCHEDULE_ACTIVATION_ENABLED:-true}
     ports:
       - "8000:8000"
     volumes:
@@ -128,6 +129,27 @@ services:
       backend:
         condition: service_started
     command: python -m app.workers.visual_pipeline_run_worker --mode loop
+    restart: unless-stopped
+
+  vp-schedule-worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: thermops-vp-schedule-worker
+    environment:
+      DATABASE_URL: postgresql+asyncpg://thermops:thermops@postgres:5432/thermops
+      THERMOOPS_VP_SCHEDULE_ACTIVATION_ENABLED: "true"
+      THERMOOPS_VP_SCHEDULE_WORKER_ENABLED: "true"
+      THERMOOPS_VP_SCHEDULE_WORKER_MODE: loop
+      THERMOOPS_VP_SCHEDULE_WORKER_POLL_INTERVAL_SECONDS: "30"
+      THERMOOPS_VP_SCHEDULE_WORKER_MAX_BATCH_SIZE: "10"
+      GIT_PYTHON_REFRESH: quiet
+    depends_on:
+      postgres:
+        condition: service_healthy
+      backend:
+        condition: service_started
+    command: python -m app.workers.visual_pipeline_schedule_worker --mode loop
     restart: unless-stopped
 
   frontend:

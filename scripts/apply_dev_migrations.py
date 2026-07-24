@@ -370,6 +370,10 @@ MIGRATIONS = [
         "R11-S7-6 visual pipeline run worker claim columns",
         _load_sql("r11s7_visual_pipeline_run_worker.sql"),
     ),
+    (
+        "R11-S7-8 visual pipeline schedule activation",
+        _load_sql("r11s7_schedule_activation.sql"),
+    ),
 ]
 
 
