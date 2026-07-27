@@ -1672,10 +1672,19 @@ cd frontend && node scripts/check-visual-pipeline-studio.mjs
 - **핵심:** 「R10 설정 반영」→「실행 설정 반영」 · 「Run Now」→「즉시 실행」 · 「Schedule Activation」→「스케줄 활성화」 · Materialization 표시명 → 실행 설정 반영
 - **경계 문구:** Compile / 실행 설정 반영은 API·적재·스케줄 미수행 · 즉시 실행은 실제 API·적재 가능 · 스케줄 활성화는 대기 Run 생성 후 실행기가 적재
 - **대상:** `VisualPipelineStudioPage` · `VpMaterializationPanel` · `VpCompilePanel` · `VpRunPanel` · `VpScheduleActivationPanel`
+- **다음:** R11-S8-2 Run History UI/API 고도화 (아래 섹션)
+
+### R11-S8-2 Run History UI/API 고도화
+
+- **범위:** 기존 `tb_visual_pipeline_run` 기반 list/detail 고도화. **migration 없음**. Progress/Retry/Interrupt/Catch-up/Notification 미구현.
+- **API:** `GET .../runs` optional filter(`run_status`,`mode`,`activation_id`, created/scheduled range, `offset`/`total`) · detail additive(worker/lease/`created_at`/`dedup_key`/`issues_count`) · SELECT only
+- **Studio:** Run Panel 「최근 실행 이력」·상태/방식 필터·상세 패널(read-only) · latest polling 유지 · history 과다 polling 금지
+- **Ops:** Stuck/Recent/Audit에서 `pipeline_id`+`visual_run_id` 있을 때 Run 상세 · mark-failed와 분리 · 용어「실행 설정 반영」유지
+- **테스트:** `scripts/test_visual_pipeline_run_history.py` · studio/ops smoke 보강
 - **다음:**
-  - R11-S8-2 Run History UI/API 고도화
   - R11-S8-3 Step-level Progress PoC
   - R11-S8-4 Retry Policy PoC
+  - R11-S8-5 RUNNING soft-cancel 설계/PoC
 
 ## 설계 문서 참조
 

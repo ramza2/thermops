@@ -82,6 +82,24 @@ try {
     if (!failVisible) fail("recent failures table or empty message expected");
     console.log("  [ok] recent failures section");
 
+    const detailButtons = page.getByTestId("visual-pipeline-ops-run-detail-button");
+    if ((await detailButtons.count()) > 0) {
+      await detailButtons.first().click();
+      await page.getByTestId("visual-pipeline-ops-run-detail-panel").waitFor({
+        state: "visible",
+        timeout: 15000,
+      });
+      const badInDetail = await page
+        .getByTestId("visual-pipeline-ops-run-detail-panel")
+        .getByRole("button", { name: /retry|재시도|중단 요청/i })
+        .count();
+      if (badInDetail > 0) fail("ops run detail must be read-only (no retry/interrupt)");
+      await page.getByTestId("visual-pipeline-ops-run-detail-close").click();
+      console.log("  [ok] ops run detail panel read-only");
+    } else {
+      console.log("  [skip] no ops run detail buttons (no stuck/failure/audit with run ids)");
+    }
+
     // Non-stuck destructive actions must not exist
     const badActions = await page.getByRole("button", {
       name: /pause|resume|deactivate|cancel|retry|정리 적용/i,

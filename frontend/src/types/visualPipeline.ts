@@ -399,13 +399,22 @@ export interface VisualPipelineRunResponse {
   triggered_at?: string | null;
   started_at?: string | null;
   finished_at?: string | null;
+  created_at?: string | null;
   result?: Record<string, unknown> | null;
   issues?: VisualPipelineRunIssue[];
+  issues_count?: number;
   poll_url?: string | null;
   schedule_active_changed?: boolean;
   current_sync_status_changed?: boolean;
   error_message?: string | null;
   persisted?: boolean;
+  /** S8-2 additive */
+  dedup_key?: string | null;
+  claimed_at?: string | null;
+  claimed_by?: string | null;
+  locked_until?: string | null;
+  heartbeat_at?: string | null;
+  attempt_count?: number | null;
 }
 
 export interface VisualPipelineRunSummary {
@@ -416,19 +425,43 @@ export interface VisualPipelineRunSummary {
   run_status: VisualPipelineRunStatus | string;
   compile_result_id?: string | null;
   materialization_result_id?: string | null;
+  graph_version_hash?: string | null;
   load_run_id?: string | null;
   activation_id?: string | null;
   r10_schedule_id?: string | null;
   scheduled_for?: string | null;
+  triggered_at?: string | null;
   started_at?: string | null;
   finished_at?: string | null;
   created_at?: string | null;
+  claimed_by?: string | null;
+  claimed_at?: string | null;
+  locked_until?: string | null;
+  heartbeat_at?: string | null;
+  attempt_count?: number | null;
+  error_message?: string | null;
+  issues_count?: number;
   result_summary?: Record<string, unknown> | null;
+}
+
+export interface VisualPipelineRunListParams {
+  status?: string;
+  run_status?: string;
+  mode?: string;
+  activation_id?: string;
+  created_from?: string;
+  created_to?: string;
+  scheduled_from?: string;
+  scheduled_to?: string;
+  limit?: number;
+  offset?: number;
 }
 
 export interface VisualPipelineRunListResponse {
   items: VisualPipelineRunSummary[];
   limit?: number;
+  offset?: number;
+  total?: number;
 }
 
 /** R11-S7-8 Schedule Activation. */

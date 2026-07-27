@@ -8,12 +8,15 @@ import {
   markVisualPipelineStuckRunFailed,
 } from "@/api/visualPipelineOps";
 import { extractApiErrorMessage } from "@/api/client";
+import { getVisualPipelineRun } from "@/api/visualPipelines";
 import { Button } from "@/components/Button";
 import { Modal } from "@/components/Modal";
 import { LoadingState, ErrorState } from "@/components/Pagination";
+import { VpRunDetailPanel } from "@/components/visualPipeline/VpRunDetailPanel";
 import { PageHeader } from "@/layouts/MainLayout";
 import { useRole } from "@/hooks/useRole";
 import { PAGE_DESCRIPTIONS, PAGE_TITLES } from "@/constants/displayLabels";
+import type { VisualPipelineRunResponse } from "@/types/visualPipeline";
 import type {
   VisualPipelineAuditLogListItem,
   VisualPipelineOpsStuckRun,
@@ -93,6 +96,29 @@ export default function VisualPipelineOpsPage() {
   const [markSubmitting, setMarkSubmitting] = useState(false);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+
+  const [runDetail, setRunDetail] = useState<VisualPipelineRunResponse | null>(null);
+  const [runDetailOpen, setRunDetailOpen] = useState(false);
+  const [runDetailLoading, setRunDetailLoading] = useState(false);
+  const [runDetailError, setRunDetailError] = useState<string | null>(null);
+
+  const openRunDetail = async (pipelineId?: string | null, visualRunId?: string | null) => {
+    if (!pipelineId || !visualRunId) return;
+    setRunDetailOpen(true);
+    setRunDetail(null);
+    setRunDetailError(null);
+    setRunDetailLoading(true);
+    try {
+      const detail = await getVisualPipelineRun(pipelineId, visualRunId);
+      setRunDetail(detail);
+    } catch (err) {
+      setRunDetailError(
+        extractApiErrorMessage(err, "Run 상세 정보를 찾을 수 없습니다. 목록을 새로고침해 주세요."),
+      );
+    } finally {
+      setRunDetailLoading(false);
+    }
+  };
 
   const loadAudit = useCallback(async () => {
     if (!canViewVpOps) return;
@@ -456,13 +482,22 @@ export default function VisualPipelineOpsPage() {
                         <td className="px-2 py-1.5 font-mono">{fmt(row.claimed_by)}</td>
                         <td className="px-2 py-1.5 tabular-nums">{fmt(row.attempt_count)}</td>
                         <td className="px-2 py-1.5 whitespace-nowrap">
-                          <Button
-                            variant="secondary"
-                            onClick={() => openMarkFailed(row)}
-                            data-testid="visual-pipeline-ops-mark-failed-button"
-                          >
-                            실패 처리
-                          </Button>
+                          <div className="flex flex-wrap gap-1.5">
+                            <Button
+                              variant="secondary"
+                              onClick={() => void openRunDetail(row.pipeline_id, row.visual_run_id)}
+                              data-testid="visual-pipeline-ops-run-detail-button"
+                            >
+                              Run 상세
+                            </Button>
+                            <Button
+                              variant="secondary"
+                              onClick={() => openMarkFailed(row)}
+                              data-testid="visual-pipeline-ops-mark-failed-button"
+                            >
+                              실패 처리
+                            </Button>
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -488,6 +523,7 @@ export default function VisualPipelineOpsPage() {
                         "activation_id",
                         "error_message",
                         "finished_at",
+                        "action",
                       ].map((h) => (
                         <th key={h} className="px-2 py-1.5 font-medium whitespace-nowrap">
                           {h}
@@ -509,6 +545,17 @@ export default function VisualPipelineOpsPage() {
                         </td>
                         <td className="px-2 py-1.5 font-mono whitespace-nowrap">
                           {fmt(row.finished_at)}
+                        </td>
+                        <td className="px-2 py-1.5 whitespace-nowrap">
+                          {row.pipeline_id && row.visual_run_id ? (
+                            <Button
+                              variant="secondary"
+                              onClick={() => void openRunDetail(row.pipeline_id, row.visual_run_id)}
+                              data-testid="visual-pipeline-ops-run-detail-button"
+                            >
+                              Run 상세
+                            </Button>
+                          ) : null}
                         </td>
                       </tr>
                     ))}
@@ -578,6 +625,7 @@ export default function VisualPipelineOpsPage() {
                     "activation_id",
                     "actor",
                     "reason",
+                    "action",
                   ].map((h) => (
                     <th key={h} className="px-2 py-1.5 font-medium whitespace-nowrap">
                       {h}
@@ -608,6 +656,17 @@ export default function VisualPipelineOpsPage() {
                     <td className="px-2 py-1.5 max-w-xs truncate" title={row.reason ?? ""}>
                       {fmt(row.reason)}
                     </td>
+                    <td className="px-2 py-1.5 whitespace-nowrap">
+                      {row.pipeline_id && row.visual_run_id ? (
+                        <Button
+                          variant="secondary"
+                          onClick={() => void openRunDetail(row.pipeline_id, row.visual_run_id)}
+                          data-testid="visual-pipeline-ops-run-detail-button"
+                        >
+                          Run 상세
+                        </Button>
+                      ) : null}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -615,6 +674,22 @@ export default function VisualPipelineOpsPage() {
           </div>
         )}
       </section>
+
+      {runDetailOpen && (
+        <div className="bg-white border border-slate-200 rounded-lg p-4 shadow-sm">
+          <VpRunDetailPanel
+            detail={runDetail}
+            loading={runDetailLoading}
+            error={runDetailError}
+            testIdPrefix="visual-pipeline-ops-run-detail"
+            onClose={() => {
+              setRunDetailOpen(false);
+              setRunDetail(null);
+              setRunDetailError(null);
+            }}
+          />
+        </div>
+      )}
 
       <Modal
         open={!!markTarget}

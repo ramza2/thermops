@@ -11,6 +11,7 @@ import type {
   VisualPipelineGraph,
   VisualPipelineListResponse,
   VisualPipelineRunListResponse,
+  VisualPipelineRunListParams,
   VisualPipelineRunRequest,
   VisualPipelineRunResponse,
   VisualPipelineScheduleActivationListResponse,
@@ -186,9 +187,27 @@ export async function getVisualPipelineRun(
 
 export async function listVisualPipelineRuns(
   pipelineId: string,
-  limit = 20,
+  limitOrParams: number | VisualPipelineRunListParams = 20,
 ): Promise<VisualPipelineRunListResponse> {
-  return fetchApi<VisualPipelineRunListResponse>(`/visual-pipelines/${pipelineId}/runs`, { limit });
+  const params: Record<string, unknown> =
+    typeof limitOrParams === "number"
+      ? { limit: limitOrParams }
+      : {
+          limit: limitOrParams.limit ?? 20,
+          offset: limitOrParams.offset,
+          run_status: limitOrParams.run_status ?? limitOrParams.status,
+          mode: limitOrParams.mode,
+          activation_id: limitOrParams.activation_id,
+          created_from: limitOrParams.created_from,
+          created_to: limitOrParams.created_to,
+          scheduled_from: limitOrParams.scheduled_from,
+          scheduled_to: limitOrParams.scheduled_to,
+        };
+  // Drop undefined keys so axios does not send "undefined"
+  Object.keys(params).forEach((k) => {
+    if (params[k] === undefined || params[k] === "") delete params[k];
+  });
+  return fetchApi<VisualPipelineRunListResponse>(`/visual-pipelines/${pipelineId}/runs`, params);
 }
 
 /**

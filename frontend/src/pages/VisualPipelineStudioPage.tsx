@@ -158,6 +158,7 @@ function StudioCanvasInner() {
   const [pausing, setPausing] = useState(false);
   const [resuming, setResuming] = useState(false);
   const [cancellingRun, setCancellingRun] = useState(false);
+  const [historyRefreshToken, setHistoryRefreshToken] = useState(0);
   const runPollGenRef = useRef(0);
 
   const nodeTypes = useMemo(() => buildNodeTypes(), []);
@@ -188,6 +189,7 @@ function StudioCanvasInner() {
           setRunPollError(null);
           if (RUN_TERMINAL_STATUSES.has(String(detail.run_status))) {
             setRunPolling(false);
+            setHistoryRefreshToken((n) => n + 1);
             return;
           }
         } catch (err) {
@@ -766,6 +768,7 @@ function StudioCanvasInner() {
       const accepted = await runVisualPipeline(pipelineId, { mode: "MANUAL" });
       setRunResult(accepted);
       showToast("success", "즉시 실행이 접수되었습니다. 상태를 확인합니다.");
+      setHistoryRefreshToken((n) => n + 1);
       if (RUN_TERMINAL_STATUSES.has(String(accepted.run_status))) {
         setRunPolling(false);
       } else {
@@ -905,6 +908,7 @@ function StudioCanvasInner() {
       setRunResult(result);
       stopRunPolling();
       showToast("success", "대기 중인 Run이 취소되었습니다.");
+      setHistoryRefreshToken((n) => n + 1);
     } catch (err) {
       const detail = extractApiErrorMessage(err, "Run 취소에 실패했습니다.");
       setRunError(detail);
@@ -1202,6 +1206,8 @@ function StudioCanvasInner() {
         onResume={() => void handleResumeSchedule()}
       />
       <VpRunPanel
+        pipelineId={pipelineId}
+        historyRefreshToken={historyRefreshToken}
         result={runResult}
         loading={running || runLoadingLatest}
         polling={runPolling}

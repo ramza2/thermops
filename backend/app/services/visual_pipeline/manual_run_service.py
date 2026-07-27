@@ -762,18 +762,31 @@ async def list_visual_pipeline_runs(
     pipeline_id: str,
     *,
     limit: int = 20,
+    offset: int = 0,
+    run_status: str | None = None,
+    mode: str | None = None,
+    activation_id: str | None = None,
+    created_from: str | None = None,
+    created_to: str | None = None,
+    scheduled_from: str | None = None,
+    scheduled_to: str | None = None,
 ) -> dict[str, Any]:
-    await _get_visual_definition(db, pipeline_id)
-    lim = max(1, min(int(limit), 100))
-    rows = (
-        await db.execute(
-            select(VisualPipelineRun)
-            .where(VisualPipelineRun.pipeline_id == pipeline_id)
-            .order_by(VisualPipelineRun.created_at.desc())
-            .limit(lim)
-        )
-    ).scalars().all()
-    return {"items": [_summary_row(r) for r in rows], "limit": lim}
+    """Read-only list — delegates to run_history_service (S8-2)."""
+    from app.services.visual_pipeline.run_history_service import list_visual_pipeline_runs_history
+
+    return await list_visual_pipeline_runs_history(
+        db,
+        pipeline_id,
+        limit=limit,
+        offset=offset,
+        run_status=run_status,
+        mode=mode,
+        activation_id=activation_id,
+        created_from=created_from,
+        created_to=created_to,
+        scheduled_from=scheduled_from,
+        scheduled_to=scheduled_to,
+    )
 
 
 async def get_visual_pipeline_run(
@@ -781,18 +794,10 @@ async def get_visual_pipeline_run(
     pipeline_id: str,
     visual_run_id: str,
 ) -> dict[str, Any]:
-    await _get_visual_definition(db, pipeline_id)
-    row = (
-        await db.execute(
-            select(VisualPipelineRun).where(
-                VisualPipelineRun.pipeline_id == pipeline_id,
-                VisualPipelineRun.visual_run_id == visual_run_id,
-            )
-        )
-    ).scalar_one_or_none()
-    if row is None:
-        raise LookupError("VISUAL_PIPELINE_RUN_NOT_FOUND")
-    return _row_to_response(row)
+    """Read-only detail — delegates to run_history_service (S8-2)."""
+    from app.services.visual_pipeline.run_history_service import get_visual_pipeline_run_history_detail
+
+    return await get_visual_pipeline_run_history_detail(db, pipeline_id, visual_run_id)
 
 
 async def cancel_visual_pipeline_run(

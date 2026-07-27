@@ -1,7 +1,10 @@
 import { ChevronDown, Play } from "lucide-react";
+import { VpRunHistorySection } from "@/components/visualPipeline/VpRunHistorySection";
 import type { VisualPipelineRunIssue, VisualPipelineRunResponse } from "@/types/visualPipeline";
 
 interface VpRunPanelProps {
+  pipelineId?: string;
+  historyRefreshToken?: number;
   result: VisualPipelineRunResponse | null;
   loading?: boolean;
   polling?: boolean;
@@ -80,6 +83,8 @@ function asCount(value: unknown): string {
 }
 
 export function VpRunPanel({
+  pipelineId,
+  historyRefreshToken = 0,
   result,
   loading,
   polling,
@@ -322,6 +327,10 @@ export function VpRunPanel({
                 </p>
               )}
             </>
+          )}
+
+          {pipelineId && (
+            <VpRunHistorySection pipelineId={pipelineId} refreshToken={historyRefreshToken} />
           )}
         </div>
       )}

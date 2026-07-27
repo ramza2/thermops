@@ -414,14 +414,37 @@ async def post_visual_pipeline_manual_run(
 async def get_visual_pipeline_runs(
     pipeline_id: str,
     limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    run_status: str | None = Query(default=None),
+    mode: str | None = Query(default=None),
+    activation_id: str | None = Query(default=None),
+    created_from: str | None = Query(default=None),
+    created_to: str | None = Query(default=None),
+    scheduled_from: str | None = Query(default=None),
+    scheduled_to: str | None = Query(default=None),
     db: AsyncSession = Depends(get_db),
 ):
+    """List Visual Pipeline runs (R11-S8-2 read-only history filters)."""
     from app.services.visual_pipeline.manual_run_service import list_visual_pipeline_runs
 
     try:
-        result = await list_visual_pipeline_runs(db, pipeline_id, limit=limit)
+        result = await list_visual_pipeline_runs(
+            db,
+            pipeline_id,
+            limit=limit,
+            offset=offset,
+            run_status=run_status,
+            mode=mode,
+            activation_id=activation_id,
+            created_from=created_from,
+            created_to=created_to,
+            scheduled_from=scheduled_from,
+            scheduled_to=scheduled_to,
+        )
     except LookupError:
         raise HTTPException(status_code=404, detail="VISUAL_PIPELINE_NOT_FOUND") from None
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc) or "INVALID_RUN_HISTORY_FILTER") from None
     return ok(result)
 
 
