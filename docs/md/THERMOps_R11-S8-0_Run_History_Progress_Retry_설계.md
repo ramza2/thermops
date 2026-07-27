@@ -407,10 +407,11 @@ Audit 후보: `SCHEDULE_CATCH_UP_ENQUEUED`
 
 ### 9.3 권장
 
-- **S8-7** Notification 설계
+- **S8-7** Notification 설계 → 상세: [`THERMOps_R11-S8-7_Notification_설계.md`](./THERMOps_R11-S8-7_Notification_설계.md)
 - audit(`누가 무엇을`)과 notification(`누구에게 알림`) **분리**
 - 기본 테스트에서 외부 send 금지 (mock)
-- 테이블 후보: `tb_visual_pipeline_notification_event` (audit 재사용 비권장)
+- 테이블 후보: `tb_visual_pipeline_notification` (S8-7에서 `notification_event` 명칭 정리, audit 재사용 비권장)
+- MVP 구현은 **S8-7-1 read-model badge**부터 · persistent/external은 S8-7-2/S8-7-3
 
 ---
 
@@ -580,7 +581,7 @@ POST .../runs/{run_id}/cancel
 | S8-4 Retry | FAILED→새 run · lineage · max count · audit · 원본 불변 · dedup 분리 · worker 실행 |
 | S8-5 Cancel-request | RUNNING request · step boundary · audit · non-interruptible 경고 · **no kill** |
 | S8-6 Catch-up | missed query · manual enqueue · dedup conflict · activation 경계 |
-| S8-7 Notification | trigger · channel mock · 기본 테스트 외부 send 없음 · notification log |
+| S8-7 Notification | docs-only 설계 · S8-7-1 badge PoC · 외부 send 없음 · persistent는 S8-7-2 |
 
 회귀: 기존 schedule/run/ops/audit/admin-action · quick group · FE build/check 스크립트 유지.
 

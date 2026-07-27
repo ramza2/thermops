@@ -1727,13 +1727,25 @@ cd frontend && node scripts/check-visual-pipeline-studio.mjs
 - **Audit/Event:** `SCHEDULE_CATCHUP_ENQUEUED` audit **fail-close** · `RUN_CREATED`/`SCHEDULE_CATCHUP_ENQUEUED` event fail-open
 - **FE:** Studio Activation Panel 「누락 실행 보정」 · History `누락 보정` badge · Detail provenance · Ops enqueue 없음
 - **테스트:** `scripts/test_visual_pipeline_schedule_catchup.py` · studio/ops smoke 보강
+- **다음:** R11-S8-7 Notification 설계 (아래 섹션)
+
+### R11-S8-7 Notification 설계
+
+- **범위:** docs-only — Visual Pipeline **운영 Notification** 정책 설계. DB/API/FE/worker/package/외부 발송 **미구현**.
+- **문서:** [`docs/md/THERMOps_R11-S8-7_Notification_설계.md`](docs/md/THERMOps_R11-S8-7_Notification_설계.md) (기준 커밋 `a604f77`)
+- **구분:** Notification(조치 필요) ≠ Audit(증적) ≠ Run Event(timeline). 모든 run_event가 알림은 아님.
+- **대상:** FAILED/PARTIAL · stuck(`PENDING_TOO_OLD`/`RUNNING_LOCK_EXPIRED`) · soft-cancel 미반영 · catch-up 후보 · retry max exceeded 등. SUCCESS/STEP/정상 enqueue는 기본 suppress.
+- **정책:** severity INFO/WARNING/ERROR/CRITICAL(MVP는 WARNING/ERROR 중심) · dedup/grouping · read≠ack≠resolve · metadata redaction · 「R10 설정 반영」재노출 금지
+- **UI 설계:** Studio badge/drawer · Ops 「조치 필요」· Run Detail 연계. 액션은 기존 retry/cancel/catch-up으로 이동 (notification에서 직접 실행 안 함)
+- **후속:** S8-7-1 read-model badge PoC(no DB) → S8-7-2 persistent table/API → S8-7-3 external channel(별도 승인) → R12 preference/ACL. Slack/Email/SMS/Webhook/Web Push는 본 단계 제외.
 - **다음:**
-  - R11-S8-7 Notification 설계
   - R11-S8-8 열수요 예측 Full Scenario 이용가이드 설계
   - R11-S8-9 Full Scenario 기반 UX/기능 보완
+  - (병행 가능) R11-S8-7-1 Notification badge PoC 또는 R12 Notification 구현
 
 ## 설계 문서 참조
 
+- `docs/md/THERMOps_R11-S8-7_Notification_설계.md`
 - `docs/md/THERMOps_R11-S8-0_Run_History_Progress_Retry_설계.md`
 - `docs/md/THERMOps_R11-S7-15_Visual_Pipeline_운영기능_마감정리.md`
 - `docs/md/THERMOps_R11-S7-11_Admin_UI_Audit_설계.md`
