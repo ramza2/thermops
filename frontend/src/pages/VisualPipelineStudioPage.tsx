@@ -217,7 +217,7 @@ function StudioCanvasInner() {
           startRunPolling(latest.visual_run_id);
         }
       } catch (err) {
-        setRunError(extractApiErrorMessage(err, "최근 Manual Run 결과를 불러오지 못했습니다."));
+        setRunError(extractApiErrorMessage(err, "최근 실행 결과를 불러오지 못했습니다."));
       } finally {
         setRunLoadingLatest(false);
       }
@@ -232,7 +232,7 @@ function StudioCanvasInner() {
       const latest = await getVisualPipelineMaterializationResult(id);
       setMaterializationResult(latest);
     } catch (err) {
-      setMaterializationError(extractApiErrorMessage(err, "최근 Materialization 결과를 불러오지 못했습니다."));
+      setMaterializationError(extractApiErrorMessage(err, "최근 실행 설정 반영 결과를 불러오지 못했습니다."));
     } finally {
       setMaterializationLoadingLatest(false);
     }
@@ -258,7 +258,7 @@ function StudioCanvasInner() {
       const latest = await getCurrentVisualPipelineScheduleActivation(id);
       setActivationResult(latest);
     } catch (err) {
-      setActivationError(extractApiErrorMessage(err, "최근 Schedule Activation을 불러오지 못했습니다."));
+      setActivationError(extractApiErrorMessage(err, "최근 스케줄 활성화 정보를 불러오지 못했습니다."));
     } finally {
       setActivationLoadingLatest(false);
     }
@@ -559,7 +559,7 @@ function StudioCanvasInner() {
         // panel still shows compile result even if detail refresh fails
       }
       if (result.compile_status === "SUCCESS") {
-        showToast("success", "컴파일 결과가 저장되었습니다. (실행/스케줄 활성화 아님)");
+        showToast("success", "Compile 결과가 저장되었습니다. 외부 API 호출·데이터 적재·스케줄 활성화는 수행되지 않습니다.");
       } else {
         showToast("error", "컴파일에 실패했습니다. 이슈를 확인하세요.");
       }
@@ -663,23 +663,23 @@ function StudioCanvasInner() {
 
   const activateDisabledReason = useMemo(() => {
     if (canActivate) {
-      return "스케줄 활성화를 수행합니다. due 시 PENDING scheduled run이 생성될 수 있습니다.";
+      return "스케줄을 활성화하면 지정된 주기에 따라 실행 대기 Run이 생성됩니다. 실제 데이터 적재는 실행기가 Run을 처리할 때 수행됩니다.";
     }
-    if (dirty) return "미저장 변경사항이 있습니다. 저장 후 Compile → R10 설정 반영을 완료하세요.";
+    if (dirty) return "저장되지 않은 변경사항이 있습니다. 저장 후 Compile → 실행 설정 반영을 완료하세요.";
     if (compiling || materializing || running || activating || deactivating || pausing || resuming) {
       return "다른 작업이 진행 중입니다.";
     }
     if (activationResult?.activation_status === "ACTIVE") return "이미 활성화된 스케줄이 있습니다.";
-    if (activationResult?.activation_status === "PAUSED") return "일시중지된 스케줄이 있습니다. Resume 또는 Deactivate하세요.";
+    if (activationResult?.activation_status === "PAUSED") return "일시중지된 스케줄이 있습니다. 재개 또는 비활성화를 사용하세요.";
     if (compileResult?.compile_status !== "SUCCESS" || !compileResult?.persisted) {
-      return "persisted SUCCESS Compile이 필요합니다.";
+      return "먼저 Compile을 성공시켜야 스케줄을 활성화할 수 있습니다.";
     }
-    if (pipeline?.current_sync_status !== "IN_SYNC") return "컴파일 동기화 상태(IN_SYNC)가 필요합니다.";
+    if (pipeline?.current_sync_status !== "IN_SYNC") return "현재 그래프와 Compile 결과가 일치하지 않습니다. 다시 Compile해 주세요.";
     if (materializationResult?.materialization_status !== "SUCCESS") {
-      return "SUCCESS Materialization(R10 설정 반영)이 필요합니다.";
+      return "성공한 실행 설정 반영이 필요합니다.";
     }
-    if (!hasMaterializedSchedule) return "Materialized CRON schedule이 없습니다.";
-    return "Schedule Activation 조건을 충족하지 않습니다.";
+    if (!hasMaterializedSchedule) return "실행 설정에 스케줄(CRON)이 없습니다.";
+    return "스케줄 활성화 조건을 충족하지 않습니다.";
   }, [
     canActivate,
     dirty,
@@ -699,19 +699,19 @@ function StudioCanvasInner() {
 
   const runDisabledReason = useMemo(() => {
     if (canRun) {
-      return "Manual Run을 실행합니다. 실제 REST 호출과 대상 테이블 적재가 발생할 수 있습니다. 스케줄은 활성화하지 않습니다.";
+      return "즉시 실행을 시작합니다. 실제 외부 API 호출과 데이터 적재/갱신을 수행할 수 있습니다. 스케줄 활성화는 수행하지 않습니다.";
     }
-    if (dirty) return "미저장 변경사항이 있습니다. 저장 후 Compile → R10 설정 반영을 완료하세요.";
+    if (dirty) return "저장되지 않은 변경사항이 있습니다. 저장 후 Compile → 실행 설정 반영을 완료하세요.";
     if (compiling || materializing || running) return "다른 작업이 진행 중입니다.";
-    if (isRunActive) return "이미 실행 중인 Manual Run이 있습니다.";
+    if (isRunActive) return "이미 실행 중인 Run이 있습니다.";
     if (compileResult?.compile_status !== "SUCCESS" || !compileResult?.persisted) {
-      return "persisted SUCCESS Compile이 필요합니다.";
+      return "먼저 Compile을 성공시켜야 즉시 실행할 수 있습니다.";
     }
-    if (pipeline?.current_sync_status !== "IN_SYNC") return "컴파일 동기화 상태(IN_SYNC)가 필요합니다.";
+    if (pipeline?.current_sync_status !== "IN_SYNC") return "현재 그래프와 Compile 결과가 일치하지 않습니다. 다시 Compile해 주세요.";
     if (materializationResult?.materialization_status !== "SUCCESS") {
-      return "SUCCESS Materialization(R10 설정 반영)이 필요합니다.";
+      return "성공한 실행 설정 반영이 필요합니다.";
     }
-    return "Manual Run 조건을 충족하지 않습니다.";
+    return "즉시 실행 조건을 충족하지 않습니다.";
   }, [
     canRun,
     dirty,
@@ -727,7 +727,7 @@ function StudioCanvasInner() {
   const handleMaterialize = async () => {
     if (!pipelineId || !canMaterialize) return;
     const confirmed = window.confirm(
-      "R10 설정 row를 생성/갱신합니다. 외부 API 호출, 적재 실행, 스케줄 활성화는 수행하지 않습니다.",
+      "실행 설정을 생성하거나 갱신합니다.\n이 작업은 외부 API 호출, 데이터 적재, 스케줄 활성화를 수행하지 않습니다.\n계속 진행하시겠습니까?",
     );
     if (!confirmed) return;
 
@@ -738,13 +738,13 @@ function StudioCanvasInner() {
       const result = await materializeVisualPipeline(pipelineId);
       setMaterializationResult(result);
       if (result.materialization_status === "SUCCESS") {
-        showToast("success", "R10 설정이 반영되었습니다. (실행/스케줄 활성화 아님)");
+        showToast("success", "실행 설정이 반영되었습니다.");
       } else {
-        showToast("error", "R10 설정 반영에 실패했습니다. 이슈를 확인하세요.");
+        showToast("error", "실행 설정 반영에 실패했습니다. 이슈를 확인하세요.");
       }
     } catch (err) {
-      setMaterializationError(extractApiErrorMessage(err, "R10 설정 반영에 실패했습니다."));
-      showToast("error", extractApiErrorMessage(err, "R10 설정 반영에 실패했습니다."));
+      setMaterializationError(extractApiErrorMessage(err, "실행 설정 반영에 실패했습니다."));
+      showToast("error", extractApiErrorMessage(err, "실행 설정 반영에 실패했습니다."));
     } finally {
       setMaterializing(false);
     }
@@ -753,7 +753,7 @@ function StudioCanvasInner() {
   const handleRunNow = async () => {
     if (!pipelineId || !canRun) return;
     const confirmed = window.confirm(
-      "Manual Run을 실행합니다. 이 작업은 실제 REST API 호출과 대상 테이블 적재/갱신을 수행할 수 있습니다. 스케줄 활성화는 하지 않습니다. 계속 진행하시겠습니까?",
+      "즉시 실행을 시작합니다.\n이 작업은 실제 외부 API 호출과 데이터 적재/갱신을 수행할 수 있습니다.\n스케줄 활성화는 수행하지 않습니다.\n계속 진행하시겠습니까?",
     );
     if (!confirmed) return;
 
@@ -765,21 +765,21 @@ function StudioCanvasInner() {
     try {
       const accepted = await runVisualPipeline(pipelineId, { mode: "MANUAL" });
       setRunResult(accepted);
-      showToast("success", "Manual Run이 접수되었습니다. 상태를 확인합니다.");
+      showToast("success", "즉시 실행이 접수되었습니다. 상태를 확인합니다.");
       if (RUN_TERMINAL_STATUSES.has(String(accepted.run_status))) {
         setRunPolling(false);
       } else {
         startRunPolling(accepted.visual_run_id);
       }
     } catch (err) {
-      const detail = extractApiErrorMessage(err, "Manual Run 요청에 실패했습니다.");
+      const detail = extractApiErrorMessage(err, "즉시 실행 요청에 실패했습니다.");
       if (detail === "RUN_CONCURRENT_RUN_EXISTS") {
         setRunError("이미 실행 중인 Run이 있습니다. 현재 실행 상태를 확인해 주세요.");
         showToast("error", "이미 실행 중인 Run이 있습니다. 현재 실행 상태를 확인해 주세요.");
         void loadLatestRunResult(pipelineId);
       } else {
         setRunError(detail);
-        showToast("error", detail || "Manual Run 요청에 실패했습니다.");
+        showToast("error", detail || "즉시 실행 요청에 실패했습니다.");
       }
     } finally {
       setRunning(false);
@@ -789,7 +789,7 @@ function StudioCanvasInner() {
   const handleActivateSchedule = async () => {
     if (!pipelineId || !canActivate) return;
     const confirmed = window.confirm(
-      "스케줄 활성화를 수행합니다. 활성화 후 설정된 CRON 주기에 따라 자동 실행 Run이 생성될 수 있습니다. 실제 적재 실행은 VP run-worker가 처리합니다. 계속 진행하시겠습니까?",
+      "스케줄을 활성화합니다.\n지정된 주기에 따라 실행 대기 Run이 생성됩니다.\n실제 데이터 적재는 실행기가 Run을 처리할 때 수행됩니다.\n계속 진행하시겠습니까?",
     );
     if (!confirmed) return;
 
@@ -800,7 +800,7 @@ function StudioCanvasInner() {
       const result = await activateVisualPipelineSchedule(pipelineId);
       setActivationResult(result);
       void loadLatestMaterializationResult(pipelineId);
-      showToast("success", "스케줄이 활성화되었습니다. (run_load 미실행)");
+      showToast("success", "스케줄이 활성화되었습니다. 대기 Run은 주기에 따라 생성됩니다.");
     } catch (err) {
       const detail = extractApiErrorMessage(err, "스케줄 활성화에 실패했습니다.");
       setActivationError(detail);
@@ -995,7 +995,7 @@ function StudioCanvasInner() {
             icon={<Layers className="w-4 h-4" />}
             onClick={() => void handleCompilePreview()}
             disabled={compiling}
-            title="저장된 그래프를 기준으로 실행 계획을 미리 생성합니다. DB 저장, 스케줄 활성화, 외부 API 호출은 수행하지 않습니다."
+            title="저장된 그래프를 기준으로 실행 계획을 미리 확인합니다. DB 저장, 외부 API 호출, 데이터 적재, 스케줄 활성화는 수행하지 않습니다."
             data-testid="visual-pipeline-compile-preview-button"
           >
             {compiling ? "처리 중…" : "Compile Preview"}
@@ -1007,8 +1007,8 @@ function StudioCanvasInner() {
             disabled={compiling || dirty}
             title={
               dirty
-                ? "미저장 변경사항은 Compile에 반영되지 않습니다. 저장 후 다시 시도하세요."
-                : "저장된 그래프 기준으로 컴파일 결과를 저장합니다. 실제 적재 실행이나 스케줄 활성화는 수행하지 않습니다."
+                ? "저장되지 않은 변경사항이 있습니다. 저장 후 다시 Compile해 주세요."
+                : "그래프 구성을 검사하고 실행 설정으로 반영 가능한지 확인합니다. Compile만으로는 외부 API 호출이나 데이터 적재가 수행되지 않습니다."
             }
             data-testid="visual-pipeline-compile-button"
           >
@@ -1021,14 +1021,14 @@ function StudioCanvasInner() {
             disabled={!canMaterialize || materializing}
             title={
               dirty
-                ? "미저장 변경사항이 있습니다. 저장 후 persisted SUCCESS Compile + IN_SYNC 상태에서 실행하세요."
+                ? "저장되지 않은 변경사항이 있습니다. 저장 후 다시 Compile해 주세요."
                 : !canMaterialize
-                  ? "persisted SUCCESS Compile + IN_SYNC 상태에서만 R10 설정을 반영할 수 있습니다."
-                  : "R10 Operation/Write/Schedule 설정 row를 upsert합니다. 외부 API 호출, 적재 실행, 스케줄 활성화는 수행하지 않습니다."
+                  ? "먼저 Compile을 성공시켜야 실행 설정을 반영할 수 있습니다."
+                  : "현재 Visual Pipeline 그래프의 Compile 결과를 실행 설정으로 반영합니다. 외부 API 호출, 데이터 적재, 스케줄 활성화는 수행하지 않습니다."
             }
             data-testid="visual-pipeline-materialize-button"
           >
-            {materializing ? "반영 중…" : "R10 설정 반영"}
+            {materializing ? "반영 중…" : "실행 설정 반영"}
           </Button>
           {canRun ? (
             <Button
@@ -1039,7 +1039,7 @@ function StudioCanvasInner() {
               title={runDisabledReason}
               data-testid="visual-pipeline-run-now-button"
             >
-              {running ? "접수 중…" : "Run Now"}
+              {running ? "접수 중…" : "즉시 실행"}
             </Button>
           ) : (
             <button
@@ -1049,7 +1049,7 @@ function StudioCanvasInner() {
               className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-100 text-slate-400 text-xs font-medium rounded-md cursor-not-allowed border border-slate-200"
               data-testid="visual-pipeline-run-now-button"
             >
-              <Play className="w-3 h-3" /> {isRunActive ? "실행 중…" : "Run Now"}
+              <Play className="w-3 h-3" /> {isRunActive ? "실행 중…" : "즉시 실행"}
             </button>
           )}
           {canActivate ? (

@@ -58,7 +58,7 @@ export function VpScheduleActivationPanel({
       >
         <div className="flex items-center gap-2 min-w-0">
           <Clock className="w-3.5 h-3.5 text-slate-500 shrink-0" />
-          <span className="text-xs font-bold text-slate-700">Schedule Activation</span>
+          <span className="text-xs font-bold text-slate-700">스케줄 활성화</span>
           {result?.activation_status && (
             <span
               className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${statusTone(result.activation_status)}`}
@@ -81,8 +81,7 @@ export function VpScheduleActivationPanel({
           )}
           {!result && !loading && !error && (
             <p className="text-xs text-slate-500">
-              아직 Schedule Activation 이력이 없습니다. 조건 충족 후 스케줄 활성화 버튼으로 시작할 수
-              있습니다.
+              아직 스케줄 활성화 이력이 없습니다. 조건 충족 후 스케줄 활성화 버튼으로 시작할 수 있습니다.
             </p>
           )}
           {canActivateHint && !isActive && !isPaused && (
@@ -92,11 +91,16 @@ export function VpScheduleActivationPanel({
           )}
           {staleActiveWarning && (isActive || isPaused) && (
             <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-100 rounded-md px-2.5 py-2">
-              그래프가 STALE 상태입니다. 활성/일시중지 스케줄은 유지되지만 재컴파일/재반영을 권장합니다.
+              그래프가 최신 Compile과 일치하지 않습니다. 활성/일시중지 스케줄은 유지되지만 다시 Compile 후 실행 설정
+              반영을 권장합니다.
             </p>
           )}
           {result && (
             <>
+              <p className="text-[11px] text-slate-600 leading-relaxed bg-slate-50 border border-slate-100 rounded-md px-2.5 py-2">
+                스케줄을 활성화하면 지정된 주기에 따라 실행 대기 Run이 생성됩니다. 실제 데이터 적재는 실행기가 Run을
+                처리할 때 수행됩니다.
+              </p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px]">
                 <div>
                   <span className="text-slate-400">activation_id</span>
@@ -105,7 +109,7 @@ export function VpScheduleActivationPanel({
                   </p>
                 </div>
                 <div>
-                  <span className="text-slate-400">r10_schedule_id</span>
+                  <span className="text-slate-400">schedule_id</span>
                   <p className="font-mono text-slate-700">{result.r10_schedule_id}</p>
                 </div>
                 <div>
@@ -164,9 +168,9 @@ export function VpScheduleActivationPanel({
                 </div>
               </div>
               <div className="text-[11px] bg-slate-50 border border-slate-100 rounded-md px-2.5 py-2 text-slate-600 space-y-0.5">
-                <p>Activation은 run_load를 직접 실행하지 않습니다.</p>
-                <p>PAUSED면 due enqueue가 중지됩니다. Resume 시 next_due_at을 현재 기준으로 재계산합니다.</p>
-                <p>skip/missed는 운영 정보이며 자동 catch-up은 후속입니다.</p>
+                <p>스케줄 활성화만으로는 데이터 적재를 바로 실행하지 않습니다.</p>
+                <p>일시중지하면 새 대기 Run 생성이 멈춥니다. 재개 시 다음 실행 시각을 현재 기준으로 다시 계산합니다.</p>
+                <p>건너뛴(missed) 주기의 자동 보상 실행은 후속 범위입니다.</p>
               </div>
               <div className="flex flex-wrap gap-2">
                 {isActive && onPause && (

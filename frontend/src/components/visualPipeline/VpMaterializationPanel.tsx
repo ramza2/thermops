@@ -61,7 +61,7 @@ export function VpMaterializationPanel({
         onClick={onToggle}
       >
         <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
-          <Database className="w-3.5 h-3.5" /> Materialization Result
+          <Database className="w-3.5 h-3.5" /> 실행 설정 반영 결과
         </span>
         <span className="flex items-center gap-2">
           {loading && <span className="text-[10px] text-blue-600 animate-pulse">불러오는 중…</span>}
@@ -81,25 +81,24 @@ export function VpMaterializationPanel({
       {expanded && (
         <div className="px-4 py-3 space-y-3">
           <p className="text-[11px] text-slate-600 leading-relaxed bg-slate-50 border border-slate-100 rounded-md px-2.5 py-2">
-            R10 Operation / Transform Config / Write Policy / Schedule 설정 row를 upsert합니다. 외부 API 호출, 적재 실행,
+            현재 Visual Pipeline 그래프의 Compile 결과를 실행 설정으로 반영합니다. 외부 API 호출, 데이터 적재,
             스케줄 활성화는 수행하지 않습니다.
           </p>
 
           {dirtyHint && (
             <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-100 rounded-md px-2.5 py-2">
-              미저장 변경사항이 있습니다. Materialize는 저장된 그래프 + persisted SUCCESS Compile + IN_SYNC 상태에서만
-              실행할 수 있습니다.
+              저장되지 않은 변경사항이 있습니다. 저장 후 다시 Compile한 뒤 실행 설정을 반영해 주세요.
             </p>
           )}
 
           {!dirtyHint && compileReady === false && (
             <p className="text-[11px] text-slate-600 bg-slate-50 border border-slate-100 rounded-md px-2.5 py-2">
-              persisted SUCCESS Compile 결과와 IN_SYNC 상태가 필요합니다. 먼저 Compile을 완료하세요.
+              먼저 Compile을 성공시켜야 실행 설정을 반영할 수 있습니다.
             </p>
           )}
 
           {loading && !result && (
-            <p className="text-xs text-slate-500">Materialization 결과를 불러오는 중…</p>
+            <p className="text-xs text-slate-500">실행 설정 반영 결과를 불러오는 중…</p>
           )}
 
           {error && (
@@ -107,15 +106,15 @@ export function VpMaterializationPanel({
           )}
 
           {!loading && !error && !result && (
-            <p className="text-xs text-slate-500">아직 Materialization 결과가 없습니다.</p>
+            <p className="text-xs text-slate-500">아직 실행 설정 반영 결과가 없습니다.</p>
           )}
 
           {result && (
             <>
               <p className="text-[11px] text-slate-600 leading-relaxed">
                 {result.materialization_status === "SUCCESS"
-                  ? "R10 설정 row가 생성/갱신되었습니다. Run·스케줄 활성화·외부 호출·적재 실행은 수행되지 않았습니다."
-                  : "Materialization에 실패했습니다. 아래 이슈를 확인하세요."}
+                  ? "실행 설정이 생성/갱신되었습니다. 즉시 실행·스케줄 활성화·외부 API 호출·데이터 적재는 수행되지 않았습니다."
+                  : "실행 설정 반영에 실패했습니다. 아래 이슈를 확인하세요."}
               </p>
 
               <div className="flex flex-wrap gap-1.5">
@@ -154,7 +153,7 @@ export function VpMaterializationPanel({
               </div>
 
               <div className="text-[11px] bg-violet-50 border border-violet-100 rounded-md px-2.5 py-2 space-y-1">
-                <div className="text-[9px] font-bold text-violet-500 uppercase tracking-wide">Safety policy</div>
+                <div className="text-[9px] font-bold text-violet-500 uppercase tracking-wide">안전 정책</div>
                 <div className="font-mono text-[10px] text-violet-900">
                   activation=
                   <span data-testid="visual-pipeline-materialization-activation">
@@ -167,8 +166,8 @@ export function VpMaterializationPanel({
                   </span>
                 </div>
                 <p className="text-[10px] text-violet-800 leading-snug">
-                  Schedule은 inactive로 유지됩니다. Manual Run은 Run Now로 실행할 수 있으며, 스케줄 활성화는 후속
-                  범위입니다.
+                  스케줄은 자동 실행되지 않은 상태로 유지됩니다. 즉시 실행 또는 스케줄 활성화는 별도 단계에서
+                  진행합니다.
                 </p>
               </div>
 

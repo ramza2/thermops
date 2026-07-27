@@ -111,7 +111,7 @@ export function VpRunPanel({
         onClick={onToggle}
       >
         <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
-          <Play className="w-3.5 h-3.5" /> Run
+          <Play className="w-3.5 h-3.5" /> 실행
         </span>
         <span className="flex items-center gap-2">
           {(loading || polling) && (
@@ -139,8 +139,8 @@ export function VpRunPanel({
       {expanded && (
         <div className="px-4 py-3 space-y-3">
           <p className="text-[11px] text-slate-600 leading-relaxed bg-slate-50 border border-slate-100 rounded-md px-2.5 py-2">
-            Run은 Manual 또는 Scheduled로 구분됩니다. Manual은 Run Now로, Scheduled는 Schedule Activation 후
-            vp-schedule-worker가 PENDING을 생성하고 vp-run-worker가 실행합니다.
+            실행은 수동(즉시 실행)과 스케줄로 구분됩니다. 즉시 실행은 반영된 실행 설정으로 바로 실행하고, 스케줄
+            활성화 후에는 주기에 따라 실행 대기 Run이 생성된 뒤 실행기가 처리합니다.
           </p>
 
           {canRunHint && (
@@ -160,11 +160,11 @@ export function VpRunPanel({
           )}
 
           {loading && !result && (
-            <p className="text-xs text-slate-500">최근 Manual Run 결과를 불러오는 중…</p>
+            <p className="text-xs text-slate-500">최근 실행 결과를 불러오는 중…</p>
           )}
 
           {!loading && !error && !result && (
-            <p className="text-xs text-slate-500">아직 Manual Run 결과가 없습니다. Run Now로 실행할 수 있습니다.</p>
+            <p className="text-xs text-slate-500">아직 실행 결과가 없습니다. 즉시 실행으로 시작할 수 있습니다.</p>
           )}
 
           {result && (
@@ -221,7 +221,7 @@ export function VpRunPanel({
                 )}
                 {result.r10_schedule_id && (
                   <span className="inline-flex items-center gap-1 text-[10px] font-mono bg-slate-50 border border-slate-200 rounded-md px-2 py-1">
-                    <span className="text-slate-400">r10_schedule_id</span>
+                    <span className="text-slate-400">schedule_id</span>
                     <span className="font-semibold text-slate-700">{result.r10_schedule_id}</span>
                   </span>
                 )}
@@ -305,21 +305,20 @@ export function VpRunPanel({
                 className="text-[11px] bg-violet-50 border border-violet-100 rounded-md px-2.5 py-2 space-y-1"
                 data-testid="visual-pipeline-run-safety"
               >
-                <div className="text-[9px] font-bold text-violet-500 uppercase tracking-wide">Safety policy</div>
+                <div className="text-[9px] font-bold text-violet-500 uppercase tracking-wide">안전 정책</div>
                 <div className="font-mono text-[10px] text-violet-900">
                   schedule_active_changed={String(result.schedule_active_changed ?? false)}
                   {" · "}
                   current_sync_status_changed={String(result.current_sync_status_changed ?? false)}
                 </div>
                 <p className="text-[10px] text-violet-800 leading-snug">
-                  Schedule Activation 미수행 · due worker 미연결
+                  즉시 실행은 스케줄 활성화를 수행하지 않습니다. 스케줄 실행기와는 별도로 동작합니다.
                 </p>
               </div>
 
               {active && (
                 <p className="text-[10px] text-slate-500 leading-snug bg-slate-50 border border-slate-100 rounded-md px-2.5 py-2">
-                  Background PoC 특성상 서버 재시작 시 PENDING/RUNNING 상태가 멈출 수 있습니다. 후속 worker 단계에서
-                  복구 정책을 보강합니다.
+                  서버 재시작 등으로 대기/실행 중 상태가 멈출 수 있습니다. 운영 화면에서 상태를 확인하세요.
                 </p>
               )}
             </>

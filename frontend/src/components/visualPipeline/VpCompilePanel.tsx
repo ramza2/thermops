@@ -98,7 +98,7 @@ export function VpCompilePanel({
         onClick={onToggle}
       >
         <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
-          <Layers className="w-3.5 h-3.5" /> Compile Result
+          <Layers className="w-3.5 h-3.5" /> Compile 결과
         </span>
         <span className="flex items-center gap-2">
           {loading && <span className="text-[10px] text-blue-600 animate-pulse">컴파일 중…</span>}
@@ -117,9 +117,14 @@ export function VpCompilePanel({
 
       {expanded && (
         <div className="px-4 py-3 space-y-3" data-testid="visual-pipeline-compile-panel-body">
+          <p className="text-[11px] text-slate-600 leading-relaxed bg-slate-50 border border-slate-100 rounded-md px-2.5 py-2">
+            그래프 구성을 검사하고 실행 설정으로 반영 가능한지 확인합니다. Compile만으로는 외부 API 호출이나
+            데이터 적재가 수행되지 않습니다.
+          </p>
+
           {dirtyHint && (
             <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-100 rounded-md px-2.5 py-2">
-              미저장 변경사항은 Compile에 반영되지 않습니다. Preview/Compile은 저장된 그래프 기준입니다.
+              저장되지 않은 변경사항은 Compile에 반영되지 않습니다. Preview/Compile은 저장된 그래프 기준입니다.
             </p>
           )}
 
@@ -144,9 +149,9 @@ export function VpCompilePanel({
               <p className="text-[11px] text-slate-600 leading-relaxed">
                 {result.compile_status === "SUCCESS"
                   ? result.persisted
-                    ? "컴파일 결과가 저장되었습니다. 실제 적재 실행이나 스케줄 활성화는 수행되지 않습니다."
-                    : "컴파일 미리보기가 생성되었습니다. DB 저장·스케줄 활성화·외부 API 호출은 수행되지 않습니다."
-                  : "컴파일에 실패했습니다. 아래 이슈를 확인하세요."}
+                    ? "Compile 결과가 저장되었습니다. 외부 API 호출·데이터 적재·스케줄 활성화는 수행되지 않습니다. 다음 단계로 실행 설정을 반영할 수 있습니다."
+                    : "Compile 미리보기가 생성되었습니다. DB 저장·외부 API 호출·데이터 적재·스케줄 활성화는 수행되지 않습니다."
+                  : "Compile에 실패했습니다. 아래 이슈를 확인하세요."}
               </p>
 
               <div className="flex flex-wrap gap-1.5">

@@ -1664,10 +1664,18 @@ cd frontend && node scripts/check-visual-pipeline-studio.mjs
 - **문서:** [`docs/md/THERMOps_R11-S8-0_Run_History_Progress_Retry_설계.md`](docs/md/THERMOps_R11-S8-0_Run_History_Progress_Retry_설계.md) (기준 커밋 `a141944`)
 - **권장:** History=기존 run table list/detail(S8-2) · Progress=`tb_visual_pipeline_run_event`(S8-3) · Retry=새 `visual_run_id`+lineage(S8-4) · interrupt=soft cancel만(S8-5) · catch-up 기본 no(S8-6) · notification≠audit(S8-7)
 - **관계:** S8-1「실행 설정 반영」UI 용어 · S8-8 Full Scenario 이용가이드 · mark-failed는 운영 정리(≠retry/interrupt)
+- **다음:** R11-S8-1 UI 용어/UX 정리 (아래 섹션)
+
+### R11-S8-1 UI 용어/UX 정리
+
+- **범위:** FE wording only — Studio 사용자 노출 문구 정리. handler/guard/API/DB/worker/package 변경 없음. History/Progress/Retry 미구현.
+- **핵심:** 「R10 설정 반영」→「실행 설정 반영」 · 「Run Now」→「즉시 실행」 · 「Schedule Activation」→「스케줄 활성화」 · Materialization 표시명 → 실행 설정 반영
+- **경계 문구:** Compile / 실행 설정 반영은 API·적재·스케줄 미수행 · 즉시 실행은 실제 API·적재 가능 · 스케줄 활성화는 대기 Run 생성 후 실행기가 적재
+- **대상:** `VisualPipelineStudioPage` · `VpMaterializationPanel` · `VpCompilePanel` · `VpRunPanel` · `VpScheduleActivationPanel`
 - **다음:**
-  - R11-S8-1 UI 용어/UX 정리
   - R11-S8-2 Run History UI/API 고도화
   - R11-S8-3 Step-level Progress PoC
+  - R11-S8-4 Retry Policy PoC
 
 ## 설계 문서 참조
 
