@@ -504,8 +504,8 @@ Pipeline Studio가 운영 PoC로 닫힌 뒤, 사용자가 MLOps/Studio를 **실�
 
 ### 후속 후보
 
-- `R11-S8-2 열수요 예측 Full Scenario 이용가이드 설계`
-- `R11-S8-3 이용가이드 기반 UX/기능 보완`
+- `R11-S8-2 열수요 예측 Full Scenario 이용가이드 설계` → 로드맵 정렬 후 **R11-S8-8**로 이행. 상세: [`THERMOps_R11-S8-8_열수요예측_Full_Scenario_이용가이드.md`](./THERMOps_R11-S8-8_열수요예측_Full_Scenario_이용가이드.md)
+- `R11-S8-3 이용가이드 기반 UX/기능 보완` → **R11-S8-9** backlog
 
 ### 예상 따라하기 흐름
 

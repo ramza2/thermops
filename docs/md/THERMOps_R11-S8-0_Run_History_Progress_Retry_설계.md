@@ -618,6 +618,7 @@ POST .../runs/{run_id}/cancel
 
 - 사용자가 MLOps/Studio를 이해하려면 **실제 업무 시나리오 가이드**가 필요하다.
 - 열수요실적 / 기상 / 특일 API 연결 가이드는 **S8-8**에서 설계한다.
+- 상세 이용가이드: [`THERMOps_R11-S8-8_열수요예측_Full_Scenario_이용가이드.md`](./THERMOps_R11-S8-8_열수요예측_Full_Scenario_이용가이드.md)
 - 예상 따라하기 흐름:
 
   1. 열수요실적 API Source 등록  

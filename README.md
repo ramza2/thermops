@@ -1738,13 +1738,23 @@ cd frontend && node scripts/check-visual-pipeline-studio.mjs
 - **정책:** severity INFO/WARNING/ERROR/CRITICAL(MVP는 WARNING/ERROR 중심) · dedup/grouping · read≠ack≠resolve · metadata redaction · 「R10 설정 반영」재노출 금지
 - **UI 설계:** Studio badge/drawer · Ops 「조치 필요」· Run Detail 연계. 액션은 기존 retry/cancel/catch-up으로 이동 (notification에서 직접 실행 안 함)
 - **후속:** S8-7-1 read-model badge PoC(no DB) → S8-7-2 persistent table/API → S8-7-3 external channel(별도 승인) → R12 preference/ACL. Slack/Email/SMS/Webhook/Web Push는 본 단계 제외.
+- **다음:** R11-S8-8 열수요 예측 Full Scenario 이용가이드 (아래 섹션)
+
+### R11-S8-8 열수요 예측 Full Scenario 이용가이드
+
+- **범위:** docs-only — Visual Pipeline으로 **열수요 예측 입력 데이터 적재** 운영자 여정 가이드. code/DB/API/FE/worker/package 변경 없음.
+- **문서:** [`docs/md/THERMOps_R11-S8-8_열수요예측_Full_Scenario_이용가이드.md`](docs/md/THERMOps_R11-S8-8_열수요예측_Full_Scenario_이용가이드.md) (기준 커밋 `d519529`)
+- **여정:** Connector/Data Source → REST(실적·기상·특일) → Transform → Upsert → Graph 검증 → Compile → **실행 설정 반영** → **즉시 실행** → History/Progress → **스케줄 활성화** → schedule/run worker
+- **장애:** FAILED/PARTIAL Retry · RUNNING soft-cancel · stuck mark-failed · missed/ACTIVE_RUN_EXISTS Catch-up(수동 1건) · Notification은 설계만(현 확인=Ops stuck/failures + History)
+- **경계:** Feature/학습/예측은 적재 이후 도메인 단계(본편 제외) · 「R10 설정 반영」재노출 금지 · R10 due-worker 미연결
+- **S8-9 backlog:** multi-source template · preset · transform helper · catch-up/알림 UX · 실패 요약 · 학습/예측 연계 가이드 분리 등 (본 단계 미구현)
 - **다음:**
-  - R11-S8-8 열수요 예측 Full Scenario 이용가이드 설계
   - R11-S8-9 Full Scenario 기반 UX/기능 보완
   - (병행 가능) R11-S8-7-1 Notification badge PoC 또는 R12 Notification 구현
 
 ## 설계 문서 참조
 
+- `docs/md/THERMOps_R11-S8-8_열수요예측_Full_Scenario_이용가이드.md`
 - `docs/md/THERMOps_R11-S8-7_Notification_설계.md`
 - `docs/md/THERMOps_R11-S8-0_Run_History_Progress_Retry_설계.md`
 - `docs/md/THERMOps_R11-S7-15_Visual_Pipeline_운영기능_마감정리.md`

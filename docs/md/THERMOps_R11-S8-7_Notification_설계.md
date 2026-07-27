@@ -629,6 +629,8 @@ Notification badge PoC는 Full Scenario 가이드와 병행 가능하나, S8-8 �
 
 ### 20.1 S8-8 Full Scenario 이용가이드
 
+상세: [`THERMOps_R11-S8-8_열수요예측_Full_Scenario_이용가이드.md`](./THERMOps_R11-S8-8_열수요예측_Full_Scenario_이용가이드.md)
+
 열수요 예측 시나리오(실적/기상/특일 → transform → upsert → schedule) 문서에 아래를 반영한다.
 
 - 실패 시 어디서 알림을 확인하는지 (Studio badge / Ops 「조치 필요」)
