@@ -390,6 +390,10 @@ MIGRATIONS = [
         "R11-S8-4 visual pipeline run retry lineage",
         _load_sql("r11s8_visual_pipeline_run_retry.sql"),
     ),
+    (
+        "R11-S8-5 visual pipeline run soft-cancel",
+        _load_sql("r11s8_visual_pipeline_run_soft_cancel.sql"),
+    ),
 ]
 
 

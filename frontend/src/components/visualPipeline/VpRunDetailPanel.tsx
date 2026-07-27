@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { extractApiErrorMessage } from "@/api/client";
 import {
+  cancelVisualPipelineRun,
   getVisualPipelineRunProgress,
   listVisualPipelineRunEvents,
   retryVisualPipelineRun,
@@ -19,6 +20,8 @@ interface VpRunDetailPanelProps {
   testIdPrefix?: string;
   /** Called after a retry run is successfully enqueued. */
   onRetrySuccess?: (retryVisualRunId: string) => void;
+  /** Called after soft-cancel request or PENDING cancel succeeds. */
+  onCancelSuccess?: () => void;
 }
 
 function Field({ label, value }: { label: string; value?: string | number | null }) {
@@ -47,6 +50,7 @@ function eventTypeLabel(eventType: string): string {
     RUN_COMPLETED: "실행 완료",
     RUN_FAILED: "실행 실패",
     RUN_CANCELLED: "실행 취소",
+    RUN_CANCEL_REQUESTED: "중단 요청",
     RUN_RETRY_REQUESTED: "재시도 요청",
   };
   return map[eventType] ?? eventType;
@@ -61,6 +65,27 @@ function stepStatusTone(status: string): string {
 function canRetryStatus(status?: string | null): boolean {
   const s = String(status || "").toUpperCase();
   return s === "FAILED" || s === "PARTIAL";
+}
+
+function canSoftCancelStatus(status?: string | null): boolean {
+  return String(status || "").toUpperCase() === "RUNNING";
+}
+
+function cancelErrorMessage(codeOrMsg: string): string {
+  const code = codeOrMsg.trim();
+  if (code.includes("RUN_CANCEL_NOT_ALLOWED_STATUS") || code === "RUN_CANCEL_NOT_ALLOWED_STATUS") {
+    return "현재 상태에서는 중단 요청을 할 수 없습니다.";
+  }
+  if (code.includes("RUN_CANCEL_CONFIRM_MISMATCH") || code === "RUN_CANCEL_CONFIRM_MISMATCH") {
+    return "confirm_visual_run_id가 일치하지 않습니다.";
+  }
+  if (code.includes("RUN_CANCEL_REASON_REQUIRED") || code === "RUN_CANCEL_REASON_REQUIRED") {
+    return "사유는 5자 이상 입력해야 합니다.";
+  }
+  if (code.includes("RUN_CANCEL_AUDIT_REQUIRED_FAILED") || code === "RUN_CANCEL_AUDIT_REQUIRED_FAILED") {
+    return "Audit 기록 실패로 중단 요청을 접수하지 못했습니다.";
+  }
+  return codeOrMsg || "중단 요청에 실패했습니다.";
 }
 
 function retryErrorMessage(codeOrMsg: string): string {
@@ -93,6 +118,7 @@ export function VpRunDetailPanel({
   onClose,
   testIdPrefix = "visual-pipeline-run-detail",
   onRetrySuccess,
+  onCancelSuccess,
 }: VpRunDetailPanelProps) {
   const [progress, setProgress] = useState<VisualPipelineRunProgress | null>(null);
   const [events, setEvents] = useState<VisualPipelineRunEvent[]>([]);
@@ -105,6 +131,13 @@ export function VpRunDetailPanel({
   const [retrySubmitting, setRetrySubmitting] = useState(false);
   const [retryError, setRetryError] = useState<string | null>(null);
   const [retrySuccess, setRetrySuccess] = useState<string | null>(null);
+
+  const [cancelOpen, setCancelOpen] = useState(false);
+  const [cancelConfirmRunId, setCancelConfirmRunId] = useState("");
+  const [cancelReason, setCancelReason] = useState("");
+  const [cancelSubmitting, setCancelSubmitting] = useState(false);
+  const [cancelError, setCancelError] = useState<string | null>(null);
+  const [cancelSuccess, setCancelSuccess] = useState<string | null>(null);
 
   useEffect(() => {
     if (!detail?.pipeline_id || !detail.visual_run_id) {
@@ -145,6 +178,11 @@ export function VpRunDetailPanel({
     setRetryReason("");
     setRetryError(null);
     setRetrySuccess(null);
+    setCancelOpen(false);
+    setCancelConfirmRunId("");
+    setCancelReason("");
+    setCancelError(null);
+    setCancelSuccess(null);
   }, [detail?.visual_run_id]);
 
   const progressPercent =
@@ -156,6 +194,16 @@ export function VpRunDetailPanel({
     confirmRunId.trim() === detail.visual_run_id &&
     retryReason.trim().length >= 5 &&
     !retrySubmitting;
+
+  const softCancelable = canSoftCancelStatus(detail?.run_status);
+  const cancelAlreadyRequested = Boolean(
+    detail?.cancel_requested_at || progress?.cancel_requested_at || detail?.cancel_requested,
+  );
+  const canConfirmCancel =
+    !!detail &&
+    cancelConfirmRunId.trim() === detail.visual_run_id &&
+    cancelReason.trim().length >= 5 &&
+    !cancelSubmitting;
 
   const openRetry = () => {
     setRetryOpen(true);
@@ -192,6 +240,44 @@ export function VpRunDetailPanel({
       setRetryError(retryErrorMessage(raw));
     } finally {
       setRetrySubmitting(false);
+    }
+  };
+
+  const openCancel = () => {
+    setCancelOpen(true);
+    setCancelConfirmRunId("");
+    setCancelReason("");
+    setCancelError(null);
+  };
+
+  const closeCancel = () => {
+    if (cancelSubmitting) return;
+    setCancelOpen(false);
+    setCancelConfirmRunId("");
+    setCancelReason("");
+    setCancelError(null);
+  };
+
+  const submitCancel = async () => {
+    if (!detail || !canConfirmCancel) return;
+    setCancelSubmitting(true);
+    setCancelError(null);
+    try {
+      const result = await cancelVisualPipelineRun(detail.pipeline_id, detail.visual_run_id, {
+        reason: cancelReason.trim(),
+        confirm_visual_run_id: cancelConfirmRunId.trim(),
+      });
+      setCancelOpen(false);
+      setCancelSuccess(
+        result.message ||
+          "중단 요청이 접수되었습니다. 현재 단계가 끝난 뒤 중단됩니다.",
+      );
+      onCancelSuccess?.();
+    } catch (err) {
+      const raw = extractApiErrorMessage(err, "중단 요청에 실패했습니다.");
+      setCancelError(cancelErrorMessage(raw));
+    } finally {
+      setCancelSubmitting(false);
     }
   };
 
@@ -409,6 +495,116 @@ export function VpRunDetailPanel({
               </div>
             )}
 
+            <section
+              className="rounded-md border border-amber-100 bg-amber-50/40 px-2.5 py-2 space-y-2"
+              data-testid={`${testIdPrefix}-cancel-section`}
+            >
+              <div className="text-[10px] font-bold text-amber-800 uppercase tracking-wide">중단 요청</div>
+              {(detail.cancel_requested_at || detail.cancel_reason || cancelAlreadyRequested) && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <Field label="요청 시각" value={detail.cancel_requested_at ?? progress?.cancel_requested_at} />
+                  <Field label="요청자" value={detail.cancel_requested_by ?? progress?.cancel_requested_by} />
+                  <Field label="사유" value={detail.cancel_reason ?? progress?.cancel_reason} />
+                  <Field
+                    label="반영 시각"
+                    value={detail.cancel_acknowledged_at ?? progress?.cancel_acknowledged_at}
+                  />
+                </div>
+              )}
+              {cancelSuccess && (
+                <p
+                  className="text-[11px] text-emerald-800 bg-emerald-50 border border-emerald-100 rounded px-2 py-1"
+                  data-testid={`${testIdPrefix}-cancel-success`}
+                >
+                  {cancelSuccess}
+                </p>
+              )}
+              {softCancelable && cancelAlreadyRequested ? (
+                <p
+                  className="text-[11px] text-amber-900 bg-amber-100/60 border border-amber-200 rounded px-2 py-1"
+                  data-testid={`${testIdPrefix}-cancel-requested-badge`}
+                >
+                  중단 요청됨 — 현재 단계가 끝난 뒤 반영됩니다. (즉시 강제 종료되지 않습니다)
+                </p>
+              ) : softCancelable ? (
+                <button
+                  type="button"
+                  className="text-[11px] font-medium text-amber-900 border border-amber-300 bg-white rounded px-2.5 py-1 hover:bg-amber-50"
+                  onClick={openCancel}
+                  data-testid={`${testIdPrefix}-cancel-button`}
+                >
+                  중단 요청
+                </button>
+              ) : (
+                <p className="text-[11px] text-slate-500" data-testid={`${testIdPrefix}-cancel-unavailable`}>
+                  현재 상태({detail.run_status})에서는 중단 요청을 할 수 없습니다. RUNNING만 가능합니다.
+                  대기(PENDING) Run은 실행 패널의 「대기 Run 취소」를 사용하세요.
+                </p>
+              )}
+            </section>
+
+            {cancelOpen && (
+              <div
+                className="rounded-md border border-amber-200 bg-white px-2.5 py-2 space-y-2"
+                data-testid={`${testIdPrefix}-cancel-dialog`}
+              >
+                <div className="text-xs font-bold text-slate-700">Run 중단 요청</div>
+                <p className="text-[11px] text-slate-600 whitespace-pre-line">
+                  {`실행 중인 Run에 중단을 요청합니다.
+현재 진행 중인 단계가 끝난 뒤 실행이 취소됩니다.
+이미 완료된 단계의 데이터는 되돌리지 않습니다.
+외부 API 호출/적재가 진행 중이면 즉시 중단되지 않을 수 있습니다.
+계속하려면 Run ID를 정확히 입력하세요.`}
+                </p>
+                <p className="font-mono text-[10px] text-slate-500">target: {detail.visual_run_id}</p>
+                <label className="block text-[11px] text-slate-600">
+                  confirm_visual_run_id
+                  <input
+                    className="mt-1 w-full border border-slate-200 rounded px-2 py-1.5 text-[11px] font-mono"
+                    value={cancelConfirmRunId}
+                    onChange={(e) => setCancelConfirmRunId(e.target.value)}
+                    placeholder={detail.visual_run_id}
+                    data-testid={`${testIdPrefix}-cancel-confirm-input`}
+                    autoComplete="off"
+                  />
+                </label>
+                <label className="block text-[11px] text-slate-600">
+                  reason (5자 이상)
+                  <textarea
+                    className="mt-1 w-full border border-slate-200 rounded px-2 py-1.5 text-[11px] min-h-[64px]"
+                    value={cancelReason}
+                    onChange={(e) => setCancelReason(e.target.value)}
+                    data-testid={`${testIdPrefix}-cancel-reason-input`}
+                  />
+                </label>
+                {cancelError && (
+                  <p className="text-[11px] text-red-600" data-testid={`${testIdPrefix}-cancel-dialog-error`}>
+                    {cancelError}
+                  </p>
+                )}
+                <div className="flex justify-end gap-2">
+                  <button
+                    type="button"
+                    className="text-[11px] text-slate-600 border border-slate-200 rounded px-2.5 py-1"
+                    onClick={closeCancel}
+                    disabled={cancelSubmitting}
+                    data-testid={`${testIdPrefix}-cancel-dialog-close`}
+                  >
+                    닫기
+                  </button>
+                  <button
+                    type="button"
+                    className="text-[11px] font-medium text-white bg-amber-700 rounded px-2.5 py-1 disabled:opacity-40"
+                    onClick={() => void submitCancel()}
+                    disabled={!canConfirmCancel}
+                    data-testid={`${testIdPrefix}-cancel-confirm-button`}
+                  >
+                    {cancelSubmitting ? "처리 중…" : "중단 요청 접수"}
+                  </button>
+                </div>
+              </div>
+            )}
+
             <section className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               <Field label="생성" value={detail.created_at} />
               <Field label="시작" value={detail.started_at} />
@@ -469,7 +665,9 @@ export function VpRunDetailPanel({
                 )}
               </section>
             )}
-            <p className="text-[10px] text-slate-400">읽기 전용 상세 · 중단 요청은 후속 단계입니다.</p>
+            <p className="text-[10px] text-slate-400">
+              읽기 전용 상세 · RUNNING 중단은 soft-cancel(단계 경계 반영)입니다.
+            </p>
           </>
         )}
       </div>

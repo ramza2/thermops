@@ -27,7 +27,6 @@ from app.models.entities import (
     VisualPipelineRun,
 )
 from app.services.api_connector_service import ApiConnectorError, run_load
-from app.services.visual_pipeline.audit_service import record_run_cancel_event
 from app.services.visual_pipeline.compile_preview_service import calculate_graph_version_hash
 from app.services.visual_pipeline.compile_result_service import SYNC_IN_SYNC
 from app.services.visual_pipeline.run_event_service import (
@@ -590,6 +589,12 @@ async def _emit_run_failed_event(
 
 async def _run_load_and_update_result(db: AsyncSession, run_row: VisualPipelineRun) -> None:
     """Execute R10 run_load and update run_row to a terminal status. Caller commits."""
+    from app.services.visual_pipeline.run_cancel_service import (
+        VisualPipelineCancelRequested,
+        apply_cancel_acknowledged,
+        raise_if_visual_run_cancel_requested,
+    )
+
     request = dict(run_row.request_json or {})
     mat_row = (
         await db.execute(
@@ -658,18 +663,30 @@ async def _run_load_and_update_result(db: AsyncSession, run_row: VisualPipelineR
             event_type=EVENT_RUN_STARTED,
             message="Starting load execution",
         )
-        load_result = await run_load(
-            db,
-            operation_id,
-            runtime_params,
-            called_by="visual_pipeline_manual_run",
-            dry_run=False,
-            on_progress=build_step_progress_callback(
+
+        async def _cancel_checker() -> None:
+            await raise_if_visual_run_cancel_requested(db, run_row.visual_run_id)
+
+        await raise_if_visual_run_cancel_requested(db, run_row.visual_run_id)
+        try:
+            load_result = await run_load(
                 db,
-                visual_run_id=run_row.visual_run_id,
-                pipeline_id=run_row.pipeline_id,
-            ),
-        )
+                operation_id,
+                runtime_params,
+                called_by="visual_pipeline_manual_run",
+                dry_run=False,
+                on_progress=build_step_progress_callback(
+                    db,
+                    visual_run_id=run_row.visual_run_id,
+                    pipeline_id=run_row.pipeline_id,
+                ),
+                cancel_checker=_cancel_checker,
+            )
+        except VisualPipelineCancelRequested:
+            await apply_cancel_acknowledged(db, run_row)
+            await db.flush()
+            return
+        await raise_if_visual_run_cancel_requested(db, run_row.visual_run_id)
         status = str(load_result.get("status") or "SUCCESS").upper()
         error_count = int(load_result.get("error_count") or 0)
         if status == "FAILED":
@@ -682,6 +699,10 @@ async def _run_load_and_update_result(db: AsyncSession, run_row: VisualPipelineR
             run_status = "PARTIAL"
         else:
             run_status = "SUCCESS"
+    except VisualPipelineCancelRequested:
+        await apply_cancel_acknowledged(db, run_row)
+        await db.flush()
+        return
     except ApiConnectorError as exc:
         code = getattr(exc, "error_code", None) or "RUN_REST_CALL_FAILED"
         if "EXTRACT" in str(code).upper() or "ITEM" in str(code).upper():
@@ -891,66 +912,23 @@ async def cancel_visual_pipeline_run(
     db: AsyncSession,
     pipeline_id: str,
     visual_run_id: str,
+    *,
+    reason: str | None = None,
+    confirm_visual_run_id: str | None = None,
+    actor_type: str = "USER",
+    actor_id: str = "mock_admin",
 ) -> dict[str, Any]:
-    """Cancel PENDING run only. RUNNING is not interruptible in S7-9."""
-    await _get_visual_definition(db, pipeline_id)
-    row = (
-        await db.execute(
-            select(VisualPipelineRun).where(
-                VisualPipelineRun.pipeline_id == pipeline_id,
-                VisualPipelineRun.visual_run_id == visual_run_id,
-            )
-        )
-    ).scalar_one_or_none()
-    if row is None:
-        raise LookupError("VISUAL_PIPELINE_RUN_NOT_FOUND")
+    """Cancel PENDING immediately or request soft-cancel for RUNNING (R11-S8-5)."""
+    from app.services.visual_pipeline.run_cancel_service import (
+        cancel_visual_pipeline_run as cancel_run,
+    )
 
-    status = str(row.run_status or "").upper()
-    if status == "CANCELLED":
-        return _row_to_response(row)
-    if status == "RUNNING":
-        raise RunPreconditionError("RUN_CANCEL_RUNNING_NOT_SUPPORTED")
-    if status in {"SUCCESS", "FAILED", "PARTIAL"}:
-        raise RunPreconditionError("RUN_ALREADY_TERMINAL")
-    if status != "PENDING":
-        raise RunPreconditionError("RUN_ALREADY_TERMINAL")
-
-    now = utc_now()
-    row.run_status = "CANCELLED"
-    row.finished_at = now
-    row.error_message = "Cancelled before execution"
-    issues = list(row.issues_json or [])
-    issues.append(
-        _issue(
-            "RUN_CANCELLED_BEFORE_EXECUTION",
-            "Run was cancelled before execution.",
-            step_id="cancel",
-        )
-    )
-    row.issues_json = issues
-    row.result_json = {
-        "summary": {
-            "cancelled": True,
-            "cancel_phase": "PENDING",
-        }
-    }
-    _clear_run_lease(row)
-    await emit_run_event_safe(
+    return await cancel_run(
         db,
-        visual_run_id=visual_run_id,
-        pipeline_id=pipeline_id,
-        event_type=EVENT_RUN_CANCELLED,
-        message="Cancelled before execution",
-        metadata_json={"cancel_phase": "PENDING"},
+        pipeline_id,
+        visual_run_id,
+        reason=reason,
+        confirm_visual_run_id=confirm_visual_run_id,
+        actor_type=actor_type,
+        actor_id=actor_id,
     )
-    await db.flush()
-    await record_run_cancel_event(
-        db,
-        pipeline_id=pipeline_id,
-        visual_run_id=visual_run_id,
-        activation_id=row.activation_id,
-        finished_at=now,
-    )
-    await db.commit()
-    await db.refresh(row)
-    return _row_to_response(row)

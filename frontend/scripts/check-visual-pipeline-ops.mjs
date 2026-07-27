@@ -91,16 +91,20 @@ try {
       });
       const badInDetail = await page
         .getByTestId("visual-pipeline-ops-run-detail-panel")
-        .getByRole("button", { name: /중단 요청/i })
+        .getByTestId("visual-pipeline-ops-run-detail-cancel-button")
         .count();
-      if (badInDetail > 0) fail("ops run detail must not show interrupt actions");
-      // Detail-panel Retry is allowed (strong confirm). Global page-level retry is not.
+      if (badInDetail > 0) fail("ops non-RUNNING run detail must not show soft-cancel action button");
+      // Detail-panel Retry + cancel section are allowed (strong confirm). Global page-level cancel is not.
       await page.getByTestId("visual-pipeline-ops-run-detail-retry-section").waitFor({
         state: "visible",
         timeout: 10000,
       });
+      await page.getByTestId("visual-pipeline-ops-run-detail-cancel-section").waitFor({
+        state: "visible",
+        timeout: 10000,
+      });
       await page.getByTestId("visual-pipeline-ops-run-detail-close").click();
-      console.log("  [ok] ops run detail panel (retry section allowed, interrupt forbidden)");
+      console.log("  [ok] ops run detail panel (retry + cancel section allowed, action gated by status)");
     } else {
       console.log("  [skip] no ops run detail buttons (no stuck/failure/audit with run ids)");
     }

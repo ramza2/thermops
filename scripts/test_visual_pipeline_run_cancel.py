@@ -122,8 +122,8 @@ def test_cancel_pending_idempotent() -> None:
         archive_pipeline(pid)
 
 
-def test_cancel_running_rejected() -> None:
-    print("== cancel RUNNING rejected ==")
+def test_cancel_running_soft_request() -> None:
+    print("== cancel RUNNING soft-request (S8-5) ==")
     fixture = setup_compiled_materialized(f"S79-CANRUN-{uuid4().hex[:6]}")
     pid = fixture["pipeline_id"]
     try:
@@ -148,18 +148,34 @@ def test_cancel_running_rejected() -> None:
             f"SELECT run_status FROM tb_visual_pipeline_run WHERE visual_run_id='{rid}'"
         )
         assert status_before == "RUNNING", status_before
+        # body missing → 400
         fail = api(
             "POST",
             f"/visual-pipelines/{pid}/runs/{rid}/cancel",
+            {},
             expect_fail=True,
         )
-        assert fail.get("_http_status") == 409, fail
-        assert fail.get("detail") == "RUN_CANCEL_RUNNING_NOT_SUPPORTED", fail
+        assert fail.get("_http_status") == 400, fail
+        assert fail.get("detail") in {
+            "RUN_CANCEL_REASON_REQUIRED",
+            "RUN_CANCEL_CONFIRM_MISMATCH",
+        }, fail
+        req = api(
+            "POST",
+            f"/visual-pipelines/{pid}/runs/{rid}/cancel",
+            {
+                "reason": "operator requested soft cancel",
+                "confirm_visual_run_id": rid,
+            },
+        )
+        assert req["run_status"] == "RUNNING", req
+        assert req.get("cancel_requested") is True
+        assert req.get("cancel_requested_at")
         status = _psql(
             f"SELECT run_status FROM tb_visual_pipeline_run WHERE visual_run_id='{rid}'"
         )
         assert status == "RUNNING"
-        print("  PASS RUNNING cancel 409")
+        print("  PASS RUNNING soft-cancel request keeps RUNNING")
     finally:
         archive_pipeline(pid)
 
@@ -192,7 +208,7 @@ def test_cancel_terminal_rejected() -> None:
                 expect_fail=True,
             )
             assert fail.get("_http_status") == 409, (terminal, fail)
-            assert fail.get("detail") == "RUN_ALREADY_TERMINAL", (terminal, fail)
+            assert fail.get("detail") == "RUN_CANCEL_NOT_ALLOWED_STATUS", (terminal, fail)
         print("  PASS SUCCESS/FAILED/PARTIAL cancel 409")
     finally:
         archive_pipeline(pid)
@@ -274,7 +290,7 @@ def test_cancel_does_not_touch_activation() -> None:
 def main() -> int:
     ensure_test_standard_datasets()
     test_cancel_pending_idempotent()
-    test_cancel_running_rejected()
+    test_cancel_running_soft_request()
     test_cancel_terminal_rejected()
     test_cancel_does_not_touch_activation()
     print("\nAll run cancel tests PASSED")

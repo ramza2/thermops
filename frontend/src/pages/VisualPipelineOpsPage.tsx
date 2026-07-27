@@ -283,8 +283,9 @@ export default function VisualPipelineOpsPage() {
         </span>
         <span className="text-xs text-slate-500">
           stuck run에 한정해 `실패 처리`(strong confirm + audit required)를 지원합니다. pause /
-          resume / deactivate / cancel 전역 버튼은 없습니다. Run 상세 패널의 재시도(strong confirm)는
-          FAILED/PARTIAL에 한해 사용할 수 있습니다. CLI도 계속 사용할 수 있습니다.
+          resume / deactivate 전역 버튼은 없습니다. Run 상세 패널의 재시도(FAILED/PARTIAL)·중단
+          요청(RUNNING, strong confirm)은 상태별 허용 범위에서만 동작합니다. CLI도 계속 사용할 수
+          있습니다.
         </span>
       </div>
 
@@ -685,6 +686,12 @@ export default function VisualPipelineOpsPage() {
             testIdPrefix="visual-pipeline-ops-run-detail"
             onRetrySuccess={() => {
               void load();
+            }}
+            onCancelSuccess={() => {
+              void load();
+              if (runDetail?.visual_run_id && runDetail.pipeline_id) {
+                void openRunDetail(runDetail.pipeline_id, runDetail.visual_run_id);
+              }
             }}
             onClose={() => {
               setRunDetailOpen(false);

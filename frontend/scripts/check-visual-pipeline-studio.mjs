@@ -709,11 +709,21 @@ async function runBrowserSmoke(pipeline) {
         fail("expected retry-unavailable notice for SUCCESS run");
       }
     }
-    // Global interrupt action buttons must not appear; detail Retry section is allowed.
-    const interruptBtn = page.getByRole("button", { name: /중단 요청/i });
-    if ((await interruptBtn.count()) > 0) fail("history detail must not show interrupt actions");
+    // Global interrupt action buttons must not appear for SUCCESS; cancel section is allowed.
+    await page.getByTestId("visual-pipeline-run-detail-cancel-section").waitFor({
+      state: "visible",
+      timeout: 10000,
+    });
+    const interruptBtn = page.getByTestId("visual-pipeline-run-detail-cancel-button");
+    if ((await interruptBtn.count()) > 0) {
+      fail("SUCCESS run detail must not show soft-cancel action button");
+    }
+    const cancelUnavailable = page.getByTestId("visual-pipeline-run-detail-cancel-unavailable");
+    if ((await cancelUnavailable.count()) === 0) {
+      fail("expected cancel-unavailable notice for SUCCESS run");
+    }
     await page.getByTestId("visual-pipeline-run-detail-close").click();
-    console.log("  [ok] Run History list/filter/detail (progress + retry section)");
+    console.log("  [ok] Run History list/filter/detail (progress + retry + cancel section)");
 
     // --- R11-S7-8 Schedule Activation smoke (panel only; due enqueue in backend tests) ---
     await page.getByTestId("visual-pipeline-schedule-activation-panel").waitFor({ state: "visible", timeout: 15000 });

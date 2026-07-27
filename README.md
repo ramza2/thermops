@@ -1704,10 +1704,22 @@ cd frontend && node scripts/check-visual-pipeline-studio.mjs
 - **Event:** source=`RUN_RETRY_REQUESTED`(fail-open) · new run=`RUN_CREATED`+retry metadata
 - **FE:** Studio/Ops 공용 `VpRunDetailPanel` Retry section · strong confirm · PARTIAL 중복 적재 경고 · history refresh
 - **테스트:** `scripts/test_visual_pipeline_run_retry.py` · studio/ops smoke 보강
+- **다음:** R11-S8-5 RUNNING soft-cancel 설계/PoC (아래 섹션)
+
+### R11-S8-5 RUNNING soft-cancel PoC
+
+- **범위:** cooperative soft-cancel only (process/thread/connection/HTTP kill 금지). PENDING 즉시 `CANCELLED` · RUNNING은 cancel request 후 step boundary에서 terminal. Catch-up / Notification / auto-retry 미구현.
+- **DB:** `cancel_requested_at` · `cancel_requested_by` · `cancel_reason` · `cancel_acknowledged_at` · `scripts/r11s8_visual_pipeline_run_soft_cancel.sql`
+- **정책:** RUNNING 중복 요청 idempotent(reason/by 덮어쓰지 않음) · SUCCESS/FAILED/PARTIAL 불허 · CANCELLED idempotent 200 · blocking REST/upsert 중 즉시 중단 없음 · 완료 step rollback 없음
+- **API:** 기존 `POST .../runs/{visual_run_id}/cancel` 확장 · PENDING body optional · RUNNING `reason`(5~300)+`confirm_visual_run_id` 필수 · 신규 `/cancel-request` path 없음
+- **실행:** `run_load(..., cancel_checker=None)` · VP 경로만 checker 전달 · step boundary에서만 확인 · `VisualPipelineCancelRequested`만 전파
+- **Audit/Event:** request=`RUN_CANCEL_REQUESTED` audit **fail-close** · PENDING cancel audit fail-close · acknowledged `RUN_CANCELLED` audit fail-open · run_event fail-open · mark-failed 정책 변경 없음
+- **FE:** Studio/Ops 공용 `VpRunDetailPanel` 「중단 요청」섹션 · strong confirm · RUNNING only action
+- **테스트:** `scripts/test_visual_pipeline_soft_cancel.py` · studio/ops smoke 보강
 - **다음:**
-  - R11-S8-5 RUNNING soft-cancel 설계/PoC
   - R11-S8-6 Schedule Catch-up 설계/PoC
   - R11-S8-7 Notification 설계
+  - R11-S8-8 Full Scenario 이용가이드
 
 ## 설계 문서 참조
 

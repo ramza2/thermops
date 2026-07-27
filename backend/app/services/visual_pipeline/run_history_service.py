@@ -108,6 +108,11 @@ def summarize_run_row(row: VisualPipelineRun) -> dict[str, Any]:
         "retry_attempt": int(row.retry_attempt or 0),
         "retry_reason": row.retry_reason,
         "retry_mode": row.retry_mode,
+        "cancel_requested": row.cancel_requested_at is not None,
+        "cancel_requested_at": _iso(row.cancel_requested_at),
+        "cancel_acknowledged_at": _iso(row.cancel_acknowledged_at),
+        "cancel_requested_by": row.cancel_requested_by,
+        "cancel_reason": row.cancel_reason,
     }
 
 
@@ -156,6 +161,11 @@ def detail_run_row(row: VisualPipelineRun) -> dict[str, Any]:
         "retry_attempt": int(row.retry_attempt or 0),
         "retry_reason": row.retry_reason,
         "retry_mode": row.retry_mode,
+        "cancel_requested": row.cancel_requested_at is not None,
+        "cancel_requested_at": _iso(row.cancel_requested_at),
+        "cancel_acknowledged_at": _iso(row.cancel_acknowledged_at),
+        "cancel_requested_by": row.cancel_requested_by,
+        "cancel_reason": row.cancel_reason,
     }
 
 

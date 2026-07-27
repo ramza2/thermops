@@ -420,6 +420,14 @@ export interface VisualPipelineRunResponse {
   retry_attempt?: number | null;
   retry_reason?: string | null;
   retry_mode?: string | null;
+  /** S8-5 additive */
+  cancel_requested?: boolean | null;
+  cancel_requested_at?: string | null;
+  cancel_acknowledged_at?: string | null;
+  cancel_requested_by?: string | null;
+  cancel_reason?: string | null;
+  already_requested?: boolean | null;
+  message?: string | null;
 }
 
 export interface VisualPipelineRunEvent {
@@ -459,6 +467,12 @@ export interface VisualPipelineRunProgress {
   last_event_at?: string | null;
   steps: VisualPipelineRunProgressStep[];
   event_count: number;
+  /** S8-5 additive */
+  cancel_requested?: boolean | null;
+  cancel_requested_at?: string | null;
+  cancel_acknowledged_at?: string | null;
+  cancel_requested_by?: string | null;
+  cancel_reason?: string | null;
 }
 
 export interface VisualPipelineRunSummary {
@@ -491,6 +505,12 @@ export interface VisualPipelineRunSummary {
   retry_attempt?: number | null;
   retry_reason?: string | null;
   retry_mode?: string | null;
+  /** S8-5 additive */
+  cancel_requested?: boolean | null;
+  cancel_requested_at?: string | null;
+  cancel_acknowledged_at?: string | null;
+  cancel_requested_by?: string | null;
+  cancel_reason?: string | null;
 }
 
 export interface VisualPipelineRunListParams {
@@ -522,6 +542,11 @@ export interface VisualPipelineRunRetryResponse {
   run_status: "PENDING" | string;
   reason: string;
   poll_url?: string;
+}
+
+export interface VisualPipelineRunCancelRequest {
+  reason?: string;
+  confirm_visual_run_id?: string;
 }
 
 export interface VisualPipelineRunListResponse {

@@ -962,6 +962,10 @@ BEGIN
     retry_attempt INTEGER NOT NULL DEFAULT 0,
     retry_reason VARCHAR(300),
     retry_mode VARCHAR(40),
+    cancel_requested_at TIMESTAMP,
+    cancel_requested_by VARCHAR(120),
+    cancel_reason VARCHAR(300),
+    cancel_acknowledged_at TIMESTAMP,
     started_at TIMESTAMP,
     finished_at TIMESTAMP,
     created_at TIMESTAMP NOT NULL DEFAULT NOW()
@@ -995,6 +999,9 @@ CREATE INDEX IF NOT EXISTS ix_vp_run_retry_of
 
 CREATE INDEX IF NOT EXISTS ix_vp_run_pipeline_retry
     ON tb_visual_pipeline_run(pipeline_id, retry_of_run_id);
+
+CREATE INDEX IF NOT EXISTS ix_vp_run_cancel_requested
+    ON tb_visual_pipeline_run(pipeline_id, cancel_requested_at);
 
 -- R11-S8-3 Visual Pipeline Run Event (step-level progress)
 DO $thermops_ct$

@@ -103,6 +103,13 @@ class VisualPipelineRunRetryBody(BaseModel):
     retry_mode: str = Field(default="SAME_SNAPSHOT")
 
 
+class VisualPipelineRunCancelBody(BaseModel):
+    """Optional for PENDING; required fields validated in service for RUNNING."""
+
+    reason: str | None = Field(default=None, max_length=300)
+    confirm_visual_run_id: str | None = Field(default=None, max_length=50)
+
+
 # --- S1 Catalog (static paths before /{pipeline_id}) ---
 
 
@@ -520,24 +527,33 @@ async def get_visual_pipeline_run_progress_endpoint(
 async def post_visual_pipeline_run_cancel(
     pipeline_id: str,
     run_id: str,
+    body: VisualPipelineRunCancelBody | None = None,
     db: AsyncSession = Depends(get_db),
 ):
-    """Cancel PENDING run only (R11-S7-9). RUNNING cancel is not supported."""
-    from app.services.visual_pipeline.manual_run_service import (
-        RunPreconditionError,
+    """Cancel PENDING immediately, or soft-cancel request for RUNNING (R11-S8-5)."""
+    from app.services.visual_pipeline.run_cancel_service import (
+        RunCancelError,
         cancel_visual_pipeline_run,
     )
 
+    payload = body or VisualPipelineRunCancelBody()
     try:
-        result = await cancel_visual_pipeline_run(db, pipeline_id, run_id)
+        result = await cancel_visual_pipeline_run(
+            db,
+            pipeline_id,
+            run_id,
+            reason=payload.reason,
+            confirm_visual_run_id=payload.confirm_visual_run_id,
+        )
     except LookupError as exc:
         detail = str(exc) if str(exc) else "VISUAL_PIPELINE_RUN_NOT_FOUND"
         if detail == "VISUAL_PIPELINE_NOT_FOUND":
             raise HTTPException(status_code=404, detail="VISUAL_PIPELINE_NOT_FOUND") from None
         raise HTTPException(status_code=404, detail="VISUAL_PIPELINE_RUN_NOT_FOUND") from None
-    except RunPreconditionError as exc:
-        raise HTTPException(status_code=409, detail=exc.code) from None
-    return ok(result, message="Visual Pipeline Run이 취소되었습니다.")
+    except RunCancelError as exc:
+        raise HTTPException(status_code=exc.http_status, detail=exc.code) from None
+    message = result.get("message") if isinstance(result, dict) else None
+    return ok(result, message=message or "Visual Pipeline Run 취소/중단 요청이 처리되었습니다.")
 
 
 @router.post("/visual-pipelines/{pipeline_id}/runs/{run_id}/retry")

@@ -92,6 +92,13 @@ export function VpRunHistorySection({ pipelineId, refreshToken = 0 }: VpRunHisto
     await openDetail(retryVisualRunId);
   };
 
+  const handleCancelSuccess = async () => {
+    setLocalRefresh((n) => n + 1);
+    if (detail?.visual_run_id) {
+      await openDetail(detail.visual_run_id);
+    }
+  };
+
   return (
     <div
       className="border-t border-slate-100 pt-3 space-y-2.5"
@@ -211,6 +218,9 @@ export function VpRunHistorySection({ pipelineId, refreshToken = 0 }: VpRunHisto
           error={detailError}
           onRetrySuccess={(retryId) => {
             void handleRetrySuccess(retryId);
+          }}
+          onCancelSuccess={() => {
+            void handleCancelSuccess();
           }}
           onClose={() => {
             setDetailOpen(false);

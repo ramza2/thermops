@@ -16,6 +16,7 @@ import type {
   VisualPipelineRunProgress,
   VisualPipelineRunRetryRequest,
   VisualPipelineRunRetryResponse,
+  VisualPipelineRunCancelRequest,
   VisualPipelineRunRequest,
   VisualPipelineRunResponse,
   VisualPipelineScheduleActivationListResponse,
@@ -271,10 +272,11 @@ export async function resumeVisualPipelineScheduleActivation(
 export async function cancelVisualPipelineRun(
   pipelineId: string,
   visualRunId: string,
+  body?: VisualPipelineRunCancelRequest,
 ): Promise<VisualPipelineRunResponse> {
   return postApi<VisualPipelineRunResponse>(
     `/visual-pipelines/${pipelineId}/runs/${encodeURIComponent(visualRunId)}/cancel`,
-    {},
+    body ?? {},
   );
 }
 

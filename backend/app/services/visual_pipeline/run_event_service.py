@@ -30,6 +30,7 @@ EVENT_LOAD_FINALIZE = "LOAD_FINALIZE"
 EVENT_RUN_COMPLETED = "RUN_COMPLETED"
 EVENT_RUN_FAILED = "RUN_FAILED"
 EVENT_RUN_CANCELLED = "RUN_CANCELLED"
+EVENT_RUN_CANCEL_REQUESTED = "RUN_CANCEL_REQUESTED"
 EVENT_RUN_RETRY_REQUESTED = "RUN_RETRY_REQUESTED"
 
 STEP_SOURCE_FETCH = "SOURCE_FETCH"
@@ -331,4 +332,9 @@ async def get_visual_pipeline_run_progress(
         "last_event_at": last_event_at,
         "steps": steps,
         "event_count": len(events),
+        "cancel_requested": run_row.cancel_requested_at is not None,
+        "cancel_requested_at": _iso(run_row.cancel_requested_at),
+        "cancel_acknowledged_at": _iso(run_row.cancel_acknowledged_at),
+        "cancel_requested_by": run_row.cancel_requested_by,
+        "cancel_reason": run_row.cancel_reason,
     }

@@ -278,7 +278,7 @@ export function VpRunPanel({
                   className="text-xs text-slate-700 bg-slate-50 border border-slate-200 rounded-md px-2.5 py-2"
                   data-testid="visual-pipeline-run-cancelled-message"
                 >
-                  실행 전에 취소되었습니다. (RUNNING 중 중단은 후속 지원)
+                  실행 전에 취소되었습니다. (RUNNING 중 중단은 Run 상세에서 요청 가능 · 단계 경계 반영)
                 </p>
               )}
 

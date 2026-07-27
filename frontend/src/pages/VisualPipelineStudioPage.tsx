@@ -898,7 +898,7 @@ function StudioCanvasInner() {
     if (!pipelineId || !runResult?.visual_run_id) return;
     if (runResult.run_status !== "PENDING") return;
     const confirmed = window.confirm(
-      "아직 실행 대기 중인 Run을 취소합니다. 이미 실행 중인 Run은 중단할 수 없습니다. 계속하시겠습니까?",
+      "아직 실행 대기 중인 Run을 취소합니다. 실행 중(RUNNING) Run은 Run 상세의 중단 요청을 사용하세요. 계속하시겠습니까?",
     );
     if (!confirmed) return;
     setCancellingRun(true);

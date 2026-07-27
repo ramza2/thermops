@@ -775,6 +775,7 @@ async def run_load(
     called_by: str | None = None,
     dry_run: bool = False,
     on_progress: Callable[[dict[str, Any]], Awaitable[None]] | None = None,
+    cancel_checker: Callable[[], Awaitable[None]] | None = None,
 ) -> dict[str, Any]:
     async def _progress(
         event_type: str,
@@ -796,6 +797,25 @@ async def run_load(
             )
         except Exception:  # noqa: BLE001 — callback must not affect run_load
             pass
+
+    async def _check_cancel() -> None:
+        if cancel_checker is None:
+            return
+        try:
+            await cancel_checker()
+        except Exception as exc:  # noqa: BLE001
+            # VisualPipelineCancelRequested must propagate; other checker errors fail-open.
+            from app.services.visual_pipeline.run_cancel_service import VisualPipelineCancelRequested
+
+            if isinstance(exc, VisualPipelineCancelRequested):
+                raise
+            logger.warning(
+                "cancel_checker failed (fail-open) operation_id=%s: %s",
+                operation_id,
+                exc,
+                exc_info=True,
+            )
+            return
 
     op = await _get_operation(db, operation_id)
     if not op.target_table:
@@ -819,6 +839,7 @@ async def run_load(
     await db.flush()
 
     try:
+        await _check_cancel()
         await _progress("STEP_STARTED", "SOURCE_FETCH")
         result = await _execute_operation_call(
             db,
@@ -832,9 +853,11 @@ async def run_load(
             "SOURCE_FETCH",
             metadata={"item_count": result.get("item_count"), "snapshot_id": result.get("snapshot_id")},
         )
+        await _check_cancel()
         run.raw_snapshot_id = result.get("snapshot_id")
         if dry_run:
             mapping = await _resolve_mapping(db, op.data_source_id, op.target_table)
+            await _check_cancel()
             await _progress("STEP_STARTED", "TRANSFORM")
             transform_result = await apply_transform_if_configured(
                 db, operation_id, result["items"], for_load=False
@@ -847,6 +870,7 @@ async def run_load(
                     "item_count": len(transform_result.get("items") or []),
                 },
             )
+            await _check_cancel()
             preview = await preview_load_rows(
                 db,
                 target_table=op.target_table,
@@ -871,6 +895,7 @@ async def run_load(
             }
 
         mapping = await _resolve_mapping(db, op.data_source_id, op.target_table)
+        await _check_cancel()
         await _progress("STEP_STARTED", "TRANSFORM")
         transform_result = await apply_transform_if_configured(
             db, operation_id, result["items"], for_load=True
@@ -883,6 +908,7 @@ async def run_load(
                 "item_count": len(transform_result.get("items") or []),
             },
         )
+        await _check_cancel()
         items = transform_result["items"]
         code_scan: dict[str, Any] = {}
         code_mappings = (op.metadata_json or {}).get("code_mappings") if op.metadata_json else None
@@ -893,6 +919,7 @@ async def run_load(
                 code_mappings=code_mappings,
                 source_operation_id=operation_id,
             )
+        await _check_cancel()
         await _progress("STEP_STARTED", "UPSERT_LOAD")
         counts = await apply_write_policy(
             db,
@@ -914,6 +941,7 @@ async def run_load(
                 "error_count": counts.get("error_count"),
             },
         )
+        await _check_cancel()
         finished = utc_now()
         run.run_status = "SUCCESS" if counts["error_count"] == 0 else "WARNING"
         run.finished_at = finished
@@ -958,6 +986,14 @@ async def run_load(
             "api_item_count": result["item_count"],
         }
     except Exception as exc:
+        from app.services.visual_pipeline.run_cancel_service import VisualPipelineCancelRequested
+
+        if isinstance(exc, VisualPipelineCancelRequested):
+            run.run_status = "FAILED"
+            run.finished_at = utc_now()
+            run.error_message = "Cancelled by visual pipeline soft-cancel"
+            await db.flush()
+            raise
         run.run_status = "FAILED"
         run.finished_at = utc_now()
         run.error_message = str(exc)[:500]
