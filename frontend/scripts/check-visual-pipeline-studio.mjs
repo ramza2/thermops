@@ -689,10 +689,31 @@ async function runBrowserSmoke(pipeline) {
     await historyRows.first().waitFor({ state: "visible", timeout: 15000 });
     await historySection.getByTestId("visual-pipeline-run-history-detail-button").first().click();
     await page.getByTestId("visual-pipeline-run-detail-panel").waitFor({ state: "visible", timeout: 10000 });
-    const retryBtn = page.getByRole("button", { name: /retry|재시도|중단 요청|progress/i });
-    if ((await retryBtn.count()) > 0) fail("history detail must not show Retry/Progress/interrupt actions");
+    await page.getByTestId("visual-pipeline-run-detail-progress-section").waitFor({
+      state: "visible",
+      timeout: 10000,
+    });
+    await page.getByTestId("visual-pipeline-run-detail-retry-section").waitFor({
+      state: "visible",
+      timeout: 10000,
+    });
+    // After successful Manual Run the latest detail is SUCCESS — retry action must be hidden.
+    const statusText = await page.getByTestId("visual-pipeline-run-detail-panel").innerText();
+    if (/상태[\s\S]*SUCCESS/i.test(statusText) || statusText.includes("SUCCESS")) {
+      const retryBtn = page.getByTestId("visual-pipeline-run-detail-retry-button");
+      if ((await retryBtn.count()) > 0) {
+        fail("SUCCESS run detail must not show Retry action button");
+      }
+      const unavailable = page.getByTestId("visual-pipeline-run-detail-retry-unavailable");
+      if ((await unavailable.count()) === 0) {
+        fail("expected retry-unavailable notice for SUCCESS run");
+      }
+    }
+    // Global interrupt action buttons must not appear; detail Retry section is allowed.
+    const interruptBtn = page.getByRole("button", { name: /중단 요청/i });
+    if ((await interruptBtn.count()) > 0) fail("history detail must not show interrupt actions");
     await page.getByTestId("visual-pipeline-run-detail-close").click();
-    console.log("  [ok] Run History list/filter/detail (read-only)");
+    console.log("  [ok] Run History list/filter/detail (progress + retry section)");
 
     // --- R11-S7-8 Schedule Activation smoke (panel only; due enqueue in backend tests) ---
     await page.getByTestId("visual-pipeline-schedule-activation-panel").waitFor({ state: "visible", timeout: 15000 });

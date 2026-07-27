@@ -958,6 +958,10 @@ BEGIN
     scheduled_for TIMESTAMP,
     triggered_at TIMESTAMP,
     dedup_key VARCHAR(160),
+    retry_of_run_id VARCHAR(40),
+    retry_attempt INTEGER NOT NULL DEFAULT 0,
+    retry_reason VARCHAR(300),
+    retry_mode VARCHAR(40),
     started_at TIMESTAMP,
     finished_at TIMESTAMP,
     created_at TIMESTAMP NOT NULL DEFAULT NOW()
@@ -985,6 +989,12 @@ CREATE INDEX IF NOT EXISTS ix_vp_run_activation_scheduled_for
 CREATE UNIQUE INDEX IF NOT EXISTS ux_vp_run_dedup_key
     ON tb_visual_pipeline_run(dedup_key)
     WHERE dedup_key IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS ix_vp_run_retry_of
+    ON tb_visual_pipeline_run(retry_of_run_id, created_at);
+
+CREATE INDEX IF NOT EXISTS ix_vp_run_pipeline_retry
+    ON tb_visual_pipeline_run(pipeline_id, retry_of_run_id);
 
 -- R11-S8-3 Visual Pipeline Run Event (step-level progress)
 DO $thermops_ct$

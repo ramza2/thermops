@@ -386,6 +386,10 @@ MIGRATIONS = [
         "R11-S8-3 visual pipeline run event",
         _load_sql("r11s8_visual_pipeline_run_event.sql"),
     ),
+    (
+        "R11-S8-4 visual pipeline run retry lineage",
+        _load_sql("r11s8_visual_pipeline_run_retry.sql"),
+    ),
 ]
 
 

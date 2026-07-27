@@ -104,6 +104,10 @@ def summarize_run_row(row: VisualPipelineRun) -> dict[str, Any]:
         "error_message": row.error_message,
         "issues_count": _issues_count(row.issues_json),
         "result_summary": legacy_summary,
+        "retry_of_run_id": row.retry_of_run_id,
+        "retry_attempt": int(row.retry_attempt or 0),
+        "retry_reason": row.retry_reason,
+        "retry_mode": row.retry_mode,
     }
 
 
@@ -148,6 +152,10 @@ def detail_run_row(row: VisualPipelineRun) -> dict[str, Any]:
         "locked_until": _iso(row.locked_until),
         "heartbeat_at": _iso(row.heartbeat_at),
         "attempt_count": int(row.attempt_count or 0),
+        "retry_of_run_id": row.retry_of_run_id,
+        "retry_attempt": int(row.retry_attempt or 0),
+        "retry_reason": row.retry_reason,
+        "retry_mode": row.retry_mode,
     }
 
 
@@ -160,6 +168,7 @@ async def list_visual_pipeline_runs_history(
     run_status: str | None = None,
     mode: str | None = None,
     activation_id: str | None = None,
+    retry_of_run_id: str | None = None,
     created_from: str | None = None,
     created_to: str | None = None,
     scheduled_from: str | None = None,
@@ -187,6 +196,9 @@ async def list_visual_pipeline_runs_history(
 
     if activation_id is not None and str(activation_id).strip():
         filters.append(VisualPipelineRun.activation_id == str(activation_id).strip())
+
+    if retry_of_run_id is not None and str(retry_of_run_id).strip():
+        filters.append(VisualPipelineRun.retry_of_run_id == str(retry_of_run_id).strip())
 
     cf = _parse_dt(created_from, field="created_from")
     ct = _parse_dt(created_to, field="created_to")

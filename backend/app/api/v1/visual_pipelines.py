@@ -97,6 +97,12 @@ class VisualPipelineScheduleActivationBody(BaseModel):
     compile_result_id: str | None = None
 
 
+class VisualPipelineRunRetryBody(BaseModel):
+    reason: str = Field(..., min_length=5, max_length=300)
+    confirm_visual_run_id: str = Field(..., min_length=1, max_length=50)
+    retry_mode: str = Field(default="SAME_SNAPSHOT")
+
+
 # --- S1 Catalog (static paths before /{pipeline_id}) ---
 
 
@@ -418,6 +424,7 @@ async def get_visual_pipeline_runs(
     run_status: str | None = Query(default=None),
     mode: str | None = Query(default=None),
     activation_id: str | None = Query(default=None),
+    retry_of_run_id: str | None = Query(default=None),
     created_from: str | None = Query(default=None),
     created_to: str | None = Query(default=None),
     scheduled_from: str | None = Query(default=None),
@@ -436,6 +443,7 @@ async def get_visual_pipeline_runs(
             run_status=run_status,
             mode=mode,
             activation_id=activation_id,
+            retry_of_run_id=retry_of_run_id,
             created_from=created_from,
             created_to=created_to,
             scheduled_from=scheduled_from,
@@ -530,6 +538,37 @@ async def post_visual_pipeline_run_cancel(
     except RunPreconditionError as exc:
         raise HTTPException(status_code=409, detail=exc.code) from None
     return ok(result, message="Visual Pipeline Run이 취소되었습니다.")
+
+
+@router.post("/visual-pipelines/{pipeline_id}/runs/{run_id}/retry")
+async def post_visual_pipeline_run_retry(
+    pipeline_id: str,
+    run_id: str,
+    body: VisualPipelineRunRetryBody,
+    db: AsyncSession = Depends(get_db),
+):
+    """Retry FAILED/PARTIAL run as a new PENDING run (R11-S8-4). Does not call run_load."""
+    from app.services.visual_pipeline.run_retry_service import RunRetryError, retry_visual_pipeline_run
+
+    try:
+        result = await retry_visual_pipeline_run(
+            db,
+            pipeline_id=pipeline_id,
+            source_visual_run_id=run_id,
+            reason=body.reason,
+            confirm_visual_run_id=body.confirm_visual_run_id,
+            retry_mode=body.retry_mode,
+        )
+    except LookupError:
+        raise HTTPException(status_code=404, detail="VISUAL_PIPELINE_NOT_FOUND") from None
+    except RunRetryError as exc:
+        raise HTTPException(status_code=exc.http_status, detail=exc.code) from None
+    return JSONResponse(
+        status_code=202,
+        content=jsonable_encoder(
+            accepted(result, message="Visual Pipeline Retry Run이 접수되었습니다.")
+        ),
+    )
 
 
 @router.post("/visual-pipelines/{pipeline_id}/schedule-activations")

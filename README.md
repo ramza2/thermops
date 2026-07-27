@@ -1693,9 +1693,21 @@ cd frontend && node scripts/check-visual-pipeline-studio.mjs
 - **API:** `GET .../runs/{visual_run_id}/events` · `GET .../runs/{visual_run_id}/progress` · SELECT only · source of truth=`tb_visual_pipeline_run.run_status`
 - **FE:** 공용 `VpRunDetailPanel` — 진행률 바 · 단계 badge · 이벤트 timeline (read-only)
 - **테스트:** `scripts/test_visual_pipeline_run_progress.py` · 기존 run_history/manual/run_worker/ops/admin/audit 회귀 유지
+- **다음:** R11-S8-4 Retry Policy PoC (아래 섹션)
+
+### R11-S8-4 Retry Policy PoC
+
+- **범위:** FAILED/PARTIAL Run을 **새 `visual_run_id` PENDING**으로 재시도. 원본 Run 불변. SAME_SNAPSHOT만 지원. Auto retry / Interrupt / Catch-up / Notification 미구현.
+- **DB:** `retry_of_run_id` · `retry_attempt` · `retry_reason` · `retry_mode` · `scripts/r11s8_visual_pipeline_run_retry.sql`
+- **정책:** FAILED/PARTIAL만 허용 · PENDING/RUNNING/SUCCESS/CANCELLED 불허 · active run 존재 시 불허 · max attempts=`THERMOOPS_VP_RUN_RETRY_MAX_ATTEMPTS`(기본 3, 0=disabled) · dedup=`RETRY:{root}:{attempt}:{new_id}`
+- **API:** `POST .../runs/{visual_run_id}/retry` (202) · confirm+reason 필수 · audit `RUN_RETRY_ENQUEUED` **fail-close** · `run_load`/BackgroundTasks 직접 호출 없음 (vp-run-worker 실행)
+- **Event:** source=`RUN_RETRY_REQUESTED`(fail-open) · new run=`RUN_CREATED`+retry metadata
+- **FE:** Studio/Ops 공용 `VpRunDetailPanel` Retry section · strong confirm · PARTIAL 중복 적재 경고 · history refresh
+- **테스트:** `scripts/test_visual_pipeline_run_retry.py` · studio/ops smoke 보강
 - **다음:**
-  - R11-S8-4 Retry Policy PoC
   - R11-S8-5 RUNNING soft-cancel 설계/PoC
+  - R11-S8-6 Schedule Catch-up 설계/PoC
+  - R11-S8-7 Notification 설계
 
 ## 설계 문서 참조
 

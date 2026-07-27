@@ -26,6 +26,7 @@ EVENT_SCHEDULE_PAUSE = "SCHEDULE_PAUSE"
 EVENT_SCHEDULE_RESUME = "SCHEDULE_RESUME"
 EVENT_RUN_CANCELLED = "RUN_CANCELLED"
 EVENT_RUN_MARK_FAILED_BY_OPS = "RUN_MARK_FAILED_BY_OPS"
+EVENT_RUN_RETRY_ENQUEUED = "RUN_RETRY_ENQUEUED"
 EVENT_OPS_MARK_FAILED_DRY_RUN = "OPS_MARK_FAILED_DRY_RUN"
 EVENT_OPS_MARK_FAILED_APPLY = "OPS_MARK_FAILED_APPLY"
 EVENT_SCHEDULE_WORKER_SKIPPED_ACTIVE_RUN = "SCHEDULE_WORKER_SKIPPED_ACTIVE_RUN"
@@ -258,6 +259,54 @@ async def record_run_cancel_event(
         actor_id="mock_admin",
         before_json={"run_status": "PENDING"},
         after_json={"run_status": "CANCELLED", "finished_at": _iso(finished_at)},
+    )
+
+
+async def record_run_retry_enqueued_event(
+    db: AsyncSession,
+    *,
+    pipeline_id: str,
+    source_visual_run_id: str,
+    retry_visual_run_id: str,
+    retry_attempt: int,
+    retry_mode: str,
+    reason: str,
+    activation_id: str | None = None,
+    materialization_result_id: str | None = None,
+    r10_schedule_id: str | None = None,
+    source_run_status: str | None = None,
+    actor_type: str = ACTOR_USER,
+    actor_id: str = "mock_admin",
+    fail_open: bool = False,
+) -> VisualPipelineAuditLog | None:
+    """Record retry enqueue audit. Default fail_open=False (S8-4 fail-close)."""
+    return await record_visual_pipeline_audit_event(
+        db,
+        event_type=EVENT_RUN_RETRY_ENQUEUED,
+        event_source=SOURCE_API,
+        action_status=STATUS_SUCCESS,
+        pipeline_id=pipeline_id,
+        visual_run_id=source_visual_run_id,
+        activation_id=activation_id,
+        materialization_result_id=materialization_result_id,
+        r10_schedule_id=r10_schedule_id,
+        actor_type=actor_type,
+        actor_id=actor_id,
+        reason=reason,
+        before_json={"run_status": source_run_status, "visual_run_id": source_visual_run_id},
+        after_json={
+            "retry_visual_run_id": retry_visual_run_id,
+            "run_status": "PENDING",
+            "retry_attempt": retry_attempt,
+            "retry_mode": retry_mode,
+        },
+        metadata_json={
+            "retry_visual_run_id": retry_visual_run_id,
+            "retry_attempt": retry_attempt,
+            "retry_mode": retry_mode,
+            "source_run_status": source_run_status,
+        },
+        fail_open=fail_open,
     )
 
 

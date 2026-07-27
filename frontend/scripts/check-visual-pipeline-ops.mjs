@@ -91,21 +91,30 @@ try {
       });
       const badInDetail = await page
         .getByTestId("visual-pipeline-ops-run-detail-panel")
-        .getByRole("button", { name: /retry|재시도|중단 요청/i })
+        .getByRole("button", { name: /중단 요청/i })
         .count();
-      if (badInDetail > 0) fail("ops run detail must be read-only (no retry/interrupt)");
+      if (badInDetail > 0) fail("ops run detail must not show interrupt actions");
+      // Detail-panel Retry is allowed (strong confirm). Global page-level retry is not.
+      await page.getByTestId("visual-pipeline-ops-run-detail-retry-section").waitFor({
+        state: "visible",
+        timeout: 10000,
+      });
       await page.getByTestId("visual-pipeline-ops-run-detail-close").click();
-      console.log("  [ok] ops run detail panel read-only");
+      console.log("  [ok] ops run detail panel (retry section allowed, interrupt forbidden)");
     } else {
       console.log("  [skip] no ops run detail buttons (no stuck/failure/audit with run ids)");
     }
 
-    // Non-stuck destructive actions must not exist
+    // Non-stuck destructive actions must not exist at page level (detail-panel retry is separate)
     const badActions = await page.getByRole("button", {
-      name: /pause|resume|deactivate|cancel|retry|정리 적용/i,
+      name: /pause|resume|deactivate|cancel|정리 적용/i,
     }).count();
     if (badActions > 0) fail("unexpected destructive action buttons present");
-    console.log("  [ok] no pause/resume/deactivate/cancel/retry buttons");
+    // After detail closed, no retry-button should remain on the page
+    if ((await page.getByTestId("visual-pipeline-ops-run-detail-retry-button").count()) > 0) {
+      fail("detail retry button should be closed");
+    }
+    console.log("  [ok] no pause/resume/deactivate/cancel/global-retry buttons");
 
     const markButtons = page.getByTestId("visual-pipeline-ops-mark-failed-button");
     const markCount = await markButtons.count();

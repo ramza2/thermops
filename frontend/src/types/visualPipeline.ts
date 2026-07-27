@@ -415,6 +415,11 @@ export interface VisualPipelineRunResponse {
   locked_until?: string | null;
   heartbeat_at?: string | null;
   attempt_count?: number | null;
+  /** S8-4 additive */
+  retry_of_run_id?: string | null;
+  retry_attempt?: number | null;
+  retry_reason?: string | null;
+  retry_mode?: string | null;
 }
 
 export interface VisualPipelineRunEvent {
@@ -481,6 +486,11 @@ export interface VisualPipelineRunSummary {
   error_message?: string | null;
   issues_count?: number;
   result_summary?: Record<string, unknown> | null;
+  /** S8-4 additive */
+  retry_of_run_id?: string | null;
+  retry_attempt?: number | null;
+  retry_reason?: string | null;
+  retry_mode?: string | null;
 }
 
 export interface VisualPipelineRunListParams {
@@ -488,12 +498,30 @@ export interface VisualPipelineRunListParams {
   run_status?: string;
   mode?: string;
   activation_id?: string;
+  retry_of_run_id?: string;
   created_from?: string;
   created_to?: string;
   scheduled_from?: string;
   scheduled_to?: string;
   limit?: number;
   offset?: number;
+}
+
+export interface VisualPipelineRunRetryRequest {
+  reason: string;
+  confirm_visual_run_id: string;
+  retry_mode?: "SAME_SNAPSHOT";
+}
+
+export interface VisualPipelineRunRetryResponse {
+  original_visual_run_id: string;
+  retry_visual_run_id: string;
+  pipeline_id: string;
+  retry_attempt: number;
+  retry_mode: string;
+  run_status: "PENDING" | string;
+  reason: string;
+  poll_url?: string;
 }
 
 export interface VisualPipelineRunListResponse {

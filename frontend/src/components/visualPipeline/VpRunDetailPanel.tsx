@@ -1,5 +1,10 @@
 import { useEffect, useState } from "react";
-import { getVisualPipelineRunProgress, listVisualPipelineRunEvents } from "@/api/visualPipelines";
+import { extractApiErrorMessage } from "@/api/client";
+import {
+  getVisualPipelineRunProgress,
+  listVisualPipelineRunEvents,
+  retryVisualPipelineRun,
+} from "@/api/visualPipelines";
 import type {
   VisualPipelineRunEvent,
   VisualPipelineRunProgress,
@@ -12,6 +17,8 @@ interface VpRunDetailPanelProps {
   error?: string | null;
   onClose: () => void;
   testIdPrefix?: string;
+  /** Called after a retry run is successfully enqueued. */
+  onRetrySuccess?: (retryVisualRunId: string) => void;
 }
 
 function Field({ label, value }: { label: string; value?: string | number | null }) {
@@ -40,6 +47,7 @@ function eventTypeLabel(eventType: string): string {
     RUN_COMPLETED: "실행 완료",
     RUN_FAILED: "실행 실패",
     RUN_CANCELLED: "실행 취소",
+    RUN_RETRY_REQUESTED: "재시도 요청",
   };
   return map[eventType] ?? eventType;
 }
@@ -50,17 +58,53 @@ function stepStatusTone(status: string): string {
   return "bg-slate-50 text-slate-500 border-slate-200";
 }
 
+function canRetryStatus(status?: string | null): boolean {
+  const s = String(status || "").toUpperCase();
+  return s === "FAILED" || s === "PARTIAL";
+}
+
+function retryErrorMessage(codeOrMsg: string): string {
+  const code = codeOrMsg.trim();
+  if (code.includes("RUN_RETRY_ACTIVE_RUN_EXISTS") || code === "RUN_RETRY_ACTIVE_RUN_EXISTS") {
+    return "이 파이프라인에 실행 중이거나 대기 중인 Run이 있어 재시도할 수 없습니다.";
+  }
+  if (code.includes("RUN_RETRY_NOT_ALLOWED_STATUS") || code === "RUN_RETRY_NOT_ALLOWED_STATUS") {
+    return "현재 상태에서는 재시도할 수 없습니다.";
+  }
+  if (code.includes("RUN_RETRY_MAX_ATTEMPT_EXCEEDED") || code === "RUN_RETRY_MAX_ATTEMPT_EXCEEDED") {
+    return "최대 재시도 횟수를 초과했습니다.";
+  }
+  if (code.includes("RUN_RETRY_AUDIT_REQUIRED_FAILED") || code === "RUN_RETRY_AUDIT_REQUIRED_FAILED") {
+    return "Audit 기록 실패로 재시도 Run을 생성하지 못했습니다.";
+  }
+  if (code.includes("RUN_RETRY_CONFIRM_MISMATCH") || code === "RUN_RETRY_CONFIRM_MISMATCH") {
+    return "confirm_visual_run_id가 일치하지 않습니다.";
+  }
+  if (code.includes("RUN_RETRY_REASON_REQUIRED") || code === "RUN_RETRY_REASON_REQUIRED") {
+    return "사유는 5자 이상 입력해야 합니다.";
+  }
+  return codeOrMsg || "재시도 요청에 실패했습니다.";
+}
+
 export function VpRunDetailPanel({
   detail,
   loading,
   error,
   onClose,
   testIdPrefix = "visual-pipeline-run-detail",
+  onRetrySuccess,
 }: VpRunDetailPanelProps) {
   const [progress, setProgress] = useState<VisualPipelineRunProgress | null>(null);
   const [events, setEvents] = useState<VisualPipelineRunEvent[]>([]);
   const [progressLoading, setProgressLoading] = useState(false);
   const [progressError, setProgressError] = useState<string | null>(null);
+
+  const [retryOpen, setRetryOpen] = useState(false);
+  const [confirmRunId, setConfirmRunId] = useState("");
+  const [retryReason, setRetryReason] = useState("");
+  const [retrySubmitting, setRetrySubmitting] = useState(false);
+  const [retryError, setRetryError] = useState<string | null>(null);
+  const [retrySuccess, setRetrySuccess] = useState<string | null>(null);
 
   useEffect(() => {
     if (!detail?.pipeline_id || !detail.visual_run_id) {
@@ -95,8 +139,61 @@ export function VpRunDetailPanel({
     };
   }, [detail?.pipeline_id, detail?.visual_run_id]);
 
+  useEffect(() => {
+    setRetryOpen(false);
+    setConfirmRunId("");
+    setRetryReason("");
+    setRetryError(null);
+    setRetrySuccess(null);
+  }, [detail?.visual_run_id]);
+
   const progressPercent =
     progress?.progress_percent != null ? Math.max(0, Math.min(100, progress.progress_percent)) : null;
+
+  const retryable = canRetryStatus(detail?.run_status);
+  const canConfirmRetry =
+    !!detail &&
+    confirmRunId.trim() === detail.visual_run_id &&
+    retryReason.trim().length >= 5 &&
+    !retrySubmitting;
+
+  const openRetry = () => {
+    setRetryOpen(true);
+    setConfirmRunId("");
+    setRetryReason("");
+    setRetryError(null);
+  };
+
+  const closeRetry = () => {
+    if (retrySubmitting) return;
+    setRetryOpen(false);
+    setConfirmRunId("");
+    setRetryReason("");
+    setRetryError(null);
+  };
+
+  const submitRetry = async () => {
+    if (!detail || !canConfirmRetry) return;
+    setRetrySubmitting(true);
+    setRetryError(null);
+    try {
+      const result = await retryVisualPipelineRun(detail.pipeline_id, detail.visual_run_id, {
+        reason: retryReason.trim(),
+        confirm_visual_run_id: confirmRunId.trim(),
+        retry_mode: "SAME_SNAPSHOT",
+      });
+      setRetryOpen(false);
+      setRetrySuccess(
+        `재시도 Run이 생성되었습니다. (${result.retry_visual_run_id}) 실행 이력에서 진행 상태를 확인할 수 있습니다.`,
+      );
+      onRetrySuccess?.(result.retry_visual_run_id);
+    } catch (err) {
+      const raw = extractApiErrorMessage(err, "재시도 요청에 실패했습니다.");
+      setRetryError(retryErrorMessage(raw));
+    } finally {
+      setRetrySubmitting(false);
+    }
+  };
 
   return (
     <div
@@ -204,6 +301,114 @@ export function VpRunDetailPanel({
               )}
             </section>
 
+            <section
+              className="rounded-md border border-violet-100 bg-violet-50/40 px-2.5 py-2 space-y-2"
+              data-testid={`${testIdPrefix}-retry-section`}
+            >
+              <div className="text-[10px] font-bold text-violet-700 uppercase tracking-wide">재시도</div>
+              {(detail.retry_of_run_id || (detail.retry_attempt ?? 0) > 0) && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <Field label="원본 Run ID" value={detail.retry_of_run_id} />
+                  <Field label="Retry attempt" value={detail.retry_attempt} />
+                  <Field label="Retry mode" value={detail.retry_mode} />
+                  <Field label="Retry reason" value={detail.retry_reason} />
+                </div>
+              )}
+              {retrySuccess && (
+                <p
+                  className="text-[11px] text-emerald-800 bg-emerald-50 border border-emerald-100 rounded px-2 py-1"
+                  data-testid={`${testIdPrefix}-retry-success`}
+                >
+                  {retrySuccess}
+                </p>
+              )}
+              {retryable ? (
+                <button
+                  type="button"
+                  className="text-[11px] font-medium text-violet-800 border border-violet-200 bg-white rounded px-2.5 py-1 hover:bg-violet-50"
+                  onClick={openRetry}
+                  data-testid={`${testIdPrefix}-retry-button`}
+                >
+                  재시도
+                </button>
+              ) : (
+                <p className="text-[11px] text-slate-500" data-testid={`${testIdPrefix}-retry-unavailable`}>
+                  현재 상태({detail.run_status})에서는 재시도할 수 없습니다. FAILED / PARTIAL만 가능합니다.
+                </p>
+              )}
+            </section>
+
+            {retryOpen && (
+              <div
+                className="rounded-md border border-violet-200 bg-white px-2.5 py-2 space-y-2"
+                data-testid={`${testIdPrefix}-retry-dialog`}
+              >
+                <div className="text-xs font-bold text-slate-700">Run 재시도</div>
+                <p className="text-[11px] text-slate-600 whitespace-pre-line">
+                  {`선택한 Run을 새 Run으로 재시도합니다.
+원본 Run은 변경하지 않고, 동일한 실행 설정 스냅샷으로 새 대기 Run을 생성합니다.
+실제 실행은 실행기가 처리합니다.
+계속하려면 Run ID를 정확히 입력하세요.`}
+                </p>
+                {String(detail.run_status).toUpperCase() === "PARTIAL" && (
+                  <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-100 rounded px-2 py-1">
+                    이 Run은 부분 성공 상태입니다. 재시도 시 동일한 대상에 다시 적재될 수 있습니다.
+                  </p>
+                )}
+                {String(detail.run_status).toUpperCase() === "FAILED" && (
+                  <p className="text-[11px] text-slate-600 bg-slate-50 border border-slate-100 rounded px-2 py-1">
+                    실패 원인을 확인한 뒤 재시도하는 것을 권장합니다.
+                  </p>
+                )}
+                <p className="font-mono text-[10px] text-slate-500">target: {detail.visual_run_id}</p>
+                <label className="block text-[11px] text-slate-600">
+                  confirm_visual_run_id
+                  <input
+                    className="mt-1 w-full border border-slate-200 rounded px-2 py-1.5 text-[11px] font-mono"
+                    value={confirmRunId}
+                    onChange={(e) => setConfirmRunId(e.target.value)}
+                    placeholder={detail.visual_run_id}
+                    data-testid={`${testIdPrefix}-retry-confirm-input`}
+                    autoComplete="off"
+                  />
+                </label>
+                <label className="block text-[11px] text-slate-600">
+                  reason (5자 이상)
+                  <textarea
+                    className="mt-1 w-full border border-slate-200 rounded px-2 py-1.5 text-[11px] min-h-[64px]"
+                    value={retryReason}
+                    onChange={(e) => setRetryReason(e.target.value)}
+                    data-testid={`${testIdPrefix}-retry-reason-input`}
+                  />
+                </label>
+                {retryError && (
+                  <p className="text-[11px] text-red-600" data-testid={`${testIdPrefix}-retry-dialog-error`}>
+                    {retryError}
+                  </p>
+                )}
+                <div className="flex justify-end gap-2">
+                  <button
+                    type="button"
+                    className="text-[11px] text-slate-600 border border-slate-200 rounded px-2.5 py-1"
+                    onClick={closeRetry}
+                    disabled={retrySubmitting}
+                    data-testid={`${testIdPrefix}-retry-cancel-button`}
+                  >
+                    취소
+                  </button>
+                  <button
+                    type="button"
+                    className="text-[11px] font-medium text-white bg-violet-700 rounded px-2.5 py-1 disabled:opacity-40"
+                    onClick={() => void submitRetry()}
+                    disabled={!canConfirmRetry}
+                    data-testid={`${testIdPrefix}-retry-confirm-button`}
+                  >
+                    {retrySubmitting ? "처리 중…" : "새 Run으로 재시도"}
+                  </button>
+                </div>
+              </div>
+            )}
+
             <section className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               <Field label="생성" value={detail.created_at} />
               <Field label="시작" value={detail.started_at} />
@@ -264,7 +469,7 @@ export function VpRunDetailPanel({
                 )}
               </section>
             )}
-            <p className="text-[10px] text-slate-400">읽기 전용 · Retry / 중단 요청은 후속 단계입니다.</p>
+            <p className="text-[10px] text-slate-400">읽기 전용 상세 · 중단 요청은 후속 단계입니다.</p>
           </>
         )}
       </div>

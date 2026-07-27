@@ -14,6 +14,8 @@ import type {
   VisualPipelineRunListParams,
   VisualPipelineRunEventListResponse,
   VisualPipelineRunProgress,
+  VisualPipelineRunRetryRequest,
+  VisualPipelineRunRetryResponse,
   VisualPipelineRunRequest,
   VisualPipelineRunResponse,
   VisualPipelineScheduleActivationListResponse,
@@ -200,6 +202,7 @@ export async function listVisualPipelineRuns(
           run_status: limitOrParams.run_status ?? limitOrParams.status,
           mode: limitOrParams.mode,
           activation_id: limitOrParams.activation_id,
+          retry_of_run_id: limitOrParams.retry_of_run_id,
           created_from: limitOrParams.created_from,
           created_to: limitOrParams.created_to,
           scheduled_from: limitOrParams.scheduled_from,
@@ -296,6 +299,17 @@ export async function getVisualPipelineRunProgress(
 ): Promise<VisualPipelineRunProgress> {
   return fetchApi<VisualPipelineRunProgress>(
     `/visual-pipelines/${pipelineId}/runs/${encodeURIComponent(visualRunId)}/progress`,
+  );
+}
+
+export async function retryVisualPipelineRun(
+  pipelineId: string,
+  visualRunId: string,
+  body: VisualPipelineRunRetryRequest,
+): Promise<VisualPipelineRunRetryResponse> {
+  return postApi<VisualPipelineRunRetryResponse>(
+    `/visual-pipelines/${pipelineId}/runs/${encodeURIComponent(visualRunId)}/retry`,
+    body,
   );
 }
 

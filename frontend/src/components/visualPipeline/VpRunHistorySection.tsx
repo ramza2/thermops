@@ -44,6 +44,7 @@ export function VpRunHistorySection({ pipelineId, refreshToken = 0 }: VpRunHisto
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
+  const [localRefresh, setLocalRefresh] = useState(0);
 
   const loadHistory = useCallback(async () => {
     if (!pipelineId) return;
@@ -69,7 +70,7 @@ export function VpRunHistorySection({ pipelineId, refreshToken = 0 }: VpRunHisto
 
   useEffect(() => {
     void loadHistory();
-  }, [loadHistory, refreshToken]);
+  }, [loadHistory, refreshToken, localRefresh]);
 
   const openDetail = async (visualRunId: string) => {
     setDetailOpen(true);
@@ -84,6 +85,11 @@ export function VpRunHistorySection({ pipelineId, refreshToken = 0 }: VpRunHisto
     } finally {
       setDetailLoading(false);
     }
+  };
+
+  const handleRetrySuccess = async (retryVisualRunId: string) => {
+    setLocalRefresh((n) => n + 1);
+    await openDetail(retryVisualRunId);
   };
 
   return (
@@ -203,6 +209,9 @@ export function VpRunHistorySection({ pipelineId, refreshToken = 0 }: VpRunHisto
           detail={detail}
           loading={detailLoading}
           error={detailError}
+          onRetrySuccess={(retryId) => {
+            void handleRetrySuccess(retryId);
+          }}
           onClose={() => {
             setDetailOpen(false);
             setDetail(null);

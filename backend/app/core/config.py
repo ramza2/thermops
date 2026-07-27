@@ -53,6 +53,10 @@ class Settings(BaseSettings):
         default=1, validation_alias="THERMOOPS_VP_RUN_WORKER_MAX_BATCH_SIZE"
     )
     vp_run_worker_log_level: str = Field(default="INFO", validation_alias="THERMOOPS_VP_RUN_WORKER_LOG_LEVEL")
+    # R11-S8-4 Visual Pipeline Run Retry (0 = disabled)
+    vp_run_retry_max_attempts: int = Field(
+        default=3, validation_alias="THERMOOPS_VP_RUN_RETRY_MAX_ATTEMPTS"
+    )
     # R11-S7-8 Visual Pipeline Schedule Activation
     vp_schedule_activation_enabled: bool = Field(
         default=False, validation_alias="THERMOOPS_VP_SCHEDULE_ACTIVATION_ENABLED"
