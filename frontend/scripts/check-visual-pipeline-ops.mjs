@@ -103,8 +103,15 @@ try {
         state: "visible",
         timeout: 10000,
       });
+      // Ops must not expose schedule catch-up enqueue controls
+      if ((await page.getByTestId("visual-pipeline-schedule-catchup-button").count()) > 0) {
+        fail("ops must not show schedule catch-up enqueue button");
+      }
+      if ((await page.getByTestId("visual-pipeline-ops-run-detail-panel").getByRole("button", { name: /누락 실행 보정 Run 생성/i }).count()) > 0) {
+        fail("ops run detail must not show catch-up enqueue action");
+      }
       await page.getByTestId("visual-pipeline-ops-run-detail-close").click();
-      console.log("  [ok] ops run detail panel (retry + cancel section allowed, action gated by status)");
+      console.log("  [ok] ops run detail panel (retry + cancel section; no catch-up enqueue)");
     } else {
       console.log("  [skip] no ops run detail buttons (no stuck/failure/audit with run ids)");
     }

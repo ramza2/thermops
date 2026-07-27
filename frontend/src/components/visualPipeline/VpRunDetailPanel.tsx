@@ -52,6 +52,7 @@ function eventTypeLabel(eventType: string): string {
     RUN_CANCELLED: "실행 취소",
     RUN_CANCEL_REQUESTED: "중단 요청",
     RUN_RETRY_REQUESTED: "재시도 요청",
+    SCHEDULE_CATCHUP_ENQUEUED: "누락 실행 보정",
   };
   return map[eventType] ?? eventType;
 }
@@ -386,6 +387,24 @@ export function VpRunDetailPanel({
                 </ul>
               )}
             </section>
+
+            {(detail.catchup_of_activation_id || detail.catchup_for_scheduled_at) && (
+              <section
+                className="rounded-md border border-teal-100 bg-teal-50/40 px-2.5 py-2 space-y-2"
+                data-testid={`${testIdPrefix}-catchup-section`}
+              >
+                <div className="text-[10px] font-bold text-teal-800 uppercase tracking-wide">
+                  누락 실행 보정
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <Field label="대상 스케줄 시각" value={detail.catchup_for_scheduled_at} />
+                  <Field label="Activation ID" value={detail.catchup_of_activation_id} />
+                  <Field label="요청자" value={detail.catchup_requested_by} />
+                  <Field label="요청 시각" value={detail.catchup_requested_at} />
+                  <Field label="사유" value={detail.catchup_reason} />
+                </div>
+              </section>
+            )}
 
             <section
               className="rounded-md border border-violet-100 bg-violet-50/40 px-2.5 py-2 space-y-2"

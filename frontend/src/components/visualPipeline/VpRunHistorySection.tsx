@@ -189,7 +189,19 @@ export function VpRunHistorySection({ pipelineId, refreshToken = 0 }: VpRunHisto
                       {row.run_status}
                     </span>
                   </td>
-                  <td className="px-2 py-1.5 whitespace-nowrap">{modeLabel(row.mode)}</td>
+                  <td className="px-2 py-1.5 whitespace-nowrap">
+                    <span className="inline-flex items-center gap-1">
+                      {modeLabel(row.mode)}
+                      {row.catchup_of_activation_id ? (
+                        <span
+                          className="text-[9px] font-bold uppercase tracking-wide border border-teal-200 bg-teal-50 text-teal-800 rounded px-1 py-0.5"
+                          data-testid="visual-pipeline-run-history-catchup-badge"
+                        >
+                          누락 보정
+                        </span>
+                      ) : null}
+                    </span>
+                  </td>
                   <td className="px-2 py-1.5 font-mono whitespace-nowrap text-[10px]">
                     {row.created_at ?? "-"}
                   </td>

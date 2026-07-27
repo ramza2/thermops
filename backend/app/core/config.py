@@ -78,6 +78,16 @@ class Settings(BaseSettings):
     vp_schedule_worker_log_level: str = Field(
         default="INFO", validation_alias="THERMOOPS_VP_SCHEDULE_WORKER_LOG_LEVEL"
     )
+    # R11-S8-6 Schedule Catch-up (manual enqueue PoC; max_batch fixed at 1)
+    vp_schedule_catchup_enabled: bool = Field(
+        default=True, validation_alias="THERMOOPS_VP_SCHEDULE_CATCHUP_ENABLED"
+    )
+    vp_schedule_catchup_max_window_hours: int = Field(
+        default=24, validation_alias="THERMOOPS_VP_SCHEDULE_CATCHUP_MAX_WINDOW_HOURS"
+    )
+    vp_schedule_catchup_max_batch: int = Field(
+        default=1, validation_alias="THERMOOPS_VP_SCHEDULE_CATCHUP_MAX_BATCH"
+    )
     # R11-S7-14 Admin Action PoC (not Auth — feature exposure only)
     vp_admin_actions_enabled: bool = Field(
         default=False, validation_alias="THERMOOPS_VP_ADMIN_ACTIONS_ENABLED"

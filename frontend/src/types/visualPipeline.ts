@@ -428,6 +428,12 @@ export interface VisualPipelineRunResponse {
   cancel_reason?: string | null;
   already_requested?: boolean | null;
   message?: string | null;
+  /** S8-6 additive */
+  catchup_of_activation_id?: string | null;
+  catchup_for_scheduled_at?: string | null;
+  catchup_reason?: string | null;
+  catchup_requested_by?: string | null;
+  catchup_requested_at?: string | null;
 }
 
 export interface VisualPipelineRunEvent {
@@ -511,6 +517,12 @@ export interface VisualPipelineRunSummary {
   cancel_acknowledged_at?: string | null;
   cancel_requested_by?: string | null;
   cancel_reason?: string | null;
+  /** S8-6 additive */
+  catchup_of_activation_id?: string | null;
+  catchup_for_scheduled_at?: string | null;
+  catchup_reason?: string | null;
+  catchup_requested_by?: string | null;
+  catchup_requested_at?: string | null;
 }
 
 export interface VisualPipelineRunListParams {
@@ -547,6 +559,35 @@ export interface VisualPipelineRunRetryResponse {
 export interface VisualPipelineRunCancelRequest {
   reason?: string;
   confirm_visual_run_id?: string;
+}
+
+export interface VisualPipelineScheduleCatchupCandidate {
+  pipeline_id: string;
+  activation_id: string;
+  eligible: boolean;
+  candidate_scheduled_at?: string | null;
+  missed_count?: number | null;
+  last_due_at?: string | null;
+  last_skip_at?: string | null;
+  last_skip_reason?: string | null;
+  reason?: string | null;
+  warnings?: string[];
+}
+
+export interface VisualPipelineScheduleCatchupRequest {
+  candidate_scheduled_at: string;
+  reason: string;
+  confirm_activation_id: string;
+}
+
+export interface VisualPipelineScheduleCatchupResponse {
+  pipeline_id: string;
+  activation_id: string;
+  catchup_visual_run_id: string;
+  run_status: string;
+  catchup_for_scheduled_at: string;
+  reason: string;
+  poll_url?: string;
 }
 
 export interface VisualPipelineRunListResponse {

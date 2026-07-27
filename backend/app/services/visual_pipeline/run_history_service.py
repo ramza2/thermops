@@ -113,6 +113,11 @@ def summarize_run_row(row: VisualPipelineRun) -> dict[str, Any]:
         "cancel_acknowledged_at": _iso(row.cancel_acknowledged_at),
         "cancel_requested_by": row.cancel_requested_by,
         "cancel_reason": row.cancel_reason,
+        "catchup_of_activation_id": row.catchup_of_activation_id,
+        "catchup_for_scheduled_at": _iso(row.catchup_for_scheduled_at),
+        "catchup_reason": row.catchup_reason,
+        "catchup_requested_by": row.catchup_requested_by,
+        "catchup_requested_at": _iso(row.catchup_requested_at),
     }
 
 
@@ -166,6 +171,11 @@ def detail_run_row(row: VisualPipelineRun) -> dict[str, Any]:
         "cancel_acknowledged_at": _iso(row.cancel_acknowledged_at),
         "cancel_requested_by": row.cancel_requested_by,
         "cancel_reason": row.cancel_reason,
+        "catchup_of_activation_id": row.catchup_of_activation_id,
+        "catchup_for_scheduled_at": _iso(row.catchup_for_scheduled_at),
+        "catchup_reason": row.catchup_reason,
+        "catchup_requested_by": row.catchup_requested_by,
+        "catchup_requested_at": _iso(row.catchup_requested_at),
     }
 
 

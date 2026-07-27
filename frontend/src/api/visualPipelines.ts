@@ -19,6 +19,9 @@ import type {
   VisualPipelineRunCancelRequest,
   VisualPipelineRunRequest,
   VisualPipelineRunResponse,
+  VisualPipelineScheduleCatchupCandidate,
+  VisualPipelineScheduleCatchupRequest,
+  VisualPipelineScheduleCatchupResponse,
   VisualPipelineScheduleActivationListResponse,
   VisualPipelineScheduleActivationResponse,
   VisualPipelineSummary,
@@ -311,6 +314,26 @@ export async function retryVisualPipelineRun(
 ): Promise<VisualPipelineRunRetryResponse> {
   return postApi<VisualPipelineRunRetryResponse>(
     `/visual-pipelines/${pipelineId}/runs/${encodeURIComponent(visualRunId)}/retry`,
+    body,
+  );
+}
+
+export async function getScheduleCatchupCandidate(
+  pipelineId: string,
+  activationId: string,
+): Promise<VisualPipelineScheduleCatchupCandidate> {
+  return fetchApi<VisualPipelineScheduleCatchupCandidate>(
+    `/visual-pipelines/${pipelineId}/schedule-activations/${encodeURIComponent(activationId)}/catch-up-candidates`,
+  );
+}
+
+export async function enqueueScheduleCatchupRun(
+  pipelineId: string,
+  activationId: string,
+  body: VisualPipelineScheduleCatchupRequest,
+): Promise<VisualPipelineScheduleCatchupResponse> {
+  return postApi<VisualPipelineScheduleCatchupResponse>(
+    `/visual-pipelines/${pipelineId}/schedule-activations/${encodeURIComponent(activationId)}/catch-up`,
     body,
   );
 }

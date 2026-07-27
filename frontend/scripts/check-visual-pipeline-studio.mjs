@@ -754,6 +754,22 @@ async function runBrowserSmoke(pipeline) {
       fail("expected Schedule Activation button disabled while ACTIVE");
     }
 
+    // R11-S8-6 Catch-up section (candidate may be empty — section must still render)
+    await actPanel.getByTestId("visual-pipeline-schedule-catchup-section").waitFor({
+      state: "visible",
+      timeout: 15000,
+    });
+    await actPanel.getByTestId("visual-pipeline-schedule-catchup-refresh").click();
+    const catchupEligible = actPanel.getByTestId("visual-pipeline-schedule-catchup-eligible");
+    const catchupUnavailable = actPanel.getByTestId("visual-pipeline-schedule-catchup-unavailable");
+    const catchupReason = actPanel.getByTestId("visual-pipeline-schedule-catchup-reason");
+    await Promise.race([
+      catchupEligible.waitFor({ state: "visible", timeout: 15000 }),
+      catchupUnavailable.waitFor({ state: "visible", timeout: 15000 }),
+      catchupReason.waitFor({ state: "visible", timeout: 15000 }),
+    ]);
+    console.log("  [ok] Schedule Catch-up section visible");
+
     // Pause → Resume → Deactivate
     const pauseBtn = actPanel.getByTestId("visual-pipeline-schedule-pause-button");
     page.once("dialog", (dialog) => dialog.accept());

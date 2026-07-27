@@ -110,6 +110,12 @@ class VisualPipelineRunCancelBody(BaseModel):
     confirm_visual_run_id: str | None = Field(default=None, max_length=50)
 
 
+class VisualPipelineScheduleCatchupBody(BaseModel):
+    candidate_scheduled_at: str = Field(..., min_length=1, max_length=64)
+    reason: str = Field(..., min_length=5, max_length=300)
+    confirm_activation_id: str = Field(..., min_length=1, max_length=50)
+
+
 # --- S1 Catalog (static paths before /{pipeline_id}) ---
 
 
@@ -708,6 +714,65 @@ async def post_visual_pipeline_schedule_resume(
     except ActivationPreconditionError as exc:
         raise HTTPException(status_code=409, detail=exc.code) from None
     return ok(result, message="Visual Pipeline Schedule Activation이 재개되었습니다.")
+
+
+@router.get(
+    "/visual-pipelines/{pipeline_id}/schedule-activations/{activation_id}/catch-up-candidates"
+)
+async def get_visual_pipeline_schedule_catchup_candidates(
+    pipeline_id: str,
+    activation_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """Read-only catch-up candidate for the latest missed slot (R11-S8-6)."""
+    from app.services.visual_pipeline.schedule_catchup_service import (
+        ScheduleCatchupError,
+        get_schedule_catchup_candidate,
+    )
+
+    try:
+        result = await get_schedule_catchup_candidate(
+            db, pipeline_id=pipeline_id, activation_id=activation_id
+        )
+    except LookupError:
+        raise HTTPException(status_code=404, detail="VISUAL_PIPELINE_NOT_FOUND") from None
+    except ScheduleCatchupError as exc:
+        raise HTTPException(status_code=exc.http_status, detail=exc.code) from None
+    return ok(result)
+
+
+@router.post("/visual-pipelines/{pipeline_id}/schedule-activations/{activation_id}/catch-up")
+async def post_visual_pipeline_schedule_catchup(
+    pipeline_id: str,
+    activation_id: str,
+    body: VisualPipelineScheduleCatchupBody,
+    db: AsyncSession = Depends(get_db),
+):
+    """Enqueue one PENDING catch-up run (R11-S8-6). Does not call run_load."""
+    from app.services.visual_pipeline.schedule_catchup_service import (
+        ScheduleCatchupError,
+        enqueue_schedule_catchup_run,
+    )
+
+    try:
+        result = await enqueue_schedule_catchup_run(
+            db,
+            pipeline_id=pipeline_id,
+            activation_id=activation_id,
+            candidate_scheduled_at=body.candidate_scheduled_at,
+            reason=body.reason,
+            confirm_activation_id=body.confirm_activation_id,
+        )
+    except LookupError:
+        raise HTTPException(status_code=404, detail="VISUAL_PIPELINE_NOT_FOUND") from None
+    except ScheduleCatchupError as exc:
+        raise HTTPException(status_code=exc.http_status, detail=exc.code) from None
+    return JSONResponse(
+        status_code=202,
+        content=jsonable_encoder(
+            accepted(result, message="누락 실행 보정 Run이 접수되었습니다.")
+        ),
+    )
 
 
 @router.get("/visual-pipelines/{pipeline_id}")

@@ -394,6 +394,10 @@ MIGRATIONS = [
         "R11-S8-5 visual pipeline run soft-cancel",
         _load_sql("r11s8_visual_pipeline_run_soft_cancel.sql"),
     ),
+    (
+        "R11-S8-6 visual pipeline schedule catch-up",
+        _load_sql("r11s8_visual_pipeline_schedule_catchup.sql"),
+    ),
 ]
 
 

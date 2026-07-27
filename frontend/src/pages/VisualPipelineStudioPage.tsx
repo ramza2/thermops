@@ -1186,6 +1186,7 @@ function StudioCanvasInner() {
         onToggle={() => setMaterializationExpanded((v) => !v)}
       />
       <VpScheduleActivationPanel
+        pipelineId={pipelineId}
         result={activationResult}
         loading={activationLoadingLatest}
         activating={activating}
@@ -1204,6 +1205,9 @@ function StudioCanvasInner() {
         onDeactivate={() => void handleDeactivateSchedule()}
         onPause={() => void handlePauseSchedule()}
         onResume={() => void handleResumeSchedule()}
+        onCatchupSuccess={() => {
+          setHistoryRefreshToken((n) => n + 1);
+        }}
       />
       <VpRunPanel
         pipelineId={pipelineId}

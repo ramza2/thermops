@@ -966,6 +966,11 @@ BEGIN
     cancel_requested_by VARCHAR(120),
     cancel_reason VARCHAR(300),
     cancel_acknowledged_at TIMESTAMP,
+    catchup_of_activation_id VARCHAR(40),
+    catchup_for_scheduled_at TIMESTAMP,
+    catchup_reason VARCHAR(300),
+    catchup_requested_by VARCHAR(120),
+    catchup_requested_at TIMESTAMP,
     started_at TIMESTAMP,
     finished_at TIMESTAMP,
     created_at TIMESTAMP NOT NULL DEFAULT NOW()
@@ -1002,6 +1007,12 @@ CREATE INDEX IF NOT EXISTS ix_vp_run_pipeline_retry
 
 CREATE INDEX IF NOT EXISTS ix_vp_run_cancel_requested
     ON tb_visual_pipeline_run(pipeline_id, cancel_requested_at);
+
+CREATE INDEX IF NOT EXISTS ix_vp_run_catchup_activation
+    ON tb_visual_pipeline_run(catchup_of_activation_id, catchup_for_scheduled_at);
+
+CREATE INDEX IF NOT EXISTS ix_vp_run_pipeline_catchup
+    ON tb_visual_pipeline_run(pipeline_id, catchup_of_activation_id);
 
 -- R11-S8-3 Visual Pipeline Run Event (step-level progress)
 DO $thermops_ct$

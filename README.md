@@ -1716,10 +1716,21 @@ cd frontend && node scripts/check-visual-pipeline-studio.mjs
 - **Audit/Event:** request=`RUN_CANCEL_REQUESTED` audit **fail-close** · PENDING cancel audit fail-close · acknowledged `RUN_CANCELLED` audit fail-open · run_event fail-open · mark-failed 정책 변경 없음
 - **FE:** Studio/Ops 공용 `VpRunDetailPanel` 「중단 요청」섹션 · strong confirm · RUNNING only action
 - **테스트:** `scripts/test_visual_pipeline_soft_cancel.py` · studio/ops smoke 보강
+- **다음:** R11-S8-6 Schedule Catch-up 설계/PoC (아래 섹션)
+
+### R11-S8-6 Schedule Catch-up PoC
+
+- **범위:** 자동 catch-up **없음**. 최근 missed/skip 후보 **1건**을 운영자가 수동으로 PENDING Run 생성. bulk/전체 재구성/별도 worker 없음.
+- **DB:** `catchup_of_activation_id` · `catchup_for_scheduled_at` · `catchup_reason` · `catchup_requested_by` · `catchup_requested_at` · `scripts/r11s8_visual_pipeline_schedule_catchup.sql` (activation 컬럼 추가 없음)
+- **정책:** skip=`ACTIVE_RUN_EXISTS`/`STALE_OR_INVALID`(warning) · INACTIVE enqueue 불허 · active PENDING/RUNNING 불허 · 동일 scheduled_at duplicate 불허 · window=`THERMOOPS_VP_SCHEDULE_CATCHUP_MAX_WINDOW_HOURS`(기본 24) · batch=1 · enabled 기본 true · `next_due_at` 불변
+- **API:** `GET .../schedule-activations/{id}/catch-up-candidates` · `POST .../catch-up`(202) · confirm+reason 필수 · `run_load`/BackgroundTasks/schedule-worker wake 없음
+- **Audit/Event:** `SCHEDULE_CATCHUP_ENQUEUED` audit **fail-close** · `RUN_CREATED`/`SCHEDULE_CATCHUP_ENQUEUED` event fail-open
+- **FE:** Studio Activation Panel 「누락 실행 보정」 · History `누락 보정` badge · Detail provenance · Ops enqueue 없음
+- **테스트:** `scripts/test_visual_pipeline_schedule_catchup.py` · studio/ops smoke 보강
 - **다음:**
-  - R11-S8-6 Schedule Catch-up 설계/PoC
   - R11-S8-7 Notification 설계
-  - R11-S8-8 Full Scenario 이용가이드
+  - R11-S8-8 열수요 예측 Full Scenario 이용가이드 설계
+  - R11-S8-9 Full Scenario 기반 UX/기능 보완
 
 ## 설계 문서 참조
 
