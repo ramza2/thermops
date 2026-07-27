@@ -1006,6 +1006,22 @@ class VisualPipelineRun(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime)
 
 
+class VisualPipelineRunEvent(Base):
+    """R11-S8-3 Run progress event — append-only observability timeline."""
+
+    __tablename__ = "tb_visual_pipeline_run_event"
+    event_id: Mapped[str] = mapped_column(String(50), primary_key=True)
+    visual_run_id: Mapped[str] = mapped_column(String(50))
+    pipeline_id: Mapped[str] = mapped_column(String(50))
+    event_type: Mapped[str] = mapped_column(String(80))
+    step_key: Mapped[str | None] = mapped_column(String(50))
+    step_name: Mapped[str | None] = mapped_column(String(120))
+    progress_percent: Mapped[int | None] = mapped_column(Integer)
+    message: Mapped[str | None] = mapped_column(Text)
+    metadata_json: Mapped[dict | None] = mapped_column(JSONB)
+    created_at: Mapped[datetime] = mapped_column(DateTime)
+
+
 class VisualPipelineScheduleActivation(Base):
     """R11-S7-8 Schedule Activation — due enqueue authority; does not call run_load."""
 

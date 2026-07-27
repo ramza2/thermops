@@ -26,6 +26,10 @@ from app.services.visual_pipeline.manual_run_service import (
     _run_load_and_update_result,
     _sanitize_error_message,
 )
+from app.services.visual_pipeline.run_event_service import (
+    EVENT_WORKER_CLAIMED,
+    emit_run_event_safe,
+)
 from app.services.visual_pipeline.visual_pipeline_service import _get_visual_definition
 
 logger = logging.getLogger(__name__)
@@ -140,6 +144,15 @@ async def execute_claimed_visual_pipeline_run(
     except LookupError:
         sync_before = None
 
+    await emit_run_event_safe(
+        db,
+        visual_run_id=visual_run_id,
+        pipeline_id=run_row.pipeline_id,
+        event_type=EVENT_WORKER_CLAIMED,
+        message="Worker claimed run",
+        metadata_json={"worker_id": worker_id},
+    )
+
     try:
         await _run_load_and_update_result(db, run_row)
         if sync_before is not None:
@@ -181,6 +194,14 @@ async def execute_claimed_visual_pipeline_run(
                     )
                 ]
                 _clear_run_lease(row)
+                await emit_run_event_safe(
+                    db2,
+                    visual_run_id=visual_run_id,
+                    pipeline_id=row.pipeline_id,
+                    event_type=EVENT_RUN_FAILED,
+                    message=row.error_message,
+                    metadata_json={"code": "RUN_WORKER_TASK_FAILED", "worker_id": worker_id},
+                )
                 await db2.commit()
                 return {
                     "visual_run_id": visual_run_id,

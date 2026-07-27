@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Awaitable, Callable
 from datetime import datetime
 from typing import Any
 from uuid import uuid4
@@ -773,7 +774,29 @@ async def run_load(
     *,
     called_by: str | None = None,
     dry_run: bool = False,
+    on_progress: Callable[[dict[str, Any]], Awaitable[None]] | None = None,
 ) -> dict[str, Any]:
+    async def _progress(
+        event_type: str,
+        step_key: str,
+        *,
+        metadata: dict[str, Any] | None = None,
+        message: str | None = None,
+    ) -> None:
+        if on_progress is None:
+            return
+        try:
+            await on_progress(
+                {
+                    "event_type": event_type,
+                    "step_key": step_key,
+                    "metadata": metadata or {},
+                    "message": message,
+                }
+            )
+        except Exception:  # noqa: BLE001 — callback must not affect run_load
+            pass
+
     op = await _get_operation(db, operation_id)
     if not op.target_table:
         raise ApiConnectorError("적재 대상 테이블이 설정되지 않았습니다.", error_code="MISSING_TARGET_TABLE")
@@ -796,6 +819,7 @@ async def run_load(
     await db.flush()
 
     try:
+        await _progress("STEP_STARTED", "SOURCE_FETCH")
         result = await _execute_operation_call(
             db,
             operation_id,
@@ -803,11 +827,25 @@ async def run_load(
             sample_limit=MAX_LOAD_ITEMS,
             called_by=called_by,
         )
+        await _progress(
+            "STEP_COMPLETED",
+            "SOURCE_FETCH",
+            metadata={"item_count": result.get("item_count"), "snapshot_id": result.get("snapshot_id")},
+        )
         run.raw_snapshot_id = result.get("snapshot_id")
         if dry_run:
             mapping = await _resolve_mapping(db, op.data_source_id, op.target_table)
+            await _progress("STEP_STARTED", "TRANSFORM")
             transform_result = await apply_transform_if_configured(
                 db, operation_id, result["items"], for_load=False
+            )
+            await _progress(
+                "STEP_COMPLETED",
+                "TRANSFORM",
+                metadata={
+                    "transform_applied": transform_result.get("transform_applied", False),
+                    "item_count": len(transform_result.get("items") or []),
+                },
             )
             preview = await preview_load_rows(
                 db,
@@ -833,8 +871,17 @@ async def run_load(
             }
 
         mapping = await _resolve_mapping(db, op.data_source_id, op.target_table)
+        await _progress("STEP_STARTED", "TRANSFORM")
         transform_result = await apply_transform_if_configured(
             db, operation_id, result["items"], for_load=True
+        )
+        await _progress(
+            "STEP_COMPLETED",
+            "TRANSFORM",
+            metadata={
+                "transform_applied": transform_result.get("transform_applied", False),
+                "item_count": len(transform_result.get("items") or []),
+            },
         )
         items = transform_result["items"]
         code_scan: dict[str, Any] = {}
@@ -846,6 +893,7 @@ async def run_load(
                 code_mappings=code_mappings,
                 source_operation_id=operation_id,
             )
+        await _progress("STEP_STARTED", "UPSERT_LOAD")
         counts = await apply_write_policy(
             db,
             operation_id=operation_id,
@@ -855,6 +903,16 @@ async def run_load(
             dry_run=False,
             load_run_id=load_id,
             max_rows=MAX_LOAD_ITEMS,
+        )
+        await _progress(
+            "STEP_COMPLETED",
+            "UPSERT_LOAD",
+            metadata={
+                "inserted_count": counts.get("inserted_count"),
+                "updated_count": counts.get("updated_count"),
+                "skipped_count": counts.get("skipped_count"),
+                "error_count": counts.get("error_count"),
+            },
         )
         finished = utc_now()
         run.run_status = "SUCCESS" if counts["error_count"] == 0 else "WARNING"

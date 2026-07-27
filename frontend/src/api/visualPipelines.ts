@@ -12,6 +12,8 @@ import type {
   VisualPipelineListResponse,
   VisualPipelineRunListResponse,
   VisualPipelineRunListParams,
+  VisualPipelineRunEventListResponse,
+  VisualPipelineRunProgress,
   VisualPipelineRunRequest,
   VisualPipelineRunResponse,
   VisualPipelineScheduleActivationListResponse,
@@ -270,6 +272,30 @@ export async function cancelVisualPipelineRun(
   return postApi<VisualPipelineRunResponse>(
     `/visual-pipelines/${pipelineId}/runs/${encodeURIComponent(visualRunId)}/cancel`,
     {},
+  );
+}
+
+export async function listVisualPipelineRunEvents(
+  pipelineId: string,
+  visualRunId: string,
+  params?: { limit?: number; offset?: number },
+): Promise<VisualPipelineRunEventListResponse> {
+  const query: Record<string, unknown> = {
+    limit: params?.limit ?? 100,
+    offset: params?.offset ?? 0,
+  };
+  return fetchApi<VisualPipelineRunEventListResponse>(
+    `/visual-pipelines/${pipelineId}/runs/${encodeURIComponent(visualRunId)}/events`,
+    query,
+  );
+}
+
+export async function getVisualPipelineRunProgress(
+  pipelineId: string,
+  visualRunId: string,
+): Promise<VisualPipelineRunProgress> {
+  return fetchApi<VisualPipelineRunProgress>(
+    `/visual-pipelines/${pipelineId}/runs/${encodeURIComponent(visualRunId)}/progress`,
   );
 }
 

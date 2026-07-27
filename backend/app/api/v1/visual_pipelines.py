@@ -466,6 +466,48 @@ async def get_visual_pipeline_run_detail(
     return ok(result)
 
 
+@router.get("/visual-pipelines/{pipeline_id}/runs/{run_id}/events")
+async def get_visual_pipeline_run_events(
+    pipeline_id: str,
+    run_id: str,
+    limit: int = Query(default=100, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    db: AsyncSession = Depends(get_db),
+):
+    """Read-only run event timeline (R11-S8-3)."""
+    from app.services.visual_pipeline.run_event_service import list_visual_pipeline_run_events
+
+    try:
+        result = await list_visual_pipeline_run_events(
+            db, pipeline_id, run_id, limit=limit, offset=offset
+        )
+    except LookupError as exc:
+        detail = str(exc) if str(exc) else "VISUAL_PIPELINE_RUN_NOT_FOUND"
+        if detail == "VISUAL_PIPELINE_NOT_FOUND":
+            raise HTTPException(status_code=404, detail="VISUAL_PIPELINE_NOT_FOUND") from None
+        raise HTTPException(status_code=404, detail="VISUAL_PIPELINE_RUN_NOT_FOUND") from None
+    return ok(result)
+
+
+@router.get("/visual-pipelines/{pipeline_id}/runs/{run_id}/progress")
+async def get_visual_pipeline_run_progress_endpoint(
+    pipeline_id: str,
+    run_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """Read-only run progress summary (R11-S8-3)."""
+    from app.services.visual_pipeline.run_event_service import get_visual_pipeline_run_progress
+
+    try:
+        result = await get_visual_pipeline_run_progress(db, pipeline_id, run_id)
+    except LookupError as exc:
+        detail = str(exc) if str(exc) else "VISUAL_PIPELINE_RUN_NOT_FOUND"
+        if detail == "VISUAL_PIPELINE_NOT_FOUND":
+            raise HTTPException(status_code=404, detail="VISUAL_PIPELINE_NOT_FOUND") from None
+        raise HTTPException(status_code=404, detail="VISUAL_PIPELINE_RUN_NOT_FOUND") from None
+    return ok(result)
+
+
 @router.post("/visual-pipelines/{pipeline_id}/runs/{run_id}/cancel")
 async def post_visual_pipeline_run_cancel(
     pipeline_id: str,

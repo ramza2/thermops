@@ -382,6 +382,10 @@ MIGRATIONS = [
         "R11-S7-13 visual pipeline audit log",
         _load_sql("r11s7_visual_pipeline_audit_log.sql"),
     ),
+    (
+        "R11-S8-3 visual pipeline run event",
+        _load_sql("r11s8_visual_pipeline_run_event.sql"),
+    ),
 ]
 
 

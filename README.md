@@ -1682,7 +1682,18 @@ cd frontend && node scripts/check-visual-pipeline-studio.mjs
 - **Ops:** Stuck/Recent/Audit에서 `pipeline_id`+`visual_run_id` 있을 때 Run 상세 · mark-failed와 분리 · 용어「실행 설정 반영」유지
 - **테스트:** `scripts/test_visual_pipeline_run_history.py` · studio/ops smoke 보강
 - **다음:**
-  - R11-S8-3 Step-level Progress PoC
+  - R11-S8-4 Retry Policy PoC
+  - R11-S8-5 RUNNING soft-cancel 설계/PoC
+
+### R11-S8-3 Step-level Progress PoC
+
+- **범위:** `tb_visual_pipeline_run_event` migration + append-only event emit (fail-open) + read API + Studio/Ops Run 상세 진행 표시. Retry/Interrupt/Catch-up/Notification 미구현.
+- **DB:** `tb_visual_pipeline_run_event` (`event_type`, `step_key`, `progress_percent`, `metadata_json`) · `scripts/r11s8_visual_pipeline_run_event.sql` · `db/init/01_schema.sql` 반영
+- **실행 emit:** `RUN_CREATED` · `WORKER_CLAIMED`(worker) · `RUN_STARTED` · `STEP_STARTED/COMPLETED`(SOURCE_FETCH/TRANSFORM/UPSERT_LOAD via `run_load` optional `on_progress`) · `LOAD_FINALIZE` · `RUN_COMPLETED`/`RUN_FAILED`/`RUN_CANCELLED`
+- **API:** `GET .../runs/{visual_run_id}/events` · `GET .../runs/{visual_run_id}/progress` · SELECT only · source of truth=`tb_visual_pipeline_run.run_status`
+- **FE:** 공용 `VpRunDetailPanel` — 진행률 바 · 단계 badge · 이벤트 timeline (read-only)
+- **테스트:** `scripts/test_visual_pipeline_run_progress.py` · 기존 run_history/manual/run_worker/ops/admin/audit 회귀 유지
+- **다음:**
   - R11-S8-4 Retry Policy PoC
   - R11-S8-5 RUNNING soft-cancel 설계/PoC
 

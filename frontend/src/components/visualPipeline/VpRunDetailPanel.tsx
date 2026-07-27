@@ -1,4 +1,10 @@
-import type { VisualPipelineRunResponse } from "@/types/visualPipeline";
+import { useEffect, useState } from "react";
+import { getVisualPipelineRunProgress, listVisualPipelineRunEvents } from "@/api/visualPipelines";
+import type {
+  VisualPipelineRunEvent,
+  VisualPipelineRunProgress,
+  VisualPipelineRunResponse,
+} from "@/types/visualPipeline";
 
 interface VpRunDetailPanelProps {
   detail: VisualPipelineRunResponse | null;
@@ -23,6 +29,27 @@ function modeLabel(mode?: string | null): string {
   return mode ?? "-";
 }
 
+function eventTypeLabel(eventType: string): string {
+  const map: Record<string, string> = {
+    RUN_CREATED: "실행 생성",
+    WORKER_CLAIMED: "Worker claim",
+    RUN_STARTED: "실행 시작",
+    STEP_STARTED: "단계 시작",
+    STEP_COMPLETED: "단계 완료",
+    LOAD_FINALIZE: "적재 마무리",
+    RUN_COMPLETED: "실행 완료",
+    RUN_FAILED: "실행 실패",
+    RUN_CANCELLED: "실행 취소",
+  };
+  return map[eventType] ?? eventType;
+}
+
+function stepStatusTone(status: string): string {
+  if (status === "completed") return "bg-emerald-50 text-emerald-700 border-emerald-200";
+  if (status === "running") return "bg-sky-50 text-sky-700 border-sky-200";
+  return "bg-slate-50 text-slate-500 border-slate-200";
+}
+
 export function VpRunDetailPanel({
   detail,
   loading,
@@ -30,6 +57,47 @@ export function VpRunDetailPanel({
   onClose,
   testIdPrefix = "visual-pipeline-run-detail",
 }: VpRunDetailPanelProps) {
+  const [progress, setProgress] = useState<VisualPipelineRunProgress | null>(null);
+  const [events, setEvents] = useState<VisualPipelineRunEvent[]>([]);
+  const [progressLoading, setProgressLoading] = useState(false);
+  const [progressError, setProgressError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!detail?.pipeline_id || !detail.visual_run_id) {
+      setProgress(null);
+      setEvents([]);
+      setProgressError(null);
+      return;
+    }
+    let cancelled = false;
+    setProgressLoading(true);
+    setProgressError(null);
+    void Promise.all([
+      getVisualPipelineRunProgress(detail.pipeline_id, detail.visual_run_id),
+      listVisualPipelineRunEvents(detail.pipeline_id, detail.visual_run_id, { limit: 50 }),
+    ])
+      .then(([progressRes, eventsRes]) => {
+        if (cancelled) return;
+        setProgress(progressRes);
+        setEvents(eventsRes.items ?? []);
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        setProgress(null);
+        setEvents([]);
+        setProgressError(err instanceof Error ? err.message : "진행 상태를 불러오지 못했습니다.");
+      })
+      .finally(() => {
+        if (!cancelled) setProgressLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [detail?.pipeline_id, detail?.visual_run_id]);
+
+  const progressPercent =
+    progress?.progress_percent != null ? Math.max(0, Math.min(100, progress.progress_percent)) : null;
+
   return (
     <div
       className="rounded-md border border-slate-200 bg-white shadow-sm overflow-hidden"
@@ -62,6 +130,80 @@ export function VpRunDetailPanel({
               <Field label="실행 방식" value={modeLabel(detail.mode)} />
               <Field label="execution_mode" value={detail.execution_mode} />
             </section>
+
+            <section
+              className="rounded-md border border-slate-100 bg-slate-50 px-2.5 py-2 space-y-2"
+              data-testid={`${testIdPrefix}-progress-section`}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">진행 상태</span>
+                {progressPercent != null && (
+                  <span className="text-[10px] font-mono text-slate-600">{progressPercent}%</span>
+                )}
+              </div>
+              {progressLoading && <p className="text-[11px] text-slate-500">진행 상태를 불러오는 중입니다.</p>}
+              {progressError && (
+                <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-100 rounded px-2 py-1">
+                  {progressError}
+                </p>
+              )}
+              {!progressLoading && !progressError && progress && (
+                <>
+                  {progressPercent != null && (
+                    <div className="h-1.5 rounded-full bg-slate-200 overflow-hidden">
+                      <div
+                        className="h-full bg-violet-500 transition-all"
+                        style={{ width: `${progressPercent}%` }}
+                        data-testid={`${testIdPrefix}-progress-bar`}
+                      />
+                    </div>
+                  )}
+                  <div className="text-[11px] text-slate-600">
+                    현재 단계: {progress.current_step_name ?? progress.current_step_key ?? "-"}
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {(progress.steps ?? []).map((step) => (
+                      <span
+                        key={step.step_key}
+                        className={`inline-flex text-[10px] border rounded px-1.5 py-0.5 ${stepStatusTone(step.status)}`}
+                        data-testid={`${testIdPrefix}-step-${step.step_key}`}
+                      >
+                        {step.step_name ?? step.step_key}: {step.status}
+                      </span>
+                    ))}
+                  </div>
+                </>
+              )}
+            </section>
+
+            <section
+              className="rounded-md border border-slate-100 bg-white px-2.5 py-2 space-y-1.5"
+              data-testid={`${testIdPrefix}-timeline-section`}
+            >
+              <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">단계별 진행 이력</div>
+              {progressLoading && <p className="text-[11px] text-slate-500">이력을 불러오는 중입니다.</p>}
+              {!progressLoading && events.length === 0 && (
+                <p className="text-[11px] text-slate-500">기록된 진행 이벤트가 없습니다.</p>
+              )}
+              {events.length > 0 && (
+                <ul className="space-y-1 max-h-40 overflow-y-auto">
+                  {events.map((ev) => (
+                    <li
+                      key={ev.event_id}
+                      className="text-[10px] font-mono text-slate-600 border-b border-slate-50 pb-1"
+                      data-testid={`${testIdPrefix}-event-row`}
+                    >
+                      <span className="text-slate-400">{ev.created_at ?? "-"}</span>
+                      {" · "}
+                      <span className="font-semibold">{eventTypeLabel(ev.event_type)}</span>
+                      {ev.step_name ? ` · ${ev.step_name}` : ev.step_key ? ` · ${ev.step_key}` : ""}
+                      {ev.progress_percent != null ? ` · ${ev.progress_percent}%` : ""}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+
             <section className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               <Field label="생성" value={detail.created_at} />
               <Field label="시작" value={detail.started_at} />
@@ -122,7 +264,7 @@ export function VpRunDetailPanel({
                 )}
               </section>
             )}
-            <p className="text-[10px] text-slate-400">읽기 전용 · Retry / Progress / 중단 요청은 후속 단계입니다.</p>
+            <p className="text-[10px] text-slate-400">읽기 전용 · Retry / 중단 요청은 후속 단계입니다.</p>
           </>
         )}
       </div>

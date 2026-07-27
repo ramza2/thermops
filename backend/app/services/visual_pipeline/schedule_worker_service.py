@@ -34,6 +34,7 @@ from app.services.visual_pipeline.manual_run_service import (
     _new_visual_run_id,
 )
 from app.services.visual_pipeline.audit_service import record_schedule_worker_skip_event
+from app.services.visual_pipeline.run_event_service import EVENT_RUN_CREATED, emit_run_event_safe
 from app.services.visual_pipeline.schedule_activation_service import (
     DEFAULT_TZ,
     STATUS_ACTIVE,
@@ -316,6 +317,18 @@ async def enqueue_due_activation(
 
     try:
         await db.flush()
+        await emit_run_event_safe(
+            db,
+            visual_run_id=run_row.visual_run_id,
+            pipeline_id=run_row.pipeline_id,
+            event_type=EVENT_RUN_CREATED,
+            message="Scheduled run enqueued (PENDING)",
+            metadata_json={
+                "mode": SCHEDULED_MODE,
+                "activation_id": activation.activation_id,
+                "scheduled_for": _iso_for_request(scheduled_for),
+            },
+        )
         await db.commit()
     except IntegrityError:
         await db.rollback()

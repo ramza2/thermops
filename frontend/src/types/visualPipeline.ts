@@ -417,6 +417,45 @@ export interface VisualPipelineRunResponse {
   attempt_count?: number | null;
 }
 
+export interface VisualPipelineRunEvent {
+  event_id: string;
+  visual_run_id: string;
+  pipeline_id: string;
+  event_type: string;
+  step_key?: string | null;
+  step_name?: string | null;
+  progress_percent?: number | null;
+  message?: string | null;
+  metadata_json?: Record<string, unknown>;
+  created_at?: string | null;
+}
+
+export interface VisualPipelineRunEventListResponse {
+  items: VisualPipelineRunEvent[];
+  limit: number;
+  offset: number;
+  total: number;
+}
+
+export interface VisualPipelineRunProgressStep {
+  step_key: string;
+  step_name?: string | null;
+  status: "pending" | "running" | "completed" | string;
+}
+
+export interface VisualPipelineRunProgress {
+  visual_run_id: string;
+  pipeline_id: string;
+  run_status: string;
+  current_step_key?: string | null;
+  current_step_name?: string | null;
+  progress_percent?: number | null;
+  is_terminal: boolean;
+  last_event_at?: string | null;
+  steps: VisualPipelineRunProgressStep[];
+  event_count: number;
+}
+
 export interface VisualPipelineRunSummary {
   visual_run_id: string;
   pipeline_id: string;

@@ -30,6 +30,16 @@ from app.services.api_connector_service import ApiConnectorError, run_load
 from app.services.visual_pipeline.audit_service import record_run_cancel_event
 from app.services.visual_pipeline.compile_preview_service import calculate_graph_version_hash
 from app.services.visual_pipeline.compile_result_service import SYNC_IN_SYNC
+from app.services.visual_pipeline.run_event_service import (
+    EVENT_LOAD_FINALIZE,
+    EVENT_RUN_CANCELLED,
+    EVENT_RUN_COMPLETED,
+    EVENT_RUN_CREATED,
+    EVENT_RUN_FAILED,
+    EVENT_RUN_STARTED,
+    build_step_progress_callback,
+    emit_run_event_safe,
+)
 from app.services.visual_pipeline.visual_pipeline_service import (
     VISUAL_PIPELINE_KIND,
     _get_visual_definition,
@@ -545,12 +555,37 @@ async def create_manual_run(
     )
     db.add(run_row)
     await db.flush()
+    await emit_run_event_safe(
+        db,
+        visual_run_id=run_row.visual_run_id,
+        pipeline_id=pipeline_id,
+        event_type=EVENT_RUN_CREATED,
+        message="Manual run created (PENDING)",
+        metadata_json={"mode": MANUAL_MODE, "executor": resolved_executor},
+    )
     # Background task / worker uses a new session; commit so PENDING is visible.
     await db.commit()
     await db.refresh(run_row)
     response = _row_to_response(run_row)
     response["executor"] = resolved_executor
     return response
+
+
+async def _emit_run_failed_event(
+    db: AsyncSession,
+    run_row: VisualPipelineRun,
+    *,
+    message: str | None = None,
+    metadata_json: dict[str, Any] | None = None,
+) -> None:
+    await emit_run_event_safe(
+        db,
+        visual_run_id=run_row.visual_run_id,
+        pipeline_id=run_row.pipeline_id,
+        event_type=EVENT_RUN_FAILED,
+        message=message or "Run failed",
+        metadata_json=metadata_json,
+    )
 
 
 async def _run_load_and_update_result(db: AsyncSession, run_row: VisualPipelineRun) -> None:
@@ -579,6 +614,12 @@ async def _run_load_and_update_result(db: AsyncSession, run_row: VisualPipelineR
             _issue("RUN_OBJECT_NOT_FOUND", "Materialized operation/write_policy missing at run time.")
         ]
         _clear_run_lease(run_row)
+        await _emit_run_failed_event(
+            db,
+            run_row,
+            message="RUN_OBJECT_NOT_FOUND",
+            metadata_json={"code": "RUN_OBJECT_NOT_FOUND"},
+        )
         await db.flush()
         return
 
@@ -593,6 +634,12 @@ async def _run_load_and_update_result(db: AsyncSession, run_row: VisualPipelineR
         run_row.error_message = "RUN_OBJECT_NOT_FOUND"
         run_row.issues_json = [_issue("RUN_OBJECT_NOT_FOUND", f"Operation {operation_id} not found.")]
         _clear_run_lease(run_row)
+        await _emit_run_failed_event(
+            db,
+            run_row,
+            message="RUN_OBJECT_NOT_FOUND",
+            metadata_json={"code": "RUN_OBJECT_NOT_FOUND", "operation_id": operation_id},
+        )
         await db.flush()
         return
 
@@ -604,12 +651,24 @@ async def _run_load_and_update_result(db: AsyncSession, run_row: VisualPipelineR
     error_message: str | None = None
 
     try:
+        await emit_run_event_safe(
+            db,
+            visual_run_id=run_row.visual_run_id,
+            pipeline_id=run_row.pipeline_id,
+            event_type=EVENT_RUN_STARTED,
+            message="Starting load execution",
+        )
         load_result = await run_load(
             db,
             operation_id,
             runtime_params,
             called_by="visual_pipeline_manual_run",
             dry_run=False,
+            on_progress=build_step_progress_callback(
+                db,
+                visual_run_id=run_row.visual_run_id,
+                pipeline_id=run_row.pipeline_id,
+            ),
         )
         status = str(load_result.get("status") or "SUCCESS").upper()
         error_count = int(load_result.get("error_count") or 0)
@@ -680,6 +739,26 @@ async def _run_load_and_update_result(db: AsyncSession, run_row: VisualPipelineR
         "run_version": RUN_VERSION,
         "executor": (request.get("executor") if isinstance(request.get("executor"), str) else None),
     }
+    await emit_run_event_safe(
+        db,
+        visual_run_id=run_row.visual_run_id,
+        pipeline_id=run_row.pipeline_id,
+        event_type=EVENT_LOAD_FINALIZE,
+        message="Load execution finished",
+        metadata_json={
+            "load_run_id": run_row.load_run_id,
+            "run_status": run_status,
+        },
+    )
+    terminal_event = EVENT_RUN_COMPLETED if run_status in {"SUCCESS", "PARTIAL"} else EVENT_RUN_FAILED
+    await emit_run_event_safe(
+        db,
+        visual_run_id=run_row.visual_run_id,
+        pipeline_id=run_row.pipeline_id,
+        event_type=terminal_event,
+        message=f"Run terminal status={run_status}",
+        metadata_json={"run_status": run_status},
+    )
     _clear_run_lease(run_row)
     await db.flush()
 
@@ -752,6 +831,12 @@ async def execute_visual_pipeline_run_background(visual_run_id: str) -> None:
                             )
                         ]
                         _clear_run_lease(row)
+                        await _emit_run_failed_event(
+                            db2,
+                            row,
+                            message=row.error_message,
+                            metadata_json={"code": "RUN_BACKGROUND_TASK_FAILED"},
+                        )
                         await db2.commit()
             except Exception:  # noqa: BLE001
                 logger.exception("failed to mark visual run %s as FAILED", visual_run_id)
@@ -848,6 +933,14 @@ async def cancel_visual_pipeline_run(
         }
     }
     _clear_run_lease(row)
+    await emit_run_event_safe(
+        db,
+        visual_run_id=visual_run_id,
+        pipeline_id=pipeline_id,
+        event_type=EVENT_RUN_CANCELLED,
+        message="Cancelled before execution",
+        metadata_json={"cancel_phase": "PENDING"},
+    )
     await db.flush()
     await record_run_cancel_event(
         db,
