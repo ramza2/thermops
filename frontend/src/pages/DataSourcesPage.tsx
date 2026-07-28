@@ -178,6 +178,9 @@ export default function DataSourcesPage() {
     limit: "",
     load_mode: "UPSERT",
   });
+  const [connectorRefreshToken, setConnectorRefreshToken] = useState(0);
+
+  const bumpConnectorRefresh = () => setConnectorRefreshToken((n) => n + 1);
 
   const load = async (p = page) => {
     setLoading(true);
@@ -216,6 +219,7 @@ export default function DataSourcesPage() {
       setForm(EMPTY_FORM);
       load(1);
       setPage(1);
+      bumpConnectorRefresh();
     } catch {
       showToast("error", "등록에 실패했습니다.");
     } finally {
@@ -239,6 +243,7 @@ export default function DataSourcesPage() {
       showToast("success", "데이터 소스가 수정되었습니다.");
       setEditTarget(null);
       load();
+      bumpConnectorRefresh();
     } catch {
       showToast("error", "수정에 실패했습니다.");
     } finally {
@@ -264,6 +269,7 @@ export default function DataSourcesPage() {
       showToast("success", "데이터 소스가 삭제되었습니다.");
       setDeleteTarget(null);
       load();
+      bumpConnectorRefresh();
     } catch (err) {
       showToast("error", extractApiErrorMessage(err, "삭제에 실패했습니다."));
     }
@@ -741,7 +747,7 @@ export default function DataSourcesPage() {
         )}
       </Modal>
 
-      <ApiConnectorPanel />
+      <ApiConnectorPanel refreshToken={connectorRefreshToken} />
     </div>
   );
 }

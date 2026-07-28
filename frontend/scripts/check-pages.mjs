@@ -1,6 +1,10 @@
 import { chromium } from "playwright";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 const BASE = process.env.CHECK_PAGES_BASE || "http://localhost:5173";
+const FRONTEND_SRC = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../src");
 const PATHS = [
   "/dashboard",
   "/data/sources",
@@ -28,6 +32,40 @@ const PATHS = [
   "/visual-pipeline-ops",
   "/system/configs",
 ];
+
+/** B25: GET /data-sources size must be <= 100 (API max). Do not flag /pipeline-runs size: 200. */
+function assertNoDataSourcesSizeOver100() {
+  const files = [];
+  function walk(dir) {
+    for (const name of fs.readdirSync(dir)) {
+      const full = path.join(dir, name);
+      if (fs.statSync(full).isDirectory()) walk(full);
+      else if (/\.(ts|tsx)$/.test(name)) files.push(full);
+    }
+  }
+  walk(FRONTEND_SRC);
+  const bad = [];
+  for (const file of files) {
+    const lines = fs.readFileSync(file, "utf8").split(/\r?\n/);
+    for (let i = 0; i < lines.length; i += 1) {
+      const line = lines[i];
+      if (!line.includes('"/data-sources"') && !line.includes("'/data-sources'")) continue;
+      if (/\/data-sources[/$`]/.test(line)) continue;
+      const window = lines.slice(Math.max(0, i - 2), Math.min(lines.length, i + 4)).join("\n");
+      const m = window.match(/\bsize:\s*(\d+)/);
+      if (m && Number(m[1]) > 100) {
+        bad.push(`${path.relative(FRONTEND_SRC, file)}:${i + 1} size=${m[1]}`);
+      }
+    }
+  }
+  if (bad.length) {
+    throw new Error(
+      `B25 regression: /data-sources list size must be <= 100 (got >100):\n  ${bad.join("\n  ")}`,
+    );
+  }
+}
+
+assertNoDataSourcesSizeOver100();
 
 const browser = await chromium.launch();
 const page = await browser.newPage();

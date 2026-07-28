@@ -1760,6 +1760,15 @@ cd frontend && node scripts/check-visual-pipeline-studio.mjs
 - **제외:** MainLayout 전역 overflow · DB/API/backend/worker · validation/compile/run 로직 변경 없음.
 - **Backlog:** [`docs/md/THERMOps_R11-S8-9_Backlog.md`](docs/md/THERMOps_R11-S8-9_Backlog.md) (B17 done)
 
+### R11-S8-9-2 REST API 연결 Data Source 목록 수정
+
+- **범위:** FE-only — B25. `ApiConnectorPanel` `/data-sources` size를 API max(100) 이하로 수정.
+- **변경:** `DATA_SOURCE_LIST_PAGE_SIZE=100` · Data Source 등록/수정/삭제 후 패널 refresh · 로드 실패 vs 0건 empty 구분 · smoke 정적 검사(data-sources size>100만 감지, pipeline-runs size:200 제외)
+- **검증:** `cd frontend && npm run build` · `node scripts/check-pages.mjs` · `node scripts/check-visual-pipeline-studio.mjs`
+- **제외:** backend max size · B19/B20 인라인 생성 · Studio Dock/compile/run · 「R10 설정 반영」재노출 금지
+- **Known:** 100건 초과 1페이지 → B11. Studio Inspector Data Source select → B19
+- **Backlog:** B25 done
+
 ## 설계 문서 참조
 
 - `docs/md/THERMOps_R11-S8-9_Backlog.md`

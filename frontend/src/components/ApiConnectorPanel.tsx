@@ -26,6 +26,7 @@ import type {
   ApiConnectorSnapshot,
 } from "@/types/apiConnector";
 import { safeJsonStringify } from "@/utils/apiConnectorDisplay";
+import { DATA_SOURCE_LIST_PAGE_SIZE } from "@/constants/dataSourceList";
 import { EMPTY_MESSAGES, HELP_TEXTS, lifecycleStatusLabel } from "@/constants/displayLabels";
 
 interface DataSourceOption {
@@ -37,10 +38,16 @@ interface DataSourceOption {
 
 type SubTab = "operations" | "call-logs" | "load-runs" | "snapshots";
 
-export function ApiConnectorPanel() {
+interface ApiConnectorPanelProps {
+  /** Bump after Data Source create/update/delete so Wizard options reload. */
+  refreshToken?: number;
+}
+
+export function ApiConnectorPanel({ refreshToken = 0 }: ApiConnectorPanelProps) {
   const { showToast } = useToast();
   const [subTab, setSubTab] = useState<SubTab>("operations");
   const [sources, setSources] = useState<DataSourceOption[]>([]);
+  const [sourcesLoadError, setSourcesLoadError] = useState(false);
   const [operations, setOperations] = useState<ApiConnectorOperation[]>([]);
   const [callLogs, setCallLogs] = useState<ApiConnectorCallLog[]>([]);
   const [loadRuns, setLoadRuns] = useState<ApiConnectorLoadRun[]>([]);
@@ -68,25 +75,35 @@ export function ApiConnectorPanel() {
 
   const load = useCallback(async () => {
     setLoading(true);
+    setSourcesLoadError(false);
     try {
-      const [srcRes, ops, logs, runs] = await Promise.all([
-        fetchApi<PagedData<DataSourceOption>>("/data-sources", { page: 1, size: 200 }),
+      const [ops, logs, runs] = await Promise.all([
         listApiConnectorOperations(),
         listApiConnectorCallLogs(),
         listApiConnectorLoadRuns(),
       ]);
-      setSources(srcRes.items || []);
       setOperations(ops);
       setCallLogs(logs);
       setLoadRuns(runs);
     } catch {
       showToast("error", "REST API 연결 정보를 불러오지 못했습니다.");
+    }
+    try {
+      const srcRes = await fetchApi<PagedData<DataSourceOption>>("/data-sources", {
+        page: 1,
+        size: DATA_SOURCE_LIST_PAGE_SIZE,
+      });
+      setSources(srcRes.items || []);
+    } catch {
+      setSources([]);
+      setSourcesLoadError(true);
+      showToast("error", "Data Source 목록을 불러오지 못했습니다.");
     } finally {
       setLoading(false);
     }
   }, [showToast]);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => { void load(); }, [load, refreshToken]);
 
   const openWizard = (operationId?: string) => {
     setEditOpId(operationId || null);
@@ -304,6 +321,7 @@ export function ApiConnectorPanel() {
         onClose={() => { setWizardOpen(false); setEditOpId(null); }}
         onCompleted={() => void load()}
         sources={sources}
+        sourcesLoadError={sourcesLoadError}
         editOperationId={editOpId}
       />
 

@@ -8,7 +8,7 @@
  *     (default http://127.0.0.1:8000/api/v1 — sample-external, no external APIs)
  */
 import { spawnSync } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
@@ -18,6 +18,39 @@ const API_BASE = process.env.THERMOOPS_API_BASE || "http://localhost:8000/api/v1
 const INTERNAL_API =
   process.env.THERMOOPS_INTERNAL_API_BASE || "http://127.0.0.1:8000/api/v1";
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
+const FRONTEND_SRC = path.join(REPO_ROOT, "frontend", "src");
+
+/** B25: GET /data-sources size must be <= 100. Do not flag /pipeline-runs size: 200. */
+function assertNoDataSourcesSizeOver100() {
+  const files = [];
+  function walk(dir) {
+    for (const name of readdirSync(dir)) {
+      const full = path.join(dir, name);
+      if (statSync(full).isDirectory()) walk(full);
+      else if (/\.(ts|tsx)$/.test(name)) files.push(full);
+    }
+  }
+  walk(FRONTEND_SRC);
+  const bad = [];
+  for (const file of files) {
+    const lines = readFileSync(file, "utf8").split(/\r?\n/);
+    for (let i = 0; i < lines.length; i += 1) {
+      const line = lines[i];
+      if (!line.includes('"/data-sources"') && !line.includes("'/data-sources'")) continue;
+      if (/\/data-sources[/$`]/.test(line)) continue;
+      const window = lines.slice(Math.max(0, i - 2), Math.min(lines.length, i + 4)).join("\n");
+      const m = window.match(/\bsize:\s*(\d+)/);
+      if (m && Number(m[1]) > 100) {
+        bad.push(`${path.relative(FRONTEND_SRC, file)}:${i + 1} size=${m[1]}`);
+      }
+    }
+  }
+  if (bad.length) {
+    throw new Error(
+      `B25 regression: /data-sources list size must be <= 100 (got >100):\n  ${bad.join("\n  ")}`,
+    );
+  }
+}
 
 function resolveScriptsDir() {
   const fromRepo = path.join(REPO_ROOT, "scripts");
@@ -929,6 +962,7 @@ async function main() {
   console.log(`  frontend=${FRONTEND_BASE}`);
   console.log(`  api=${API_BASE}`);
 
+  assertNoDataSourcesSizeOver100();
   ensureMaterializeSeedData();
 
   let pipelineId = null;

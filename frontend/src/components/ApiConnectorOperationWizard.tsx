@@ -53,6 +53,8 @@ interface WizardProps {
   onClose: () => void;
   onCompleted: () => void;
   sources: DataSourceOption[];
+  /** True when GET /data-sources failed (distinct from empty list). */
+  sourcesLoadError?: boolean;
   editOperationId?: string | null;
 }
 
@@ -119,6 +121,7 @@ export function ApiConnectorOperationWizard({
   onClose,
   onCompleted,
   sources,
+  sourcesLoadError = false,
   editOperationId,
 }: WizardProps) {
   const { showToast } = useToast();
@@ -530,7 +533,11 @@ export function ApiConnectorOperationWizard({
               ]}
             />
             {restSources.length === 0 && (
-              <p className="text-amber-700 text-xs bg-amber-50 p-2 rounded">{EMPTY_MESSAGES.dataSources}</p>
+              <p className={`text-xs p-2 rounded ${sourcesLoadError ? "text-red-700 bg-red-50" : "text-amber-700 bg-amber-50"}`}>
+                {sourcesLoadError
+                  ? "Data Source 목록을 불러오지 못했습니다. 잠시 후 다시 시도하세요."
+                  : EMPTY_MESSAGES.dataSources}
+              </p>
             )}
             <label className="block text-xs text-slate-500">API 작업명</label>
             <TextInput value={basic.operation_name} onChange={(v) => setBasic({ ...basic, operation_name: v })} />

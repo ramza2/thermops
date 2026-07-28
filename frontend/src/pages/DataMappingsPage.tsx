@@ -21,6 +21,7 @@ import { SelectInput, TextInput } from "@/components/SearchPanel";
 import { useToast } from "@/hooks/useToast";
 import { PageHeader } from "@/layouts/MainLayout";
 import { EMPTY_MESSAGES, HELP_TEXTS, PAGE_DESCRIPTIONS, PAGE_TITLES } from "@/constants/displayLabels";
+import { DATA_SOURCE_LIST_PAGE_SIZE } from "@/constants/dataSourceList";
 import type {
   ColumnRoleCode,
   FeatureColumnRole,
@@ -443,7 +444,7 @@ export default function DataMappingsPage() {
 
   useEffect(() => {
     load(page);
-    fetchApi<PagedData<DataSource>>("/data-sources", { page: 1, size: 100 })
+    fetchApi<PagedData<DataSource>>("/data-sources", { page: 1, size: DATA_SOURCE_LIST_PAGE_SIZE })
       .then((res) => setSources(res.items))
       .catch(() => {});
     getColumnRoleCodes()

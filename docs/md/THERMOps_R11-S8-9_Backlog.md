@@ -34,7 +34,7 @@
 | B8 | PARTIAL 중복 적재 가시화 | Retry 전 영향 범위 힌트 | C | open | |
 | B9 | Schedule skip 이력 UI | `ACTIVE_RUN_EXISTS` 등 skip 반복 가시화 | C | open | |
 | B10 | Ops 「조치 필요」카드 | stuck / failures / catch-up 후보 그룹 (notification 전단계) | C | open | |
-| B11 | Connector / Data Source 선택 UX | Studio·데이터 소스 화면에서 Data Source 검색·필터·최근 사용 강화 | A | open | |
+| B11 | Connector / Data Source 선택 UX | Studio·데이터 소스 화면에서 Data Source 검색·필터·최근 사용 강화. **포함:** 100건 초과 시 Wizard/셀렉트 페이지네이션·검색 (B25 known limitation 이관) | A | open | |
 | B12 | Visual Pipeline E2E Smoke Scenario | REST → Transform → Upsert → Compile → 실행 설정 반영 → 즉시 실행 → History 범용 smoke. fixture는 generic sample dataset | D | open | |
 | B13 | Inspector select 기본값 미반영 | `http_method`·`transform_type` 등 select **표시** 기본값이 config에 저장되지 않아 Graph 검증 required 경고. 노드 생성 시 default 실제 주입 또는 초기 option을 「선택하세요」로 변경 | A | open | **1순위** |
 | B14 | Transform Unmapped Policy enum 정렬 | Studio: `미설정`/`KEEP`/`DROP`/`ERROR` vs 백엔드 `WIDE_HOUR_TO_LONG`: `FAIL_LOAD`/`SKIP_UNMAPPED`/`LOG_ONLY`. 잘못된 값 시 `MATERIALIZE_TRANSFORM_FAILED`. API Connector Wizard와 enum 정렬 | A | open | |
@@ -48,7 +48,7 @@
 | B22 | DISABLED(Coming later) 컴포넌트 본구현 | Palette DISABLED 노드 활성화 로드맵. **DATA_INPUT:** `VP_DB_SOURCE`, `VP_CSV_SOURCE`, `VP_FORECAST_PROVIDER`. **QUALITY:** `VP_DATA_QUALITY`. **FEATURE:** `VP_FEATURE_BUILD`. **MODEL:** `VP_MODEL_TRAINING`. **PREDICTION:** `VP_BATCH_PREDICTION`. **OPERATION:** `VP_NOTIFICATION` (S8-7 운영 알림과 구분) | D | open | 우선순위 별도 승인 |
 | B23 | Product Branding Generalization | 특정 고객/도메인 문구를 범용 MLOps 운영 플랫폼 기준으로 정리. 고객명·도메인명은 demo scenario / tenant / project label로 분리 | D | open | |
 | B24 | 표준 데이터셋 보관(archive) UI | `POST /standard-dataset-types/{id}/archive` API는 있으나 FE 삭제/보관 버튼 없음. 테스트용 DRAFT·미완성(컬럼 0) 데이터셋 정리 UX. 물리 테이블 DROP은 별도 확인 | A | open | 2026-07-27 추가 |
-| B25 | REST API 연결 목록 로드 버그 | `ApiConnectorPanel`이 `GET /data-sources?size=200` 호출 → API max 100으로 **422** → Wizard 데이터 소스 셀렉트 항상 빈 목록. `size=100` 수정 + 상단 등록 후 패널 자동 refresh | A | open | 2026-07-27 추가 |
+| B25 | REST API 연결 목록 로드 버그 | `ApiConnectorPanel`이 `GET /data-sources?size=200` 호출 → API max 100으로 **422** → Wizard 데이터 소스 셀렉트 항상 빈 목록. `DATA_SOURCE_LIST_PAGE_SIZE=100` + 등록/수정/삭제 후 패널 refresh + empty/error 구분 | A | **done** | **R11-S8-9-2**. 100건 초과 1페이지 제한 → B11 |
 | B26 | Ops smoke soft-cancel assertion 안정화 | `check-visual-pipeline-ops.mjs`가 첫 번째 `run-detail-button`을 상태 확인 없이 클릭해, stuck 목록에 `RUNNING`이 있으면 soft-cancel 버튼 표시 여부 assertion이 깨짐. clean HEAD에서도 재현되어 S8-9-1과 무관한 기존 smoke flaky 이슈. 대상 run 상태를 명시적으로 선택하거나, 상태별 assertion 분기 및 `fail()` throw 동작 보강 필요 | C | open | 2026-07-28 추가 |
 
 ---
@@ -58,7 +58,7 @@
 | 순서 | ID | 상태 | 비고 |
 |------|-----|------|------|
 | 1 | B17 | done | S8-9-1 Operations Dock |
-| 2 | B25 | open | 데이터 소스 등록해도 API 작업 Wizard 빈 목록 |
+| 2 | B25 | done | S8-9-2 data-sources size≤100 + refresh |
 | 3 | B16 | open | Graph 검증 → Compile 연속 흐름 |
 | 4 | B13 | open | Select 기본값 미저장 |
 | 5 | B24 | open | 테스트 데이터셋 정리 |
@@ -70,7 +70,7 @@
 
 ### A — Studio / 데이터 관리 실사용 개선
 
-B11, B13, B14, B16, B17(done), B24, B25
+B11, B13, B14, B16, B17(done), B24, B25(done)
 
 ### B — 범용 Visual Pipeline 구성 편의
 
@@ -91,6 +91,7 @@ B5, B7, B12, B22, B23
 | 단계 | ID | 완료 내용 | 커밋/참고 |
 |------|-----|-----------|-----------|
 | R11-S8-9-1 | B17 | Studio viewport 고정 + Bottom Operations Dock. Palette/Canvas/Inspector 내부 스크롤 | `e23461b` — `feat(R11-S8-9-1): Studio 스크롤과 Operations Dock 정리` (master push 완료) |
+| R11-S8-9-2 | B25 | REST API 연결 Wizard Data Source 목록 `size≤100` 수정, 등록 후 refresh, empty/error 구분 | 구현 완료 (커밋 대기) |
 
 ---
 
@@ -102,6 +103,7 @@ B5, B7, B12, B22, B23
 | 2026-07-27 | B17 → `done` (S8-9-1) |
 | 2026-07-27 | B24 표준 데이터셋 archive UI, B25 REST API 연결 size=200 버그 추가 |
 | 2026-07-28 | B17 완료 확정 (`e23461b` push). B26 Ops smoke soft-cancel assertion 안정화 이슈 추가. clean HEAD에서도 재현되어 S8-9-1과 무관한 기존 smoke flaky 이슈로 분리 |
+| 2026-07-28 | B25 → `done` (S8-9-2). `DATA_SOURCE_LIST_PAGE_SIZE=100`, DataSourcesPage→ApiConnectorPanel refreshToken, empty/error 구분. 100건 초과 UX는 B11로 이관 |
 
 ---
 
