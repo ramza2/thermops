@@ -274,7 +274,46 @@ export function buildMvpSampleNodeConfigs(): Record<string, VisualPipelineNodeCo
 
 export type { VisualPipelineNodeData };
 
-/** Aggregate CONFIG-phase issues into node.data.config.validation cache (R11-S5-5). */
+/**
+ * Build UI-only per-node config validation cache from Graph 검증 issues (R11-S8-9-3 / B16).
+ * Does not mutate React Flow nodes — keep out of dirty/save payload.
+ */
+export function buildConfigValidationByNodeId(
+  issues: Array<{
+    phase?: string;
+    node_id?: string;
+    severity?: string;
+  }>,
+  nodeIds: string[],
+  validatedAt: string = new Date().toISOString(),
+): Record<string, VisualPipelineNodeConfigValidation> {
+  const byNode = new Map<string, Array<{ severity?: string }>>();
+  for (const issue of issues) {
+    if (issue.phase !== "CONFIG" || !issue.node_id) continue;
+    const list = byNode.get(issue.node_id) ?? [];
+    list.push(issue);
+    byNode.set(issue.node_id, list);
+  }
+
+  const out: Record<string, VisualPipelineNodeConfigValidation> = {};
+  for (const nodeId of nodeIds) {
+    const nodeIssues = byNode.get(nodeId) ?? [];
+    let status: VisualPipelineConfigValidationStatus = "OK";
+    if (nodeIssues.some((i) => i.severity === "ERROR")) status = "ERROR";
+    else if (nodeIssues.some((i) => i.severity === "WARNING")) status = "WARNING";
+    out[nodeId] = {
+      status,
+      issue_count: nodeIssues.length,
+      last_validated_at: validatedAt,
+    };
+  }
+  return out;
+}
+
+/**
+ * @deprecated R11-S8-9-3 / B16 — mutates node.data and dirties the graph.
+ * Use {@link buildConfigValidationByNodeId} + UI state instead.
+ */
 export function applyConfigValidationCache(
   nodes: Node[],
   issues: Array<{
@@ -284,33 +323,22 @@ export function applyConfigValidationCache(
   }>,
   validatedAt: string = new Date().toISOString(),
 ): Node[] {
-  const byNode = new Map<string, Array<{ severity?: string }>>();
-  for (const issue of issues) {
-    if (issue.phase !== "CONFIG" || !issue.node_id) continue;
-    const list = byNode.get(issue.node_id) ?? [];
-    list.push(issue);
-    byNode.set(issue.node_id, list);
-  }
-
+  const cache = buildConfigValidationByNodeId(
+    issues,
+    nodes.map((n) => n.id),
+    validatedAt,
+  );
   return nodes.map((node) => {
     const ctype = String(node.type ?? node.data?.component_type ?? "");
     const config = normalizeNodeConfig(node.data?.config, ctype);
-    const nodeIssues = byNode.get(node.id) ?? [];
-    let status: VisualPipelineConfigValidationStatus = "OK";
-    if (nodeIssues.some((i) => i.severity === "ERROR")) status = "ERROR";
-    else if (nodeIssues.some((i) => i.severity === "WARNING")) status = "WARNING";
-
+    const validation = cache[node.id] ?? defaultConfigValidation();
     return {
       ...node,
       data: {
         ...node.data,
         config: {
           ...config,
-          validation: {
-            status,
-            issue_count: nodeIssues.length,
-            last_validated_at: validatedAt,
-          },
+          validation,
         },
       },
     };

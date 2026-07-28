@@ -39,7 +39,7 @@
 | B13 | Inspector select 기본값 미반영 | `http_method`·`transform_type` 등 select **표시** 기본값이 config에 저장되지 않아 Graph 검증 required 경고. 노드 생성 시 default 실제 주입 또는 초기 option을 「선택하세요」로 변경 | A | open | **1순위** |
 | B14 | Transform Unmapped Policy enum 정렬 | Studio: `미설정`/`KEEP`/`DROP`/`ERROR` vs 백엔드 `WIDE_HOUR_TO_LONG`: `FAIL_LOAD`/`SKIP_UNMAPPED`/`LOG_ONLY`. 잘못된 값 시 `MATERIALIZE_TRANSFORM_FAILED`. API Connector Wizard와 enum 정렬 | A | open | |
 | B15 | Source ↔ Target Column Normalization UX | API `ND_ID` vs 테이블 `nd_id` 등 대소문자·snake_case 불일치. Upsert conflict key 오류(`MATERIALIZE_WRITE_POLICY_FAILED`) 방지. Transform 스키마·Upsert target 비교·매핑·conflict key 힌트 (범용) | B | open | |
-| B16 | 검증 → Compile dirty 흐름 개선 | Graph 검증 후 `applyConfigValidationCache`가 노드에 결과를 써 dirty 재발. Compile/Preview 연속 클릭 차단. 검증 캐시는 dirty 제외 또는 검증 성공 시 자동 저장/다음 단계 유도 | A | open | **1순위** |
+| B16 | 검증 → Compile dirty 흐름 개선 | Graph 검증 후 `applyConfigValidationCache`가 노드에 결과를 써 dirty 재발. **A안:** UI 전용 `configValidationByNodeId` + dirty/save에서 `config.validation` canonicalize | A | **done** | **R11-S8-9-3** |
 | B17 | Studio 이중 스크롤 정리 | Node Inspector·하단 패널 누적 스크롤. viewport 고정 작업대 + Bottom Operations Dock | A | **done** | **R11-S8-9-1** 완료 |
 | B18 | Target Table sample rows 미리보기 | 즉시 실행 SUCCESS 후 Studio에서 적재 row·건수 확인 UI 없음 (현재 SQL만). Run Detail 또는 Upsert 연계 LIMIT N preview | C | open | |
 | B19 | Studio REST — Data Source 인라인 생성 | Inspector에서 Data Source 최소 생성(이름·base URL·credential ref) 후 ID 자동 선택. `/data-sources` 이탈 감소 | B | open | |
@@ -59,7 +59,7 @@
 |------|-----|------|------|
 | 1 | B17 | done | S8-9-1 Operations Dock |
 | 2 | B25 | done | S8-9-2 data-sources size≤100 + refresh |
-| 3 | B16 | open | Graph 검증 → Compile 연속 흐름 |
+| 3 | B16 | done | S8-9-3 검증 후 Compile dirty 미재발 |
 | 4 | B13 | open | Select 기본값 미저장 |
 | 5 | B24 | open | 테스트 데이터셋 정리 |
 | 6 | B26 | open | Ops smoke flaky assertion 안정화 |
@@ -70,7 +70,7 @@
 
 ### A — Studio / 데이터 관리 실사용 개선
 
-B11, B13, B14, B16, B17(done), B24, B25(done)
+B11, B13, B14, B16(done), B17(done), B24, B25(done)
 
 ### B — 범용 Visual Pipeline 구성 편의
 
@@ -91,7 +91,8 @@ B5, B7, B12, B22, B23
 | 단계 | ID | 완료 내용 | 커밋/참고 |
 |------|-----|-----------|-----------|
 | R11-S8-9-1 | B17 | Studio viewport 고정 + Bottom Operations Dock. Palette/Canvas/Inspector 내부 스크롤 | `e23461b` — `feat(R11-S8-9-1): Studio 스크롤과 Operations Dock 정리` (master push 완료) |
-| R11-S8-9-2 | B25 | REST API 연결 Wizard Data Source 목록 `size≤100` 수정, 등록 후 refresh, empty/error 구분 | 구현 완료 (커밋 대기) |
+| R11-S8-9-2 | B25 | REST API 연결 Wizard Data Source 목록 `size≤100` 수정, 등록 후 refresh, empty/error 구분 | `fbfe8f2` |
+| R11-S8-9-3 | B16 | Graph 검증 UI cache 분리 — 검증 후 dirty 미재발, Compile 연속 가능 | 구현 완료 (커밋 대기) |
 
 ---
 
@@ -104,6 +105,7 @@ B5, B7, B12, B22, B23
 | 2026-07-27 | B24 표준 데이터셋 archive UI, B25 REST API 연결 size=200 버그 추가 |
 | 2026-07-28 | B17 완료 확정 (`e23461b` push). B26 Ops smoke soft-cancel assertion 안정화 이슈 추가. clean HEAD에서도 재현되어 S8-9-1과 무관한 기존 smoke flaky 이슈로 분리 |
 | 2026-07-28 | B25 → `done` (S8-9-2). `DATA_SOURCE_LIST_PAGE_SIZE=100`, DataSourcesPage→ApiConnectorPanel refreshToken, empty/error 구분. 100건 초과 UX는 B11로 이관 |
+| 2026-07-28 | B16 → `done` (S8-9-3). Graph 검증 UI cache 분리, dirty/save에서 `config.validation` canonicalize |
 
 ---
 

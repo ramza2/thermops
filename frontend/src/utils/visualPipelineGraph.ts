@@ -6,7 +6,7 @@ import type {
   VisualPipelineGraphNode,
   VisualPipelineNodeConfig,
 } from "@/types/visualPipeline";
-import { formatPlaceholderConfigJson, normalizeNodeConfig } from "@/utils/visualPipelineNodeConfig";
+import { formatPlaceholderConfigJson, defaultConfigValidation, normalizeNodeConfig } from "@/utils/visualPipelineNodeConfig";
 
 export const MVP_COMPONENT_TYPES = [
   "VP_REST_API_SOURCE",
@@ -328,6 +328,36 @@ export function serializeGraphBody(graph: VisualPipelineGraph, includeViewport =
     ? graph
     : { nodes: graph.nodes, edges: graph.edges };
   return JSON.stringify(payload);
+}
+
+/**
+ * Normalize UI-only config.validation so it cannot affect dirty/save.
+ * R11-S8-9-3 / B16: validation results live in Studio UI state, not graph payload.
+ */
+export function canonicalizeGraphForPersist(graph: VisualPipelineGraph): VisualPipelineGraph {
+  const validation = defaultConfigValidation();
+  return {
+    ...graph,
+    nodes: (graph.nodes ?? []).map((n) => {
+      const ctype = String(n.type || n.data?.component_type || "");
+      const config = normalizeNodeConfig(n.data?.config, ctype);
+      return {
+        ...n,
+        data: {
+          ...n.data,
+          config: {
+            ...config,
+            validation,
+          },
+        },
+      };
+    }),
+  };
+}
+
+/** Dirty fingerprint: ignore config.validation (and viewport by default). */
+export function serializeGraphBodyForDirty(graph: VisualPipelineGraph): string {
+  return serializeGraphBody(canonicalizeGraphForPersist(graph), false);
 }
 
 /** @deprecated Use formatPlaceholderConfigJson from visualPipelineNodeConfig */

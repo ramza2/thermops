@@ -16,6 +16,8 @@ import { ensureNodeConfig, formatNodeConfigPreviewJson } from "@/utils/visualPip
 interface VpNodeInspectorProps {
   node: Node | null;
   catalogItem: ComponentCatalogItem | null;
+  /** UI-only validation cache (B16). Prefer over node.data.config.validation. */
+  configValidation?: VisualPipelineNodeConfigValidation;
   fieldWarnings?: Record<string, string>;
   onLabelChange: (label: string) => void;
   onConfigChange: (patch: Record<string, unknown>) => void;
@@ -133,6 +135,7 @@ const EDITABLE_FORM_TYPES = new Set([
 export function VpNodeInspector({
   node,
   catalogItem,
+  configValidation,
   fieldWarnings,
   onLabelChange,
   onConfigChange,
@@ -180,7 +183,7 @@ export function VpNodeInspector({
       <div className="px-3 py-2.5 border-b border-slate-100 bg-slate-50 shrink-0">
         <div className="flex items-center justify-between gap-2">
           <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Node Inspector</span>
-          <ConfigValidationBadge validation={normalizedConfig.validation} />
+          <ConfigValidationBadge validation={configValidation ?? normalizedConfig.validation} />
         </div>
         <p className="text-[10px] text-slate-400 mt-0.5 truncate">{label || componentType}</p>
       </div>

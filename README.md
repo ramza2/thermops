@@ -1769,6 +1769,14 @@ cd frontend && node scripts/check-visual-pipeline-studio.mjs
 - **Known:** 100건 초과 1페이지 → B11. Studio Inspector Data Source select → B19
 - **Backlog:** B25 done
 
+### R11-S8-9-3 Graph 검증 → Compile dirty 흐름
+
+- **범위:** FE-only — B16. Graph 검증 결과를 UI 전용 state로 분리해 검증 직후 dirty/Compile 차단 재발 제거.
+- **변경:** `configValidationByNodeId` · `serializeGraphBodyForDirty` / `canonicalizeGraphForPersist` · Inspector badge props · studio smoke B16 회귀
+- **검증:** `cd frontend && npm run build` · `node scripts/check-pages.mjs` · `node scripts/check-visual-pipeline-studio.mjs`
+- **제외:** backend validation/compile · 자동 저장(C안) · B13/B14 · Dock 구조 · 「R10 설정 반영」재노출 금지
+- **Backlog:** B16 done
+
 ## 설계 문서 참조
 
 - `docs/md/THERMOps_R11-S8-9_Backlog.md`

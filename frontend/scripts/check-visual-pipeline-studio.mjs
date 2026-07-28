@@ -52,6 +52,22 @@ function assertNoDataSourcesSizeOver100() {
   }
 }
 
+/** B16: Graph 검증 must not mutate nodes via applyConfigValidationCache (dirtymaking). */
+function assertNoValidationCacheNodeMutation() {
+  const pageFile = path.join(FRONTEND_SRC, "pages", "VisualPipelineStudioPage.tsx");
+  const text = readFileSync(pageFile, "utf8");
+  if (/setNodes\s*\([\s\S]*applyConfigValidationCache/.test(text) || /applyConfigValidationCache\s*\(/.test(text)) {
+    throw new Error(
+      "B16 regression: VisualPipelineStudioPage must not call applyConfigValidationCache (use UI cache / buildConfigValidationByNodeId)",
+    );
+  }
+  if (!text.includes("buildConfigValidationByNodeId") || !text.includes("serializeGraphBodyForDirty")) {
+    throw new Error(
+      "B16 regression: expected buildConfigValidationByNodeId + serializeGraphBodyForDirty in Studio page",
+    );
+  }
+}
+
 function resolveScriptsDir() {
   const fromRepo = path.join(REPO_ROOT, "scripts");
   if (existsSync(fromRepo)) return fromRepo;
@@ -659,6 +675,43 @@ async function runBrowserSmoke(pipeline) {
     await page.getByTestId("visual-pipeline-studio-page").waitFor({ state: "visible", timeout: 60000 });
     console.log("  [ok] materialize-ready graph via API + reload");
 
+    // --- R11-S8-9-3 / B16: Graph 검증 must not re-dirty / block Compile ---
+    {
+      // Dock expand can resize the canvas and nudge RF positions → dirty.
+      // Settle layout first so this assert isolates validation-cache dirty only.
+      await openDockTab(page, "validation");
+      await page.waitForTimeout(800);
+      if (await toolbar.getByText("● 저장되지 않음").count()) {
+        await saveGraphAndWait(page);
+      }
+      if (await toolbar.getByText("● 저장되지 않음").count()) {
+        fail("B16 precondition: expected clean graph after dock settle + save");
+      }
+      const validationB16 = page.getByTestId("visual-pipeline-validation-panel");
+      await page.getByTestId("visual-pipeline-validate-button").click();
+      await validationB16.getByTestId("visual-pipeline-validation-severity").waitFor({
+        state: "visible",
+        timeout: 30000,
+      });
+      if (await toolbar.getByText("● 저장되지 않음").count()) {
+        fail("B16: Graph 검증 직후 dirty(● 저장되지 않음)가 재발하면 안 됩니다");
+      }
+      const compileBtnB16 = page.getByTestId("visual-pipeline-compile-button");
+      await compileBtnB16.waitFor({ state: "visible", timeout: 10000 });
+      if (await compileBtnB16.isDisabled()) {
+        const title = (await compileBtnB16.getAttribute("title")) || "";
+        if (title.includes("저장되지 않은")) {
+          fail(`B16: Compile must not be dirty-blocked after Graph 검증 (title=${title})`);
+        }
+      }
+      await selectNodeById(page, "e2e-rest");
+      const badgeB16 = (await inspector.getByTestId("visual-pipeline-inspector-validation-badge").innerText()).trim();
+      if (!badgeB16 || badgeB16 === "NOT_VALIDATED") {
+        fail(`B16: expected Inspector validation badge after Graph 검증, got ${badgeB16}`);
+      }
+      console.log(`  [ok] B16 validate→no dirty, Compile not dirty-blocked, badge=${badgeB16}`);
+    }
+
     // --- R11-S6-3 Compile Preview / Compile smoke ---
     await page.getByTestId("visual-pipeline-compile-preview-button").waitFor({ state: "visible", timeout: 10000 });
     await page.getByTestId("visual-pipeline-compile-button").waitFor({ state: "visible", timeout: 10000 });
@@ -963,6 +1016,7 @@ async function main() {
   console.log(`  api=${API_BASE}`);
 
   assertNoDataSourcesSizeOver100();
+  assertNoValidationCacheNodeMutation();
   ensureMaterializeSeedData();
 
   let pipelineId = null;

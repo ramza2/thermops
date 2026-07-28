@@ -75,6 +75,7 @@ import type {
   VisualPipelineCompileResponse,
   VisualPipelineDetail,
   VisualPipelineMaterializationResponse,
+  VisualPipelineNodeConfigValidation,
   VisualPipelineRunResponse,
   VisualPipelineScheduleActivationResponse,
   VisualPipelineValidationResponse,
@@ -89,9 +90,15 @@ import {
   newNodeId,
   NODE_STYLE,
   parsePortHandleId,
-  serializeGraphBody,
+  serializeGraphBodyForDirty,
+  canonicalizeGraphForPersist,
 } from "@/utils/visualPipelineGraph";
-import { applyConfigValidationCache, applyNodeConfigPatch, fieldWarningsFromConfigIssues } from "@/utils/visualPipelineNodeConfig";
+import {
+  buildConfigValidationByNodeId,
+  applyNodeConfigPatch,
+  defaultConfigValidation,
+  fieldWarningsFromConfigIssues,
+} from "@/utils/visualPipelineNodeConfig";
 
 const RUN_ACTIVE_STATUSES = new Set(["PENDING", "RUNNING"]);
 const RUN_TERMINAL_STATUSES = new Set(["SUCCESS", "FAILED", "PARTIAL", "CANCELLED"]);
@@ -129,6 +136,10 @@ function StudioCanvasInner() {
   const [versions, setVersions] = useState<VisualPipelineVersion[]>([]);
   const [validating, setValidating] = useState(false);
   const [validationResult, setValidationResult] = useState<VisualPipelineValidationResponse | null>(null);
+  /** UI-only config validation cache (B16) — must not mutate nodes / dirty. */
+  const [configValidationByNodeId, setConfigValidationByNodeId] = useState<
+    Record<string, VisualPipelineNodeConfigValidation>
+  >({});
   const [validationExpanded, setValidationExpanded] = useState(true);
   const [compiling, setCompiling] = useState(false);
   const [compileResult, setCompileResult] = useState<VisualPipelineCompileResponse | null>(null);
@@ -281,8 +292,11 @@ function StudioCanvasInner() {
       setNodes(n);
       setEdges(e);
       setViewport(vp);
+      setConfigValidationByNodeId({});
+      setValidationResult(null);
       // Baseline must match canvas round-trip (normalize), not raw API JSON.
-      savedGraphRef.current = serializeGraphBody(flowToGraph(n, e, vp));
+      // Strip UI-only config.validation so legacy persisted cache cannot dirty.
+      savedGraphRef.current = serializeGraphBodyForDirty(flowToGraph(n, e, vp));
       setGraphSaveEpoch((epoch) => epoch + 1);
       setLastSavedAt(detail.updated_at ?? null);
       void loadLatestCompileResult(pipelineId);
@@ -334,7 +348,7 @@ function StudioCanvasInner() {
   const currentGraph = useMemo(() => flowToGraph(nodes, edges, viewport), [nodes, edges, viewport]);
 
   const dirty = useMemo(
-    () => serializeGraphBody(currentGraph) !== savedGraphRef.current,
+    () => serializeGraphBodyForDirty(currentGraph) !== savedGraphRef.current,
     [currentGraph, graphSaveEpoch],
   );
 
@@ -358,13 +372,16 @@ function StudioCanvasInner() {
   const selectedNode = useMemo(() => nodes.find((n) => n.id === selectedNodeId) ?? null, [nodes, selectedNodeId]);
   const selectedCatalog = selectedNode ? catalogMap.get(String(selectedNode.type)) ?? null : null;
   const selectedConfigStatus = useMemo(() => {
-    if (!selectedNode) return "NOT_VALIDATED";
-    const raw = (selectedNode.data as { config?: { validation?: { status?: string } } } | undefined)?.config
-      ?.validation?.status;
+    if (!selectedNodeId) return "NOT_VALIDATED";
+    const raw = configValidationByNodeId[selectedNodeId]?.status;
     if (raw === "VALID") return "OK";
     if (raw === "INVALID") return "ERROR";
     return raw ?? "NOT_VALIDATED";
-  }, [selectedNode]);
+  }, [selectedNodeId, configValidationByNodeId]);
+  const selectedConfigValidation = useMemo((): VisualPipelineNodeConfigValidation => {
+    if (!selectedNodeId) return defaultConfigValidation();
+    return configValidationByNodeId[selectedNodeId] ?? defaultConfigValidation();
+  }, [selectedNodeId, configValidationByNodeId]);
   const fieldWarnings = useMemo(() => {
     if (!validationResult || selectedConfigStatus === "NOT_VALIDATED" || selectedConfigStatus === "STALE") {
       return {};
@@ -421,6 +438,14 @@ function StudioCanvasInner() {
   const handleNodeConfigChange = (patch: Record<string, unknown>) => {
     if (!selectedNodeId) return;
     setNodes((nds) => nds.map((n) => (n.id === selectedNodeId ? applyNodeConfigPatch(n, patch) : n)));
+    setConfigValidationByNodeId((prev) => ({
+      ...prev,
+      [selectedNodeId]: {
+        status: "NOT_VALIDATED",
+        last_validated_at: null,
+        issue_count: 0,
+      },
+    }));
   };
 
   const handleDeleteNode = () => {
@@ -435,13 +460,13 @@ function StudioCanvasInner() {
     const silent = opts?.silent === true;
     if (!silent) setSaving(true);
     try {
-      const graph = flowToGraph(nodes, edges, viewport);
+      const graph = canonicalizeGraphForPersist(flowToGraph(nodes, edges, viewport));
       const updated = await updateVisualPipeline(pipelineId, {
         graph,
         create_version: false,
       });
       setPipeline(updated);
-      savedGraphRef.current = serializeGraphBody(graph);
+      savedGraphRef.current = serializeGraphBodyForDirty(graph);
       setGraphSaveEpoch((e) => e + 1);
       setLastSavedAt(updated.updated_at ?? new Date().toISOString());
       if (!silent) {
@@ -506,10 +531,15 @@ function StudioCanvasInner() {
         validation_level: "BASIC",
       });
       setValidationResult(result);
+      setConfigValidationByNodeId(
+        buildConfigValidationByNodeId(
+          result.issues ?? [],
+          nodes.map((n) => n.id),
+        ),
+      );
       setValidationExpanded(true);
       setDockTab("validation");
       setDockExpanded(true);
-      setNodes((nds) => applyConfigValidationCache(nds, result.issues ?? []));
       if (result.severity === "ERROR") {
         showToast("error", "Graph 검증 오류가 있습니다.");
       } else if (result.severity === "WARNING") {
@@ -1235,6 +1265,7 @@ function StudioCanvasInner() {
         <VpNodeInspector
           node={selectedNode}
           catalogItem={selectedCatalog}
+          configValidation={selectedConfigValidation}
           fieldWarnings={fieldWarnings}
           onLabelChange={handleLabelChange}
           onConfigChange={handleNodeConfigChange}
