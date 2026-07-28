@@ -8,6 +8,10 @@ import type {
   VisualPipelineConfigSection,
   VisualPipelineNodeConfigValues,
 } from "@/types/visualPipeline";
+import {
+  DEFAULT_UNMAPPED_POLICY,
+  UNMAPPED_POLICY_VALUES,
+} from "@/constants/transformUnmappedPolicy";
 
 export const VISUAL_PIPELINE_CONFIG_SCHEMA_VERSION = "R11-S5-0";
 
@@ -100,8 +104,9 @@ const TRANSFORM_FIELDS: VisualPipelineConfigFieldSchema[] = [
     ui_component: "select",
     required: false,
     advanced: true,
-    // Backend catalog has no enum values yet — FE overlay MVP for S5-3.
-    options: ["KEEP", "DROP", "ERROR"],
+    default: DEFAULT_UNMAPPED_POLICY,
+    // R11-S8-9-5 / B14: align with backend WIDE_HOUR_TO_LONG UNMAPPED_POLICIES.
+    options: [...UNMAPPED_POLICY_VALUES],
   }),
   field("hour_policy", {
     type: "object",

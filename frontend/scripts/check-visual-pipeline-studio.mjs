@@ -98,6 +98,34 @@ function assertSchemaDefaultsSeparatedFromPlaceholder() {
   }
 }
 
+/** B14: Transform unmapped_policy options must be backend enums only. */
+function assertUnmappedPolicyEnumAligned() {
+  const constFile = readFileSync(path.join(FRONTEND_SRC, "constants/transformUnmappedPolicy.ts"), "utf8");
+  const form = readFileSync(
+    path.join(FRONTEND_SRC, "components/visualPipeline/config/VpTransformConfigForm.tsx"),
+    "utf8",
+  );
+  const registry = readFileSync(path.join(FRONTEND_SRC, "utils/visualPipelineConfigRegistry.ts"), "utf8");
+  if (!constFile.includes("FAIL_LOAD") || !constFile.includes("SKIP_UNMAPPED") || !constFile.includes("LOG_ONLY")) {
+    throw new Error("B14 regression: transformUnmappedPolicy constants missing backend enums");
+  }
+  if (!constFile.includes('ERROR: "FAIL_LOAD"') || !constFile.includes('DROP: "SKIP_UNMAPPED"')) {
+    throw new Error("B14 regression: legacy ERROR/DROP auto-map missing");
+  }
+  if (/KEEP\s*:\s*"LOG_ONLY"/.test(constFile)) {
+    throw new Error("B14 regression: KEEP must not auto-map to LOG_ONLY");
+  }
+  if (/UNMAPPED_POLICY_OPTIONS\s*=\s*\[[^\]]*"KEEP"/.test(form) || form.includes('["KEEP", "DROP", "ERROR"]')) {
+    throw new Error("B14 regression: VpTransformConfigForm still lists KEEP/DROP/ERROR");
+  }
+  if (!form.includes("UNMAPPED_POLICY_SELECT_OPTIONS")) {
+    throw new Error("B14 regression: Transform form must use UNMAPPED_POLICY_SELECT_OPTIONS");
+  }
+  if (!registry.includes("DEFAULT_UNMAPPED_POLICY") || !registry.includes("UNMAPPED_POLICY_VALUES")) {
+    throw new Error("B14 regression: registry must use shared unmapped_policy constants");
+  }
+}
+
 function resolveScriptsDir() {
   const fromRepo = path.join(REPO_ROOT, "scripts");
   if (existsSync(fromRepo)) return fromRepo;
@@ -657,6 +685,36 @@ async function runBrowserSmoke(pipeline) {
     await assertConfigFormVisible(page, ["transform_type"]);
     console.log("  [ok] Transform config form visible");
 
+    // --- R11-S8-9-5 / B14: unmapped_policy backend enum options ---
+    {
+      await assertConfigFormVisible(page, ["unmapped_policy"]);
+      const policySelect = inspector.getByTestId("visual-pipeline-unmapped-policy-select");
+      await policySelect.waitFor({ state: "visible", timeout: 10000 });
+      const optionValues = await policySelect.locator("option").evaluateAll((opts) =>
+        opts.map((o) => o.value).filter((v) => v !== ""),
+      );
+      for (const banned of ["KEEP", "DROP", "ERROR"]) {
+        if (optionValues.includes(banned)) {
+          fail(`B14: unmapped_policy must not expose legacy option ${banned}`);
+        }
+      }
+      for (const required of ["FAIL_LOAD", "SKIP_UNMAPPED", "LOG_ONLY"]) {
+        if (!optionValues.includes(required)) {
+          fail(`B14: unmapped_policy missing backend option ${required}, got ${JSON.stringify(optionValues)}`);
+        }
+      }
+      await policySelect.selectOption("SKIP_UNMAPPED");
+      await toolbar.getByText("● 저장되지 않음").first().waitFor({ state: "visible", timeout: 10000 });
+      await saveGraphAndWait(page);
+      const afterPolicy = await api("GET", `/visual-pipelines/${pipeline.pipeline_id}`);
+      const xform = (afterPolicy.graph?.nodes ?? []).find((n) => n.id === "e2e-transform");
+      const savedPolicy = xform?.data?.config?.values?.unmapped_policy;
+      if (savedPolicy !== "SKIP_UNMAPPED") {
+        fail(`B14: saved unmapped_policy expected SKIP_UNMAPPED, got ${savedPolicy}`);
+      }
+      console.log("  [ok] B14 unmapped_policy options + saved SKIP_UNMAPPED");
+    }
+
     await selectNodeById(page, "e2e-cron");
     await inspector.getByText("VP_CRON_SCHEDULE").first().waitFor({ state: "visible", timeout: 10000 });
     await assertConfigFormVisible(page, ["cron_expression", "timezone", "active_yn"]);
@@ -1168,6 +1226,7 @@ async function main() {
   assertNoDataSourcesSizeOver100();
   assertNoValidationCacheNodeMutation();
   assertSchemaDefaultsSeparatedFromPlaceholder();
+  assertUnmappedPolicyEnumAligned();
   ensureMaterializeSeedData();
 
   let pipelineId = null;

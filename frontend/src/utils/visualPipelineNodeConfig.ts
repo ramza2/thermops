@@ -16,6 +16,7 @@ import {
   getPlaceholderConfigValues,
   isSecretConfigField,
 } from "@/utils/visualPipelineConfigRegistry";
+import { remapLegacyUnmappedPolicy } from "@/constants/transformUnmappedPolicy";
 
 const CONFIG_META_KEYS = new Set(["schema_version", "values", "validation"]);
 
@@ -85,8 +86,21 @@ export function normalizeNodeConfig(
   componentType?: string,
 ): VisualPipelineNodeConfig {
   const validation = defaultConfigValidation();
-  const withDefaults = (values: VisualPipelineNodeConfigValues): VisualPipelineNodeConfigValues =>
-    componentType ? applySchemaDefaultValues(componentType, values) : values;
+  const withDefaults = (values: VisualPipelineNodeConfigValues): VisualPipelineNodeConfigValues => {
+    let next: VisualPipelineNodeConfigValues = { ...values };
+    if (
+      componentType === "VP_TRANSFORM" &&
+      next.unmapped_policy !== undefined &&
+      next.unmapped_policy !== null &&
+      next.unmapped_policy !== ""
+    ) {
+      next = {
+        ...next,
+        unmapped_policy: remapLegacyUnmappedPolicy(next.unmapped_policy) as string,
+      };
+    }
+    return componentType ? applySchemaDefaultValues(componentType, next) : next;
+  };
 
   if (raw == null) {
     return {

@@ -35,6 +35,10 @@ import type {
 import { PARAM_QUICK_ADD, WIZARD_STEP_TITLES as STEP_TITLES } from "@/types/apiConnector";
 import type { StandardTargetTable } from "@/types/standardDatasets";
 import {
+  DEFAULT_UNMAPPED_POLICY,
+  UNMAPPED_POLICY_SELECT_OPTIONS,
+} from "@/constants/transformUnmappedPolicy";
+import {
   computeColumnMatching,
   normalizePreviewItems,
   safeJsonStringify,
@@ -101,7 +105,7 @@ const DEFAULT_TRANSFORM: ApiConnectorTransformConfig = {
   external_name_output_field: "external_node_name",
   timestamp_policy: "HOUR_LABEL_AS_END",
   hour_24_policy: "NEXT_DAY_00",
-  unmapped_policy: "FAIL_LOAD",
+  unmapped_policy: DEFAULT_UNMAPPED_POLICY,
   null_value_policy: "SKIP_NULL",
   numeric_parse_policy: "ALLOW_COMMA",
   active_yn: true,
@@ -757,11 +761,11 @@ export function ApiConnectorOperationWizard({
                   </div>
                   <div>
                     <label className="text-xs text-slate-500">미매핑 처리 방식</label>
-                    <SelectInput value={transform.unmapped_policy || "FAIL_LOAD"} onChange={(v) => setTransform({ ...transform, unmapped_policy: v })} options={[
-                      { value: "FAIL_LOAD", label: "FAIL_LOAD (적재 중단)" },
-                      { value: "SKIP_UNMAPPED", label: "SKIP_UNMAPPED (해당 item skip)" },
-                      { value: "LOG_ONLY", label: "LOG_ONLY (entity 없이 변환)" },
-                    ]} />
+                    <SelectInput
+                      value={transform.unmapped_policy || DEFAULT_UNMAPPED_POLICY}
+                      onChange={(v) => setTransform({ ...transform, unmapped_policy: v })}
+                      options={UNMAPPED_POLICY_SELECT_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
+                    />
                   </div>
                   <div>
                     <label className="text-xs text-slate-500">NULL 값 처리</label>

@@ -1785,6 +1785,14 @@ cd frontend && node scripts/check-visual-pipeline-studio.mjs
 - **제외:** B14 enum · PLACEHOLDER를 신규 노드에 사용 금지 · B16 dirty 흐름 · backend · 「R10 설정 반영」재노출 금지
 - **Backlog:** B13 done
 
+### R11-S8-9-5 Transform unmapped_policy enum 정렬
+
+- **범위:** FE-only — B14. Studio/Wizard `unmapped_policy`를 backend `FAIL_LOAD`/`SKIP_UNMAPPED`/`LOG_ONLY`로 정렬.
+- **변경:** 공통 `transformUnmappedPolicy` 상수 · Type A default `FAIL_LOAD` · legacy ERROR→FAIL_LOAD, DROP→SKIP_UNMAPPED, KEEP 재선택 · studio smoke B14
+- **검증:** `cd frontend && npm run build` · `node scripts/check-pages.mjs` · `node scripts/check-visual-pipeline-studio.mjs`
+- **제외:** backend enum · B15 · B13/B16 재수정 · 「R10 설정 반영」재노출 금지
+- **Backlog:** B14 done
+
 ## 설계 문서 참조
 
 - `docs/md/THERMOps_R11-S8-9_Backlog.md`

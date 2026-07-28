@@ -5,6 +5,13 @@ import type {
 } from "@/types/visualPipeline";
 import { VpConfigFieldShell } from "@/components/visualPipeline/config/VpConfigFieldShell";
 import { VpJsonTextareaField } from "@/components/visualPipeline/config/VpJsonTextareaField";
+import {
+  DEFAULT_UNMAPPED_POLICY,
+  UNMAPPED_POLICY_SELECT_OPTIONS,
+  UNSUPPORTED_UNMAPPED_POLICY_MESSAGE,
+  isAllowedUnmappedPolicy,
+  isUnsupportedLegacyUnmappedPolicy,
+} from "@/constants/transformUnmappedPolicy";
 
 const INPUT_CLASS =
   "h-8 px-2.5 text-xs border border-slate-300 rounded-md w-full focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white disabled:bg-slate-50 disabled:text-slate-400";
@@ -16,9 +23,6 @@ const TRANSFORM_TYPE_OPTIONS = [
   "CALENDAR_SPECIAL_DAY_TO_DATE",
   "CALENDAR_DATE_TO_HOUR",
 ] as const;
-
-/** FE overlay MVP — backend catalog has no enum values for unmapped_policy. */
-const UNMAPPED_POLICY_OPTIONS = ["KEEP", "DROP", "ERROR"] as const;
 
 const MAPPING_PLACEHOLDER = `{
   "mappings": [
@@ -64,6 +68,14 @@ export function VpTransformConfigForm({ values, fieldWarnings, onChange, disable
 
   const schemaPreview = previewJson(values.target_schema_preview);
   const warn = (key: string) => fieldWarnings?.[key];
+  const unmappedPolicy = strVal(values, "unmapped_policy");
+  const unsupportedLegacy = Boolean(unmappedPolicy) && isUnsupportedLegacyUnmappedPolicy(unmappedPolicy);
+  const unmappedSelectValue =
+    !unmappedPolicy || isAllowedUnmappedPolicy(unmappedPolicy) || unsupportedLegacy
+      ? unmappedPolicy || DEFAULT_UNMAPPED_POLICY
+      : DEFAULT_UNMAPPED_POLICY;
+  const unmappedWarning =
+    warn("unmapped_policy") || (unsupportedLegacy ? UNSUPPORTED_UNMAPPED_POLICY_MESSAGE : undefined);
 
   return (
     <div className="space-y-3" data-testid="visual-pipeline-inspector-config-form">
@@ -105,19 +117,24 @@ export function VpTransformConfigForm({ values, fieldWarnings, onChange, disable
         <VpConfigFieldShell
           fieldKey="unmapped_policy"
           label="Unmapped Policy"
-          help="미매핑 필드 처리 정책 (FE MVP options)"
-          warning={warn("unmapped_policy")}
+          help="backend WIDE_HOUR_TO_LONG 허용 정책 (FAIL_LOAD / SKIP_UNMAPPED / LOG_ONLY)"
+          warning={unmappedWarning}
         >
           <select
-            value={strVal(values, "unmapped_policy")}
+            value={unsupportedLegacy ? unmappedPolicy : unmappedSelectValue}
             onChange={patchSelect("unmapped_policy")}
             disabled={disabled}
             className={INPUT_CLASS}
+            data-testid="visual-pipeline-unmapped-policy-select"
           >
-            <option value="">미설정</option>
-            {UNMAPPED_POLICY_OPTIONS.map((opt) => (
-              <option key={opt} value={opt}>
-                {opt}
+            {unsupportedLegacy && (
+              <option value={unmappedPolicy} disabled>
+                {`지원되지 않는 기존 값: ${unmappedPolicy}`}
+              </option>
+            )}
+            {UNMAPPED_POLICY_SELECT_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
               </option>
             ))}
           </select>

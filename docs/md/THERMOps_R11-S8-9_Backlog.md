@@ -37,7 +37,7 @@
 | B11 | Connector / Data Source 선택 UX | Studio·데이터 소스 화면에서 Data Source 검색·필터·최근 사용 강화. **포함:** 100건 초과 시 Wizard/셀렉트 페이지네이션·검색 (B25 known limitation 이관) | A | open | |
 | B12 | Visual Pipeline E2E Smoke Scenario | REST → Transform → Upsert → Compile → 실행 설정 반영 → 즉시 실행 → History 범용 smoke. fixture는 generic sample dataset | D | open | |
 | B13 | Inspector select 기본값 미반영 | `http_method`·`transform_type` 등 select **표시** 기본값이 config에 저장되지 않아 Graph 검증 required 경고. **A+B:** schema default 주입 + Type B placeholder | A | **done** | **R11-S8-9-4** |
-| B14 | Transform Unmapped Policy enum 정렬 | Studio: `미설정`/`KEEP`/`DROP`/`ERROR` vs 백엔드 `WIDE_HOUR_TO_LONG`: `FAIL_LOAD`/`SKIP_UNMAPPED`/`LOG_ONLY`. 잘못된 값 시 `MATERIALIZE_TRANSFORM_FAILED`. API Connector Wizard와 enum 정렬 | A | open | |
+| B14 | Transform Unmapped Policy enum 정렬 | Studio `KEEP`/`DROP`/`ERROR` → backend `FAIL_LOAD`/`SKIP_UNMAPPED`/`LOG_ONLY`. Wizard 공통 상수. legacy C안(ERROR/DROP remap, KEEP 재선택) | A | **done** | **R11-S8-9-5** |
 | B15 | Source ↔ Target Column Normalization UX | API `ND_ID` vs 테이블 `nd_id` 등 대소문자·snake_case 불일치. Upsert conflict key 오류(`MATERIALIZE_WRITE_POLICY_FAILED`) 방지. Transform 스키마·Upsert target 비교·매핑·conflict key 힌트 (범용) | B | open | |
 | B16 | 검증 → Compile dirty 흐름 개선 | Graph 검증 후 `applyConfigValidationCache`가 노드에 결과를 써 dirty 재발. **A안:** UI 전용 `configValidationByNodeId` + dirty/save에서 `config.validation` canonicalize | A | **done** | **R11-S8-9-3** |
 | B17 | Studio 이중 스크롤 정리 | Node Inspector·하단 패널 누적 스크롤. viewport 고정 작업대 + Bottom Operations Dock | A | **done** | **R11-S8-9-1** 완료 |
@@ -70,7 +70,7 @@
 
 ### A — Studio / 데이터 관리 실사용 개선
 
-B11, B13(done), B14, B16(done), B17(done), B24, B25(done)
+B11, B13(done), B14(done), B16(done), B17(done), B24, B25(done)
 
 ### B — 범용 Visual Pipeline 구성 편의
 
@@ -93,7 +93,8 @@ B5, B7, B12, B22, B23
 | R11-S8-9-1 | B17 | Studio viewport 고정 + Bottom Operations Dock. Palette/Canvas/Inspector 내부 스크롤 | `e23461b` — `feat(R11-S8-9-1): Studio 스크롤과 Operations Dock 정리` (master push 완료) |
 | R11-S8-9-2 | B25 | REST API 연결 Wizard Data Source 목록 `size≤100` 수정, 등록 후 refresh, empty/error 구분 | `fbfe8f2` |
 | R11-S8-9-3 | B16 | Graph 검증 UI cache 분리 — 검증 후 dirty 미재발, Compile 연속 가능 | `77a6e05` |
-| R11-S8-9-4 | B13 | Inspector select schema default 주입 (PLACEHOLDER 분리, Type B placeholder) | 구현 완료 (커밋 대기) |
+| R11-S8-9-4 | B13 | Inspector select schema default 주입 (PLACEHOLDER 분리, Type B placeholder) | `0593d69` |
+| R11-S8-9-5 | B14 | Transform unmapped_policy → FAIL_LOAD/SKIP_UNMAPPED/LOG_ONLY + Wizard 공통 상수 | 구현 완료 (커밋 대기) |
 
 ---
 
@@ -108,6 +109,7 @@ B5, B7, B12, B22, B23
 | 2026-07-28 | B25 → `done` (S8-9-2). `DATA_SOURCE_LIST_PAGE_SIZE=100`, DataSourcesPage→ApiConnectorPanel refreshToken, empty/error 구분. 100건 초과 UX는 B11로 이관 |
 | 2026-07-28 | B16 → `done` (S8-9-3). Graph 검증 UI cache 분리, dirty/save에서 `config.validation` canonicalize |
 | 2026-07-28 | B16 push (`77a6e05`). B13 → `done` (S8-9-4). schema default 주입 + form fallback 정리 |
+| 2026-07-28 | B13 push (`0593d69`). B14 → `done` (S8-9-5). unmapped_policy backend enum 정렬 + legacy C안 |
 
 ---
 
