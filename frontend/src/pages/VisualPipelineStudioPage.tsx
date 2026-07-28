@@ -62,6 +62,8 @@ import { VpComponentPalette } from "@/components/visualPipeline/VpComponentPalet
 import { buildNodeTypes } from "@/components/visualPipeline/VpFlowNode";
 import { VpGraphStatusPanel } from "@/components/visualPipeline/VpGraphStatusPanel";
 import { VpNodeInspector } from "@/components/visualPipeline/VpNodeInspector";
+import { VpOperationsDock, type VpOperationsDockTab, type VpOperationsDockTabBadge } from "@/components/visualPipeline/VpOperationsDock";
+import { VpRunHistorySection } from "@/components/visualPipeline/VpRunHistorySection";
 import { VpRunPanel } from "@/components/visualPipeline/VpRunPanel";
 import { VpScheduleActivationPanel } from "@/components/visualPipeline/VpScheduleActivationPanel";
 import { VpValidationPanel } from "@/components/visualPipeline/VpValidationPanel";
@@ -159,6 +161,8 @@ function StudioCanvasInner() {
   const [resuming, setResuming] = useState(false);
   const [cancellingRun, setCancellingRun] = useState(false);
   const [historyRefreshToken, setHistoryRefreshToken] = useState(0);
+  const [dockExpanded, setDockExpanded] = useState(false);
+  const [dockTab, setDockTab] = useState<VpOperationsDockTab>("graph");
   const runPollGenRef = useRef(0);
 
   const nodeTypes = useMemo(() => buildNodeTypes(), []);
@@ -503,6 +507,8 @@ function StudioCanvasInner() {
       });
       setValidationResult(result);
       setValidationExpanded(true);
+      setDockTab("validation");
+      setDockExpanded(true);
       setNodes((nds) => applyConfigValidationCache(nds, result.issues ?? []));
       if (result.severity === "ERROR") {
         showToast("error", "Graph 검증 오류가 있습니다.");
@@ -529,6 +535,8 @@ function StudioCanvasInner() {
     setCompiling(true);
     setCompileError(null);
     setCompileExpanded(true);
+    setDockTab("compile");
+    setDockExpanded(true);
     try {
       const result = await compileVisualPipelinePreview(pipelineId);
       setCompileResult(result);
@@ -550,6 +558,8 @@ function StudioCanvasInner() {
     setCompiling(true);
     setCompileError(null);
     setCompileExpanded(true);
+    setDockTab("compile");
+    setDockExpanded(true);
     try {
       const result = await compileVisualPipeline(pipelineId);
       setCompileResult(result);
@@ -736,6 +746,8 @@ function StudioCanvasInner() {
     setMaterializing(true);
     setMaterializationError(null);
     setMaterializationExpanded(true);
+    setDockTab("materialization");
+    setDockExpanded(true);
     try {
       const result = await materializeVisualPipeline(pipelineId);
       setMaterializationResult(result);
@@ -764,6 +776,8 @@ function StudioCanvasInner() {
     setRunError(null);
     setRunPollError(null);
     setRunExpanded(true);
+    setDockTab("run");
+    setDockExpanded(true);
     try {
       const accepted = await runVisualPipeline(pipelineId, { mode: "MANUAL" });
       setRunResult(accepted);
@@ -799,6 +813,8 @@ function StudioCanvasInner() {
     setActivating(true);
     setActivationError(null);
     setActivationExpanded(true);
+    setDockTab("run");
+    setDockExpanded(true);
     try {
       const result = await activateVisualPipelineSchedule(pipelineId);
       setActivationResult(result);
@@ -923,17 +939,77 @@ function StudioCanvasInner() {
     navigate("/visual-pipelines");
   };
 
+  const dockTabBadges = useMemo((): Partial<Record<VpOperationsDockTab, VpOperationsDockTabBadge | null>> => {
+    const compileTone: VpOperationsDockTabBadge["tone"] =
+      compileResult?.compile_status === "SUCCESS"
+        ? "success"
+        : compileResult?.compile_status === "FAILED"
+          ? "error"
+          : "neutral";
+    const materializationTone: VpOperationsDockTabBadge["tone"] =
+      materializationResult?.materialization_status === "SUCCESS"
+        ? "success"
+        : materializationResult?.materialization_status === "FAILED"
+          ? "error"
+          : "neutral";
+    const runTone: VpOperationsDockTabBadge["tone"] =
+      runResult?.run_status === "SUCCESS"
+        ? "success"
+        : runResult?.run_status === "FAILED" || runResult?.run_status === "CANCELLED"
+          ? "error"
+          : runResult?.run_status === "PARTIAL"
+            ? "warning"
+            : runResult?.run_status === "PENDING" || runResult?.run_status === "RUNNING"
+              ? "info"
+              : "neutral";
+    const validationTone: VpOperationsDockTabBadge["tone"] =
+      validationResult?.severity === "OK"
+        ? "success"
+        : validationResult?.severity === "ERROR"
+          ? "error"
+          : validationResult?.severity === "WARNING"
+            ? "warning"
+            : validationResult?.severity
+              ? "info"
+              : "neutral";
+
+    return {
+      graph: {
+        label: dirty ? "dirty" : pipeline?.current_sync_status ?? "saved",
+        tone: dirty ? ("warning" as const) : ("neutral" as const),
+      },
+      compile: compileResult?.compile_status
+        ? { label: compileResult.compile_status, tone: compileTone }
+        : null,
+      materialization: materializationResult?.materialization_status
+        ? { label: materializationResult.materialization_status, tone: materializationTone }
+        : null,
+      run: runResult?.run_status ? { label: runResult.run_status, tone: runTone } : null,
+      history: runResult?.run_status ? { label: "latest", tone: runTone } : null,
+      validation: validationResult?.severity
+        ? { label: validationResult.severity, tone: validationTone }
+        : null,
+    };
+  }, [
+    dirty,
+    pipeline?.current_sync_status,
+    compileResult?.compile_status,
+    materializationResult?.materialization_status,
+    runResult?.run_status,
+    validationResult?.severity,
+  ]);
+
   if (loading) return <LoadingState />;
   if (error) return <ErrorState message={error} onRetry={() => void loadPipeline()} />;
   if (!pipeline) return null;
 
   return (
     <div
-      className="-m-6 p-4 md:p-5 min-h-[calc(100vh-4rem)] flex flex-col bg-slate-100/60"
-      data-testid="visual-pipeline-studio-page"
+      className="-m-6 p-4 md:p-5 h-[calc(100vh-4rem)] flex flex-col bg-slate-100/60 overflow-hidden"
+      data-testid="visual-studio-root"
     >
       <div
-        className="bg-white border border-slate-200 rounded-lg shadow-sm px-3 py-2.5 flex flex-wrap items-center justify-between gap-2 mb-3"
+        className="shrink-0 bg-white border border-slate-200 rounded-lg shadow-sm px-3 py-2.5 flex flex-wrap items-center justify-between gap-2 mb-3"
         data-testid="visual-pipeline-toolbar"
       >
         <div className="flex items-center gap-2 flex-wrap min-w-0">
@@ -1086,35 +1162,42 @@ function StudioCanvasInner() {
         </div>
       </div>
 
-      <div className="flex gap-3 flex-1 min-h-[620px]">
-        <VpComponentPalette
-          active={catalogActive}
-          disabled={catalogDisabled}
-          loading={catalogLoading}
-          error={catalogError}
-          onAdd={handleAddNode}
-        />
+      <div
+        className="flex-1 min-h-0 flex flex-col gap-3"
+        data-testid="visual-pipeline-studio-page"
+      >
         <div
-          className="flex-1 bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden min-h-[620px] relative"
-          data-testid="visual-pipeline-canvas"
+          className="flex-1 min-h-0 flex gap-3"
+          data-testid="visual-studio-workspace"
         >
-          <ReactFlow
-            nodes={nodes}
-            edges={edges}
-            onNodesChange={onNodesChange}
-            onEdgesChange={onEdgesChange}
-            onConnect={onConnect}
-            nodeTypes={nodeTypes}
-            onSelectionChange={({ nodes: sel }) => setSelectedNodeId(sel[0]?.id ?? null)}
-            onMoveEnd={(_, vp) => setViewport({ x: vp.x, y: vp.y, zoom: vp.zoom })}
-            fitView
-            deleteKeyCode={["Backspace", "Delete"]}
-            className="bg-slate-50"
-            style={{
-              backgroundImage: "radial-gradient(circle, #e2e8f0 1px, transparent 1px)",
-              backgroundSize: "20px 20px",
-            }}
+          <VpComponentPalette
+            active={catalogActive}
+            disabled={catalogDisabled}
+            loading={catalogLoading}
+            error={catalogError}
+            onAdd={handleAddNode}
+          />
+          <div
+            className="flex-1 min-h-0 bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden relative"
+            data-testid="visual-pipeline-canvas"
           >
+            <ReactFlow
+              nodes={nodes}
+              edges={edges}
+              onNodesChange={onNodesChange}
+              onEdgesChange={onEdgesChange}
+              onConnect={onConnect}
+              nodeTypes={nodeTypes}
+              onSelectionChange={({ nodes: sel }) => setSelectedNodeId(sel[0]?.id ?? null)}
+              onMoveEnd={(_, vp) => setViewport({ x: vp.x, y: vp.y, zoom: vp.zoom })}
+              fitView
+              deleteKeyCode={["Backspace", "Delete"]}
+              className="bg-slate-50 !h-full"
+              style={{
+                backgroundImage: "radial-gradient(circle, #e2e8f0 1px, transparent 1px)",
+                backgroundSize: "20px 20px",
+              }}
+            >
             <Background gap={20} size={1} color="#cbd5e1" />
             <Controls className="!shadow-sm !border-slate-200 !rounded-md overflow-hidden" />
             <MiniMap
@@ -1157,79 +1240,109 @@ function StudioCanvasInner() {
           onConfigChange={handleNodeConfigChange}
           onDelete={handleDeleteNode}
         />
-      </div>
+        </div>
 
-      <VpGraphStatusPanel
-        pipeline={pipeline}
-        graph={currentGraph}
-        dirty={dirty}
-        lastSavedAt={lastSavedAt}
-        expanded={jsonExpanded}
-        onToggle={() => setJsonExpanded((v) => !v)}
-      />
-      <VpCompilePanel
-        result={compileResult}
-        loading={compiling || compileLoadingLatest}
-        error={compileError}
-        dirtyHint={dirty}
-        expanded={compileExpanded}
-        onToggle={() => setCompileExpanded((v) => !v)}
-        onSelectNode={(nodeId) => setSelectedNodeId(nodeId)}
-      />
-      <VpMaterializationPanel
-        result={materializationResult}
-        loading={materializing || materializationLoadingLatest}
-        error={materializationError}
-        dirtyHint={dirty}
-        compileReady={canMaterialize}
-        expanded={materializationExpanded}
-        onToggle={() => setMaterializationExpanded((v) => !v)}
-      />
-      <VpScheduleActivationPanel
-        pipelineId={pipelineId}
-        result={activationResult}
-        loading={activationLoadingLatest}
-        activating={activating}
-        deactivating={deactivating}
-        pausing={pausing}
-        resuming={resuming}
-        error={activationError}
-        canActivateHint={canActivate ? null : activateDisabledReason}
-        staleActiveWarning={
-          (activationResult?.activation_status === "ACTIVE" ||
-            activationResult?.activation_status === "PAUSED") &&
-          pipeline?.current_sync_status !== "IN_SYNC"
-        }
-        expanded={activationExpanded}
-        onToggle={() => setActivationExpanded((v) => !v)}
-        onDeactivate={() => void handleDeactivateSchedule()}
-        onPause={() => void handlePauseSchedule()}
-        onResume={() => void handleResumeSchedule()}
-        onCatchupSuccess={() => {
-          setHistoryRefreshToken((n) => n + 1);
-        }}
-      />
-      <VpRunPanel
-        pipelineId={pipelineId}
-        historyRefreshToken={historyRefreshToken}
-        result={runResult}
-        loading={running || runLoadingLatest}
-        polling={runPolling}
-        cancelling={cancellingRun}
-        error={runError}
-        pollError={runPollError}
-        canRunHint={canRun ? null : runDisabledReason}
-        expanded={runExpanded}
-        onToggle={() => setRunExpanded((v) => !v)}
-        onCancel={() => void handleCancelRun()}
-      />
-      <VpValidationPanel
-        result={validationResult}
-        loading={validating}
-        expanded={validationExpanded}
-        onToggle={() => setValidationExpanded((v) => !v)}
-        onSelectNode={(nodeId) => setSelectedNodeId(nodeId)}
-      />
+        <VpOperationsDock
+          expanded={dockExpanded}
+          activeTab={dockTab}
+          onToggleExpanded={() => setDockExpanded((v) => !v)}
+          onTabChange={setDockTab}
+          tabBadges={dockTabBadges}
+          graphPanel={
+            <VpGraphStatusPanel
+              pipeline={pipeline}
+              graph={currentGraph}
+              dirty={dirty}
+              lastSavedAt={lastSavedAt}
+              expanded={jsonExpanded}
+              onToggle={() => setJsonExpanded((v) => !v)}
+              variant="dock"
+            />
+          }
+          compilePanel={
+            <VpCompilePanel
+              result={compileResult}
+              loading={compiling || compileLoadingLatest}
+              error={compileError}
+              dirtyHint={dirty}
+              expanded={compileExpanded}
+              onToggle={() => setCompileExpanded((v) => !v)}
+              onSelectNode={(nodeId) => setSelectedNodeId(nodeId)}
+              variant="dock"
+            />
+          }
+          materializationPanel={
+            <VpMaterializationPanel
+              result={materializationResult}
+              loading={materializing || materializationLoadingLatest}
+              error={materializationError}
+              dirtyHint={dirty}
+              compileReady={canMaterialize}
+              expanded={materializationExpanded}
+              onToggle={() => setMaterializationExpanded((v) => !v)}
+              variant="dock"
+            />
+          }
+          runPanel={
+            <div className="space-y-3">
+              <VpRunPanel
+                pipelineId={pipelineId}
+                historyRefreshToken={historyRefreshToken}
+                result={runResult}
+                loading={running || runLoadingLatest}
+                polling={runPolling}
+                cancelling={cancellingRun}
+                error={runError}
+                pollError={runPollError}
+                canRunHint={canRun ? null : runDisabledReason}
+                expanded={runExpanded}
+                onToggle={() => setRunExpanded((v) => !v)}
+                onCancel={() => void handleCancelRun()}
+                variant="dock"
+                showHistory={false}
+              />
+              <VpScheduleActivationPanel
+                pipelineId={pipelineId}
+                result={activationResult}
+                loading={activationLoadingLatest}
+                activating={activating}
+                deactivating={deactivating}
+                pausing={pausing}
+                resuming={resuming}
+                error={activationError}
+                canActivateHint={canActivate ? null : activateDisabledReason}
+                staleActiveWarning={
+                  (activationResult?.activation_status === "ACTIVE" ||
+                    activationResult?.activation_status === "PAUSED") &&
+                  pipeline?.current_sync_status !== "IN_SYNC"
+                }
+                expanded={activationExpanded}
+                onToggle={() => setActivationExpanded((v) => !v)}
+                onDeactivate={() => void handleDeactivateSchedule()}
+                onPause={() => void handlePauseSchedule()}
+                onResume={() => void handleResumeSchedule()}
+                onCatchupSuccess={() => {
+                  setHistoryRefreshToken((n) => n + 1);
+                }}
+                variant="dock"
+              />
+            </div>
+          }
+          historyPanel={
+            <VpRunHistorySection pipelineId={pipelineId} refreshToken={historyRefreshToken} />
+          }
+          validationPanel={
+            <VpValidationPanel
+              result={validationResult}
+              loading={validating}
+              expanded={validationExpanded}
+              onToggle={() => setValidationExpanded((v) => !v)}
+              onSelectNode={(nodeId) => setSelectedNodeId(nodeId)}
+              variant="dock"
+            />
+          }
+        />
+      </div>
       <VpVersionHistoryModal
         open={versionsOpen}
         loading={versionsLoading}

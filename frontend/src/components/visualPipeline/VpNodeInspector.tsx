@@ -141,7 +141,7 @@ export function VpNodeInspector({
   if (!node) {
     return (
       <div
-        className="w-[320px] shrink-0 bg-white border border-slate-200 rounded-lg shadow-sm flex flex-col overflow-hidden min-h-[320px]"
+        className="w-[320px] shrink-0 h-full min-h-0 bg-white border border-slate-200 rounded-lg shadow-sm flex flex-col overflow-hidden"
         data-testid="visual-pipeline-inspector"
       >
         <div className="px-3 py-2.5 border-b border-slate-100 bg-slate-50">
@@ -174,17 +174,20 @@ export function VpNodeInspector({
 
   return (
     <div
-      className="w-[320px] shrink-0 bg-white border border-slate-200 rounded-lg shadow-sm flex flex-col overflow-hidden max-h-[min(720px,calc(100vh-12rem))]"
+      className="w-[320px] shrink-0 h-full min-h-0 bg-white border border-slate-200 rounded-lg shadow-sm flex flex-col overflow-hidden"
       data-testid="visual-pipeline-inspector"
     >
-      <div className="px-3 py-2.5 border-b border-slate-100 bg-slate-50">
+      <div className="px-3 py-2.5 border-b border-slate-100 bg-slate-50 shrink-0">
         <div className="flex items-center justify-between gap-2">
           <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Node Inspector</span>
           <ConfigValidationBadge validation={normalizedConfig.validation} />
         </div>
         <p className="text-[10px] text-slate-400 mt-0.5 truncate">{label || componentType}</p>
       </div>
-      <div className="flex-1 overflow-y-auto p-3 space-y-3 text-xs">
+      <div
+        className="flex-1 min-h-0 overflow-y-auto p-3 space-y-3 text-xs"
+        data-testid="visual-studio-inspector-body"
+      >
         <section className="rounded-lg border border-slate-100 bg-slate-50/60 p-2.5">
           <div className="text-[9px] font-bold text-slate-400 uppercase tracking-wide mb-2">노드 정보</div>
           {rows.map(([k, v]) => (

@@ -12,6 +12,7 @@ interface VpMaterializationPanelProps {
   compileReady?: boolean;
   expanded: boolean;
   onToggle: () => void;
+  variant?: "standalone" | "dock";
 }
 
 const SEV_STYLE: Record<string, string> = {
@@ -46,39 +47,56 @@ export function VpMaterializationPanel({
   compileReady,
   expanded,
   onToggle,
+  variant = "standalone",
 }: VpMaterializationPanelProps) {
   const issues = result?.issues ?? [];
   const warnings = result?.warnings ?? [];
+  const isDock = variant === "dock";
+  const bodyOpen = isDock || expanded;
 
   return (
     <div
-      className="mt-3 bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden"
+      className={`${isDock ? "" : "mt-3"} bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden`}
       data-testid="visual-pipeline-materialization-panel"
     >
-      <button
-        type="button"
-        className="w-full px-4 py-2.5 border-b border-slate-100 bg-slate-50 flex items-center justify-between text-left hover:bg-slate-100/80 transition-colors"
-        onClick={onToggle}
-      >
-        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
-          <Database className="w-3.5 h-3.5" /> 실행 설정 반영 결과
-        </span>
-        <span className="flex items-center gap-2">
-          {loading && <span className="text-[10px] text-blue-600 animate-pulse">불러오는 중…</span>}
-          {result && (
-            <span
-              className={`text-[10px] font-bold uppercase tracking-wide border rounded px-1.5 py-0.5 ${statusTone(result.materialization_status)}`}
-              data-testid="visual-pipeline-materialization-status"
-            >
-              {result.materialization_status}
-            </span>
-          )}
-          <span className="text-[10px] text-slate-400">{expanded ? "접기" : "펼치기"}</span>
-          <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform ${expanded ? "rotate-180" : ""}`} />
-        </span>
-      </button>
+      {!isDock && (
+        <button
+          type="button"
+          className="w-full px-4 py-2.5 border-b border-slate-100 bg-slate-50 flex items-center justify-between text-left hover:bg-slate-100/80 transition-colors"
+          onClick={onToggle}
+        >
+          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+            <Database className="w-3.5 h-3.5" /> 실행 설정 반영 결과
+          </span>
+          <span className="flex items-center gap-2">
+            {loading && <span className="text-[10px] text-blue-600 animate-pulse">불러오는 중…</span>}
+            {result && (
+              <span
+                className={`text-[10px] font-bold uppercase tracking-wide border rounded px-1.5 py-0.5 ${statusTone(result.materialization_status)}`}
+                data-testid="visual-pipeline-materialization-status"
+              >
+                {result.materialization_status}
+              </span>
+            )}
+            <span className="text-[10px] text-slate-400">{expanded ? "접기" : "펼치기"}</span>
+            <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform ${expanded ? "rotate-180" : ""}`} />
+          </span>
+        </button>
+      )}
 
-      {expanded && (
+      {isDock && result && (
+        <div className="px-4 py-2 border-b border-slate-100 bg-slate-50 flex items-center gap-2">
+          <span
+            className={`text-[10px] font-bold uppercase tracking-wide border rounded px-1.5 py-0.5 ${statusTone(result.materialization_status)}`}
+            data-testid="visual-pipeline-materialization-status"
+          >
+            {result.materialization_status}
+          </span>
+          {loading && <span className="text-[10px] text-blue-600 animate-pulse">불러오는 중…</span>}
+        </div>
+      )}
+
+      {bodyOpen && (
         <div className="px-4 py-3 space-y-3">
           <p className="text-[11px] text-slate-600 leading-relaxed bg-slate-50 border border-slate-100 rounded-md px-2.5 py-2">
             현재 Visual Pipeline 그래프의 Compile 결과를 실행 설정으로 반영합니다. 외부 API 호출, 데이터 적재,
@@ -117,6 +135,59 @@ export function VpMaterializationPanel({
                   : "실행 설정 반영에 실패했습니다. 아래 이슈를 확인하세요."}
               </p>
 
+              {isDock && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-[10px] font-mono text-slate-600">
+                  {result.materialization_result_id && (
+                    <div className="bg-slate-50 border border-slate-100 rounded-md px-2 py-1.5 truncate">
+                      result_id:{" "}
+                      <span data-testid="visual-pipeline-materialization-result-id">
+                        {result.materialization_result_id}
+                      </span>
+                    </div>
+                  )}
+                  <div className="bg-slate-50 border border-slate-100 rounded-md px-2 py-1.5">
+                    activation:{" "}
+                    <span data-testid="visual-pipeline-materialization-activation">
+                      {result.activation ?? "NOT_REQUESTED"}
+                    </span>
+                  </div>
+                  <div className="bg-slate-50 border border-slate-100 rounded-md px-2 py-1.5">
+                    run_created:{" "}
+                    <span data-testid="visual-pipeline-materialization-run-created">
+                      {String(result.run_created ?? false)}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {isDock ? (
+                <details className="text-[10px] text-slate-600">
+                  <summary className="cursor-pointer text-[9px] font-bold text-slate-400 uppercase tracking-wide py-1">
+                    Hash / objects / issues
+                  </summary>
+                  <div className="mt-2 space-y-2">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2 font-mono">
+                      <div className="bg-slate-50 border border-slate-100 rounded-md px-2 py-1.5 truncate">
+                        graph_hash: {result.graph_version_hash ?? "-"}
+                      </div>
+                      <div className="bg-slate-50 border border-slate-100 rounded-md px-2 py-1.5">
+                        materialized_at: {result.materialized_at ?? "-"}
+                      </div>
+                    </div>
+                    {result.objects && Object.keys(result.objects).length > 0 && (
+                      <div className="font-mono break-all">objects: {Object.keys(result.objects).join(", ")}</div>
+                    )}
+                    {issues.length > 0 && (
+                      <div className="space-y-1.5">
+                        {issues.map((issue, idx) => (
+                          <IssueRow key={`${issue.code}-${idx}`} issue={issue} />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </details>
+              ) : (
+                <>
               <div className="flex flex-wrap gap-1.5">
                 {result.materialization_result_id && (
                   <span className="inline-flex items-center gap-1 text-[10px] font-mono bg-slate-50 border border-slate-200 rounded-md px-2 py-1">
@@ -224,6 +295,8 @@ export function VpMaterializationPanel({
                 <p className="text-xs text-red-700 bg-red-50 border border-red-100 rounded-md px-2.5 py-2">
                   {result.error_message}
                 </p>
+              )}
+                </>
               )}
             </>
           )}

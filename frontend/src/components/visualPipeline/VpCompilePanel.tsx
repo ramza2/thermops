@@ -12,6 +12,7 @@ interface VpCompilePanelProps {
   expanded: boolean;
   onToggle: () => void;
   onSelectNode?: (nodeId: string) => void;
+  variant?: "standalone" | "dock";
 }
 
 const SEV_STYLE: Record<string, string> = {
@@ -79,6 +80,7 @@ export function VpCompilePanel({
   expanded,
   onToggle,
   onSelectNode,
+  variant = "standalone",
 }: VpCompilePanelProps) {
   const artifact = result?.compiled_artifact;
   const meta = artifact?.metadata;
@@ -86,36 +88,52 @@ export function VpCompilePanel({
   const allIssues = result?.issues ?? [];
   const wrapperIssues = allIssues.filter((i) => i.code === "COMPILE_VALIDATION_FAILED");
   const detailIssues = allIssues.filter((i) => i.code !== "COMPILE_VALIDATION_FAILED");
+  const isDock = variant === "dock";
+  const bodyOpen = isDock || expanded;
 
   return (
     <div
-      className="mt-3 bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden"
+      className={`${isDock ? "" : "mt-3"} bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden`}
       data-testid="visual-pipeline-compile-panel"
     >
-      <button
-        type="button"
-        className="w-full px-4 py-2.5 border-b border-slate-100 bg-slate-50 flex items-center justify-between text-left hover:bg-slate-100/80 transition-colors"
-        onClick={onToggle}
-      >
-        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
-          <Layers className="w-3.5 h-3.5" /> Compile 결과
-        </span>
-        <span className="flex items-center gap-2">
-          {loading && <span className="text-[10px] text-blue-600 animate-pulse">컴파일 중…</span>}
-          {result && (
-            <span
-              className={`text-[10px] font-bold uppercase tracking-wide border rounded px-1.5 py-0.5 ${statusTone(result.compile_status)}`}
-              data-testid="visual-pipeline-compile-status"
-            >
-              {result.compile_status}
-            </span>
-          )}
-          <span className="text-[10px] text-slate-400">{expanded ? "접기" : "펼치기"}</span>
-          <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform ${expanded ? "rotate-180" : ""}`} />
-        </span>
-      </button>
+      {!isDock && (
+        <button
+          type="button"
+          className="w-full px-4 py-2.5 border-b border-slate-100 bg-slate-50 flex items-center justify-between text-left hover:bg-slate-100/80 transition-colors"
+          onClick={onToggle}
+        >
+          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+            <Layers className="w-3.5 h-3.5" /> Compile 결과
+          </span>
+          <span className="flex items-center gap-2">
+            {loading && <span className="text-[10px] text-blue-600 animate-pulse">컴파일 중…</span>}
+            {result && (
+              <span
+                className={`text-[10px] font-bold uppercase tracking-wide border rounded px-1.5 py-0.5 ${statusTone(result.compile_status)}`}
+                data-testid="visual-pipeline-compile-status"
+              >
+                {result.compile_status}
+              </span>
+            )}
+            <span className="text-[10px] text-slate-400">{expanded ? "접기" : "펼치기"}</span>
+            <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform ${expanded ? "rotate-180" : ""}`} />
+          </span>
+        </button>
+      )}
 
-      {expanded && (
+      {isDock && result && (
+        <div className="px-4 py-2 border-b border-slate-100 bg-slate-50 flex items-center gap-2">
+          <span
+            className={`text-[10px] font-bold uppercase tracking-wide border rounded px-1.5 py-0.5 ${statusTone(result.compile_status)}`}
+            data-testid="visual-pipeline-compile-status"
+          >
+            {result.compile_status}
+          </span>
+          {loading && <span className="text-[10px] text-blue-600 animate-pulse">컴파일 중…</span>}
+        </div>
+      )}
+
+      {bodyOpen && (
         <div className="px-4 py-3 space-y-3" data-testid="visual-pipeline-compile-panel-body">
           <p className="text-[11px] text-slate-600 leading-relaxed bg-slate-50 border border-slate-100 rounded-md px-2.5 py-2">
             그래프 구성을 검사하고 실행 설정으로 반영 가능한지 확인합니다. Compile만으로는 외부 API 호출이나
@@ -154,78 +172,139 @@ export function VpCompilePanel({
                   : "Compile에 실패했습니다. 아래 이슈를 확인하세요."}
               </p>
 
-              <div className="flex flex-wrap gap-1.5">
-                <span className="inline-flex items-center gap-1 text-[10px] font-mono bg-slate-50 border border-slate-200 rounded-md px-2 py-1">
-                  <span className="text-slate-400">persisted</span>
-                  <span
-                    className="font-semibold text-slate-700"
-                    data-testid="visual-pipeline-compile-persisted"
-                  >
-                    {String(result.persisted)}
-                  </span>
-                </span>
-                {result.compile_result_id && (
-                  <span className="inline-flex items-center gap-1 text-[10px] font-mono bg-slate-50 border border-slate-200 rounded-md px-2 py-1">
-                    <span className="text-slate-400">result_id</span>
-                    <span className="font-semibold text-slate-700" data-testid="visual-pipeline-compile-result-id">
-                      {result.compile_result_id}
-                    </span>
-                  </span>
-                )}
-                {result.compile_version && (
-                  <span className="inline-flex items-center gap-1 text-[10px] font-mono bg-slate-50 border border-slate-200 rounded-md px-2 py-1">
-                    <span className="text-slate-400">version</span>
-                    <span className="font-semibold text-slate-700">{result.compile_version}</span>
-                  </span>
-                )}
-                {meta?.pattern && (
-                  <span className="inline-flex items-center gap-1 text-[10px] font-mono bg-violet-50 border border-violet-100 text-violet-800 rounded-md px-2 py-1">
-                    <span className="text-violet-400">pattern</span>
-                    <span className="font-semibold" data-testid="visual-pipeline-compile-pattern">
-                      {meta.pattern}
-                    </span>
-                  </span>
-                )}
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-[10px] font-mono text-slate-600">
-                <div className="bg-slate-50 border border-slate-100 rounded-md px-2 py-1.5 truncate">
-                  graph_hash: {result.graph_version_hash ?? "-"}
-                </div>
-                <div className="bg-slate-50 border border-slate-100 rounded-md px-2 py-1.5 truncate">
-                  config_hash: {result.config_hash ?? "-"}
-                </div>
-                <div className="bg-slate-50 border border-slate-100 rounded-md px-2 py-1.5">
-                  compiled_at: {result.compiled_at ?? "-"}
-                </div>
-                <div className="bg-slate-50 border border-slate-100 rounded-md px-2 py-1.5">
-                  validation: {result.validation_level ?? "STRICT"}
-                </div>
-              </div>
-
-              {meta && (
-                <div className="text-[10px] text-slate-600 space-y-0.5 font-mono">
-                  <div>source={meta.source_node_id ?? "-"} · transform={meta.transform_node_id ?? "-"} · load={meta.load_node_id ?? "-"} · schedule={meta.schedule_node_id ?? "-"}</div>
-                </div>
-              )}
-
-              {steps.length > 0 && (
-                <div>
-                  <div className="text-[9px] font-bold text-slate-400 uppercase tracking-wide mb-1.5">Steps</div>
-                  <ul className="space-y-1" data-testid="visual-pipeline-compile-steps">
-                    {steps.map((step) => (
-                      <li
-                        key={step.step_id}
-                        className="text-[11px] font-mono bg-slate-50 border border-slate-100 rounded-md px-2 py-1.5 text-slate-700"
+              {isDock ? (
+                <>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-[10px] font-mono text-slate-600">
+                    <div className="bg-slate-50 border border-slate-100 rounded-md px-2 py-1.5 truncate">
+                      persisted:{" "}
+                      <span data-testid="visual-pipeline-compile-persisted">{String(result.persisted)}</span>
+                    </div>
+                    {result.compile_result_id && (
+                      <div className="bg-slate-50 border border-slate-100 rounded-md px-2 py-1.5 truncate">
+                        result_id:{" "}
+                        <span data-testid="visual-pipeline-compile-result-id">{result.compile_result_id}</span>
+                      </div>
+                    )}
+                  </div>
+                  <details className="text-[10px] text-slate-600">
+                    <summary className="cursor-pointer text-[9px] font-bold text-slate-400 uppercase tracking-wide py-1">
+                      Hash / metadata
+                    </summary>
+                    <div className="mt-2 space-y-2">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2 font-mono">
+                        <div className="bg-slate-50 border border-slate-100 rounded-md px-2 py-1.5 truncate">
+                          graph_hash: {result.graph_version_hash ?? "-"}
+                        </div>
+                        <div className="bg-slate-50 border border-slate-100 rounded-md px-2 py-1.5 truncate">
+                          config_hash: {result.config_hash ?? "-"}
+                        </div>
+                        <div className="bg-slate-50 border border-slate-100 rounded-md px-2 py-1.5">
+                          compiled_at: {result.compiled_at ?? "-"}
+                        </div>
+                        <div className="bg-slate-50 border border-slate-100 rounded-md px-2 py-1.5">
+                          validation: {result.validation_level ?? "STRICT"}
+                        </div>
+                      </div>
+                      {meta && (
+                        <div className="font-mono">
+                          source={meta.source_node_id ?? "-"} · transform={meta.transform_node_id ?? "-"} · load=
+                          {meta.load_node_id ?? "-"} · schedule={meta.schedule_node_id ?? "-"}
+                        </div>
+                      )}
+                    </div>
+                  </details>
+                  {steps.length > 0 && (
+                    <ul className="space-y-1" data-testid="visual-pipeline-compile-steps">
+                      {steps.map((step) => (
+                        <li
+                          key={step.step_id}
+                          className="font-mono text-[11px] bg-slate-50 border border-slate-100 rounded-md px-2 py-1.5 text-slate-700"
+                        >
+                          <span className="font-semibold">{step.type}</span>
+                          {" · "}
+                          {step.step_id}
+                          {step.adapter ? ` · ${step.adapter}` : ""}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </>
+              ) : (
+                <>
+                  <div className="flex flex-wrap gap-1.5">
+                    <span className="inline-flex items-center gap-1 text-[10px] font-mono bg-slate-50 border border-slate-200 rounded-md px-2 py-1">
+                      <span className="text-slate-400">persisted</span>
+                      <span
+                        className="font-semibold text-slate-700"
+                        data-testid="visual-pipeline-compile-persisted"
                       >
-                        <span className="font-semibold">{step.type}</span>
-                        {" · "}
-                        {step.step_id}
-                        {step.adapter ? ` · ${step.adapter}` : ""}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
+                        {String(result.persisted)}
+                      </span>
+                    </span>
+                    {result.compile_result_id && (
+                      <span className="inline-flex items-center gap-1 text-[10px] font-mono bg-slate-50 border border-slate-200 rounded-md px-2 py-1">
+                        <span className="text-slate-400">result_id</span>
+                        <span className="font-semibold text-slate-700" data-testid="visual-pipeline-compile-result-id">
+                          {result.compile_result_id}
+                        </span>
+                      </span>
+                    )}
+                    {result.compile_version && (
+                      <span className="inline-flex items-center gap-1 text-[10px] font-mono bg-slate-50 border border-slate-200 rounded-md px-2 py-1">
+                        <span className="text-slate-400">version</span>
+                        <span className="font-semibold text-slate-700">{result.compile_version}</span>
+                      </span>
+                    )}
+                    {meta?.pattern && (
+                      <span className="inline-flex items-center gap-1 text-[10px] font-mono bg-violet-50 border border-violet-100 text-violet-800 rounded-md px-2 py-1">
+                        <span className="text-violet-400">pattern</span>
+                        <span className="font-semibold" data-testid="visual-pipeline-compile-pattern">
+                          {meta.pattern}
+                        </span>
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-[10px] font-mono text-slate-600">
+                    <div className="bg-slate-50 border border-slate-100 rounded-md px-2 py-1.5 truncate">
+                      graph_hash: {result.graph_version_hash ?? "-"}
+                    </div>
+                    <div className="bg-slate-50 border border-slate-100 rounded-md px-2 py-1.5 truncate">
+                      config_hash: {result.config_hash ?? "-"}
+                    </div>
+                    <div className="bg-slate-50 border border-slate-100 rounded-md px-2 py-1.5">
+                      compiled_at: {result.compiled_at ?? "-"}
+                    </div>
+                    <div className="bg-slate-50 border border-slate-100 rounded-md px-2 py-1.5">
+                      validation: {result.validation_level ?? "STRICT"}
+                    </div>
+                  </div>
+
+                  {meta && (
+                    <div className="text-[10px] text-slate-600 space-y-0.5 font-mono">
+                      <div>source={meta.source_node_id ?? "-"} · transform={meta.transform_node_id ?? "-"} · load={meta.load_node_id ?? "-"} · schedule={meta.schedule_node_id ?? "-"}</div>
+                    </div>
+                  )}
+
+                  {steps.length > 0 && (
+                    <div>
+                      <div className="text-[9px] font-bold text-slate-400 uppercase tracking-wide mb-1.5">Steps</div>
+                      <ul className="space-y-1" data-testid="visual-pipeline-compile-steps">
+                        {steps.map((step) => (
+                          <li
+                            key={step.step_id}
+                            className="text-[11px] font-mono bg-slate-50 border border-slate-100 rounded-md px-2 py-1.5 text-slate-700"
+                          >
+                            <span className="font-semibold">{step.type}</span>
+                            {" · "}
+                            {step.step_id}
+                            {step.adapter ? ` · ${step.adapter}` : ""}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </>
               )}
 
               {artifact?.schedule && (

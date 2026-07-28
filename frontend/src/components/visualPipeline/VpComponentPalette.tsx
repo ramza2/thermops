@@ -19,14 +19,14 @@ const PALETTE_BORDER: Record<string, string> = {
 export function VpComponentPalette({ active, disabled, loading, error, onAdd }: VpComponentPaletteProps) {
   if (loading) {
     return (
-      <div className="w-[260px] shrink-0 bg-white border border-slate-200 rounded-lg shadow-sm p-3 text-xs text-slate-400">
+      <div className="w-[260px] shrink-0 h-full min-h-0 bg-white border border-slate-200 rounded-lg shadow-sm p-3 text-xs text-slate-400">
         카탈로그 로딩 중…
       </div>
     );
   }
   if (error) {
     return (
-      <div className="w-[260px] shrink-0 bg-red-50 border border-red-200 rounded-lg shadow-sm p-3 text-xs text-red-700">
+      <div className="w-[260px] shrink-0 h-full min-h-0 bg-red-50 border border-red-200 rounded-lg shadow-sm p-3 text-xs text-red-700">
         {error}
       </div>
     );
@@ -34,14 +34,17 @@ export function VpComponentPalette({ active, disabled, loading, error, onAdd }: 
 
   return (
     <div
-      className="w-[260px] shrink-0 bg-white border border-slate-200 rounded-lg shadow-sm flex flex-col overflow-hidden max-h-[min(720px,calc(100vh-12rem))]"
+      className="w-[260px] shrink-0 h-full min-h-0 bg-white border border-slate-200 rounded-lg shadow-sm flex flex-col overflow-hidden"
       data-testid="visual-pipeline-palette"
     >
-      <div className="px-3 py-2.5 border-b border-slate-100 bg-slate-50">
+      <div className="px-3 py-2.5 border-b border-slate-100 bg-slate-50 shrink-0">
         <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Component Palette</span>
         <p className="text-[10px] text-slate-400 mt-0.5">클릭하여 Canvas에 추가</p>
       </div>
-      <div className="flex-1 overflow-y-auto py-2.5 px-2.5 space-y-2">
+      <div
+        className="flex-1 min-h-0 overflow-y-auto py-2.5 px-2.5 space-y-2"
+        data-testid="visual-studio-palette-body"
+      >
         <div className="flex items-center justify-between px-0.5 mb-1">
           <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wide">ACTIVE</span>
           <span className="text-[9px] font-mono text-slate-400">{active.length}</span>

@@ -27,6 +27,7 @@ interface VpScheduleActivationPanelProps {
   onPause?: () => void;
   onResume?: () => void;
   onCatchupSuccess?: (catchupVisualRunId: string) => void;
+  variant?: "standalone" | "dock";
 }
 
 function statusTone(status: string | undefined): string {
@@ -80,10 +81,13 @@ export function VpScheduleActivationPanel({
   onPause,
   onResume,
   onCatchupSuccess,
+  variant = "standalone",
 }: VpScheduleActivationPanelProps) {
   const isActive = result?.activation_status === "ACTIVE";
   const isPaused = result?.activation_status === "PAUSED";
   const busy = Boolean(activating || deactivating || pausing || resuming);
+  const isDock = variant === "dock";
+  const bodyOpen = isDock || expanded;
 
   const [candidate, setCandidate] = useState<VisualPipelineScheduleCatchupCandidate | null>(null);
   const [candidateLoading, setCandidateLoading] = useState(false);
@@ -119,13 +123,13 @@ export function VpScheduleActivationPanel({
     setCatchupReason("");
     setCatchupError(null);
     setCatchupSuccess(null);
-    if (!expanded || !pipelineId || !result?.activation_id) {
+    if (!bodyOpen || !pipelineId || !result?.activation_id) {
       setCandidate(null);
       return;
     }
     void loadCandidate();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reload when activation identity changes
-  }, [expanded, pipelineId, result?.activation_id, result?.last_skip_at, result?.missed_count]);
+  }, [bodyOpen, pipelineId, result?.activation_id, result?.last_skip_at, result?.missed_count]);
 
   const canConfirmCatchup =
     !!result &&
@@ -161,31 +165,47 @@ export function VpScheduleActivationPanel({
 
   return (
     <div
-      className="mt-3 bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden"
+      className={`${isDock ? "" : "mt-3"} bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden`}
       data-testid="visual-pipeline-schedule-activation-panel"
     >
-      <button
-        type="button"
-        className="w-full flex items-center justify-between px-3 py-2.5 text-left hover:bg-slate-50"
-        onClick={onToggle}
-      >
-        <div className="flex items-center gap-2 min-w-0">
+      {!isDock && (
+        <button
+          type="button"
+          className="w-full flex items-center justify-between px-3 py-2.5 text-left hover:bg-slate-50"
+          onClick={onToggle}
+        >
+          <div className="flex items-center gap-2 min-w-0">
+            <Clock className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+            <span className="text-xs font-bold text-slate-700">스케줄 활성화</span>
+            {result?.activation_status && (
+              <span
+                className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${statusTone(result.activation_status)}`}
+                data-testid="visual-pipeline-schedule-activation-status"
+              >
+                {result.activation_status}
+              </span>
+            )}
+            {(loading || busy) && <span className="text-[10px] text-slate-400">처리 중…</span>}
+          </div>
+          <span className="text-[10px] text-slate-400">{expanded ? "접기" : "펼치기"}</span>
+        </button>
+      )}
+
+      {isDock && result?.activation_status && (
+        <div className="px-3 py-2 border-b border-slate-100 bg-slate-50 flex items-center gap-2">
           <Clock className="w-3.5 h-3.5 text-slate-500 shrink-0" />
           <span className="text-xs font-bold text-slate-700">스케줄 활성화</span>
-          {result?.activation_status && (
-            <span
-              className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${statusTone(result.activation_status)}`}
-              data-testid="visual-pipeline-schedule-activation-status"
-            >
-              {result.activation_status}
-            </span>
-          )}
+          <span
+            className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${statusTone(result.activation_status)}`}
+            data-testid="visual-pipeline-schedule-activation-status"
+          >
+            {result.activation_status}
+          </span>
           {(loading || busy) && <span className="text-[10px] text-slate-400">처리 중…</span>}
         </div>
-        <span className="text-[10px] text-slate-400">{expanded ? "접기" : "펼치기"}</span>
-      </button>
+      )}
 
-      {expanded && (
+      {bodyOpen && (
         <div className="px-3 pb-3 border-t border-slate-100 space-y-2.5">
           {error && (
             <p className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-md px-2.5 py-2">

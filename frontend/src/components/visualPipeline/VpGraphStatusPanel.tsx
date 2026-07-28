@@ -10,6 +10,7 @@ interface VpGraphStatusPanelProps {
   lastSavedAt?: string | null;
   expanded: boolean;
   onToggle: () => void;
+  variant?: "standalone" | "dock";
 }
 
 export function VpGraphStatusPanel({
@@ -19,28 +20,32 @@ export function VpGraphStatusPanel({
   lastSavedAt,
   expanded,
   onToggle,
+  variant = "standalone",
 }: VpGraphStatusPanelProps) {
   const counts = graphCounts(graph);
   const fullPreview = JSON.stringify(graph, null, 2);
+  const isDock = variant === "dock";
 
   return (
     <div
-      className="mt-3 bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden"
+      className={`${isDock ? "" : "mt-3"} bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden`}
       data-testid="visual-pipeline-graph-status"
     >
-      <button
-        type="button"
-        className="w-full px-4 py-2.5 border-b border-slate-100 bg-slate-50 flex items-center justify-between text-left hover:bg-slate-100/80 transition-colors"
-        onClick={onToggle}
-      >
-        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
-          <GitBranch className="w-3.5 h-3.5" /> Graph Status Panel
-        </span>
-        <span className="flex items-center gap-2">
-          <span className="text-[10px] text-slate-400">{expanded ? "JSON 접기" : "JSON 펼치기"}</span>
-          <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform ${expanded ? "rotate-180" : ""}`} />
-        </span>
-      </button>
+      {!isDock && (
+        <button
+          type="button"
+          className="w-full px-4 py-2.5 border-b border-slate-100 bg-slate-50 flex items-center justify-between text-left hover:bg-slate-100/80 transition-colors"
+          onClick={onToggle}
+        >
+          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+            <GitBranch className="w-3.5 h-3.5" /> Graph Status Panel
+          </span>
+          <span className="flex items-center gap-2">
+            <span className="text-[10px] text-slate-400">{expanded ? "JSON 접기" : "JSON 펼치기"}</span>
+            <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform ${expanded ? "rotate-180" : ""}`} />
+          </span>
+        </button>
+      )}
 
       <div className="px-4 py-3 flex flex-wrap items-center gap-2">
         <span className="inline-flex items-center gap-1.5 text-[10px] font-mono bg-slate-50 border border-slate-200 rounded-md px-2 py-1">
@@ -79,15 +84,26 @@ export function VpGraphStatusPanel({
         </span>
       </div>
 
-      {expanded && (
-        <div className="px-4 pb-3 border-t border-slate-100">
-          <div className="text-[9px] font-bold text-slate-400 uppercase tracking-wide mb-1.5 mt-2.5">
+      {isDock ? (
+        <details className="px-4 pb-3 border-t border-slate-100">
+          <summary className="text-[9px] font-bold text-slate-400 uppercase tracking-wide cursor-pointer py-2.5 list-none">
             Graph JSON Preview
-          </div>
-          <pre className="bg-slate-900 text-slate-100 border border-slate-700 rounded-md p-3 text-[10px] font-mono leading-relaxed overflow-x-auto max-h-56">
+          </summary>
+          <pre className="bg-slate-900 text-slate-100 border border-slate-700 rounded-md p-3 text-[10px] font-mono leading-relaxed overflow-x-auto max-h-48">
             {fullPreview}
           </pre>
-        </div>
+        </details>
+      ) : (
+        expanded && (
+          <div className="px-4 pb-3 border-t border-slate-100">
+            <div className="text-[9px] font-bold text-slate-400 uppercase tracking-wide mb-1.5 mt-2.5">
+              Graph JSON Preview
+            </div>
+            <pre className="bg-slate-900 text-slate-100 border border-slate-700 rounded-md p-3 text-[10px] font-mono leading-relaxed overflow-x-auto max-h-56">
+              {fullPreview}
+            </pre>
+          </div>
+        )
       )}
     </div>
   );

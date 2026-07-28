@@ -1747,13 +1747,22 @@ cd frontend && node scripts/check-visual-pipeline-studio.mjs
 - **여정:** Connector/Data Source → REST(실적·기상·특일) → Transform → Upsert → Graph 검증 → Compile → **실행 설정 반영** → **즉시 실행** → History/Progress → **스케줄 활성화** → schedule/run worker
 - **장애:** FAILED/PARTIAL Retry · RUNNING soft-cancel · stuck mark-failed · missed/ACTIVE_RUN_EXISTS Catch-up(수동 1건) · Notification은 설계만(현 확인=Ops stuck/failures + History)
 - **경계:** Feature/학습/예측은 적재 이후 도메인 단계(본편 제외) · 「R10 설정 반영」재노출 금지 · R10 due-worker 미연결
-- **S8-9 backlog:** multi-source template · preset · transform helper · catch-up/알림 UX · 실패 요약 · 학습/예측 연계 가이드 분리 등 (본 단계 미구현)
+- **S8-9 backlog:** [`docs/md/THERMOps_R11-S8-9_Backlog.md`](docs/md/THERMOps_R11-S8-9_Backlog.md) — B1~B25 단일 소스 (ChatGPT·구현 동기화용)
 - **다음:**
   - R11-S8-9 Full Scenario 기반 UX/기능 보완
   - (병행 가능) R11-S8-7-1 Notification badge PoC 또는 R12 Notification 구현
 
+### R11-S8-9-1 Studio 스크롤·Operations Dock
+
+- **범위:** FE-only — Visual Pipeline Studio 레이아웃을 viewport 고정 작업대 + Bottom Operations Dock으로 정리 (B17).
+- **구조:** Toolbar · Palette/Canvas/Inspector(내부 스크롤) · Dock(Graph/Compile/실행 설정/실행/History/Validation 탭, 기본 접힘·max-height 40vh).
+- **검증:** `cd frontend && npm run build` · `node scripts/check-pages.mjs` · `node scripts/check-visual-pipeline-studio.mjs` · `node scripts/check-visual-pipeline-ops.mjs`
+- **제외:** MainLayout 전역 overflow · DB/API/backend/worker · validation/compile/run 로직 변경 없음.
+- **Backlog:** [`docs/md/THERMOps_R11-S8-9_Backlog.md`](docs/md/THERMOps_R11-S8-9_Backlog.md) (B17 done)
+
 ## 설계 문서 참조
 
+- `docs/md/THERMOps_R11-S8-9_Backlog.md`
 - `docs/md/THERMOps_R11-S8-8_열수요예측_Full_Scenario_이용가이드.md`
 - `docs/md/THERMOps_R11-S8-7_Notification_설계.md`
 - `docs/md/THERMOps_R11-S8-0_Run_History_Progress_Retry_설계.md`

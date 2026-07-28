@@ -333,10 +333,6 @@ async function archiveFixture(pipelineId) {
 async function selectNodeById(page, nodeId) {
   const testId = `visual-pipeline-node-${nodeId}`;
   const toolbar = page.getByTestId("visual-pipeline-toolbar");
-  const status = page.getByTestId("visual-pipeline-graph-status");
-  if (await status.getByText("Graph JSON Preview").isVisible().catch(() => false)) {
-    await status.getByRole("button").filter({ hasText: "Graph Status Panel" }).click();
-  }
   await toolbar.getByRole("button", { name: "Fit View" }).click();
   await page.waitForTimeout(300);
 
@@ -402,14 +398,57 @@ async function saveGraphAndWait(page) {
   await toolbar.getByText("● 저장되지 않음").waitFor({ state: "hidden", timeout: 10000 });
 }
 
+async function openDockTab(page, tabId) {
+  const dock = page.getByTestId("visual-studio-operations-dock");
+  await dock.waitFor({ state: "visible", timeout: 15000 });
+  const expanded = (await dock.getAttribute("data-expanded")) === "true";
+  if (!expanded) {
+    await dock.getByTestId("visual-studio-operations-dock-toggle").click();
+  }
+  await dock.getByTestId(`visual-studio-operations-dock-tab-${tabId}`).click();
+  await dock.getByTestId("visual-studio-operations-dock-body").waitFor({ state: "visible", timeout: 10000 });
+}
+
+async function assertStudioLayoutNoDoubleScroll(page) {
+  const metrics = await page.evaluate(() => {
+    const root = document.querySelector('[data-testid="visual-studio-root"]');
+    const main = document.querySelector("main");
+    const dock = document.querySelector('[data-testid="visual-studio-operations-dock"]');
+    const paletteBody = document.querySelector('[data-testid="visual-studio-palette-body"]');
+    const inspectorBody = document.querySelector('[data-testid="visual-studio-inspector-body"]');
+    return {
+      rootClientHeight: root?.clientHeight ?? 0,
+      rootScrollHeight: root?.scrollHeight ?? 0,
+      mainScrollHeight: main?.scrollHeight ?? 0,
+      mainClientHeight: main?.clientHeight ?? 0,
+      dockExpanded: dock?.getAttribute("data-expanded") === "true",
+      paletteOverflow: paletteBody ? getComputedStyle(paletteBody).overflowY : "",
+      inspectorOverflow: inspectorBody ? getComputedStyle(inspectorBody).overflowY : "",
+    };
+  });
+  if (metrics.rootScrollHeight > metrics.rootClientHeight + 4) {
+    fail(
+      `expected studio root without vertical overflow, scroll=${metrics.rootScrollHeight} client=${metrics.rootClientHeight}`,
+    );
+  }
+  if (metrics.paletteOverflow !== "auto" && metrics.paletteOverflow !== "scroll") {
+    fail(`expected palette inner scroll, got overflowY=${metrics.paletteOverflow}`);
+  }
+  console.log(
+    `  [ok] studio layout metrics root=${metrics.rootClientHeight}px dockExpanded=${metrics.dockExpanded}`,
+  );
+}
+
 async function runGraphValidationAndWait(page) {
+  await openDockTab(page, "validation");
   const validation = page.getByTestId("visual-pipeline-validation-panel");
   await page.getByTestId("visual-pipeline-validate-button").click();
-  await validation.getByText(/OK|WARNING|ERROR|INFO/).first().waitFor({ state: "visible", timeout: 30000 });
+  await validation.getByTestId("visual-pipeline-validation-severity").waitFor({ state: "visible", timeout: 30000 });
   return validation;
 }
 
 async function runCompilePreviewAndWait(page) {
+  await openDockTab(page, "compile");
   const panel = page.getByTestId("visual-pipeline-compile-panel");
   await page.getByTestId("visual-pipeline-compile-preview-button").click();
   await panel.getByTestId("visual-pipeline-compile-status").waitFor({ state: "visible", timeout: 30000 });
@@ -417,6 +456,7 @@ async function runCompilePreviewAndWait(page) {
 }
 
 async function runCompileAndWait(page) {
+  await openDockTab(page, "compile");
   const panel = page.getByTestId("visual-pipeline-compile-panel");
   await page.getByTestId("visual-pipeline-compile-button").click();
   await panel.getByTestId("visual-pipeline-compile-persisted").filter({ hasText: "true" }).waitFor({
@@ -429,6 +469,7 @@ async function runCompileAndWait(page) {
 }
 
 async function runMaterializeAndWait(page) {
+  await openDockTab(page, "materialization");
   const panel = page.getByTestId("visual-pipeline-materialization-panel");
   page.once("dialog", (dialog) => dialog.accept());
   await page.getByTestId("visual-pipeline-materialize-button").click();
@@ -437,6 +478,7 @@ async function runMaterializeAndWait(page) {
 }
 
 async function runManualAndWait(page) {
+  await openDockTab(page, "run");
   const panel = page.getByTestId("visual-pipeline-run-panel");
   page.once("dialog", (dialog) => dialog.accept());
   const runBtn = page.getByTestId("visual-pipeline-run-now-button");
@@ -479,6 +521,14 @@ async function runBrowserSmoke(pipeline) {
     await openStudio(page, pipeline.pipeline_id);
     console.log("  [ok] studio detail route loaded");
 
+    await page.getByTestId("visual-studio-root").waitFor({ state: "visible", timeout: 15000 });
+    const dock = page.getByTestId("visual-studio-operations-dock");
+    await dock.waitFor({ state: "visible", timeout: 15000 });
+    if ((await dock.getAttribute("data-expanded")) === "true") {
+      fail("expected operations dock collapsed by default");
+    }
+    console.log("  [ok] operations dock collapsed by default");
+
     const toolbar = page.getByTestId("visual-pipeline-toolbar");
     await toolbar.waitFor({ state: "visible", timeout: 15000 });
     for (const label of ["목록", "저장", "버전 저장", "Fit View", "Graph 검증"]) {
@@ -504,14 +554,18 @@ async function runBrowserSmoke(pipeline) {
     await inspector.getByText("노드를 선택하세요").waitFor({ state: "visible", timeout: 10000 });
     console.log("  [ok] inspector empty state");
 
+    await openDockTab(page, "graph");
     const status = page.getByTestId("visual-pipeline-graph-status");
     await status.getByText("nodes 4").first().waitFor({ state: "visible", timeout: 10000 });
+    await openDockTab(page, "validation");
     const validation = page.getByTestId("visual-pipeline-validation-panel");
     await validation.getByText("아직 Graph 검증을 실행하지 않았습니다.").waitFor({
       state: "visible",
       timeout: 10000,
     });
-    console.log("  [ok] status + validation initial");
+    console.log("  [ok] status + validation initial (dock tabs)");
+
+    await assertStudioLayoutNoDoubleScroll(page);
 
     // --- MVP 4 Form visibility smoke ---
     await selectNodeById(page, "e2e-rest");
@@ -607,6 +661,7 @@ async function runBrowserSmoke(pipeline) {
     if (!resultId.startsWith("VPC-")) {
       fail(`expected compile_result_id VPC-*, got ${resultId}`);
     }
+    await openDockTab(page, "graph");
     const syncBadge = page.getByTestId("visual-pipeline-sync-status");
     await syncBadge.waitFor({ state: "visible", timeout: 15000 });
     const syncText = (await syncBadge.innerText()).trim();
@@ -618,7 +673,6 @@ async function runBrowserSmoke(pipeline) {
 
     // --- R11-S6-6 Materialization smoke ---
     const materializeBtn = page.getByTestId("visual-pipeline-materialize-button");
-    await materializeBtn.scrollIntoViewIfNeeded();
     await materializeBtn.waitFor({ state: "visible", timeout: 30000 });
     if (await materializeBtn.isDisabled()) {
       fail("expected materialize button enabled after persisted SUCCESS Compile + IN_SYNC");
@@ -643,9 +697,9 @@ async function runBrowserSmoke(pipeline) {
     console.log(`  [ok] Materialization SUCCESS result_id=${matResultId} activation=${activation} run_created=${runCreated}`);
 
     // --- R11-S7-4 Manual Run smoke ---
+    await openDockTab(page, "run");
     await page.getByTestId("visual-pipeline-run-panel").waitFor({ state: "visible", timeout: 15000 });
     const runBtn = page.getByTestId("visual-pipeline-run-now-button");
-    await runBtn.scrollIntoViewIfNeeded();
     if (await runBtn.isDisabled()) {
       fail("expected Run Now button enabled after Compile+Materialize SUCCESS");
     }
@@ -674,6 +728,7 @@ async function runBrowserSmoke(pipeline) {
     console.log(`  [ok] Manual Run SUCCESS visual_run_id=${visualRunId} load_run_id=${loadRunId}`);
 
     // --- R11-S8-2 Run History smoke ---
+    await openDockTab(page, "history");
     const historySection = page.getByTestId("visual-pipeline-run-history-section");
     await historySection.waitFor({ state: "visible", timeout: 15000 });
     await historySection.getByTestId("visual-pipeline-run-history-refresh").click();
@@ -726,9 +781,9 @@ async function runBrowserSmoke(pipeline) {
     console.log("  [ok] Run History list/filter/detail (progress + retry + cancel section)");
 
     // --- R11-S7-8 Schedule Activation smoke (panel only; due enqueue in backend tests) ---
+    await openDockTab(page, "run");
     await page.getByTestId("visual-pipeline-schedule-activation-panel").waitFor({ state: "visible", timeout: 15000 });
     const activateBtn = page.getByTestId("visual-pipeline-schedule-activation-button");
-    await activateBtn.scrollIntoViewIfNeeded();
     if (await activateBtn.isDisabled()) {
       fail(
         "expected Schedule Activation button enabled after SUCCESS materialization (set THERMOOPS_VP_SCHEDULE_ACTIVATION_ENABLED=true on backend)",
@@ -802,7 +857,7 @@ async function runBrowserSmoke(pipeline) {
 
     // --- Graph validation smoke (errors 0) ---
     await runGraphValidationAndWait(page);
-    const severityBadge = validation.locator("span").filter({ hasText: /^(OK|WARNING|ERROR|INFO)$/ }).first();
+    const severityBadge = validation.getByTestId("visual-pipeline-validation-severity");
     await severityBadge.waitFor({ state: "visible", timeout: 10000 });
     const severity = (await severityBadge.innerText()).trim();
     if (severity === "ERROR") {
@@ -819,6 +874,7 @@ async function runBrowserSmoke(pipeline) {
     await selectNodeById(page, "e2e-rest");
     await fillTextField(page, "operation_name", "");
     await runGraphValidationAndWait(page);
+    await validation.locator("summary").filter({ hasText: /Issues/ }).click();
     await validation.getByText("NODE_CONFIG_REST_OPERATION_MISSING").first().waitFor({
       state: "visible",
       timeout: 30000,

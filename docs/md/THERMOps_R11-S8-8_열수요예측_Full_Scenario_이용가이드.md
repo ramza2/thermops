@@ -326,26 +326,13 @@ vp-run-worker: claim → RUNNING → run_load → terminal
 
 ---
 
-## 13. S8-9 backlog (UX / 기능 보완 후보)
+## 13. S8-9 backlog
 
-가이드·여정 작성 기준으로 **구현하지 않고** 후속 후보만 남긴다.
+Full Scenario 이용 중 발견된 UX/기능 보완 항목은 **별도 문서**에서 관리한다.
 
-| ID | 후보 | 설명 |
-|----|------|------|
-| B1 | multi-source template | 실적+기상+특일 그래프 템플릿 원클릭 |
-| B2 | 열수요 예측 입력 preset | 노드 라벨·기본 CRON·Upsert 키 preset |
-| B3 | Transform mapping helper | 날짜/지사/시간 매핑 위저드 |
-| B4 | Catch-up 안내 개선 | missed 의미·window·경고 카피 강화 |
-| B5 | Notification badge PoC | S8-7-1 read-model badge (Ops/Studio) |
-| B6 | 실패 원인 요약 개선 | Detail에 step+reason 한줄 요약 |
-| B7 | 학습/예측 연계 가이드 분리 | 적재 이후 도메인 여정 전용 문서 |
-| B8 | PARTIAL 중복 적재 가시화 | Retry 전 영향 범위 힌트 |
-| B9 | Schedule skip 이력 UI | `ACTIVE_RUN_EXISTS` 반복 가시화 |
-| B10 | Ops 「조치 필요」카드 | stuck/failures/catch-up 후보 그룹 (notif 전단계) |
-| B11 | Connector 선택 UX | Studio에서 Data Source 검색/필터 강화 |
-| B12 | E2E 시나리오 smoke | 열수요 입력 적재 fixture 기반 check 스크립트 |
+→ **[THERMOps_R11-S8-9_Backlog.md](./THERMOps_R11-S8-9_Backlog.md)** (B1~B25, 1순위·그룹·변경 이력·완료 상태)
 
-원칙: 가이드 사용 중 새 불편이 나오면 본편에 섞지 말고 **S8-9 backlog에 추가**한다.
+원칙: 가이드 사용 중 새 불편이 나오면 본편에 섞지 말고 **S8-9 backlog 문서**에 추가한다.
 
 ---
 
@@ -362,8 +349,9 @@ vp-run-worker: claim → RUNNING → run_load → terminal
 | D7 | Catch-up은 자동 없음 · Studio에서 수동 1건. |
 | D8 | Retry/soft-cancel/mark-failed는 기존 PoC 정책을 그대로 안내한다. |
 | D9 | R10 due-worker 연결 · `active_yn=true` 전환은 하지 않는다. |
-| D10 | 가이드 중 UX 이슈는 **S8-9 backlog**로 분리한다. |
+| D10 | 가이드 중 UX 이슈는 **S8-9 backlog 문서**로 분리한다. |
 | D11 | S7-15 초기 번호(S8-2 Full Scenario)는 S8-0 로드맵의 **S8-8**이 우선한다. |
+| D12 | S8-9 backlog 단일 소스는 `THERMOps_R11-S8-9_Backlog.md`이다. |
 
 ---
 
