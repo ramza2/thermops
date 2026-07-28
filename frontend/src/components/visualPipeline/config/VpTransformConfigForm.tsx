@@ -76,11 +76,12 @@ export function VpTransformConfigForm({ values, fieldWarnings, onChange, disable
           warning={warn("transform_type")}
         >
           <select
-            value={strVal(values, "transform_type") || "WIDE_HOUR_TO_LONG"}
+            value={strVal(values, "transform_type")}
             onChange={patchSelect("transform_type")}
             disabled={disabled}
             className={INPUT_CLASS}
           >
+            {!strVal(values, "transform_type") && <option value="">선택하세요</option>}
             {TRANSFORM_TYPE_OPTIONS.map((opt) => (
               <option key={opt} value={opt}>
                 {opt}

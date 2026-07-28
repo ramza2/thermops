@@ -68,6 +68,36 @@ function assertNoValidationCacheNodeMutation() {
   }
 }
 
+/** B13: schema defaults for new nodes; PLACEHOLDER must not feed getDefaultConfigValues. */
+function assertSchemaDefaultsSeparatedFromPlaceholder() {
+  const registry = readFileSync(path.join(FRONTEND_SRC, "utils/visualPipelineConfigRegistry.ts"), "utf8");
+  const graphUtil = readFileSync(path.join(FRONTEND_SRC, "utils/visualPipelineGraph.ts"), "utf8");
+  if (!registry.includes("getSchemaDefaultConfigValues") || !registry.includes("applySchemaDefaultValues")) {
+    throw new Error("B13 regression: expected getSchemaDefaultConfigValues + applySchemaDefaultValues");
+  }
+  const defaultFn = registry.match(
+    /export function getDefaultConfigValues\([\s\S]*?\n\}/,
+  );
+  if (!defaultFn || !defaultFn[0].includes("getSchemaDefaultConfigValues")) {
+    throw new Error("B13 regression: getDefaultConfigValues must delegate to getSchemaDefaultConfigValues");
+  }
+  if (/PLACEHOLDER_VALUES/.test(defaultFn[0])) {
+    throw new Error("B13 regression: getDefaultConfigValues must not use PLACEHOLDER_VALUES");
+  }
+  if (!graphUtil.includes("createDefaultNodeConfig(componentType)")) {
+    throw new Error("B13 regression: defaultNodeData must use createDefaultNodeConfig");
+  }
+  for (const rel of [
+    "components/visualPipeline/config/VpRestApiSourceConfigForm.tsx",
+    "components/visualPipeline/config/VpTransformConfigForm.tsx",
+  ]) {
+    const form = readFileSync(path.join(FRONTEND_SRC, rel), "utf8");
+    if (/http_method"\)\s*\|\|\s*"GET"|transform_type"\)\s*\|\|\s*"WIDE_HOUR_TO_LONG"/.test(form)) {
+      throw new Error(`B13 regression: ${rel} still uses display-only select fallback`);
+    }
+  }
+}
+
 function resolveScriptsDir() {
   const fromRepo = path.join(REPO_ROOT, "scripts");
   if (existsSync(fromRepo)) return fromRepo;
@@ -637,7 +667,127 @@ async function runBrowserSmoke(pipeline) {
     await assertConfigFormVisible(page, ["target_table", "write_mode", "conflict_key_columns_json"]);
     console.log("  [ok] Upsert config form visible");
 
+    // --- R11-S8-9-4 / B13: schema defaults fill missing Type A values (normalize + UI) ---
+    {
+      const before = await api("GET", `/visual-pipelines/${pipeline.pipeline_id}`);
+      const graph = before.graph ?? FIXTURE_GRAPH;
+      const b13Nodes = [
+        {
+          id: "b13-rest",
+          type: "VP_REST_API_SOURCE",
+          position: { x: 80, y: 360 },
+          data: {
+            label: "B13 REST",
+            component_type: "VP_REST_API_SOURCE",
+            config: {
+              schema_version: "R11-S5-0",
+              values: {},
+              validation: { status: "NOT_VALIDATED", last_validated_at: null, issue_count: 0 },
+            },
+            input_ports: ["trigger"],
+            output_ports: ["raw_rows"],
+          },
+        },
+        {
+          id: "b13-transform",
+          type: "VP_TRANSFORM",
+          position: { x: 320, y: 360 },
+          data: {
+            label: "B13 Transform",
+            component_type: "VP_TRANSFORM",
+            config: {
+              schema_version: "R11-S5-0",
+              values: {},
+              validation: { status: "NOT_VALIDATED", last_validated_at: null, issue_count: 0 },
+            },
+            input_ports: ["input_rows"],
+            output_ports: ["transformed_rows"],
+          },
+        },
+      ];
+      await api("PUT", `/visual-pipelines/${pipeline.pipeline_id}`, {
+        graph: { ...graph, nodes: [...(graph.nodes ?? []), ...b13Nodes] },
+        create_version: false,
+      });
+      await page.reload({ waitUntil: "domcontentloaded", timeout: 60000 });
+      await page.waitForTimeout(1200);
+      await page.getByTestId("visual-pipeline-studio-page").waitFor({ state: "visible", timeout: 60000 });
+
+      await selectNodeById(page, "b13-rest");
+      await assertConfigFormVisible(page, ["http_method"]);
+      const httpUi = await inspector
+        .getByTestId("visual-pipeline-inspector-config-field-http_method")
+        .locator("select")
+        .inputValue();
+      if (httpUi !== "GET") {
+        fail(`B13: expected b13-rest http_method UI=GET after normalize, got ${httpUi}`);
+      }
+
+      await selectNodeById(page, "b13-transform");
+      await assertConfigFormVisible(page, ["transform_type"]);
+      const transformUi = await inspector
+        .getByTestId("visual-pipeline-inspector-config-field-transform_type")
+        .locator("select")
+        .inputValue();
+      if (transformUi !== "WIDE_HOUR_TO_LONG") {
+        fail(`B13: expected b13-transform transform_type UI=WIDE_HOUR_TO_LONG, got ${transformUi}`);
+      }
+
+      // Dirty + save so normalize-filled defaults are persisted (load baseline is already filled → not dirty).
+      await selectNodeById(page, "b13-rest");
+      await fillTextField(page, "operation_name", "b13_defaults_op");
+      await saveGraphAndWait(page);
+
+      const saved = await api("GET", `/visual-pipelines/${pipeline.pipeline_id}`);
+      const restNode = (saved.graph?.nodes ?? []).find((n) => n.id === "b13-rest");
+      const xformNode = (saved.graph?.nodes ?? []).find((n) => n.id === "b13-transform");
+      const savedHttp = restNode?.data?.config?.values?.http_method;
+      const savedTransform = xformNode?.data?.config?.values?.transform_type;
+      if (savedHttp !== "GET") {
+        fail(`B13: saved config.values.http_method expected GET, got ${savedHttp}`);
+      }
+      if (savedTransform !== "WIDE_HOUR_TO_LONG") {
+        fail(`B13: saved config.values.transform_type expected WIDE_HOUR_TO_LONG, got ${savedTransform}`);
+      }
+      if (restNode?.data?.config?.values?.data_source_id === "DS-SAMPLE") {
+        fail("B13: PLACEHOLDER data_source_id must not be injected");
+      }
+
+      const validateRes = await api("POST", "/visual-pipelines/validate-graph", {
+        graph: saved.graph,
+        pipeline_id: pipeline.pipeline_id,
+        validation_level: "BASIC",
+      });
+      const requiredMiss = (validateRes.issues ?? []).filter(
+        (i) =>
+          i.phase === "CONFIG" &&
+          i.code === "NODE_CONFIG_REQUIRED_FIELD_MISSING" &&
+          (i.field_key === "http_method" || i.field_key === "transform_type") &&
+          (i.node_id === "b13-rest" || i.node_id === "b13-transform"),
+      );
+      if (requiredMiss.length) {
+        fail(
+          `B13: Graph 검증 must not report required missing for http_method/transform_type: ${JSON.stringify(requiredMiss)}`,
+        );
+      }
+
+      // Remove B13 probe nodes so later Compile/Materialize fixture stays 4-node MVP.
+      await api("PUT", `/visual-pipelines/${pipeline.pipeline_id}`, {
+        graph: {
+          ...saved.graph,
+          nodes: (saved.graph?.nodes ?? []).filter((n) => n.id !== "b13-rest" && n.id !== "b13-transform"),
+        },
+        create_version: false,
+      });
+      await page.reload({ waitUntil: "domcontentloaded", timeout: 60000 });
+      await page.waitForTimeout(1200);
+      await page.getByTestId("visual-pipeline-studio-page").waitFor({ state: "visible", timeout: 60000 });
+      console.log("  [ok] B13 schema defaults UI=values + no http_method/transform_type required missing");
+    }
+
     // --- Representative input + dirty/save ---
+    await selectNodeById(page, "e2e-load");
+    await assertConfigFormVisible(page, ["target_table", "write_mode"]);
     await fillTextField(page, "target_table", "tb_e2e_dirty_smoke");
     await selectFieldOption(page, "write_mode", "UPSERT");
     await fillTextField(page, "conflict_key_columns_json", "entity_id, measured_at");
@@ -1017,6 +1167,7 @@ async function main() {
 
   assertNoDataSourcesSizeOver100();
   assertNoValidationCacheNodeMutation();
+  assertSchemaDefaultsSeparatedFromPlaceholder();
   ensureMaterializeSeedData();
 
   let pipelineId = null;

@@ -6,7 +6,7 @@ import type {
   VisualPipelineGraphNode,
   VisualPipelineNodeConfig,
 } from "@/types/visualPipeline";
-import { formatPlaceholderConfigJson, defaultConfigValidation, normalizeNodeConfig } from "@/utils/visualPipelineNodeConfig";
+import { formatPlaceholderConfigJson, createDefaultNodeConfig, defaultConfigValidation, normalizeNodeConfig } from "@/utils/visualPipelineNodeConfig";
 
 export const MVP_COMPONENT_TYPES = [
   "VP_REST_API_SOURCE",
@@ -126,7 +126,7 @@ export function defaultNodeData(componentType: string, label?: string): Record<s
   const ports = DEFAULT_PORTS[componentType] ?? { input: [], output: [] };
   return {
     label: label ?? componentType.replace(/^VP_/, "").replace(/_/g, " "),
-    config: {},
+    config: createDefaultNodeConfig(componentType),
     component_type: componentType,
     input_ports: ports.input,
     output_ports: ports.output,

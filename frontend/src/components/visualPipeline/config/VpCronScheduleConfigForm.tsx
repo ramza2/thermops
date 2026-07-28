@@ -88,7 +88,7 @@ export function VpCronScheduleConfigForm({
         <div className="text-[9px] font-bold text-slate-400 uppercase tracking-wide">Schedule</div>
         <VpConfigFieldShell fieldKey="schedule_type" label="Schedule Type" required>
           <select
-            value="CRON"
+            value={strVal(values, "schedule_type") || "CRON"}
             disabled
             className={INPUT_CLASS}
             onChange={() => onChange({ schedule_type: "CRON" })}
@@ -114,11 +114,12 @@ export function VpCronScheduleConfigForm({
         </VpConfigFieldShell>
         <VpConfigFieldShell fieldKey="timezone" label="Timezone" required warning={warn("timezone")}>
           <select
-            value={strVal(values, "timezone") || "Asia/Seoul"}
+            value={strVal(values, "timezone")}
             onChange={patchText("timezone")}
             disabled={disabled}
             className={INPUT_CLASS}
           >
+            {!strVal(values, "timezone") && <option value="">선택하세요</option>}
             {TIMEZONE_OPTIONS.map((opt) => (
               <option key={opt} value={opt}>
                 {opt}

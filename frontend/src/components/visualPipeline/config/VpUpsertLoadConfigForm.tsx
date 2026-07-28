@@ -33,7 +33,7 @@ function boolVal(values: VisualPipelineNodeConfigValues, key: string, fallback =
 }
 
 export function VpUpsertLoadConfigForm({ values, fieldWarnings, onChange, disabled }: VpUpsertLoadConfigFormProps) {
-  const writeMode = strVal(values, "write_mode") || "INSERT_ONLY";
+  const writeMode = strVal(values, "write_mode");
   const conflictRequired = writeMode === "DEDUPLICATE" || writeMode === "UPSERT";
   const warn = (key: string) => fieldWarnings?.[key];
 
@@ -88,6 +88,7 @@ export function VpUpsertLoadConfigForm({ values, fieldWarnings, onChange, disabl
             disabled={disabled}
             className={INPUT_CLASS}
           >
+            {!writeMode && <option value="">선택하세요</option>}
             {WRITE_MODE_OPTIONS.map((opt) => (
               <option key={opt} value={opt}>
                 {opt}
@@ -120,11 +121,12 @@ export function VpUpsertLoadConfigForm({ values, fieldWarnings, onChange, disabl
           warning={warn("duplicate_within_batch_policy")}
         >
           <select
-            value={strVal(values, "duplicate_within_batch_policy") || "KEEP_LAST"}
+            value={strVal(values, "duplicate_within_batch_policy")}
             onChange={patchText("duplicate_within_batch_policy")}
             disabled={disabled}
             className={INPUT_CLASS}
           >
+            {!strVal(values, "duplicate_within_batch_policy") && <option value="">선택하세요</option>}
             {DUPLICATE_POLICY_OPTIONS.map((opt) => (
               <option key={opt} value={opt}>
                 {opt}
@@ -138,11 +140,12 @@ export function VpUpsertLoadConfigForm({ values, fieldWarnings, onChange, disabl
           warning={warn("null_update_policy")}
         >
           <select
-            value={strVal(values, "null_update_policy") || "KEEP_EXISTING"}
+            value={strVal(values, "null_update_policy")}
             onChange={patchText("null_update_policy")}
             disabled={disabled}
             className={INPUT_CLASS}
           >
+            {!strVal(values, "null_update_policy") && <option value="">선택하세요</option>}
             {NULL_UPDATE_OPTIONS.map((opt) => (
               <option key={opt} value={opt}>
                 {opt}

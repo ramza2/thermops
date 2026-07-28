@@ -11,6 +11,7 @@ import type {
 } from "@/types/visualPipeline";
 import {
   VISUAL_PIPELINE_CONFIG_SCHEMA_VERSION,
+  applySchemaDefaultValues,
   getDefaultConfigValues,
   getPlaceholderConfigValues,
   isSecretConfigField,
@@ -84,11 +85,13 @@ export function normalizeNodeConfig(
   componentType?: string,
 ): VisualPipelineNodeConfig {
   const validation = defaultConfigValidation();
+  const withDefaults = (values: VisualPipelineNodeConfigValues): VisualPipelineNodeConfigValues =>
+    componentType ? applySchemaDefaultValues(componentType, values) : values;
 
   if (raw == null) {
     return {
       schema_version: VISUAL_PIPELINE_CONFIG_SCHEMA_VERSION,
-      values: componentType ? getDefaultConfigValues(componentType) : {},
+      values: withDefaults(componentType ? getDefaultConfigValues(componentType) : {}),
       validation,
     };
   }
@@ -96,7 +99,7 @@ export function normalizeNodeConfig(
   if (!isRecord(raw)) {
     return {
       schema_version: VISUAL_PIPELINE_CONFIG_SCHEMA_VERSION,
-      values: {},
+      values: withDefaults({}),
       validation,
     };
   }
@@ -109,7 +112,7 @@ export function normalizeNodeConfig(
           : raw.schema_version == null
             ? null
             : VISUAL_PIPELINE_CONFIG_SCHEMA_VERSION,
-      values: { ...(raw.values as Record<string, unknown>) },
+      values: withDefaults({ ...(raw.values as Record<string, unknown>) }),
       validation: mergeValidation(raw.validation),
     };
   }
@@ -121,7 +124,7 @@ export function normalizeNodeConfig(
     }
     return {
       schema_version: typeof raw.schema_version === "string" ? raw.schema_version : null,
-      values,
+      values: withDefaults(values),
       validation: mergeValidation(raw.validation),
     };
   }
@@ -129,14 +132,14 @@ export function normalizeNodeConfig(
   if (isLegacyFlatConfig(raw)) {
     return {
       schema_version: null,
-      values: { ...raw },
+      values: withDefaults({ ...raw }),
       validation,
     };
   }
 
   return {
     schema_version: VISUAL_PIPELINE_CONFIG_SCHEMA_VERSION,
-    values: {},
+    values: withDefaults({}),
     validation,
   };
 }

@@ -111,11 +111,12 @@ export function VpRestApiSourceConfigForm({
           warning={warn("http_method")}
         >
           <select
-            value={strVal(values, "http_method") || "GET"}
+            value={strVal(values, "http_method")}
             onChange={patchText("http_method")}
             disabled={disabled}
             className={INPUT_CLASS}
           >
+            {!strVal(values, "http_method") && <option value="">선택하세요</option>}
             <option value="GET">GET</option>
             <option value="POST">POST</option>
           </select>

@@ -340,10 +340,8 @@ export function shouldStoreFieldInGraph(field: VisualPipelineConfigFieldSchema):
   return true;
 }
 
-export function getDefaultConfigValues(componentType: string): VisualPipelineNodeConfigValues {
-  if (isMvpConfigComponentType(componentType)) {
-    return { ...PLACEHOLDER_VALUES[componentType] };
-  }
+/** Schema `field.default` only — used for new nodes / normalize fill-in (B13). Not PLACEHOLDER samples. */
+export function getSchemaDefaultConfigValues(componentType: string): VisualPipelineNodeConfigValues {
   const values: VisualPipelineNodeConfigValues = {};
   for (const f of getVisualPipelineConfigFields(componentType)) {
     if (!shouldStoreFieldInGraph(f)) continue;
@@ -352,6 +350,36 @@ export function getDefaultConfigValues(componentType: string): VisualPipelineNod
   return values;
 }
 
+/**
+ * Fill missing Type A defaults into existing values (empty string / null / undefined only).
+ * Does not overwrite user-set values. Does not inject PLACEHOLDER samples.
+ */
+export function applySchemaDefaultValues(
+  componentType: string,
+  values: VisualPipelineNodeConfigValues,
+): VisualPipelineNodeConfigValues {
+  if (!componentType) return { ...values };
+  const out: VisualPipelineNodeConfigValues = { ...values };
+  for (const f of getVisualPipelineConfigFields(componentType)) {
+    if (!shouldStoreFieldInGraph(f)) continue;
+    if (f.default === undefined) continue;
+    const cur = out[f.name];
+    if (cur === undefined || cur === null || cur === "") {
+      out[f.name] = f.default;
+    }
+  }
+  return out;
+}
+
+/** Product defaults for new nodes / empty configs. MVP uses schema defaults (not PLACEHOLDER). */
+export function getDefaultConfigValues(componentType: string): VisualPipelineNodeConfigValues {
+  return getSchemaDefaultConfigValues(componentType);
+}
+
+/** E2E / preview sample values (may include DS-SAMPLE etc.). Do not use for palette add. */
 export function getPlaceholderConfigValues(componentType: string): VisualPipelineNodeConfigValues {
-  return getDefaultConfigValues(componentType);
+  if (isMvpConfigComponentType(componentType)) {
+    return { ...PLACEHOLDER_VALUES[componentType] };
+  }
+  return getSchemaDefaultConfigValues(componentType);
 }

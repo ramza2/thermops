@@ -1777,6 +1777,14 @@ cd frontend && node scripts/check-visual-pipeline-studio.mjs
 - **제외:** backend validation/compile · 자동 저장(C안) · B13/B14 · Dock 구조 · 「R10 설정 반영」재노출 금지
 - **Backlog:** B16 done
 
+### R11-S8-9-4 Inspector select 기본값 저장
+
+- **범위:** FE-only — B13. Type A select schema `default`를 `config.values`에 실제 주입. Type B는 placeholder 유지.
+- **변경:** `getSchemaDefaultConfigValues` / `applySchemaDefaultValues` · `defaultNodeData`→`createDefaultNodeConfig` · form display fallback 제거 · studio smoke B13
+- **검증:** `cd frontend && npm run build` · `node scripts/check-pages.mjs` · `node scripts/check-visual-pipeline-studio.mjs`
+- **제외:** B14 enum · PLACEHOLDER를 신규 노드에 사용 금지 · B16 dirty 흐름 · backend · 「R10 설정 반영」재노출 금지
+- **Backlog:** B13 done
+
 ## 설계 문서 참조
 
 - `docs/md/THERMOps_R11-S8-9_Backlog.md`
