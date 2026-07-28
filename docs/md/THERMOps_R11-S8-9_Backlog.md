@@ -20,7 +20,7 @@
 
 ---
 
-## 2. 전체 Backlog (B1 ~ B25)
+## 2. 전체 Backlog (B1 ~ B26)
 
 | ID | 제목 | 설명 | 그룹 | 상태 | 비고 |
 |----|------|------|------|------|------|
@@ -49,6 +49,7 @@
 | B23 | Product Branding Generalization | 특정 고객/도메인 문구를 범용 MLOps 운영 플랫폼 기준으로 정리. 고객명·도메인명은 demo scenario / tenant / project label로 분리 | D | open | |
 | B24 | 표준 데이터셋 보관(archive) UI | `POST /standard-dataset-types/{id}/archive` API는 있으나 FE 삭제/보관 버튼 없음. 테스트용 DRAFT·미완성(컬럼 0) 데이터셋 정리 UX. 물리 테이블 DROP은 별도 확인 | A | open | 2026-07-27 추가 |
 | B25 | REST API 연결 목록 로드 버그 | `ApiConnectorPanel`이 `GET /data-sources?size=200` 호출 → API max 100으로 **422** → Wizard 데이터 소스 셀렉트 항상 빈 목록. `size=100` 수정 + 상단 등록 후 패널 자동 refresh | A | open | 2026-07-27 추가 |
+| B26 | Ops smoke soft-cancel assertion 안정화 | `check-visual-pipeline-ops.mjs`가 첫 번째 `run-detail-button`을 상태 확인 없이 클릭해, stuck 목록에 `RUNNING`이 있으면 soft-cancel 버튼 표시 여부 assertion이 깨짐. clean HEAD에서도 재현되어 S8-9-1과 무관한 기존 smoke flaky 이슈. 대상 run 상태를 명시적으로 선택하거나, 상태별 assertion 분기 및 `fail()` throw 동작 보강 필요 | C | open | 2026-07-28 추가 |
 
 ---
 
@@ -61,6 +62,7 @@
 | 3 | B16 | open | Graph 검증 → Compile 연속 흐름 |
 | 4 | B13 | open | Select 기본값 미저장 |
 | 5 | B24 | open | 테스트 데이터셋 정리 |
+| 6 | B26 | open | Ops smoke flaky assertion 안정화 |
 
 ---
 
@@ -76,7 +78,7 @@ B1, B2, B3, B15, B19, B20, B21
 
 ### C — 운영 가시성 / 복구 UX
 
-B4, B6, B8, B9, B10, B18
+B4, B6, B8, B9, B10, B18, B26
 
 ### D — 범용 MLOps 확장 / 문서 / 장기
 
@@ -88,7 +90,7 @@ B5, B7, B12, B22, B23
 
 | 단계 | ID | 완료 내용 | 커밋/참고 |
 |------|-----|-----------|-----------|
-| R11-S8-9-1 | B17 | Studio viewport 고정 + Bottom Operations Dock. Palette/Canvas/Inspector 내부 스크롤 | `feat(R11-S8-9-1): Studio 스크롤과 Operations Dock 정리` (로컬, 미푸시) |
+| R11-S8-9-1 | B17 | Studio viewport 고정 + Bottom Operations Dock. Palette/Canvas/Inspector 내부 스크롤 | `e23461b` — `feat(R11-S8-9-1): Studio 스크롤과 Operations Dock 정리` (master push 완료) |
 
 ---
 
@@ -99,6 +101,7 @@ B5, B7, B12, B22, B23
 | 2026-07-27 | 문서 신규 생성. S8-8 §13 + stash(B13~B23) + 실사용 이슈(B24, B25) 통합. B1~B3·B7·B12 범용 MLOps 표현으로 정리 |
 | 2026-07-27 | B17 → `done` (S8-9-1) |
 | 2026-07-27 | B24 표준 데이터셋 archive UI, B25 REST API 연결 size=200 버그 추가 |
+| 2026-07-28 | B17 완료 확정 (`e23461b` push). B26 Ops smoke soft-cancel assertion 안정화 이슈 추가. clean HEAD에서도 재현되어 S8-9-1과 무관한 기존 smoke flaky 이슈로 분리 |
 
 ---
 
