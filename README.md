@@ -1827,6 +1827,15 @@ cd frontend && node scripts/check-visual-pipeline-studio.mjs
 - **제외:** backend/DB · size>100 · credential 저장 UI/API · Operation Wizard 확장 · B20/B21/B15 · 실제 외부 API 연결 테스트 자동 실행 · 「R10 설정 반영」재노출 금지
 - **Backlog:** B19 done
 
+### R11-S8-9-10 Studio Upsert Standard Dataset 인라인 생성
+
+- **범위:** FE-only — B20. Studio Upsert Load Inspector에서 표준 데이터셋 선택 + DRAFT 인라인 생성.
+- **변경:** 서버 keyword 검색·새로고침 · `createInlineStandardDataset`(DRAFT) · 성공 시 `standard_dataset_id`+`target_table` 반영 · 목록 밖 선택값 보존 · 수동 ID fallback · 물리 테이블/ACTIVE/DROP 미구현 · check-pages/studio smoke B20
+- **검증:** `cd frontend && npm run build` · `node scripts/check-pages.mjs` · `node scripts/check-visual-pipeline-studio.mjs`
+- **제외:** backend/DB · page/size·더 보기 · B21/B15 · B19/B24 재수정 · compile/run · 「R10 설정 반영」재노출 금지
+- **Known limitation:** `/standard-dataset-types`에 page/size 없음. 인라인 생성은 DRAFT 메타만
+- **Backlog:** B20 done
+
 ## 설계 문서 참조
 
 - `docs/md/THERMOps_R11-S8-9_Backlog.md`

@@ -784,6 +784,93 @@ async function runBrowserSmoke(pipeline) {
     await assertConfigFormVisible(page, ["target_table", "write_mode", "conflict_key_columns_json"]);
     console.log("  [ok] Upsert config form visible");
 
+    // --- R11-S8-9-10 / B20: Studio Upsert Standard Dataset select + inline create ---
+    {
+      await assertConfigFormVisible(page, ["standard_dataset_id", "target_table"]);
+      await inspector.getByTestId("visual-pipeline-standard-dataset-picker").waitFor({ state: "visible", timeout: 10000 });
+      await inspector.getByTestId("visual-pipeline-standard-dataset-list-hint").waitFor({ state: "visible", timeout: 10000 });
+      await inspector.getByTestId("visual-pipeline-standard-dataset-search-hint").waitFor({ state: "visible", timeout: 10000 });
+      await inspector.getByTestId("visual-pipeline-standard-dataset-search-input").waitFor({ state: "visible", timeout: 10000 });
+      await inspector.getByTestId("visual-pipeline-standard-dataset-refresh-button").waitFor({ state: "visible", timeout: 10000 });
+      await inspector.getByTestId("visual-pipeline-standard-dataset-select").waitFor({ state: "visible", timeout: 10000 });
+      const listHint = await inspector.getByTestId("visual-pipeline-standard-dataset-list-hint").innerText();
+      if (!listHint.includes("보관된 표준 데이터셋")) {
+        fail("B20: list hint must mention archived datasets excluded");
+      }
+      const searchHint = await inspector.getByTestId("visual-pipeline-standard-dataset-search-hint").innerText();
+      if (!searchHint.includes("서버 keyword") || searchHint.includes("더 보기")) {
+        fail(`B20: search hint must mention server keyword and not load-more, got ${searchHint}`);
+      }
+      if ((await inspector.getByTestId("visual-pipeline-standard-dataset-load-more").count()) > 0) {
+        fail("B20: must not expose B11-style load-more (API has no page/size)");
+      }
+
+      const tag = Date.now().toString(36).toUpperCase();
+      const createName = `B20 Studio Upsert ${tag}`;
+      const createCode = `B20UP${tag}`.slice(0, 32);
+      await inspector.getByTestId("visual-pipeline-standard-dataset-create-toggle").click();
+      await inspector.getByTestId("visual-pipeline-standard-dataset-create-form").waitFor({ state: "visible", timeout: 10000 });
+      await inspector.getByTestId("visual-pipeline-standard-dataset-create-hint").waitFor({ state: "visible", timeout: 10000 });
+      const createHint = await inspector.getByTestId("visual-pipeline-standard-dataset-create-hint").innerText();
+      if (!createHint.includes("DRAFT") || !createHint.includes("물리 테이블")) {
+        fail(`B20: create hint must clarify DRAFT metadata only, got ${createHint}`);
+      }
+      await inspector.getByTestId("visual-pipeline-standard-dataset-create-name").fill(createName);
+      await inspector.getByTestId("visual-pipeline-standard-dataset-create-code").fill(createCode);
+      await inspector.getByTestId("visual-pipeline-standard-dataset-suggest-table").click();
+      await page.waitForTimeout(800);
+      const suggestedTable = await inspector
+        .getByTestId("visual-pipeline-standard-dataset-create-target-table")
+        .inputValue();
+      if (!suggestedTable || !suggestedTable.startsWith("std_")) {
+        // Fallback if suggest is slow/unavailable
+        await inspector
+          .getByTestId("visual-pipeline-standard-dataset-create-target-table")
+          .fill(`std_b20_${tag.toLowerCase()}`);
+      }
+      await inspector.getByTestId("visual-pipeline-standard-dataset-create-submit").click();
+      await inspector.getByTestId("visual-pipeline-standard-dataset-create-success").waitFor({
+        state: "visible",
+        timeout: 30000,
+      });
+      const selectedAfterCreate = await inspector
+        .getByTestId("visual-pipeline-standard-dataset-select")
+        .inputValue();
+      if (!selectedAfterCreate || selectedAfterCreate === "SD-SAMPLE") {
+        fail(`B20: expected new standard_dataset_id after inline create, got ${selectedAfterCreate}`);
+      }
+      const targetAfterCreate = await inspector.getByTestId("visual-pipeline-target-table-input").inputValue();
+      if (!targetAfterCreate) {
+        fail("B20: expected target_table filled after inline create");
+      }
+      await toolbar.getByText("● 저장되지 않음").first().waitFor({ state: "visible", timeout: 10000 });
+      await saveGraphAndWait(page);
+      const afterB20 = await api("GET", `/visual-pipelines/${pipeline.pipeline_id}`);
+      const loadAfterB20 = (afterB20.graph?.nodes ?? []).find((n) => n.id === "e2e-load");
+      const savedDatasetId = loadAfterB20?.data?.config?.values?.standard_dataset_id;
+      const savedTargetTable = loadAfterB20?.data?.config?.values?.target_table;
+      if (savedDatasetId !== selectedAfterCreate) {
+        fail(
+          `B20: saved config.values.standard_dataset_id expected ${selectedAfterCreate}, got ${savedDatasetId}`,
+        );
+      }
+      if (savedTargetTable !== targetAfterCreate) {
+        fail(
+          `B20: saved config.values.target_table expected ${targetAfterCreate}, got ${savedTargetTable}`,
+        );
+      }
+      console.log(
+        `  [ok] B20 inline create → select → save standard_dataset_id=${savedDatasetId} target_table=${savedTargetTable}`,
+      );
+
+      try {
+        await api("POST", `/standard-dataset-types/${encodeURIComponent(selectedAfterCreate)}/archive`);
+        console.log(`  [ok] B20 smoke dataset archived ${selectedAfterCreate}`);
+      } catch (err) {
+        console.warn(`  [warn] B20 archive cleanup failed: ${String(err).slice(0, 200)}`);
+      }
+    }
+
     // --- R11-S8-9-4 / B13: schema defaults fill missing Type A values (normalize + UI) ---
     {
       const before = await api("GET", `/visual-pipelines/${pipeline.pipeline_id}`);

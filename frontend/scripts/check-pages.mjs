@@ -180,6 +180,56 @@ function assertStudioRestDataSourceInlineCreate() {
   }
 }
 
+/** B20: Studio Upsert Inspector Standard Dataset select + DRAFT-only inline create. */
+function assertStudioUpsertStandardDatasetInlineCreate() {
+  const constFile = fs.readFileSync(path.join(FRONTEND_SRC, "constants/standardDatasetList.ts"), "utf8");
+  if (!constFile.includes("createInlineStandardDataset") || !constFile.includes('status: "DRAFT"')) {
+    throw new Error("B20 regression: createInlineStandardDataset DRAFT helper missing");
+  }
+  if (!constFile.includes("fetchActiveStandardDatasets") || !constFile.includes("STANDARD_DATASET_LIST_HINT")) {
+    throw new Error("B20 regression: standardDatasetList helpers missing");
+  }
+  if (constFile.includes("createPhysicalTable") || constFile.includes("/create-physical-table")) {
+    throw new Error("B20 regression: helpers must not create physical tables");
+  }
+  if (constFile.includes("더 보기") || constFile.includes("load-more") || constFile.includes("LOAD_MORE")) {
+    throw new Error("B20 regression: standard dataset list must not reintroduce load-more");
+  }
+  const form = fs.readFileSync(
+    path.join(FRONTEND_SRC, "components/visualPipeline/config/VpUpsertLoadConfigForm.tsx"),
+    "utf8",
+  );
+  for (const token of [
+    "visual-pipeline-standard-dataset-picker",
+    "visual-pipeline-standard-dataset-select",
+    "visual-pipeline-standard-dataset-search-input",
+    "visual-pipeline-standard-dataset-refresh-button",
+    "visual-pipeline-standard-dataset-create-form",
+    "createInlineStandardDataset",
+    "standard_dataset_id",
+    "target_table",
+    "고급: ID 직접 입력",
+  ]) {
+    if (!form.includes(token)) {
+      throw new Error(`B20 regression: VpUpsertLoadConfigForm missing ${token}`);
+    }
+  }
+  if (form.includes("target_dataset_type_id") || form.includes("target_table_name")) {
+    throw new Error("B20 regression: must use standard_dataset_id + target_table only");
+  }
+  if (form.includes("createPhysicalTable") || form.includes("activateStandardDatasetType")) {
+    throw new Error("B20 regression: Upsert form must not activate or create physical tables");
+  }
+  for (const banned of ["영구 삭제", "테이블 삭제", "DROP TABLE", "unarchive", "schema inference", "auto proposal"]) {
+    if (form.includes(banned)) {
+      throw new Error(`B20 regression: Upsert form must not contain '${banned}'`);
+    }
+  }
+  if (form.includes("visual-pipeline-standard-dataset-load-more")) {
+    throw new Error("B20 regression: Upsert form must not expose load-more button");
+  }
+}
+
 async function api(method, path, body) {
   const url = `${API_BASE}${path}`;
   const res = await fetch(url, {
@@ -210,6 +260,7 @@ assertNoDataSourcesSizeOver100();
 assertStandardDatasetArchiveUi();
 assertDataSourcePagedSelectUx();
 assertStudioRestDataSourceInlineCreate();
+assertStudioUpsertStandardDatasetInlineCreate();
 
 const browser = await chromium.launch();
 const page = await browser.newPage();
