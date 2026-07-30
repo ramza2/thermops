@@ -8,15 +8,118 @@
  *
  * Optional:
  *   CHECK_VP_OPS_EXPECT_ADMIN=0  — assert admin-required notice instead of data panels
+ *
+ * B26 / R11-S8-9-7:
+ *   Do not click the first run-detail-button without checking run_status.
+ *   soft-cancel button is expected only for RUNNING; terminal/PENDING must not expose it.
+ *   fail() throws so subsequent [ok] logs cannot mix after a failure.
  */
 import { chromium } from "playwright";
 
 const BASE = process.env.CHECK_PAGES_BASE || "http://localhost:5173";
 const EXPECT_ADMIN = process.env.CHECK_VP_OPS_EXPECT_ADMIN !== "0";
 
+const TERMINAL_STATUSES = new Set(["SUCCESS", "FAILED", "PARTIAL", "CANCELLED"]);
+const DETAIL_PANEL = "visual-pipeline-ops-run-detail-panel";
+const CANCEL_BUTTON = "visual-pipeline-ops-run-detail-cancel-button";
+const CANCEL_UNAVAILABLE = "visual-pipeline-ops-run-detail-cancel-unavailable";
+
 function fail(msg) {
-  console.error(`FAIL Visual Pipeline Ops: ${msg}`);
+  const full = `FAIL Visual Pipeline Ops: ${msg}`;
+  console.error(full);
   process.exitCode = 1;
+  throw new Error(full);
+}
+
+/**
+ * Stuck table columns: reason, visual_run_id, pipeline_id, mode, run_status, ...
+ * @returns {Promise<Array<{ row: import('playwright').Locator, runId: string, status: string, detailButton: import('playwright').Locator }>>}
+ */
+async function listStuckRunRows(page) {
+  const table = page.getByTestId("visual-pipeline-ops-stuck-runs-table");
+  if ((await table.count()) === 0) return [];
+  const rows = table.locator("tbody tr");
+  const count = await rows.count();
+  const items = [];
+  for (let i = 0; i < count; i += 1) {
+    const row = rows.nth(i);
+    const cells = row.locator("td");
+    const runId = ((await cells.nth(1).innerText()) || "").trim();
+    const status = ((await cells.nth(4).innerText()) || "").trim().toUpperCase();
+    const detailButton = row.getByTestId("visual-pipeline-ops-run-detail-button");
+    items.push({ row, runId, status, detailButton });
+  }
+  return items;
+}
+
+async function openRunDetail(page, detailButton) {
+  await detailButton.click();
+  await page.getByTestId(DETAIL_PANEL).waitFor({ state: "visible", timeout: 15000 });
+}
+
+async function closeRunDetail(page) {
+  const panel = page.getByTestId(DETAIL_PANEL);
+  if ((await panel.count()) === 0) return;
+  await page.getByTestId("visual-pipeline-ops-run-detail-close").click();
+  await panel.waitFor({ state: "hidden", timeout: 10000 }).catch(() => {});
+}
+
+async function assertDetailCommonSections(page) {
+  const panel = page.getByTestId(DETAIL_PANEL);
+  await panel.getByTestId("visual-pipeline-ops-run-detail-retry-section").waitFor({
+    state: "visible",
+    timeout: 10000,
+  });
+  await panel.getByTestId("visual-pipeline-ops-run-detail-cancel-section").waitFor({
+    state: "visible",
+    timeout: 10000,
+  });
+  if ((await page.getByTestId("visual-pipeline-schedule-catchup-button").count()) > 0) {
+    fail("ops must not show schedule catch-up enqueue button");
+  }
+  if (
+    (await panel.getByRole("button", { name: /누락 실행 보정 Run 생성/i }).count()) > 0
+  ) {
+    fail("ops run detail must not show catch-up enqueue action");
+  }
+}
+
+/** RUNNING: soft-cancel action button is expected (do not submit cancel). */
+async function assertSoftCancelForRunning(page, meta) {
+  const panel = page.getByTestId(DETAIL_PANEL);
+  const cancelBtn = panel.getByTestId(CANCEL_BUTTON);
+  const count = await cancelBtn.count();
+  if (count < 1) {
+    fail(
+      `RUNNING run detail must show soft-cancel button (run_id=${meta.runId}, status=${meta.status})`,
+    );
+  }
+  console.log(
+    `  [ok] B26 RUNNING soft-cancel visible (run_id=${meta.runId}, status=${meta.status})`,
+  );
+}
+
+/**
+ * PENDING / terminal: soft-cancel action button must not appear.
+ * Product policy: only RUNNING exposes cancel-button; others show cancel-unavailable.
+ */
+async function assertNoSoftCancelForNonRunning(page, meta) {
+  const panel = page.getByTestId(DETAIL_PANEL);
+  const cancelBtnCount = await panel.getByTestId(CANCEL_BUTTON).count();
+  if (cancelBtnCount > 0) {
+    fail(
+      `non-RUNNING run detail must not show soft-cancel button (run_id=${meta.runId || "?"}, status=${meta.status})`,
+    );
+  }
+  const unavailable = panel.getByTestId(CANCEL_UNAVAILABLE);
+  if ((await unavailable.count()) < 1) {
+    fail(
+      `non-RUNNING run detail should show cancel-unavailable hint (run_id=${meta.runId || "?"}, status=${meta.status})`,
+    );
+  }
+  console.log(
+    `  [ok] B26 non-RUNNING soft-cancel absent (run_id=${meta.runId || "?"}, status=${meta.status})`,
+  );
 }
 
 const browser = await chromium.launch();
@@ -82,38 +185,67 @@ try {
     if (!failVisible) fail("recent failures table or empty message expected");
     console.log("  [ok] recent failures section");
 
-    const detailButtons = page.getByTestId("visual-pipeline-ops-run-detail-button");
-    if ((await detailButtons.count()) > 0) {
-      await detailButtons.first().click();
-      await page.getByTestId("visual-pipeline-ops-run-detail-panel").waitFor({
-        state: "visible",
-        timeout: 15000,
-      });
-      const badInDetail = await page
-        .getByTestId("visual-pipeline-ops-run-detail-panel")
-        .getByTestId("visual-pipeline-ops-run-detail-cancel-button")
-        .count();
-      if (badInDetail > 0) fail("ops non-RUNNING run detail must not show soft-cancel action button");
-      // Detail-panel Retry + cancel section are allowed (strong confirm). Global page-level cancel is not.
-      await page.getByTestId("visual-pipeline-ops-run-detail-retry-section").waitFor({
-        state: "visible",
-        timeout: 10000,
-      });
-      await page.getByTestId("visual-pipeline-ops-run-detail-cancel-section").waitFor({
-        state: "visible",
-        timeout: 10000,
-      });
-      // Ops must not expose schedule catch-up enqueue controls
-      if ((await page.getByTestId("visual-pipeline-schedule-catchup-button").count()) > 0) {
-        fail("ops must not show schedule catch-up enqueue button");
-      }
-      if ((await page.getByTestId("visual-pipeline-ops-run-detail-panel").getByRole("button", { name: /누락 실행 보정 Run 생성/i }).count()) > 0) {
-        fail("ops run detail must not show catch-up enqueue action");
-      }
-      await page.getByTestId("visual-pipeline-ops-run-detail-close").click();
-      console.log("  [ok] ops run detail panel (retry + cancel section; no catch-up enqueue)");
+    // --- B26: status-aware soft-cancel assertions (never click first detail blindly) ---
+    const stuckRows = await listStuckRunRows(page);
+    const runningStuck = stuckRows.find((r) => r.status === "RUNNING");
+    const pendingStuck = stuckRows.find((r) => r.status === "PENDING");
+    const terminalStuck = stuckRows.find((r) => TERMINAL_STATUSES.has(r.status));
+
+    let openedDetail = false;
+
+    // 1) RUNNING positive check
+    if (runningStuck) {
+      await openRunDetail(page, runningStuck.detailButton);
+      openedDetail = true;
+      await assertDetailCommonSections(page);
+      await assertSoftCancelForRunning(page, runningStuck);
+      await closeRunDetail(page);
+      openedDetail = false;
     } else {
-      console.log("  [skip] no ops run detail buttons (no stuck/failure/audit with run ids)");
+      console.log("  [skip] B26 no RUNNING stuck run for soft-cancel positive check");
+    }
+
+    // 2) non-RUNNING negative check: prefer recent failure (terminal), then PENDING, then other terminal stuck
+    let nonRunningTarget = null;
+    let nonRunningMeta = null;
+    if ((await failTable.count()) > 0) {
+      const failDetail = failTable.getByTestId("visual-pipeline-ops-run-detail-button").first();
+      if ((await failDetail.count()) > 0) {
+        const failRow = failTable.locator("tbody tr").first();
+        const failRunId = ((await failRow.locator("td").nth(0).innerText()) || "").trim();
+        nonRunningTarget = failDetail;
+        nonRunningMeta = { runId: failRunId, status: "FAILED" };
+      }
+    }
+    if (!nonRunningTarget && pendingStuck) {
+      nonRunningTarget = pendingStuck.detailButton;
+      nonRunningMeta = pendingStuck;
+    }
+    if (!nonRunningTarget && terminalStuck) {
+      nonRunningTarget = terminalStuck.detailButton;
+      nonRunningMeta = terminalStuck;
+    }
+
+    if (nonRunningTarget && nonRunningMeta) {
+      await openRunDetail(page, nonRunningTarget);
+      openedDetail = true;
+      await assertDetailCommonSections(page);
+      await assertNoSoftCancelForNonRunning(page, nonRunningMeta);
+      await closeRunDetail(page);
+      openedDetail = false;
+      console.log("  [ok] ops run detail panel (retry + cancel section; no catch-up enqueue)");
+    } else if (!runningStuck) {
+      console.log(
+        "  [skip] B26 no terminal/PENDING/FAILED run for soft-cancel negative check; no detail buttons exercised",
+      );
+    } else {
+      console.log(
+        "  [skip] B26 no terminal/PENDING/FAILED run for soft-cancel negative check (RUNNING-only environment)",
+      );
+    }
+
+    if (openedDetail) {
+      await closeRunDetail(page);
     }
 
     // Non-stuck destructive actions must not exist at page level (detail-panel retry is separate)
@@ -182,20 +314,23 @@ try {
     const menuLink = page.getByRole("link", { name: "Visual Pipeline 운영" });
     if ((await menuLink.count()) < 1) {
       fail("ADMIN menu should include Visual Pipeline 운영");
-    } else {
-      console.log("  [ok] sidebar menu visible for ADMIN");
     }
+    console.log("  [ok] sidebar menu visible for ADMIN");
   }
 
   if (pageErrors.length) {
     fail(`pageerrors: ${pageErrors.slice(0, 3).join(" | ")}`);
   }
 
-  if (!process.exitCode) {
-    console.log("PASS Visual Pipeline Ops smoke");
-  }
+  console.log("PASS Visual Pipeline Ops smoke");
 } catch (err) {
-  fail(err instanceof Error ? err.message : String(err));
+  process.exitCode = 1;
+  const msg = err instanceof Error ? err.message : String(err);
+  if (!String(msg).startsWith("FAIL Visual Pipeline Ops:")) {
+    console.error(`FAIL Visual Pipeline Ops: ${msg}`);
+  }
 } finally {
   await browser.close();
 }
+
+process.exit(process.exitCode || 0);

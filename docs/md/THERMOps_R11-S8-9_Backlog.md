@@ -49,7 +49,7 @@
 | B23 | Product Branding Generalization | 특정 고객/도메인 문구를 범용 MLOps 운영 플랫폼 기준으로 정리. 고객명·도메인명은 demo scenario / tenant / project label로 분리 | D | open | |
 | B24 | 표준 데이터셋 보관(archive) UI | `POST /standard-dataset-types/{id}/archive` FE 보관 버튼·confirm·refresh. 물리 테이블 DROP/unarchive 제외 | A | **done** | **R11-S8-9-6** |
 | B25 | REST API 연결 목록 로드 버그 | `ApiConnectorPanel`이 `GET /data-sources?size=200` 호출 → API max 100으로 **422** → Wizard 데이터 소스 셀렉트 항상 빈 목록. `DATA_SOURCE_LIST_PAGE_SIZE=100` + 등록/수정/삭제 후 패널 refresh + empty/error 구분 | A | **done** | **R11-S8-9-2**. 100건 초과 1페이지 제한 → B11 |
-| B26 | Ops smoke soft-cancel assertion 안정화 | `check-visual-pipeline-ops.mjs`가 첫 번째 `run-detail-button`을 상태 확인 없이 클릭해, stuck 목록에 `RUNNING`이 있으면 soft-cancel 버튼 표시 여부 assertion이 깨짐. clean HEAD에서도 재현되어 S8-9-1과 무관한 기존 smoke flaky 이슈. 대상 run 상태를 명시적으로 선택하거나, 상태별 assertion 분기 및 `fail()` throw 동작 보강 필요 | C | open | 2026-07-28 추가 |
+| B26 | Ops smoke soft-cancel assertion 안정화 | `check-visual-pipeline-ops.mjs`가 첫 번째 `run-detail-button`을 상태 확인 없이 클릭해, stuck 목록에 `RUNNING`이 있으면 soft-cancel 버튼 표시 여부 assertion이 깨지는 flaky 이슈. run 상태별 대상 선택과 assertion 분기로 안정화 | C | **done** | **R11-S8-9-7** |
 
 ---
 
@@ -62,7 +62,7 @@
 | 3 | B16 | done | S8-9-3 검증 후 Compile dirty 미재발 |
 | 4 | B13 | done | S8-9-4 Inspector select schema default 주입 |
 | 5 | B24 | done | S8-9-6 표준 데이터셋 보관 UI |
-| 6 | B26 | open | Ops smoke flaky assertion 안정화 |
+| 6 | B26 | done | S8-9-7 Ops smoke soft-cancel assertion 안정화 |
 
 ---
 
@@ -78,7 +78,7 @@ B1, B2, B3, B15, B19, B20, B21
 
 ### C — 운영 가시성 / 복구 UX
 
-B4, B6, B8, B9, B10, B18, B26
+B4, B6, B8, B9, B10, B18, B26(done)
 
 ### D — 범용 MLOps 확장 / 문서 / 장기
 
@@ -95,7 +95,8 @@ B5, B7, B12, B22, B23
 | R11-S8-9-3 | B16 | Graph 검증 UI cache 분리 — 검증 후 dirty 미재발, Compile 연속 가능 | `77a6e05` |
 | R11-S8-9-4 | B13 | Inspector select schema default 주입 (PLACEHOLDER 분리, Type B placeholder) | `0593d69` |
 | R11-S8-9-5 | B14 | Transform unmapped_policy → FAIL_LOAD/SKIP_UNMAPPED/LOG_ONLY + Wizard 공통 상수 | `b8bc37c` |
-| R11-S8-9-6 | B24 | 표준 데이터셋 보관 UI — archive API + confirm + 목록 refresh | 구현 완료 (커밋 대기) |
+| R11-S8-9-6 | B24 | 표준 데이터셋 보관 UI — archive API + confirm + 목록 refresh | `8688a3f` |
+| R11-S8-9-7 | B26 | Ops smoke soft-cancel: run_status별 선택·assertion 분기 + fail() throw | 구현 완료 (커밋 대기) |
 
 ---
 
@@ -112,6 +113,7 @@ B5, B7, B12, B22, B23
 | 2026-07-28 | B16 push (`77a6e05`). B13 → `done` (S8-9-4). schema default 주입 + form fallback 정리 |
 | 2026-07-28 | B13 push (`0593d69`). B14 → `done` (S8-9-5). unmapped_policy backend enum 정렬 + legacy C안 |
 | 2026-07-28 | B14 push (`b8bc37c`). B24 → `done` (S8-9-6). 표준 데이터셋 보관 UI + check-pages smoke |
+| 2026-07-30 | B24 push (`8688a3f`). B26 → `done` (S8-9-7). Ops smoke run_status별 soft-cancel assertion + fail() throw |
 
 ---
 

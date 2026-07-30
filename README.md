@@ -1802,6 +1802,14 @@ cd frontend && node scripts/check-visual-pipeline-studio.mjs
 - **Known limitation:** 상태 필터 ARCHIVED는 `active_yn=Y` 목록 API 때문에 보관 항목 조회 불가
 - **Backlog:** B24 done
 
+### R11-S8-9-7 Ops smoke soft-cancel assertion 안정화
+
+- **범위:** smoke-only — B26. `check-visual-pipeline-ops.mjs` flaky soft-cancel assertion 수정.
+- **변경:** 첫 `run-detail-button` 맹클릭 제거 · stuck `run_status`별 선택 · RUNNING=soft-cancel 표시 / terminal·PENDING=미표시 · `fail()` throw
+- **검증:** `cd frontend && npm run build` · `node scripts/check-pages.mjs` · `node scripts/check-visual-pipeline-studio.mjs` · Ops smoke 3회
+- **제외:** 제품 UI/API/backend · soft-cancel 정책 · B24 재수정 · package · 「R10 설정 반영」재노출 금지
+- **Backlog:** B26 done
+
 ## 설계 문서 참조
 
 - `docs/md/THERMOps_R11-S8-9_Backlog.md`
