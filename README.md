@@ -1810,6 +1810,15 @@ cd frontend && node scripts/check-visual-pipeline-studio.mjs
 - **제외:** 제품 UI/API/backend · soft-cancel 정책 · B24 재수정 · package · 「R10 설정 반영」재노출 금지
 - **Backlog:** B26 done
 
+### R11-S8-9-8 Data Source 100건 초과 선택 UX
+
+- **범위:** FE-only — B11. `size≤100` 유지하며 Wizard/Mappings에서 검색·더 보기·새로고침.
+- **변경:** `fetchDataSourcesPage` 누적 · 클라이언트 검색(로드된 항목 한정) · 선택값 보존 · check-pages B11
+- **검증:** `cd frontend && npm run build` · `node scripts/check-pages.mjs` · `node scripts/check-visual-pipeline-studio.mjs`
+- **제외:** backend keyword · size>100 · B19 인라인 생성 · Studio REST select 전환 · 「R10 설정 반영」재노출 금지
+- **Known limitation:** 서버 keyword 없음 → 검색은 로드된 페이지 누적 범위만
+- **Backlog:** B11 done
+
 ## 설계 문서 참조
 
 - `docs/md/THERMOps_R11-S8-9_Backlog.md`

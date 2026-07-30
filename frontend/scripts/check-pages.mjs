@@ -93,6 +93,47 @@ function assertStandardDatasetArchiveUi() {
   }
 }
 
+/** B11: Data Source select UX must keep size<=100 and expose search/load-more/refresh. */
+function assertDataSourcePagedSelectUx() {
+  const constFile = fs.readFileSync(path.join(FRONTEND_SRC, "constants/dataSourceList.ts"), "utf8");
+  if (!constFile.includes("DATA_SOURCE_LIST_PAGE_SIZE = 100")) {
+    throw new Error("B11 regression: DATA_SOURCE_LIST_PAGE_SIZE must remain 100");
+  }
+  if (!constFile.includes("fetchDataSourcesPage") || !constFile.includes("filterDataSourcesLocal")) {
+    throw new Error("B11 regression: dataSourceList helpers missing");
+  }
+  if (!constFile.includes("현재 로드된 항목 내에서만 검색합니다")) {
+    throw new Error("B11 regression: client-side search limitation hint missing");
+  }
+  const wizard = fs.readFileSync(
+    path.join(FRONTEND_SRC, "components/ApiConnectorOperationWizard.tsx"),
+    "utf8",
+  );
+  for (const token of [
+    "data-source-search-input",
+    "data-source-load-more",
+    "data-source-refresh-button",
+    "data-source-list-hint",
+    "data-source-search-hint",
+    "selectedDataSourceMissingLabel",
+  ]) {
+    if (!wizard.includes(token)) {
+      throw new Error(`B11 regression: Wizard missing ${token}`);
+    }
+  }
+  const panel = fs.readFileSync(path.join(FRONTEND_SRC, "components/ApiConnectorPanel.tsx"), "utf8");
+  if (!panel.includes("fetchDataSourcesPage") || !panel.includes("onLoadMoreSources")) {
+    throw new Error("B11 regression: ApiConnectorPanel must page-load Data Sources");
+  }
+  if (panel.includes("size: 200") || /size:\s*([2-9]\d{2,}|\d{4,})/.test(panel)) {
+    throw new Error("B11 regression: ApiConnectorPanel must not request size>100");
+  }
+  const mappings = fs.readFileSync(path.join(FRONTEND_SRC, "pages/DataMappingsPage.tsx"), "utf8");
+  if (!mappings.includes("fetchDataSourcesPage") || !mappings.includes("mapping-data-source-search-input")) {
+    throw new Error("B11 regression: DataMappingsPage must reuse paged Data Source UX");
+  }
+}
+
 async function api(method, path, body) {
   const url = `${API_BASE}${path}`;
   const res = await fetch(url, {
@@ -121,6 +162,7 @@ async function api(method, path, body) {
 
 assertNoDataSourcesSizeOver100();
 assertStandardDatasetArchiveUi();
+assertDataSourcePagedSelectUx();
 
 const browser = await chromium.launch();
 const page = await browser.newPage();
@@ -293,6 +335,16 @@ for (const path of PATHS) {
     await page.getByRole("button", { name: "새 API 작업 만들기" }).first().waitFor({ state: "visible", timeout: 30000 });
     await page.getByRole("button", { name: "새 API 작업 만들기" }).click();
     await page.getByText("REST API 작업 만들기").first().waitFor({ state: "visible", timeout: 30000 });
+    // --- R11-S8-9-8 / B11: Data Source search / hint UI ---
+    await page.getByTestId("data-source-list-hint").waitFor({ state: "visible", timeout: 10000 });
+    await page.getByTestId("data-source-search-hint").waitFor({ state: "visible", timeout: 10000 });
+    await page.getByTestId("data-source-search-input").waitFor({ state: "visible", timeout: 10000 });
+    await page.getByTestId("data-source-refresh-button").waitFor({ state: "visible", timeout: 10000 });
+    const searchHint = await page.getByTestId("data-source-search-hint").innerText();
+    if (!searchHint.includes("현재 로드된 항목 내에서만 검색")) {
+      errors.push("B11: search hint must mention client-side loaded-items limitation");
+    }
+    console.log("  [ok] B11 Data Source search/refresh UI in Wizard");
     for (const label of ["기본 정보", "인증 정보", "요청 파라미터", "페이징 방식", "응답 데이터 경로", "변환 설정", "적재 대상", "테스트 호출", "검토 및 저장"]) {
       await page.getByText(label).first().waitFor({ state: "visible", timeout: 30000 });
     }

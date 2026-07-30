@@ -34,7 +34,7 @@
 | B8 | PARTIAL 중복 적재 가시화 | Retry 전 영향 범위 힌트 | C | open | |
 | B9 | Schedule skip 이력 UI | `ACTIVE_RUN_EXISTS` 등 skip 반복 가시화 | C | open | |
 | B10 | Ops 「조치 필요」카드 | stuck / failures / catch-up 후보 그룹 (notification 전단계) | C | open | |
-| B11 | Connector / Data Source 선택 UX | Studio·데이터 소스 화면에서 Data Source 검색·필터·최근 사용 강화. **포함:** 100건 초과 시 Wizard/셀렉트 페이지네이션·검색 (B25 known limitation 이관) | A | open | |
+| B11 | Connector / Data Source 선택 UX | Wizard/Mappings에서 `size≤100` 유지 + 클라이언트 검색·더 보기·새로고침. 서버 keyword 없음 한계 안내 | A | **done** | **R11-S8-9-8** |
 | B12 | Visual Pipeline E2E Smoke Scenario | REST → Transform → Upsert → Compile → 실행 설정 반영 → 즉시 실행 → History 범용 smoke. fixture는 generic sample dataset | D | open | |
 | B13 | Inspector select 기본값 미반영 | `http_method`·`transform_type` 등 select **표시** 기본값이 config에 저장되지 않아 Graph 검증 required 경고. **A+B:** schema default 주입 + Type B placeholder | A | **done** | **R11-S8-9-4** |
 | B14 | Transform Unmapped Policy enum 정렬 | Studio `KEEP`/`DROP`/`ERROR` → backend `FAIL_LOAD`/`SKIP_UNMAPPED`/`LOG_ONLY`. Wizard 공통 상수. legacy C안(ERROR/DROP remap, KEEP 재선택) | A | **done** | **R11-S8-9-5** |
@@ -70,7 +70,7 @@
 
 ### A — Studio / 데이터 관리 실사용 개선
 
-B11, B13(done), B14(done), B16(done), B17(done), B24(done), B25(done)
+B11(done), B13(done), B14(done), B16(done), B17(done), B24(done), B25(done)
 
 ### B — 범용 Visual Pipeline 구성 편의
 
@@ -96,7 +96,8 @@ B5, B7, B12, B22, B23
 | R11-S8-9-4 | B13 | Inspector select schema default 주입 (PLACEHOLDER 분리, Type B placeholder) | `0593d69` |
 | R11-S8-9-5 | B14 | Transform unmapped_policy → FAIL_LOAD/SKIP_UNMAPPED/LOG_ONLY + Wizard 공통 상수 | `b8bc37c` |
 | R11-S8-9-6 | B24 | 표준 데이터셋 보관 UI — archive API + confirm + 목록 refresh | `8688a3f` |
-| R11-S8-9-7 | B26 | Ops smoke soft-cancel: run_status별 선택·assertion 분기 + fail() throw | 구현 완료 (커밋 대기) |
+| R11-S8-9-7 | B26 | Ops smoke soft-cancel: run_status별 선택·assertion 분기 + fail() throw | `6abaeb9` |
+| R11-S8-9-8 | B11 | Data Source 100건 초과: 클라이언트 검색·더 보기·새로고침 (size≤100) | 구현 완료 (커밋 대기) |
 
 ---
 
@@ -114,6 +115,7 @@ B5, B7, B12, B22, B23
 | 2026-07-28 | B13 push (`0593d69`). B14 → `done` (S8-9-5). unmapped_policy backend enum 정렬 + legacy C안 |
 | 2026-07-28 | B14 push (`b8bc37c`). B24 → `done` (S8-9-6). 표준 데이터셋 보관 UI + check-pages smoke |
 | 2026-07-30 | B24 push (`8688a3f`). B26 → `done` (S8-9-7). Ops smoke run_status별 soft-cancel assertion + fail() throw |
+| 2026-07-30 | B26 push (`6abaeb9`). B11 → `done` (S8-9-8). Data Source 검색·더 보기·새로고침 (서버 keyword 없음) |
 
 ---
 

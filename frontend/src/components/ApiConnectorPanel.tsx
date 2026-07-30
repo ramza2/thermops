@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Eye, Play, Plus, RefreshCw, Upload } from "lucide-react";
-import { fetchApi, PagedData } from "@/api/client";
 import {
   apiConnectorErrorMessage,
   getApiConnectorLoadRun,
@@ -26,15 +25,12 @@ import type {
   ApiConnectorSnapshot,
 } from "@/types/apiConnector";
 import { safeJsonStringify } from "@/utils/apiConnectorDisplay";
-import { DATA_SOURCE_LIST_PAGE_SIZE } from "@/constants/dataSourceList";
+import {
+  type DataSourceListItem,
+  fetchDataSourcesPage,
+  mergeDataSourcePages,
+} from "@/constants/dataSourceList";
 import { EMPTY_MESSAGES, HELP_TEXTS, lifecycleStatusLabel } from "@/constants/displayLabels";
-
-interface DataSourceOption {
-  source_id: string;
-  source_name: string;
-  source_type: string;
-  connection_info?: Record<string, string>;
-}
 
 type SubTab = "operations" | "call-logs" | "load-runs" | "snapshots";
 
@@ -46,8 +42,12 @@ interface ApiConnectorPanelProps {
 export function ApiConnectorPanel({ refreshToken = 0 }: ApiConnectorPanelProps) {
   const { showToast } = useToast();
   const [subTab, setSubTab] = useState<SubTab>("operations");
-  const [sources, setSources] = useState<DataSourceOption[]>([]);
+  const [sources, setSources] = useState<DataSourceListItem[]>([]);
+  const [sourcesPage, setSourcesPage] = useState(1);
+  const [sourcesTotalPages, setSourcesTotalPages] = useState(1);
+  const [sourcesTotalCount, setSourcesTotalCount] = useState(0);
   const [sourcesLoadError, setSourcesLoadError] = useState(false);
+  const [sourcesLoadingMore, setSourcesLoadingMore] = useState(false);
   const [operations, setOperations] = useState<ApiConnectorOperation[]>([]);
   const [callLogs, setCallLogs] = useState<ApiConnectorCallLog[]>([]);
   const [loadRuns, setLoadRuns] = useState<ApiConnectorLoadRun[]>([]);
@@ -73,6 +73,33 @@ export function ApiConnectorPanel({ refreshToken = 0 }: ApiConnectorPanelProps) 
     [callLogs],
   );
 
+  const loadSourcesPage = useCallback(
+    async (page: number, mode: "replace" | "append") => {
+      if (mode === "append") setSourcesLoadingMore(true);
+      try {
+        const srcRes = await fetchDataSourcesPage(page);
+        const items = srcRes.items || [];
+        setSources((prev) => (mode === "append" ? mergeDataSourcePages(prev, items) : items));
+        setSourcesPage(srcRes.page || page);
+        setSourcesTotalPages(Math.max(1, srcRes.total_pages || 1));
+        setSourcesTotalCount(srcRes.total_count ?? items.length);
+        setSourcesLoadError(false);
+      } catch {
+        if (mode === "replace") {
+          setSources([]);
+          setSourcesPage(1);
+          setSourcesTotalPages(1);
+          setSourcesTotalCount(0);
+          setSourcesLoadError(true);
+        }
+        showToast("error", "Data Source 목록을 불러오지 못했습니다.");
+      } finally {
+        setSourcesLoadingMore(false);
+      }
+    },
+    [showToast],
+  );
+
   const load = useCallback(async () => {
     setLoading(true);
     setSourcesLoadError(false);
@@ -88,22 +115,22 @@ export function ApiConnectorPanel({ refreshToken = 0 }: ApiConnectorPanelProps) 
     } catch {
       showToast("error", "REST API 연결 정보를 불러오지 못했습니다.");
     }
-    try {
-      const srcRes = await fetchApi<PagedData<DataSourceOption>>("/data-sources", {
-        page: 1,
-        size: DATA_SOURCE_LIST_PAGE_SIZE,
-      });
-      setSources(srcRes.items || []);
-    } catch {
-      setSources([]);
-      setSourcesLoadError(true);
-      showToast("error", "Data Source 목록을 불러오지 못했습니다.");
-    } finally {
-      setLoading(false);
-    }
-  }, [showToast]);
+    await loadSourcesPage(1, "replace");
+    setLoading(false);
+  }, [loadSourcesPage, showToast]);
 
   useEffect(() => { void load(); }, [load, refreshToken]);
+
+  const handleLoadMoreSources = useCallback(async () => {
+    if (sourcesLoadingMore || sourcesPage >= sourcesTotalPages) return;
+    await loadSourcesPage(sourcesPage + 1, "append");
+  }, [loadSourcesPage, sourcesLoadingMore, sourcesPage, sourcesTotalPages]);
+
+  const handleRefreshSources = useCallback(async () => {
+    await loadSourcesPage(1, "replace");
+  }, [loadSourcesPage]);
+
+  const sourcesHasMore = sourcesPage < sourcesTotalPages;
 
   const openWizard = (operationId?: string) => {
     setEditOpId(operationId || null);
@@ -322,6 +349,12 @@ export function ApiConnectorPanel({ refreshToken = 0 }: ApiConnectorPanelProps) 
         onCompleted={() => void load()}
         sources={sources}
         sourcesLoadError={sourcesLoadError}
+        sourcesHasMore={sourcesHasMore}
+        sourcesTotalCount={sourcesTotalCount}
+        sourcesLoadedCount={sources.length}
+        sourcesLoadingMore={sourcesLoadingMore}
+        onLoadMoreSources={() => void handleLoadMoreSources()}
+        onRefreshSources={() => void handleRefreshSources()}
         editOperationId={editOpId}
       />
 

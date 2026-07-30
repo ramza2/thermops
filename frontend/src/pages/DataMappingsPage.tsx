@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { CheckCircle, Eye, Plus, Pencil, Sparkles, Save, Trash2 } from "lucide-react";
+import { CheckCircle, Eye, Plus, Pencil, RefreshCw, Sparkles, Save, Trash2 } from "lucide-react";
 import { deleteApi, extractApiErrorMessage, fetchApi, postApi, putApi, PagedData } from "@/api/client";
 import {
   getColumnRoleCodes,
@@ -21,7 +21,16 @@ import { SelectInput, TextInput } from "@/components/SearchPanel";
 import { useToast } from "@/hooks/useToast";
 import { PageHeader } from "@/layouts/MainLayout";
 import { EMPTY_MESSAGES, HELP_TEXTS, PAGE_DESCRIPTIONS, PAGE_TITLES } from "@/constants/displayLabels";
-import { DATA_SOURCE_LIST_PAGE_SIZE } from "@/constants/dataSourceList";
+import {
+  DATA_SOURCE_LIST_HINT,
+  DATA_SOURCE_SEARCH_HINT,
+  DATA_SOURCE_SEARCH_PLACEHOLDER,
+  fetchDataSourceById,
+  fetchDataSourcesPage,
+  filterDataSourcesLocal,
+  mergeDataSourcePages,
+  selectedDataSourceMissingLabel,
+} from "@/constants/dataSourceList";
 import type {
   ColumnRoleCode,
   FeatureColumnRole,
@@ -72,6 +81,9 @@ interface Mapping {
 interface DataSource {
   source_id: string;
   source_name: string;
+  source_type?: string;
+  connection_info?: Record<string, string>;
+  data_domain?: string | null;
 }
 
 interface DeleteBlocker {
@@ -298,6 +310,14 @@ export default function DataMappingsPage() {
   const { showToast } = useToast();
   const [items, setItems] = useState<Mapping[]>([]);
   const [sources, setSources] = useState<DataSource[]>([]);
+  const [sourcesPage, setSourcesPage] = useState(1);
+  const [sourcesTotalPages, setSourcesTotalPages] = useState(1);
+  const [sourcesTotalCount, setSourcesTotalCount] = useState(0);
+  const [sourcesLoadError, setSourcesLoadError] = useState(false);
+  const [sourcesLoadingMore, setSourcesLoadingMore] = useState(false);
+  const [sourceSearchDraft, setSourceSearchDraft] = useState("");
+  const [sourceSearchApplied, setSourceSearchApplied] = useState("");
+  const [selectedSourceLabel, setSelectedSourceLabel] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(true);
@@ -442,18 +462,77 @@ export default function DataMappingsPage() {
     }
   }, [syncRolesFromColumns, loadRecipeTemplates]);
 
+  const loadSourcesPage = useCallback(async (nextPage: number, mode: "replace" | "append") => {
+    if (mode === "append") setSourcesLoadingMore(true);
+    try {
+      const res = await fetchDataSourcesPage(nextPage);
+      const items = (res.items || []) as DataSource[];
+      setSources((prev) => (mode === "append" ? mergeDataSourcePages(prev, items) : items));
+      setSourcesPage(res.page || nextPage);
+      setSourcesTotalPages(Math.max(1, res.total_pages || 1));
+      setSourcesTotalCount(res.total_count ?? items.length);
+      setSourcesLoadError(false);
+    } catch {
+      if (mode === "replace") {
+        setSources([]);
+        setSourcesPage(1);
+        setSourcesTotalPages(1);
+        setSourcesTotalCount(0);
+        setSourcesLoadError(true);
+      }
+      showToast("error", "Data Source 목록을 불러오지 못했습니다.");
+    } finally {
+      setSourcesLoadingMore(false);
+    }
+  }, [showToast]);
+
   useEffect(() => {
     load(page);
-    fetchApi<PagedData<DataSource>>("/data-sources", { page: 1, size: DATA_SOURCE_LIST_PAGE_SIZE })
-      .then((res) => setSources(res.items))
-      .catch(() => {});
+    void loadSourcesPage(1, "replace");
     getColumnRoleCodes()
       .then((res) => setRoleCodes(res.items || []))
       .catch(() => {});
     getStandardTargetTables()
       .then((res) => setTargetTables(res.items || []))
       .catch(() => {});
-  }, [page]);
+  }, [page, loadSourcesPage]);
+
+  const filteredSources = useMemo(
+    () => filterDataSourcesLocal(sources, sourceSearchApplied),
+    [sources, sourceSearchApplied],
+  );
+
+  const selectedSourceMissing =
+    Boolean(form.source_id) && !sources.some((s) => s.source_id === form.source_id);
+
+  useEffect(() => {
+    if (!formOpen || !form.source_id || !selectedSourceMissing) {
+      if (!selectedSourceMissing) setSelectedSourceLabel(null);
+      return;
+    }
+    let cancelled = false;
+    void fetchDataSourceById(form.source_id).then((item) => {
+      if (cancelled) return;
+      setSelectedSourceLabel(item?.source_name || null);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [formOpen, form.source_id, selectedSourceMissing]);
+
+  const sourceSelectOptions = useMemo(() => {
+    const opts = filteredSources.map((s) => ({
+      value: s.source_id,
+      label: `${s.source_name} (${s.source_id})`,
+    }));
+    if (form.source_id && !opts.some((o) => o.value === form.source_id)) {
+      opts.unshift({
+        value: form.source_id,
+        label: selectedDataSourceMissingLabel(form.source_id, selectedSourceLabel),
+      });
+    }
+    return opts;
+  }, [filteredSources, form.source_id, selectedSourceLabel]);
 
   useEffect(() => {
     if (!formOpen || !editingId) return;
@@ -813,11 +892,75 @@ export default function DataMappingsPage() {
         <div className="space-y-3">
           <div>
             <label className="block text-xs text-slate-500 mb-1">데이터 소스</label>
+            <div className="space-y-2 mb-2 rounded-md border border-slate-200 bg-slate-50 p-2.5">
+              <p className="text-[11px] text-slate-600">{DATA_SOURCE_LIST_HINT}</p>
+              <p className="text-[11px] text-slate-500">{DATA_SOURCE_SEARCH_HINT}</p>
+              <div className="flex flex-wrap gap-2 items-center">
+                <div className="flex-1 min-w-[160px]">
+                  <TextInput
+                    value={sourceSearchDraft}
+                    onChange={setSourceSearchDraft}
+                    placeholder={DATA_SOURCE_SEARCH_PLACEHOLDER}
+                    testId="mapping-data-source-search-input"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") setSourceSearchApplied(sourceSearchDraft);
+                    }}
+                  />
+                </div>
+                <Button
+                  variant="secondary"
+                  data-testid="mapping-data-source-search-button"
+                  onClick={() => setSourceSearchApplied(sourceSearchDraft)}
+                >
+                  검색
+                </Button>
+                <Button
+                  variant="ghost"
+                  onClick={() => {
+                    setSourceSearchDraft("");
+                    setSourceSearchApplied("");
+                  }}
+                >
+                  초기화
+                </Button>
+                <Button
+                  variant="ghost"
+                  icon={<RefreshCw className="w-3.5 h-3.5" />}
+                  data-testid="mapping-data-source-refresh-button"
+                  onClick={() => void loadSourcesPage(1, "replace")}
+                >
+                  새로고침
+                </Button>
+              </div>
+              <p className="text-[10px] text-slate-400">
+                로드됨 {sources.length} / 전체 {sourcesTotalCount || sources.length}건
+                {sourceSearchApplied ? ` · 검색 결과 ${filteredSources.length}건` : ""}
+              </p>
+            </div>
             <SelectInput
               value={form.source_id}
               onChange={(v) => setForm({ ...form, source_id: v })}
-              options={sources.map((s) => ({ value: s.source_id, label: `${s.source_name} (${s.source_id})` }))}
+              options={sourceSelectOptions}
             />
+            {selectedSourceMissing && form.source_id && (
+              <p className="text-[11px] text-amber-700 mt-1">
+                현재 선택값({form.source_id})은 로드된 목록에 없습니다. 선택값은 유지됩니다.
+              </p>
+            )}
+            {sourcesLoadError && sources.length === 0 && (
+              <p className="text-[11px] text-red-700 mt-1">Data Source 목록을 불러오지 못했습니다.</p>
+            )}
+            {sourcesPage < sourcesTotalPages && (
+              <Button
+                className="mt-2"
+                variant="secondary"
+                data-testid="mapping-data-source-load-more"
+                disabled={sourcesLoadingMore}
+                onClick={() => void loadSourcesPage(sourcesPage + 1, "append")}
+              >
+                {sourcesLoadingMore ? "불러오는 중…" : "더 보기"}
+              </Button>
+            )}
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>

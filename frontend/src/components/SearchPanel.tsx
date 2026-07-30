@@ -1,4 +1,4 @@
-import { ReactNode } from "react";
+import { type KeyboardEvent, type ReactNode } from "react";
 import { Search } from "lucide-react";
 import { Button } from "./Button";
 
@@ -47,18 +47,24 @@ export function TextInput({
   onChange,
   placeholder,
   list,
+  testId,
+  onKeyDown,
 }: {
   value: string;
   onChange: (v: string) => void;
   placeholder?: string;
   list?: string;
+  testId?: string;
+  onKeyDown?: (e: KeyboardEvent<HTMLInputElement>) => void;
 }) {
   return (
     <input
       value={value}
       onChange={(e) => onChange(e.target.value)}
+      onKeyDown={onKeyDown}
       placeholder={placeholder}
       list={list}
+      data-testid={testId}
       className="w-full border border-slate-200 rounded-md px-2 py-1.5 text-sm bg-slate-50"
     />
   );

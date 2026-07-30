@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight, Loader2, Plus, Trash2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Loader2, Plus, RefreshCw, Trash2 } from "lucide-react";
 import {
   apiConnectorErrorMessage,
   createApiConnectorOperation,
@@ -39,26 +39,34 @@ import {
   UNMAPPED_POLICY_SELECT_OPTIONS,
 } from "@/constants/transformUnmappedPolicy";
 import {
+  DATA_SOURCE_LIST_HINT,
+  DATA_SOURCE_SEARCH_HINT,
+  DATA_SOURCE_SEARCH_PLACEHOLDER,
+  type DataSourceListItem,
+  fetchDataSourceById,
+  filterDataSourcesLocal,
+  selectedDataSourceMissingLabel,
+} from "@/constants/dataSourceList";
+import {
   computeColumnMatching,
   normalizePreviewItems,
   safeJsonStringify,
 } from "@/utils/apiConnectorDisplay";
 import { EMPTY_MESSAGES, HELP_TEXTS } from "@/constants/displayLabels";
 
-interface DataSourceOption {
-  source_id: string;
-  source_name: string;
-  source_type: string;
-  connection_info?: Record<string, string>;
-}
-
 interface WizardProps {
   open: boolean;
   onClose: () => void;
   onCompleted: () => void;
-  sources: DataSourceOption[];
+  sources: DataSourceListItem[];
   /** True when GET /data-sources failed (distinct from empty list). */
   sourcesLoadError?: boolean;
+  sourcesHasMore?: boolean;
+  sourcesTotalCount?: number;
+  sourcesLoadedCount?: number;
+  sourcesLoadingMore?: boolean;
+  onLoadMoreSources?: () => void;
+  onRefreshSources?: () => void;
   editOperationId?: string | null;
 }
 
@@ -126,6 +134,12 @@ export function ApiConnectorOperationWizard({
   onCompleted,
   sources,
   sourcesLoadError = false,
+  sourcesHasMore = false,
+  sourcesTotalCount = 0,
+  sourcesLoadedCount = 0,
+  sourcesLoadingMore = false,
+  onLoadMoreSources,
+  onRefreshSources,
   editOperationId,
 }: WizardProps) {
   const { showToast } = useToast();
@@ -134,6 +148,9 @@ export function ApiConnectorOperationWizard({
   const [operationId, setOperationId] = useState<string | null>(null);
   const [targetTables, setTargetTables] = useState<StandardTargetTable[]>([]);
   const [credentialMasked, setCredentialMasked] = useState<string | null>(null);
+  const [sourceSearchDraft, setSourceSearchDraft] = useState("");
+  const [sourceSearchApplied, setSourceSearchApplied] = useState("");
+  const [selectedSourceLabel, setSelectedSourceLabel] = useState<string | null>(null);
 
   const [basic, setBasic] = useState({
     data_source_id: "",
@@ -180,12 +197,51 @@ export function ApiConnectorOperationWizard({
   const [loadRunResult, setLoadRunResult] = useState<Record<string, unknown> | null>(null);
 
   const restSources = useMemo(
-    () => sources.filter((s) => ["REST_API", "API"].includes(s.source_type)),
+    () => sources.filter((s) => ["REST_API", "API"].includes(s.source_type || "")),
     [sources],
   );
 
-  const selectedSource = restSources.find((s) => s.source_id === basic.data_source_id);
+  const filteredRestSources = useMemo(
+    () => filterDataSourcesLocal(restSources, sourceSearchApplied),
+    [restSources, sourceSearchApplied],
+  );
+
+  const selectedSource =
+    restSources.find((s) => s.source_id === basic.data_source_id) ||
+    sources.find((s) => s.source_id === basic.data_source_id);
   const baseUrl = selectedSource?.connection_info?.base_url || "(데이터 소스 base_url)";
+  const selectedMissingFromLoaded =
+    Boolean(basic.data_source_id) &&
+    !restSources.some((s) => s.source_id === basic.data_source_id);
+
+  const sourceSelectOptions = useMemo(() => {
+    const opts = filteredRestSources.map((s) => ({
+      value: s.source_id,
+      label: `${s.source_name} (${s.source_id})`,
+    }));
+    if (basic.data_source_id && !opts.some((o) => o.value === basic.data_source_id)) {
+      opts.unshift({
+        value: basic.data_source_id,
+        label: selectedDataSourceMissingLabel(basic.data_source_id, selectedSourceLabel),
+      });
+    }
+    return [{ value: "", label: "REST API 데이터 소스 선택" }, ...opts];
+  }, [basic.data_source_id, filteredRestSources, selectedSourceLabel]);
+
+  useEffect(() => {
+    if (!open || !basic.data_source_id || !selectedMissingFromLoaded) {
+      if (!selectedMissingFromLoaded) setSelectedSourceLabel(null);
+      return;
+    }
+    let cancelled = false;
+    void fetchDataSourceById(basic.data_source_id).then((item) => {
+      if (cancelled) return;
+      setSelectedSourceLabel(item?.source_name || null);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, basic.data_source_id, selectedMissingFromLoaded]);
 
   const reset = useCallback(() => {
     setStep(0);
@@ -218,6 +274,9 @@ export function ApiConnectorOperationWizard({
     setTransformPreviewResult(null);
     setLoadRunResult(null);
     setTargetValidation(null);
+    setSourceSearchDraft("");
+    setSourceSearchApplied("");
+    setSelectedSourceLabel(null);
     setTargetColumns([]);
     setWritePolicy({
       operation_id: editOperationId || "",
@@ -528,20 +587,82 @@ export function ApiConnectorOperationWizard({
       case 0:
         return (
           <div className="space-y-3 text-sm">
+            <div className="space-y-2 rounded-md border border-slate-200 bg-slate-50 p-2.5">
+              <p className="text-[11px] text-slate-600" data-testid="data-source-list-hint">
+                {DATA_SOURCE_LIST_HINT}
+              </p>
+              <p className="text-[11px] text-slate-500" data-testid="data-source-search-hint">
+                {DATA_SOURCE_SEARCH_HINT}
+              </p>
+              <div className="flex flex-wrap gap-2 items-center">
+                <div className="flex-1 min-w-[180px]">
+                  <TextInput
+                    value={sourceSearchDraft}
+                    onChange={setSourceSearchDraft}
+                    placeholder={DATA_SOURCE_SEARCH_PLACEHOLDER}
+                    testId="data-source-search-input"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") setSourceSearchApplied(sourceSearchDraft);
+                    }}
+                  />
+                </div>
+                <Button
+                  variant="secondary"
+                  data-testid="data-source-search-button"
+                  onClick={() => setSourceSearchApplied(sourceSearchDraft)}
+                >
+                  검색
+                </Button>
+                <Button
+                  variant="ghost"
+                  data-testid="data-source-search-clear"
+                  onClick={() => {
+                    setSourceSearchDraft("");
+                    setSourceSearchApplied("");
+                  }}
+                >
+                  초기화
+                </Button>
+                <Button
+                  variant="ghost"
+                  icon={<RefreshCw className="w-3.5 h-3.5" />}
+                  data-testid="data-source-refresh-button"
+                  onClick={() => onRefreshSources?.()}
+                >
+                  새로고침
+                </Button>
+              </div>
+              <p className="text-[10px] text-slate-400">
+                로드됨 {sourcesLoadedCount || sources.length} / 전체 {sourcesTotalCount || sources.length}건
+                {sourceSearchApplied ? ` · 검색 결과 ${filteredRestSources.length}건` : ""}
+              </p>
+            </div>
             <SelectInput
               value={basic.data_source_id}
               onChange={(v) => setBasic({ ...basic, data_source_id: v })}
-              options={[
-                { value: "", label: "REST API 데이터 소스 선택" },
-                ...restSources.map((s) => ({ value: s.source_id, label: s.source_name })),
-              ]}
+              options={sourceSelectOptions}
             />
+            {selectedMissingFromLoaded && basic.data_source_id && (
+              <p className="text-[11px] text-amber-700 bg-amber-50 rounded px-2 py-1" data-testid="data-source-selected-missing">
+                현재 선택값({basic.data_source_id})은 로드된 목록에 없습니다. 선택값은 유지됩니다.
+              </p>
+            )}
             {restSources.length === 0 && (
               <p className={`text-xs p-2 rounded ${sourcesLoadError ? "text-red-700 bg-red-50" : "text-amber-700 bg-amber-50"}`}>
                 {sourcesLoadError
                   ? "Data Source 목록을 불러오지 못했습니다. 잠시 후 다시 시도하세요."
                   : EMPTY_MESSAGES.dataSources}
               </p>
+            )}
+            {sourcesHasMore && (
+              <Button
+                variant="secondary"
+                data-testid="data-source-load-more"
+                disabled={sourcesLoadingMore}
+                onClick={() => onLoadMoreSources?.()}
+              >
+                {sourcesLoadingMore ? "불러오는 중…" : "더 보기"}
+              </Button>
             )}
             <label className="block text-xs text-slate-500">API 작업명</label>
             <TextInput value={basic.operation_name} onChange={(v) => setBasic({ ...basic, operation_name: v })} />
