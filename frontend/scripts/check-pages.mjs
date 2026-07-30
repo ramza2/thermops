@@ -4,6 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const BASE = process.env.CHECK_PAGES_BASE || "http://localhost:5173";
+const API_BASE = process.env.THERMOOPS_API_BASE || "http://localhost:8000/api/v1";
 const FRONTEND_SRC = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../src");
 const PATHS = [
   "/dashboard",
@@ -65,7 +66,61 @@ function assertNoDataSourcesSizeOver100() {
   }
 }
 
+/** B24: Standard dataset archive UI must use existing archive API and safe copy. */
+function assertStandardDatasetArchiveUi() {
+  const pageFile = path.join(FRONTEND_SRC, "pages/StandardDatasetsPage.tsx");
+  const content = fs.readFileSync(pageFile, "utf8");
+  if (!content.includes("archiveStandardDatasetType")) {
+    throw new Error("B24 regression: StandardDatasetsPage must call archiveStandardDatasetType");
+  }
+  if (!content.includes("standard-dataset-archive-button-")) {
+    throw new Error("B24 regression: row archive button testid missing");
+  }
+  if (!content.includes("standard-dataset-archive-detail-button")) {
+    throw new Error("B24 regression: detail archive button testid missing");
+  }
+  if (!content.includes("물리 테이블 또는 적재 데이터는 삭제하지 않습니다")) {
+    throw new Error("B24 regression: archive confirm must mention physical table retention");
+  }
+  const apiClient = fs.readFileSync(path.join(FRONTEND_SRC, "api/standardDatasets.ts"), "utf8");
+  if (!apiClient.includes("/standard-dataset-types/") || !apiClient.includes("/archive")) {
+    throw new Error("B24 regression: standardDatasets API client must expose /standard-dataset-types/{id}/archive");
+  }
+  for (const phrase of ["영구 삭제", "테이블 삭제"]) {
+    if (content.includes(phrase)) {
+      throw new Error(`B24 regression: StandardDatasetsPage must not contain '${phrase}'`);
+    }
+  }
+}
+
+async function api(method, path, body) {
+  const url = `${API_BASE}${path}`;
+  const res = await fetch(url, {
+    method,
+    headers: body ? { "Content-Type": "application/json" } : undefined,
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const text = await res.text();
+  let data = null;
+  try {
+    data = text ? JSON.parse(text) : null;
+  } catch {
+    data = { raw: text };
+  }
+  if (!res.ok) {
+    throw new Error(`API ${method} ${path} -> ${res.status}: ${text.slice(0, 400)}`);
+  }
+  if (data && typeof data === "object" && "data" in data && data.success !== undefined) {
+    if (data.success === false) {
+      throw new Error(`API ${method} ${path} success=false: ${text.slice(0, 400)}`);
+    }
+    return data.data;
+  }
+  return data;
+}
+
 assertNoDataSourcesSizeOver100();
+assertStandardDatasetArchiveUi();
 
 const browser = await chromium.launch();
 const page = await browser.newPage();
@@ -184,6 +239,51 @@ for (const path of PATHS) {
     await page.getByText("업무 영역").first().waitFor({ state: "visible", timeout: 30000 });
     await page.getByText("태그").first().waitFor({ state: "visible", timeout: 30000 });
     await page.getByRole("button", { name: "닫기" }).click();
+
+    // --- R11-S8-9-6 / B24: archive UI smoke (test-only DRAFT dataset) ---
+    try {
+      const suffix = Date.now().toString(36);
+      const code = `B24SMOKE${suffix.toUpperCase()}`;
+      const created = await api("POST", "/standard-dataset-types", {
+        dataset_type_code: code,
+        dataset_type_name: `B24 smoke ${suffix}`,
+        target_table: `std_b24_smoke_${suffix}`,
+        status: "DRAFT",
+        managed_table: true,
+      });
+      const dsId = created.dataset_type_id;
+      await page.reload({ waitUntil: "load", timeout: 60000 });
+      await page.getByText("표준 데이터셋").first().waitFor({ state: "visible", timeout: 30000 });
+      const searchInput = page.getByPlaceholder("검색 (이름·코드·설명)");
+      await searchInput.fill(code);
+      await searchInput.press("Enter").catch(() => {});
+      await page.waitForTimeout(1200);
+      const row = page.locator("tbody tr").filter({ hasText: code });
+      await row.first().waitFor({ state: "visible", timeout: 15000 });
+      const archiveBtn = row.first().getByTestId(`standard-dataset-archive-button-${dsId}`);
+      await archiveBtn.waitFor({ state: "visible", timeout: 10000 });
+      let dialogMessage = "";
+      page.once("dialog", async (dialog) => {
+        dialogMessage = dialog.message();
+        await dialog.accept();
+      });
+      await archiveBtn.click();
+      await page.waitForTimeout(600);
+      if (!dialogMessage.includes("물리 테이블 또는 적재 데이터는 삭제하지 않습니다")) {
+        errors.push("B24: archive confirm dialog must mention physical table retention");
+      }
+      await archiveBtn.waitFor({ state: "hidden", timeout: 10000 }).catch(() => {
+        errors.push("B24: archived dataset row should disappear from default list");
+      });
+      const listed = await api("GET", `/standard-dataset-types?keyword=${encodeURIComponent(code)}`);
+      const stillVisible = (listed.items || []).some((item) => item.dataset_type_id === dsId);
+      if (stillVisible) {
+        errors.push("B24: archived dataset must not appear in default list (active_yn=Y)");
+      }
+      console.log("  [ok] B24 standard dataset archive UI smoke");
+    } catch (err) {
+      errors.push(`B24 archive smoke failed: ${err.message}`);
+    }
   }
   if (path === "/data/sources") {
     await page.getByRole("button", { name: "신규 등록" }).first().waitFor({ state: "visible", timeout: 30000 });

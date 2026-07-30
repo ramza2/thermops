@@ -1793,6 +1793,15 @@ cd frontend && node scripts/check-visual-pipeline-studio.mjs
 - **제외:** backend enum · B15 · B13/B16 재수정 · 「R10 설정 반영」재노출 금지
 - **Backlog:** B14 done
 
+### R11-S8-9-6 표준 데이터셋 보관 UI
+
+- **범위:** FE-only — B24. 표준 데이터셋 목록/상세에서 `POST .../archive` 보관 처리.
+- **변경:** row·상세 Modal 보관 버튼 · window.confirm(물리 테이블 유지 안내) · 성공 후 refresh · check-pages B24 smoke
+- **검증:** `cd frontend && npm run build` · `node scripts/check-pages.mjs` · `node scripts/check-visual-pipeline-studio.mjs`
+- **제외:** backend/archive 정책 · 물리 DROP · unarchive · 보관 포함 보기 · B15/B20/B21/B26 · 「R10 설정 반영」재노출 금지
+- **Known limitation:** 상태 필터 ARCHIVED는 `active_yn=Y` 목록 API 때문에 보관 항목 조회 불가
+- **Backlog:** B24 done
+
 ## 설계 문서 참조
 
 - `docs/md/THERMOps_R11-S8-9_Backlog.md`

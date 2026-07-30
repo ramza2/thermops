@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { Eye, Plus, Sparkles } from "lucide-react";
+import { Archive, Eye, Plus, Sparkles } from "lucide-react";
+import { extractApiErrorMessage } from "@/api/client";
 import {
   activateStandardDatasetType,
+  archiveStandardDatasetType,
   getStandardDatasetMetadataOptions,
   getStandardDatasetType,
   getStandardDatasetTypes,
@@ -44,6 +46,28 @@ const PHYSICAL_FILTER = [
 ];
 
 const EMPTY_MESSAGE = EMPTY_MESSAGES.standardDatasets;
+
+const ARCHIVE_FAIL_FALLBACK =
+  "사용 중이거나 보관할 수 없는 상태의 데이터셋입니다. 참조 중인 파이프라인 또는 표준 테이블 구성을 확인해 주세요.";
+
+function buildArchiveConfirmMessage(item: Pick<StandardDatasetType, "dataset_type_name" | "dataset_type_code" | "status">): string {
+  const lines = [
+    "표준 데이터셋을 보관하시겠습니까?",
+    "",
+    `"${item.dataset_type_name}" (${item.dataset_type_code})`,
+    "",
+    "이 작업은 표준 데이터셋을 기본 목록에서 제외하기 위한 보관 처리입니다.",
+    "물리 테이블 또는 적재 데이터는 삭제하지 않습니다.",
+    "보관 후 Studio의 Upsert 대상 선택 목록에서 제외될 수 있습니다.",
+  ];
+  if (item.status === "ACTIVE" || item.status === "VALIDATED") {
+    lines.push(
+      "",
+      "이미 운영(ACTIVE) 또는 검증(VALIDATED) 상태입니다. 보관 전 참조 관계를 확인해 주세요.",
+    );
+  }
+  return lines.join("\n");
+}
 
 export default function StandardDatasetsPage() {
   const { showToast } = useToast();
@@ -152,6 +176,24 @@ export default function StandardDatasetsPage() {
     }
   };
 
+  const handleArchive = async (item: StandardDatasetType) => {
+    if (item.status === "ARCHIVED") return;
+    if (!window.confirm(buildArchiveConfirmMessage(item))) return;
+    try {
+      await archiveStandardDatasetType(item.dataset_type_id);
+      showToast("success", "표준 데이터셋을 보관했습니다.");
+      setDetailOpen(false);
+      setDetail(null);
+      void load();
+      void loadMetadata();
+    } catch (err: unknown) {
+      showToast(
+        "error",
+        extractApiErrorMessage(err, ARCHIVE_FAIL_FALLBACK) || "표준 데이터셋 보관에 실패했습니다.",
+      );
+    }
+  };
+
   if (loading && !items.length) return <LoadingState />;
   if (error && !items.length) return <ErrorState message={error} onRetry={() => void load()} />;
 
@@ -175,6 +217,7 @@ export default function StandardDatasetsPage() {
           데이터 매핑은 <Link to="/data/mappings" className="text-blue-600 hover:underline">데이터 매핑</Link>
           에서 Wizard로 생성한 내부 테이블을 대상으로 연결합니다.
         </p>
+        <p>보관은 메타데이터 정리이며 물리 테이블(std_*)은 삭제하지 않습니다. 보관된 데이터셋은 기본 목록에서 숨겨집니다.</p>
       </div>
 
       <div className="flex flex-wrap gap-2 mb-4">
@@ -240,15 +283,34 @@ export default function StandardDatasetsPage() {
           {
             key: "actions",
             header: "",
-            render: (r) => (
-              <Button
-                variant="ghost"
-                icon={<Eye className="w-3 h-3" />}
-                onClick={() => void openDetail(String(r.dataset_type_id))}
-              >
-                상세
-              </Button>
-            ),
+            render: (r) => {
+              const row = r as unknown as StandardDatasetType;
+              const archived = String(r.status) === "ARCHIVED";
+              return (
+                <div className="flex items-center gap-1">
+                  <Button
+                    variant="ghost"
+                    icon={<Eye className="w-3 h-3" />}
+                    onClick={() => void openDetail(String(r.dataset_type_id))}
+                  >
+                    상세
+                  </Button>
+                  {archived ? (
+                    <span className="text-[10px] text-slate-400 px-1">보관됨</span>
+                  ) : (
+                    <button
+                      type="button"
+                      data-testid={`standard-dataset-archive-button-${row.dataset_type_id}`}
+                      onClick={() => void handleArchive(row)}
+                      className="inline-flex items-center gap-1 text-xs text-slate-500 hover:text-amber-700 px-1"
+                      title="기본 목록에서 숨깁니다. 물리 테이블은 유지됩니다."
+                    >
+                      <Archive className="w-3 h-3" /> 보관
+                    </button>
+                  )}
+                </div>
+              );
+            },
           },
         ]}
         data={items as unknown as Record<string, unknown>[]}
@@ -273,6 +335,16 @@ export default function StandardDatasetsPage() {
             {detail && detail.status !== "ACTIVE" && detail.physical_table_exists && !detail.managed_table && (
               <Button icon={<Sparkles className="w-4 h-4" />} onClick={() => void handleActivate(detail.dataset_type_id)}>
                 ACTIVE 전환
+              </Button>
+            )}
+            {detail && detail.status !== "ARCHIVED" && (
+              <Button
+                variant="ghost"
+                icon={<Archive className="w-4 h-4" />}
+                data-testid="standard-dataset-archive-detail-button"
+                onClick={() => void handleArchive(detail)}
+              >
+                보관
               </Button>
             )}
             <Button variant="secondary" onClick={() => setDetailOpen(false)}>닫기</Button>
