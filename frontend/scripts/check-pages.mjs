@@ -230,6 +230,66 @@ function assertStudioUpsertStandardDatasetInlineCreate() {
   }
 }
 
+/** B21: Transform output → Standard Dataset column draft proposal in Upsert inline create. */
+function assertStudioUpsertTransformColumnProposal() {
+  const proposal = fs.readFileSync(
+    path.join(FRONTEND_SRC, "utils/transformOutputColumnProposal.ts"),
+    "utf8",
+  );
+  for (const token of [
+    "proposeTransformOutputColumns",
+    "proposedColumnsToCreatePayload",
+    "WIDE_HOUR_TO_LONG",
+    "heat_demand",
+    "measured_at",
+    "isRestDirectUpsertInput",
+    "TRANSFORM_COLUMN_PROPOSAL_HINT",
+  ]) {
+    if (!proposal.includes(token)) {
+      throw new Error(`B21 regression: transformOutputColumnProposal missing ${token}`);
+    }
+  }
+  if (proposal.includes("conflict_key") || proposal.includes("schema inference")) {
+    throw new Error("B21 regression: proposal must not auto-recommend conflict keys or run schema inference");
+  }
+
+  const graph = fs.readFileSync(path.join(FRONTEND_SRC, "utils/visualPipelineGraph.ts"), "utf8");
+  if (!graph.includes("findUpstreamTransformForUpsert")) {
+    throw new Error("B21 regression: findUpstreamTransformForUpsert helper missing");
+  }
+
+  const form = fs.readFileSync(
+    path.join(FRONTEND_SRC, "components/visualPipeline/config/VpUpsertLoadConfigForm.tsx"),
+    "utf8",
+  );
+  for (const token of [
+    "visual-pipeline-standard-dataset-propose-columns",
+    "visual-pipeline-standard-dataset-column-editor",
+    "visual-pipeline-standard-dataset-column-add",
+    "visual-pipeline-standard-dataset-column-delete",
+    "proposeTransformOutputColumns",
+    "studioGraph",
+    "컬럼 후보 제안",
+  ]) {
+    if (!form.includes(token)) {
+      throw new Error(`B21 regression: VpUpsertLoadConfigForm missing ${token}`);
+    }
+  }
+  for (const banned of ["auto proposal", "conflict key 추천", "source↔target", "column normalization"]) {
+    if (form.includes(banned)) {
+      throw new Error(`B21 regression: Upsert form must not contain '${banned}'`);
+    }
+  }
+
+  const inspector = fs.readFileSync(
+    path.join(FRONTEND_SRC, "components/visualPipeline/VpNodeInspector.tsx"),
+    "utf8",
+  );
+  if (!inspector.includes("studioNodes") || !inspector.includes("studioEdges") || !inspector.includes("studioGraph")) {
+    throw new Error("B21 regression: VpNodeInspector must pass studio graph to Upsert form");
+  }
+}
+
 async function api(method, path, body) {
   const url = `${API_BASE}${path}`;
   const res = await fetch(url, {
@@ -261,6 +321,7 @@ assertStandardDatasetArchiveUi();
 assertDataSourcePagedSelectUx();
 assertStudioRestDataSourceInlineCreate();
 assertStudioUpsertStandardDatasetInlineCreate();
+assertStudioUpsertTransformColumnProposal();
 
 const browser = await chromium.launch();
 const page = await browser.newPage();

@@ -806,8 +806,8 @@ async function runBrowserSmoke(pipeline) {
       }
 
       const tag = Date.now().toString(36).toUpperCase();
-      const createName = `B20 Studio Upsert ${tag}`;
-      const createCode = `B20UP${tag}`.slice(0, 32);
+      const createName = `B21 Studio Upsert ${tag}`;
+      const createCode = `B21UP${tag}`.slice(0, 32);
       await inspector.getByTestId("visual-pipeline-standard-dataset-create-toggle").click();
       await inspector.getByTestId("visual-pipeline-standard-dataset-create-form").waitFor({ state: "visible", timeout: 10000 });
       await inspector.getByTestId("visual-pipeline-standard-dataset-create-hint").waitFor({ state: "visible", timeout: 10000 });
@@ -815,6 +815,44 @@ async function runBrowserSmoke(pipeline) {
       if (!createHint.includes("DRAFT") || !createHint.includes("물리 테이블")) {
         fail(`B20: create hint must clarify DRAFT metadata only, got ${createHint}`);
       }
+
+      // --- R11-S8-9-11 / B21: Transform output column draft proposal ---
+      await inspector.getByTestId("visual-pipeline-standard-dataset-column-editor").waitFor({ state: "visible", timeout: 10000 });
+      await inspector.getByTestId("visual-pipeline-standard-dataset-propose-columns").click();
+      await inspector.getByTestId("visual-pipeline-standard-dataset-proposal-info").waitFor({
+        state: "visible",
+        timeout: 10000,
+      });
+      const proposalInfo = await inspector.getByTestId("visual-pipeline-standard-dataset-proposal-info").innerText();
+      if (!proposalInfo.includes("WIDE_HOUR_TO_LONG")) {
+        fail(`B21: proposal info should mention WIDE_HOUR_TO_LONG, got ${proposalInfo}`);
+      }
+      const columnRowCount = await inspector
+        .locator('[data-testid^="visual-pipeline-standard-dataset-column-row-"]')
+        .count();
+      if (columnRowCount < 2) {
+        fail(`B21: expected column rows after proposal, got ${columnRowCount}`);
+      }
+      const columnNames = await inspector
+        .getByTestId("visual-pipeline-standard-dataset-column-name")
+        .evaluateAll((inputs) => inputs.map((i) => i.value));
+      if (!columnNames.includes("heat_demand")) {
+        fail(`B21: expected heat_demand in column proposals, got ${JSON.stringify(columnNames)}`);
+      }
+      if (!columnNames.includes("measured_at")) {
+        fail(`B21: expected measured_at in column proposals, got ${JSON.stringify(columnNames)}`);
+      }
+      const typeSelects = inspector.getByTestId("visual-pipeline-standard-dataset-column-type");
+      const measuredAtIdx = columnNames.indexOf("measured_at");
+      if (measuredAtIdx >= 0) {
+        await typeSelects.nth(measuredAtIdx).selectOption("TIMESTAMP");
+      }
+      const heatIdx = columnNames.indexOf("heat_demand");
+      if (heatIdx >= 0) {
+        await inspector.getByTestId("visual-pipeline-standard-dataset-column-name").nth(heatIdx).fill("heat_demand_kw");
+      }
+      console.log(`  [ok] B21 column proposal (${columnRowCount} rows, heat_demand/measured_at visible, editable)`);
+
       await inspector.getByTestId("visual-pipeline-standard-dataset-create-name").fill(createName);
       await inspector.getByTestId("visual-pipeline-standard-dataset-create-code").fill(createCode);
       await inspector.getByTestId("visual-pipeline-standard-dataset-suggest-table").click();
@@ -860,12 +898,31 @@ async function runBrowserSmoke(pipeline) {
         );
       }
       console.log(
-        `  [ok] B20 inline create → select → save standard_dataset_id=${savedDatasetId} target_table=${savedTargetTable}`,
+        `  [ok] B20/B21 inline create → select → save standard_dataset_id=${savedDatasetId} target_table=${savedTargetTable}`,
       );
 
       try {
+        const detail = await api(
+          "GET",
+          `/standard-dataset-types/${encodeURIComponent(selectedAfterCreate)}?include_columns=true`,
+        );
+        const savedCols = detail?.columns ?? detail?.column_definitions ?? [];
+        if (Array.isArray(savedCols) && savedCols.length > 0) {
+          const savedColNames = savedCols.map((c) => c.column_name);
+          if (!savedColNames.includes("heat_demand_kw")) {
+            fail(`B21: created dataset columns expected heat_demand_kw, got ${JSON.stringify(savedColNames)}`);
+          }
+          console.log(`  [ok] B21 created dataset columns verified (${savedColNames.length} cols)`);
+        } else {
+          console.warn("  [warn] B21 include_columns=true returned no columns — skipped column payload verify");
+        }
+      } catch (err) {
+        console.warn(`  [warn] B21 include_columns verify skipped: ${String(err).slice(0, 200)}`);
+      }
+
+      try {
         await api("POST", `/standard-dataset-types/${encodeURIComponent(selectedAfterCreate)}/archive`);
-        console.log(`  [ok] B20 smoke dataset archived ${selectedAfterCreate}`);
+        console.log(`  [ok] B21 smoke dataset archived ${selectedAfterCreate}`);
       } catch (err) {
         console.warn(`  [warn] B20 archive cleanup failed: ${String(err).slice(0, 200)}`);
       }

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type ChangeEvent } from "react";
+import type { Edge, Node } from "@xyflow/react";
 import type {
   VisualPipelineComponentConfigSchema,
   VisualPipelineNodeConfigValues,
@@ -22,6 +23,14 @@ import {
   selectedStandardDatasetMissingLabel,
   suggestStandardTargetTable,
 } from "@/constants/standardDatasetList";
+import {
+  STANDARD_DATASET_DATA_TYPE_OPTIONS,
+  TRANSFORM_COLUMN_PROPOSAL_HINT,
+  TRANSFORM_COLUMN_PROPOSAL_UNAVAILABLE,
+  proposeTransformOutputColumns,
+  proposedColumnsToCreatePayload,
+  type ProposedColumnDraft,
+} from "@/utils/transformOutputColumnProposal";
 
 const INPUT_CLASS =
   "h-8 px-2.5 text-xs border border-slate-300 rounded-md w-full focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white disabled:bg-slate-50 disabled:text-slate-400";
@@ -43,7 +52,25 @@ export type VpUpsertLoadConfigFormProps = {
   fieldWarnings?: Record<string, string>;
   onChange: (patch: Record<string, unknown>) => void;
   disabled?: boolean;
+  studioGraph?: {
+    upsertNodeId: string;
+    nodes: Node[];
+    edges: Edge[];
+  };
 };
+
+type DraftColumnRow = ProposedColumnDraft & { row_id: string };
+
+function newDraftColumnRow(partial?: Partial<ProposedColumnDraft>): DraftColumnRow {
+  return {
+    row_id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    column_name: partial?.column_name ?? "",
+    data_type: partial?.data_type ?? "VARCHAR",
+    required: partial?.required ?? false,
+    description: partial?.description ?? "",
+    sort_order: partial?.sort_order,
+  };
+}
 
 function strVal(values: VisualPipelineNodeConfigValues, key: string): string {
   const v = values[key];
@@ -63,10 +90,15 @@ const EMPTY_CREATE = {
   business_domain: "",
   description: "",
   target_table: "",
-  column_name: "",
 };
 
-export function VpUpsertLoadConfigForm({ values, fieldWarnings, onChange, disabled }: VpUpsertLoadConfigFormProps) {
+export function VpUpsertLoadConfigForm({
+  values,
+  fieldWarnings,
+  onChange,
+  disabled,
+  studioGraph,
+}: VpUpsertLoadConfigFormProps) {
   const writeMode = strVal(values, "write_mode");
   const conflictRequired = writeMode === "DEDUPLICATE" || writeMode === "UPSERT";
   const warn = (key: string) => fieldWarnings?.[key];
@@ -92,6 +124,9 @@ export function VpUpsertLoadConfigForm({ values, fieldWarnings, onChange, disabl
   const [createError, setCreateError] = useState<string | null>(null);
   const [createSuccess, setCreateSuccess] = useState<string | null>(null);
   const [suggestingTable, setSuggestingTable] = useState(false);
+  const [draftColumns, setDraftColumns] = useState<DraftColumnRow[]>([]);
+  const [proposalInfo, setProposalInfo] = useState<string | null>(null);
+  const [proposalUnavailable, setProposalUnavailable] = useState<string | null>(null);
 
   const loadDatasets = useCallback(async (keyword?: string) => {
     setDatasetsLoading(true);
@@ -192,17 +227,9 @@ export function VpUpsertLoadConfigForm({ values, fieldWarnings, onChange, disabl
     setCreateSuccess(null);
     setCreating(true);
     try {
-      const columns = createForm.column_name.trim()
-        ? [
-            {
-              column_name: createForm.column_name.trim(),
-              data_type: "VARCHAR",
-              data_length: 100,
-              required: false,
-              primary_key: false,
-            },
-          ]
-        : [];
+      const columns = proposedColumnsToCreatePayload(
+        draftColumns.map(({ row_id: _rowId, ...col }) => col),
+      );
       const created = await createInlineStandardDataset({
         dataset_type_name: createForm.dataset_type_name,
         dataset_type_code: createForm.dataset_type_code,
@@ -221,11 +248,41 @@ export function VpUpsertLoadConfigForm({ values, fieldWarnings, onChange, disabl
       setCreateSuccess("새 표준 데이터셋을 등록하고 현재 노드에 선택했습니다.");
       setCreateOpen(false);
       setCreateForm(EMPTY_CREATE);
+      setDraftColumns([]);
+      setProposalInfo(null);
+      setProposalUnavailable(null);
     } catch (err) {
       setCreateError(createStandardDatasetErrorMessage(err));
     } finally {
       setCreating(false);
     }
+  };
+
+  const handleProposeColumns = () => {
+    if (!studioGraph?.upsertNodeId) {
+      setProposalUnavailable(TRANSFORM_COLUMN_PROPOSAL_UNAVAILABLE);
+      setProposalInfo(null);
+      return;
+    }
+    const result = proposeTransformOutputColumns(
+      studioGraph.upsertNodeId,
+      studioGraph.nodes,
+      studioGraph.edges,
+    );
+    if (!result.ok) {
+      setProposalUnavailable(result.reason);
+      setProposalInfo(null);
+      return;
+    }
+    const hasExisting = draftColumns.some((c) => c.column_name.trim());
+    if (hasExisting && !window.confirm("기존 컬럼을 제안 컬럼으로 대체할까요?")) {
+      return;
+    }
+    setDraftColumns(result.columns.map((c) => newDraftColumnRow(c)));
+    setProposalUnavailable(null);
+    setProposalInfo(
+      `${result.columns.length}개 컬럼 후보 (source: ${result.source}, transform: ${result.transform_type})`,
+    );
   };
 
   const categorySelectOptions = useMemo(() => {
@@ -349,6 +406,11 @@ export function VpUpsertLoadConfigForm({ values, fieldWarnings, onChange, disabl
                 onClick={() => {
                   setCreateOpen((v) => !v);
                   setCreateError(null);
+                  if (createOpen) {
+                    setDraftColumns([]);
+                    setProposalInfo(null);
+                    setProposalUnavailable(null);
+                  }
                 }}
               >
                 {createOpen ? "등록 취소" : "+ 새 표준 데이터셋 등록"}
@@ -434,15 +496,126 @@ export function VpUpsertLoadConfigForm({ values, fieldWarnings, onChange, disabl
                       {suggestingTable ? "제안 중…" : "테이블명 제안"}
                     </button>
                   </div>
-                  <label className="block text-[10px] text-slate-500">최소 컬럼 (선택)</label>
-                  <input
-                    className={INPUT_CLASS}
-                    value={createForm.column_name}
-                    disabled={disabled || creating}
-                    data-testid="visual-pipeline-standard-dataset-create-column"
-                    onChange={(e) => setCreateForm({ ...createForm, column_name: e.target.value })}
-                    placeholder="비우면 columns=[] · 예: entity_id"
-                  />
+                  <div className="space-y-2 pt-1 border-t border-slate-200" data-testid="visual-pipeline-standard-dataset-column-editor">
+                    <div className="text-[10px] font-medium text-slate-600">컬럼 정의</div>
+                    <p className="text-[10px] text-slate-500">{TRANSFORM_COLUMN_PROPOSAL_HINT}</p>
+                    <button
+                      type="button"
+                      className={BTN_SECONDARY}
+                      disabled={disabled || creating}
+                      data-testid="visual-pipeline-standard-dataset-propose-columns"
+                      onClick={handleProposeColumns}
+                    >
+                      Transform 출력 기준 컬럼 후보 제안
+                    </button>
+                    {proposalInfo && (
+                      <p className="text-[10px] text-emerald-700" data-testid="visual-pipeline-standard-dataset-proposal-info">
+                        {proposalInfo}
+                      </p>
+                    )}
+                    {proposalUnavailable && (
+                      <p
+                        className="text-[10px] text-amber-700"
+                        data-testid="visual-pipeline-standard-dataset-proposal-unavailable"
+                      >
+                        {proposalUnavailable}
+                      </p>
+                    )}
+                    {draftColumns.map((row, idx) => (
+                      <div
+                        key={row.row_id}
+                        className="rounded border border-slate-200 bg-white p-2 space-y-1.5"
+                        data-testid={`visual-pipeline-standard-dataset-column-row-${idx}`}
+                      >
+                        <div className="grid grid-cols-2 gap-1.5">
+                          <div>
+                            <label className="block text-[9px] text-slate-500">column_name</label>
+                            <input
+                              className={INPUT_CLASS}
+                              value={row.column_name}
+                              disabled={disabled || creating}
+                              data-testid="visual-pipeline-standard-dataset-column-name"
+                              onChange={(e) => {
+                                const v = e.target.value;
+                                setDraftColumns((prev) =>
+                                  prev.map((c) => (c.row_id === row.row_id ? { ...c, column_name: v } : c)),
+                                );
+                              }}
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[9px] text-slate-500">data_type</label>
+                            <select
+                              className={INPUT_CLASS}
+                              value={row.data_type}
+                              disabled={disabled || creating}
+                              data-testid="visual-pipeline-standard-dataset-column-type"
+                              onChange={(e) => {
+                                const v = e.target.value;
+                                setDraftColumns((prev) =>
+                                  prev.map((c) =>
+                                    c.row_id === row.row_id ? { ...c, data_type: v as ProposedColumnDraft["data_type"] } : c,
+                                  ),
+                                );
+                              }}
+                            >
+                              {STANDARD_DATASET_DATA_TYPE_OPTIONS.map((t) => (
+                                <option key={t} value={t}>
+                                  {t}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
+                        <input
+                          className={INPUT_CLASS}
+                          value={row.description || ""}
+                          disabled={disabled || creating}
+                          placeholder="description (선택)"
+                          onChange={(e) => {
+                            const v = e.target.value;
+                            setDraftColumns((prev) =>
+                              prev.map((c) => (c.row_id === row.row_id ? { ...c, description: v } : c)),
+                            );
+                          }}
+                        />
+                        <div className="flex items-center justify-between">
+                          <label className="inline-flex items-center gap-1 text-[10px] text-slate-600">
+                            <input
+                              type="checkbox"
+                              checked={row.required}
+                              disabled={disabled || creating}
+                              onChange={(e) => {
+                                const v = e.target.checked;
+                                setDraftColumns((prev) =>
+                                  prev.map((c) => (c.row_id === row.row_id ? { ...c, required: v } : c)),
+                                );
+                              }}
+                            />
+                            required
+                          </label>
+                          <button
+                            type="button"
+                            className={BTN_GHOST}
+                            disabled={disabled || creating}
+                            data-testid="visual-pipeline-standard-dataset-column-delete"
+                            onClick={() => setDraftColumns((prev) => prev.filter((c) => c.row_id !== row.row_id))}
+                          >
+                            삭제
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                    <button
+                      type="button"
+                      className={BTN_GHOST}
+                      disabled={disabled || creating}
+                      data-testid="visual-pipeline-standard-dataset-column-add"
+                      onClick={() => setDraftColumns((prev) => [...prev, newDraftColumnRow()])}
+                    >
+                      + 컬럼 추가
+                    </button>
+                  </div>
                   {createError && (
                     <p className="text-[10px] text-red-700" data-testid="visual-pipeline-standard-dataset-create-error">
                       {createError}

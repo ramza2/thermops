@@ -1,5 +1,5 @@
 import { Box, Trash2 } from "lucide-react";
-import type { Node } from "@xyflow/react";
+import type { Edge, Node } from "@xyflow/react";
 import { Button } from "@/components/Button";
 import { VpCronScheduleConfigForm } from "@/components/visualPipeline/config/VpCronScheduleConfigForm";
 import { VpRestApiSourceConfigForm } from "@/components/visualPipeline/config/VpRestApiSourceConfigForm";
@@ -19,6 +19,8 @@ interface VpNodeInspectorProps {
   /** UI-only validation cache (B16). Prefer over node.data.config.validation. */
   configValidation?: VisualPipelineNodeConfigValidation;
   fieldWarnings?: Record<string, string>;
+  studioNodes?: Node[];
+  studioEdges?: Edge[];
   onLabelChange: (label: string) => void;
   onConfigChange: (patch: Record<string, unknown>) => void;
   onDelete: () => void;
@@ -76,11 +78,17 @@ function ConfigFormForType({
   values,
   fieldWarnings,
   onConfigChange,
+  studioGraph,
 }: {
   componentType: string;
   values: Record<string, unknown>;
   fieldWarnings?: Record<string, string>;
   onConfigChange: (patch: Record<string, unknown>) => void;
+  studioGraph?: {
+    upsertNodeId: string;
+    nodes: Node[];
+    edges: Edge[];
+  };
 }) {
   if (componentType === "VP_REST_API_SOURCE") {
     return (
@@ -109,6 +117,7 @@ function ConfigFormForType({
         schema={getVisualPipelineConfigSchema("VP_UPSERT_LOAD")}
         fieldWarnings={fieldWarnings}
         onChange={onConfigChange}
+        studioGraph={studioGraph}
       />
     );
   }
@@ -137,6 +146,8 @@ export function VpNodeInspector({
   catalogItem,
   configValidation,
   fieldWarnings,
+  studioNodes,
+  studioEdges,
   onLabelChange,
   onConfigChange,
   onDelete,
@@ -167,6 +178,10 @@ export function VpNodeInspector({
   const normalizedConfig = ensureNodeConfig(node, componentType);
   const inputs = catalogItem?.input_ports?.map((p) => p.port_id) ?? [];
   const outputs = catalogItem?.output_ports?.map((p) => p.port_id) ?? [];
+  const studioGraph =
+    node && componentType === "VP_UPSERT_LOAD" && studioNodes && studioEdges
+      ? { upsertNodeId: node.id, nodes: studioNodes, edges: studioEdges }
+      : undefined;
 
   const rows: [string, string][] = [
     ["node_id", node.id],
@@ -243,6 +258,7 @@ export function VpNodeInspector({
               values={normalizedConfig.values}
               fieldWarnings={fieldWarnings}
               onConfigChange={onConfigChange}
+              studioGraph={studioGraph}
             />
           ) : (
             <>

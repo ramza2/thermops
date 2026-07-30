@@ -1836,6 +1836,14 @@ cd frontend && node scripts/check-visual-pipeline-studio.mjs
 - **Known limitation:** `/standard-dataset-types`에 page/size 없음. 인라인 생성은 DRAFT 메타만
 - **Backlog:** B20 done
 
+### R11-S8-9-11 Studio Upsert Transform 출력 컬럼 후보 제안
+
+- **범위:** FE-only — B21. Studio Upsert Load Inspector Standard Dataset 인라인 생성 영역에 Transform 출력 기반 컬럼 초안 제안.
+- **변경:** upstream VP_TRANSFORM 정적 contract/fallback proposal · 사용자 수정 가능 컬럼 editor · `columns` payload 반영 · 생성 성공 시 `standard_dataset_id`+`target_table` 반영 · REST raw_rows 직결 시 제안 없음 · check-pages/studio smoke B21
+- **검증:** `cd frontend && npm run build` · `node scripts/check-pages.mjs` · `node scripts/check-visual-pipeline-studio.mjs`
+- **제외:** backend/DB · Transform 실행/API schema inference · conflict_keys 자동 추천 · B15 mapping UX · 물리 테이블/ACTIVE/DROP · B19/B24/B26 재수정 · compile/run · 「R10 설정 반영」재노출 금지
+- **Backlog:** B21 done
+
 ## 설계 문서 참조
 
 - `docs/md/THERMOps_R11-S8-9_Backlog.md`

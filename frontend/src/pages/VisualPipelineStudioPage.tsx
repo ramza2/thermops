@@ -1267,6 +1267,8 @@ function StudioCanvasInner() {
           catalogItem={selectedCatalog}
           configValidation={selectedConfigValidation}
           fieldWarnings={fieldWarnings}
+          studioNodes={nodes}
+          studioEdges={edges}
           onLabelChange={handleLabelChange}
           onConfigChange={handleNodeConfigChange}
           onDelete={handleDeleteNode}

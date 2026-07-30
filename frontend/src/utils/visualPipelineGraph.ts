@@ -399,3 +399,31 @@ export function findConnectionRuleWarning(
   }
   return null;
 }
+
+/** B21: Find VP_TRANSFORM feeding Upsert via transformed_rows (not REST raw_rows direct). */
+export function findUpstreamTransformForUpsert(
+  upsertNodeId: string,
+  nodes: Node[],
+  edges: Edge[],
+): { transformNode: Node; edge: Edge } | null {
+  const inbound = edges.filter((e) => e.target === upsertNodeId);
+  for (const edge of inbound) {
+    const sourceNode = nodes.find((n) => n.id === edge.source);
+    if (!sourceNode) continue;
+    const componentType = String(sourceNode.type ?? sourceNode.data?.component_type ?? "");
+    if (componentType !== "VP_TRANSFORM") continue;
+
+    const data = (edge.data ?? {}) as Record<string, unknown>;
+    const dataType = String(data.data_type || "").toUpperCase();
+    const sourcePort =
+      typeof data.source_port === "string"
+        ? data.source_port
+        : parsePortHandleId(edge.sourceHandle).portName;
+
+    if (dataType === "RAW_ROWS" || sourcePort === "raw_rows") continue;
+    if (sourcePort === "transformed_rows" || dataType === "TRANSFORMED_ROWS" || !sourcePort) {
+      return { transformNode: sourceNode, edge };
+    }
+  }
+  return null;
+}
