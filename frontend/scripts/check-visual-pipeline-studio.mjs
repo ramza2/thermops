@@ -680,6 +680,65 @@ async function runBrowserSmoke(pipeline) {
     await assertConfigFormVisible(page, ["operation_name", "endpoint_path", "http_method"]);
     console.log("  [ok] REST config form visible");
 
+    // --- R11-S8-9-9 / B19: Studio REST Data Source select + inline create ---
+    {
+      await assertConfigFormVisible(page, ["data_source_id", "credential_ref"]);
+      await inspector.getByTestId("visual-pipeline-data-source-picker").waitFor({ state: "visible", timeout: 10000 });
+      await inspector.getByTestId("visual-pipeline-data-source-list-hint").waitFor({ state: "visible", timeout: 10000 });
+      await inspector.getByTestId("visual-pipeline-data-source-search-hint").waitFor({ state: "visible", timeout: 10000 });
+      await inspector.getByTestId("visual-pipeline-data-source-search-input").waitFor({ state: "visible", timeout: 10000 });
+      await inspector.getByTestId("visual-pipeline-data-source-refresh-button").waitFor({ state: "visible", timeout: 10000 });
+      await inspector.getByTestId("visual-pipeline-data-source-select").waitFor({ state: "visible", timeout: 10000 });
+      const searchHint = await inspector.getByTestId("visual-pipeline-data-source-search-hint").innerText();
+      if (!searchHint.includes("현재 로드된 항목 내에서만 검색")) {
+        fail("B19: search hint must mention client-side loaded-items limitation");
+      }
+      const listHint = await inspector.getByTestId("visual-pipeline-data-source-list-hint").innerText();
+      if (!listHint.includes("최대 100건")) {
+        fail("B19: list hint must mention size≤100 paging");
+      }
+      const credHelp = await inspector
+        .getByTestId("visual-pipeline-inspector-config-field-credential_ref")
+        .locator("p")
+        .first()
+        .innerText();
+      if (!credHelp.includes("CRED-") || !credHelp.includes("원문을 입력하지 말고")) {
+        fail(`B19: credential_ref help must warn against secret paste, got ${credHelp}`);
+      }
+
+      const createName = `B19 Studio REST ${Date.now().toString(36)}`;
+      await inspector.getByTestId("visual-pipeline-data-source-create-toggle").click();
+      await inspector.getByTestId("visual-pipeline-data-source-create-form").waitFor({ state: "visible", timeout: 10000 });
+      await inspector.getByTestId("visual-pipeline-data-source-create-auth-hint").waitFor({ state: "visible", timeout: 10000 });
+      const authHint = await inspector.getByTestId("visual-pipeline-data-source-create-auth-hint").innerText();
+      if (!authHint.includes("REST API 연결 Wizard") || !authHint.includes("인증 정보")) {
+        fail(`B19: create auth hint must point to Data Sources Wizard, got ${authHint}`);
+      }
+      if ((await inspector.getByTestId("visual-pipeline-data-source-create-form").locator('input[type="password"]').count()) > 0) {
+        fail("B19: inline create must not expose password/secret inputs");
+      }
+      await inspector.getByTestId("visual-pipeline-data-source-create-name").fill(createName);
+      await inspector.getByTestId("visual-pipeline-data-source-create-base-url").fill(INTERNAL_API);
+      await inspector.getByTestId("visual-pipeline-data-source-create-domain").selectOption("HEAT_DEMAND");
+      await inspector.getByTestId("visual-pipeline-data-source-create-submit").click();
+      await inspector.getByTestId("visual-pipeline-data-source-create-success").waitFor({ state: "visible", timeout: 30000 });
+      const selectedAfterCreate = await inspector.getByTestId("visual-pipeline-data-source-select").inputValue();
+      if (!selectedAfterCreate || selectedAfterCreate === "DS-SAMPLE") {
+        fail(`B19: expected new data_source_id after inline create, got ${selectedAfterCreate}`);
+      }
+      await toolbar.getByText("● 저장되지 않음").first().waitFor({ state: "visible", timeout: 10000 });
+      await saveGraphAndWait(page);
+      const afterB19 = await api("GET", `/visual-pipelines/${pipeline.pipeline_id}`);
+      const restAfterB19 = (afterB19.graph?.nodes ?? []).find((n) => n.id === "e2e-rest");
+      const savedSourceId = restAfterB19?.data?.config?.values?.data_source_id;
+      if (savedSourceId !== selectedAfterCreate) {
+        fail(
+          `B19: saved config.values.data_source_id expected ${selectedAfterCreate}, got ${savedSourceId}`,
+        );
+      }
+      console.log(`  [ok] B19 inline create → select → save data_source_id=${savedSourceId}`);
+    }
+
     await selectNodeById(page, "e2e-transform");
     await inspector.getByText("VP_TRANSFORM").first().waitFor({ state: "visible", timeout: 10000 });
     await assertConfigFormVisible(page, ["transform_type"]);

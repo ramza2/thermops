@@ -42,7 +42,7 @@
 | B16 | 검증 → Compile dirty 흐름 개선 | Graph 검증 후 `applyConfigValidationCache`가 노드에 결과를 써 dirty 재발. **A안:** UI 전용 `configValidationByNodeId` + dirty/save에서 `config.validation` canonicalize | A | **done** | **R11-S8-9-3** |
 | B17 | Studio 이중 스크롤 정리 | Node Inspector·하단 패널 누적 스크롤. viewport 고정 작업대 + Bottom Operations Dock | A | **done** | **R11-S8-9-1** 완료 |
 | B18 | Target Table sample rows 미리보기 | 즉시 실행 SUCCESS 후 Studio에서 적재 row·건수 확인 UI 없음 (현재 SQL만). Run Detail 또는 Upsert 연계 LIMIT N preview | C | open | |
-| B19 | Studio REST — Data Source 인라인 생성 | Inspector에서 Data Source 최소 생성(이름·base URL·credential ref) 후 ID 자동 선택. `/data-sources` 이탈 감소 | B | open | |
+| B19 | Studio REST — Data Source 인라인 생성 | Inspector에서 REST_API Data Source 최소 생성(이름·base URL·domain, auth=NONE) 후 ID 자동 선택. 선택 UI는 B11 검색/더 보기/새로고침 재사용. secret/credential 저장 UI 없음 | B | **done** | **R11-S8-9-9** |
 | B20 | Studio Upsert — 표준 데이터셋 인라인 생성 | Inspector에서 Standard Dataset Wizard 호출·완료 후 target 자동 채움. 임의 테이블 생성 금지 정책 유지 | B | open | |
 | B21 | Transform 출력 → 표준 테이블 컬럼 자동 제안 | Transform 스키마/미리보기에서 Upsert·표준 데이터셋 컬럼·conflict key 제안. B15·B20 연계 | B | open | |
 | B22 | DISABLED(Coming later) 컴포넌트 본구현 | Palette DISABLED 노드 활성화 로드맵. **DATA_INPUT:** `VP_DB_SOURCE`, `VP_CSV_SOURCE`, `VP_FORECAST_PROVIDER`. **QUALITY:** `VP_DATA_QUALITY`. **FEATURE:** `VP_FEATURE_BUILD`. **MODEL:** `VP_MODEL_TRAINING`. **PREDICTION:** `VP_BATCH_PREDICTION`. **OPERATION:** `VP_NOTIFICATION` (S8-7 운영 알림과 구분) | D | open | 우선순위 별도 승인 |
@@ -74,7 +74,7 @@ B11(done), B13(done), B14(done), B16(done), B17(done), B24(done), B25(done)
 
 ### B — 범용 Visual Pipeline 구성 편의
 
-B1, B2, B3, B15, B19, B20, B21
+B1, B2, B3, B15, B19(done), B20, B21
 
 ### C — 운영 가시성 / 복구 UX
 
@@ -97,7 +97,8 @@ B5, B7, B12, B22, B23
 | R11-S8-9-5 | B14 | Transform unmapped_policy → FAIL_LOAD/SKIP_UNMAPPED/LOG_ONLY + Wizard 공통 상수 | `b8bc37c` |
 | R11-S8-9-6 | B24 | 표준 데이터셋 보관 UI — archive API + confirm + 목록 refresh | `8688a3f` |
 | R11-S8-9-7 | B26 | Ops smoke soft-cancel: run_status별 선택·assertion 분기 + fail() throw | `6abaeb9` |
-| R11-S8-9-8 | B11 | Data Source 100건 초과: 클라이언트 검색·더 보기·새로고침 (size≤100) | 구현 완료 (커밋 대기) |
+| R11-S8-9-8 | B11 | Data Source 100건 초과: 클라이언트 검색·더 보기·새로고침 (size≤100) | `3ac54b0` |
+| R11-S8-9-9 | B19 | Studio REST Data Source 선택 + REST_API 인라인 생성 (auth=NONE, secret UI 없음) | |
 
 ---
 
@@ -116,6 +117,7 @@ B5, B7, B12, B22, B23
 | 2026-07-28 | B14 push (`b8bc37c`). B24 → `done` (S8-9-6). 표준 데이터셋 보관 UI + check-pages smoke |
 | 2026-07-30 | B24 push (`8688a3f`). B26 → `done` (S8-9-7). Ops smoke run_status별 soft-cancel assertion + fail() throw |
 | 2026-07-30 | B26 push (`6abaeb9`). B11 → `done` (S8-9-8). Data Source 검색·더 보기·새로고침 (서버 keyword 없음) |
+| 2026-07-30 | B19 → `done` (S8-9-9). Studio REST Data Source 선택·인라인 생성 (secret/credential 저장 UI 제외) |
 
 ---
 

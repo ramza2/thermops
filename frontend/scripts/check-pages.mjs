@@ -134,6 +134,52 @@ function assertDataSourcePagedSelectUx() {
   }
 }
 
+/** B19: Studio REST Inspector Data Source select + REST_API-only inline create (no secret UI). */
+function assertStudioRestDataSourceInlineCreate() {
+  const constFile = fs.readFileSync(path.join(FRONTEND_SRC, "constants/dataSourceList.ts"), "utf8");
+  if (!constFile.includes("createRestDataSource") || !constFile.includes('source_type: "REST_API"')) {
+    throw new Error("B19 regression: createRestDataSource REST_API helper missing");
+  }
+  if (!constFile.includes('auth_type: "NONE"')) {
+    throw new Error("B19 regression: inline create must default auth_type NONE");
+  }
+  if (!constFile.includes("DATA_SOURCE_CREDENTIAL_REF_HELP") || !constFile.includes("CRED-")) {
+    throw new Error("B19 regression: credential_ref help constant missing");
+  }
+  if (!constFile.includes("DATA_SOURCE_INLINE_CREATE_AUTH_HINT")) {
+    throw new Error("B19 regression: inline create auth hint constant missing");
+  }
+  if (constFile.includes("DATA_SOURCE_LIST_PAGE_SIZE = 200") || /size:\s*([2-9]\d{2,}|\d{4,})/.test(constFile)) {
+    throw new Error("B19 regression: dataSourceList must not reintroduce size>100");
+  }
+  const form = fs.readFileSync(
+    path.join(FRONTEND_SRC, "components/visualPipeline/config/VpRestApiSourceConfigForm.tsx"),
+    "utf8",
+  );
+  for (const token of [
+    "visual-pipeline-data-source-picker",
+    "visual-pipeline-data-source-select",
+    "visual-pipeline-data-source-search-input",
+    "visual-pipeline-data-source-refresh-button",
+    "visual-pipeline-data-source-load-more",
+    "visual-pipeline-data-source-create-form",
+    "createRestDataSource",
+    "DATA_SOURCE_CREDENTIAL_REF_HELP",
+    "DATA_SOURCE_INLINE_CREATE_AUTH_HINT",
+    "고급: ID 직접 입력",
+  ]) {
+    if (!form.includes(token)) {
+      throw new Error(`B19 regression: VpRestApiSourceConfigForm missing ${token}`);
+    }
+  }
+  if (form.includes("api_key") || form.includes("password") || form.includes("type=\"password\"")) {
+    throw new Error("B19 regression: Studio inline create must not add secret/api_key/password fields");
+  }
+  if (form.includes("size: 200") || /size:\s*([2-9]\d{2,}|\d{4,})/.test(form)) {
+    throw new Error("B19 regression: Studio REST form must not request size>100");
+  }
+}
+
 async function api(method, path, body) {
   const url = `${API_BASE}${path}`;
   const res = await fetch(url, {
@@ -163,6 +209,7 @@ async function api(method, path, body) {
 assertNoDataSourcesSizeOver100();
 assertStandardDatasetArchiveUi();
 assertDataSourcePagedSelectUx();
+assertStudioRestDataSourceInlineCreate();
 
 const browser = await chromium.launch();
 const page = await browser.newPage();

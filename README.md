@@ -1819,6 +1819,14 @@ cd frontend && node scripts/check-visual-pipeline-studio.mjs
 - **Known limitation:** 서버 keyword 없음 → 검색은 로드된 페이지 누적 범위만
 - **Backlog:** B11 done
 
+### R11-S8-9-9 Studio REST Data Source 인라인 생성
+
+- **범위:** FE-only — B19. Studio REST Source Inspector에서 Data Source 선택 + REST_API 인라인 생성.
+- **변경:** B11 검색/더 보기/새로고침 재사용 · `createRestDataSource`(auth_type=NONE) · 생성 성공 시 `config.values.data_source_id` 즉시 반영 · 목록 밖 선택값 보존 · 수동 ID fallback · credential_ref는 CRED- 참조 안내만 · check-pages/studio smoke B19
+- **검증:** `cd frontend && npm run build` · `node scripts/check-pages.mjs` · `node scripts/check-visual-pipeline-studio.mjs`
+- **제외:** backend/DB · size>100 · credential 저장 UI/API · Operation Wizard 확장 · B20/B21/B15 · 실제 외부 API 연결 테스트 자동 실행 · 「R10 설정 반영」재노출 금지
+- **Backlog:** B19 done
+
 ## 설계 문서 참조
 
 - `docs/md/THERMOps_R11-S8-9_Backlog.md`
