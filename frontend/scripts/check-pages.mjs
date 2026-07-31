@@ -501,6 +501,50 @@ function assertVisualPipelineE2eSmoke() {
   }
 }
 
+/** B6: Run Detail failure summary helper + panel card. */
+function assertRunFailureSummaryUx() {
+  const helper = fs.readFileSync(path.join(FRONTEND_SRC, "utils/runFailureSummary.ts"), "utf8");
+  for (const token of [
+    "buildRunFailureSummary",
+    "mapRunStepName",
+    'severity: "none"',
+    "FALLBACK_REASON",
+    "Traceback",
+  ]) {
+    if (!helper.includes(token)) {
+      throw new Error(`B6 regression: runFailureSummary missing ${token}`);
+    }
+  }
+  if (helper.includes("R10 설정 반영")) {
+    throw new Error("B6 regression: helper must not re-expose R10 label");
+  }
+
+  const panel = fs.readFileSync(
+    path.join(FRONTEND_SRC, "components/visualPipeline/VpRunDetailPanel.tsx"),
+    "utf8",
+  );
+  for (const token of [
+    "buildRunFailureSummary",
+    "failure-summary",
+    "실패 원인 요약",
+    "showFailureSummary",
+  ]) {
+    if (!panel.includes(token)) {
+      throw new Error(`B6 regression: VpRunDetailPanel missing ${token}`);
+    }
+  }
+  if (!panel.includes('failureSummary.severity !== "none"')) {
+    throw new Error("B6 regression: SUCCESS/RUNNING must hide failure summary card");
+  }
+  if (panel.includes("R10 설정 반영")) {
+    throw new Error("B6 regression: Run Detail must not re-expose R10 label");
+  }
+  // Must not dump raw Traceback into the summary card JSX as a template.
+  if (/failure-summary[\s\S]{0,400}Traceback/.test(panel)) {
+    throw new Error("B6 regression: failure summary card must not embed Traceback dumps");
+  }
+}
+
 async function api(method, path, body) {
   const url = `${API_BASE}${path}`;
   const res = await fetch(url, {
@@ -537,6 +581,7 @@ assertStudioUpsertColumnMatchPreview();
 assertStudioUpsertConflictKeysUx();
 assertStudioTargetTableSamplePreview();
 assertVisualPipelineE2eSmoke();
+assertRunFailureSummaryUx();
 
 const browser = await chromium.launch();
 const page = await browser.newPage();

@@ -1881,6 +1881,15 @@ cd frontend && node scripts/check-visual-pipeline-studio.mjs
 - **Known limitation:** load 타깃은 platform seed sample 테이블 · Studio 회귀 smoke와 일부 경로 중복
 - **Backlog:** B12 done
 
+### R11-S8-9-16 Run Detail 실패 원인 요약
+
+- **범위:** FE-only — B6. `VpRunDetailPanel` 상단에 실패 step+reason 한 줄 요약 카드.
+- **변경:** `buildRunFailureSummary` · issues/events/error_message/cancel_reason 우선순위 · SUCCESS/RUNNING 숨김 · check-pages/ops/e2e smoke B6
+- **검증:** `cd frontend && npm run build` · `check-pages.mjs` · `check-visual-pipeline-ops.mjs` · `check-visual-pipeline-studio.mjs` · `check-visual-pipeline-e2e.mjs`
+- **제외:** backend/API/DB · compile/run/worker · B12/B18/B26 대규모 재작성 · package · 「R10 설정 반영」재노출 금지
+- **Known limitation:** progress step에 FAILED 플래그 없음 · RUNNING stale 요약 v1 제외 · 진단 보조(원인 단정 아님)
+- **Backlog:** B6 done
+
 ## 설계 문서 참조
 
 - `docs/md/THERMOps_R11-S8-9_Backlog.md`

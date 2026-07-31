@@ -11,6 +11,7 @@ import type {
   VisualPipelineRunProgress,
   VisualPipelineRunResponse,
 } from "@/types/visualPipeline";
+import { buildRunFailureSummary } from "@/utils/runFailureSummary";
 
 interface VpRunDetailPanelProps {
   detail: VisualPipelineRunResponse | null;
@@ -189,6 +190,9 @@ export function VpRunDetailPanel({
   const progressPercent =
     progress?.progress_percent != null ? Math.max(0, Math.min(100, progress.progress_percent)) : null;
 
+  const failureSummary = buildRunFailureSummary(detail, events, progress);
+  const showFailureSummary = failureSummary.severity !== "none";
+
   const retryable = canRetryStatus(detail?.run_status);
   const canConfirmRetry =
     !!detail &&
@@ -314,6 +318,48 @@ export function VpRunDetailPanel({
               <Field label="실행 방식" value={modeLabel(detail.mode)} />
               <Field label="execution_mode" value={detail.execution_mode} />
             </section>
+
+            {showFailureSummary && (
+              <section
+                className={
+                  failureSummary.severity === "error"
+                    ? "rounded-md border border-red-200 bg-red-50/70 px-2.5 py-2 space-y-1"
+                    : failureSummary.severity === "warning"
+                      ? "rounded-md border border-amber-200 bg-amber-50/70 px-2.5 py-2 space-y-1"
+                      : "rounded-md border border-slate-200 bg-slate-50 px-2.5 py-2 space-y-1"
+                }
+                data-testid={`${testIdPrefix}-failure-summary`}
+                data-severity={failureSummary.severity}
+                data-source={failureSummary.source}
+              >
+                <div className="text-[10px] font-bold uppercase tracking-wide text-slate-600">
+                  실패 원인 요약
+                </div>
+                <div
+                  className="text-[11px] font-semibold text-slate-800"
+                  data-testid={`${testIdPrefix}-failure-summary-title`}
+                >
+                  [{failureSummary.severity.toUpperCase()}] {failureSummary.title}
+                </div>
+                <p
+                  className="text-[11px] text-slate-700"
+                  data-testid={`${testIdPrefix}-failure-summary-reason`}
+                >
+                  {failureSummary.reason}
+                </p>
+                {failureSummary.hint && (
+                  <p
+                    className="text-[10px] text-slate-500"
+                    data-testid={`${testIdPrefix}-failure-summary-hint`}
+                  >
+                    힌트: {failureSummary.hint}
+                  </p>
+                )}
+                <p className="text-[10px] text-slate-400">
+                  진단 보조 요약입니다. 상세는 아래 진행 이력·이슈를 확인하세요.
+                </p>
+              </section>
+            )}
 
             <section
               className="rounded-md border border-slate-100 bg-slate-50 px-2.5 py-2 space-y-2"

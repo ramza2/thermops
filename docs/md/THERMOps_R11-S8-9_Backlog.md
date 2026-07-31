@@ -29,7 +29,7 @@
 | B3 | Schema / Key Mapping Helper | 원천 필드 → 표준 컬럼 mapping 범용 helper. 날짜/시간, 엔티티 ID, 지사/노드 코드, 측정값 category 자동 제안 | B | open | 구 S8-8 B3 확장 |
 | B4 | Catch-up 안내 개선 | missed 의미·window·경고 카피 강화 (Studio Catch-up 섹션) | C | open | |
 | B5 | Notification badge PoC | S8-7-1 read-model badge (Ops/Studio). S8-7 설계 범위 | D | open | S8-7-1과 병행 |
-| B6 | 실패 원인 요약 개선 | Run Detail에 step+reason 한줄 요약 | C | open | |
+| B6 | 실패 원인 요약 개선 | Run Detail에 step+reason 한줄 요약 | C | **done** | **R11-S8-9-16** |
 | B7 | Data Load → ML Workflow Handoff Guide | Visual Pipeline 적재 이후 Feature Dataset / Training / Batch Prediction으로 넘기는 **범용 handoff 가이드** (docs) | D | open | 구 B7 확장 |
 | B8 | PARTIAL 중복 적재 가시화 | Retry 전 영향 범위 힌트 | C | open | |
 | B9 | Schedule skip 이력 UI | `ACTIVE_RUN_EXISTS` 등 skip 반복 가시화 | C | open | |
@@ -79,7 +79,7 @@ B1, B2, B3, B15(done), B19(done), B20(done), B21(done), B27(done)
 
 ### C — 운영 가시성 / 복구 UX
 
-B4, B6, B8, B9, B10, B18(done), B26(done)
+B4, B6(done), B8, B9, B10, B18(done), B26(done)
 
 ### D — 범용 MLOps 확장 / 문서 / 장기
 
@@ -106,6 +106,7 @@ B5, B7, B12(done), B22, B23
 | R11-S8-9-13 | B27 | Upsert conflict_key_columns_json 선택·검증·추천 UX (자동 확정 없음) | |
 | R11-S8-9-14 | B18 | Upsert Target Table sample rows 읽기 전용 미리보기 (GET target-table-preview) | |
 | R11-S8-9-15 | B12 | Visual Pipeline E2E smoke (`check-visual-pipeline-e2e.mjs`) | |
+| R11-S8-9-16 | B6 | Run Detail 실패 원인 한 줄 요약 (FE-only) | |
 
 ---
 
@@ -131,6 +132,7 @@ B5, B7, B12(done), B22, B23
 | 2026-07-31 | B27 추가 후 → `done` (S8-9-13). Upsert conflict_key_columns_json 선택·검증·추천 UX |
 | 2026-07-31 | B18 → `done` (S8-9-14). Target Table sample rows 읽기 전용 미리보기 (Inspector, Run Detail 제외) |
 | 2026-07-31 | B12 → `done` (S8-9-15). Visual Pipeline E2E smoke scenario (`check-visual-pipeline-e2e.mjs`) |
+| 2026-07-31 | B6 → `done` (S8-9-16). Run Detail 실패 원인 한 줄 요약 (FE-only) |
 
 ---
 

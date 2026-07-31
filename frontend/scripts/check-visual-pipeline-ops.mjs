@@ -198,11 +198,42 @@ try {
       await openRunDetail(page, runningStuck.detailButton);
       openedDetail = true;
       await assertDetailCommonSections(page);
+      // B6: RUNNING must not show failure summary card
+      if ((await page.getByTestId("visual-pipeline-ops-run-detail-failure-summary").count()) > 0) {
+        fail("B6: RUNNING run detail must not show failure-summary card");
+      }
       await assertSoftCancelForRunning(page, runningStuck);
       await closeRunDetail(page);
       openedDetail = false;
     } else {
       console.log("  [skip] B26 no RUNNING stuck run for soft-cancel positive check");
+    }
+
+    // --- B6: FAILED recent-failure detail must show failure summary ---
+    if ((await failTable.count()) > 0) {
+      const failDetail = failTable.getByTestId("visual-pipeline-ops-run-detail-button").first();
+      if ((await failDetail.count()) > 0) {
+        await openRunDetail(page, failDetail);
+        openedDetail = true;
+        await assertDetailCommonSections(page);
+        const summary = page.getByTestId("visual-pipeline-ops-run-detail-failure-summary");
+        await summary.waitFor({ state: "visible", timeout: 10000 });
+        const reason = (
+          await page.getByTestId("visual-pipeline-ops-run-detail-failure-summary-reason").innerText()
+        ).trim();
+        if (!reason) fail("B6: failure summary reason must be non-empty for FAILED run");
+        const title = (
+          await page.getByTestId("visual-pipeline-ops-run-detail-failure-summary-title").innerText()
+        ).trim();
+        if (!title) fail("B6: failure summary title must be non-empty for FAILED run");
+        console.log(`  [ok] B6 failure summary on FAILED detail (title=${title.slice(0, 80)})`);
+        await closeRunDetail(page);
+        openedDetail = false;
+      } else {
+        console.log("  [skip] B6 no recent-failure detail button");
+      }
+    } else {
+      console.log("  [skip] B6 no recent failures table for failure-summary check");
     }
 
     // 2) non-RUNNING negative check: prefer recent failure (terminal), then PENDING, then other terminal stuck

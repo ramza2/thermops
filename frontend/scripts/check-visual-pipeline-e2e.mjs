@@ -796,8 +796,12 @@ async function runBrowserE2e(pipeline) {
         state: "visible",
         timeout: 10000,
       });
+      // B6: SUCCESS run must not show failure summary error card
+      if ((await page.getByTestId("visual-pipeline-run-detail-failure-summary").count()) > 0) {
+        fail(19, "B6: SUCCESS run detail must not show failure-summary card");
+      }
       await page.getByTestId("visual-pipeline-run-detail-close").click();
-      stepOk(19, "Run Detail progress/retry/cancel sections visible");
+      stepOk(19, "Run Detail progress/retry/cancel sections visible (no failure summary)");
     }
 
     // --- B18 Target Table Preview (seed table after SUCCESS run) ---
