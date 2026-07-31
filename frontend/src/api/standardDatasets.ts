@@ -6,6 +6,7 @@ import type {
   StandardDatasetTypeUpdateRequest,
   StandardDatasetValidation,
   StandardTargetTable,
+  TargetTableSamplePreview,
 } from "@/types/standardDatasets";
 
 export async function getStandardDatasetMetadataOptions(): Promise<StandardDatasetMetadataOptions> {
@@ -69,6 +70,17 @@ export async function archiveStandardDatasetType(id: string): Promise<StandardDa
 
 export async function suggestTableName(datasetCode: string): Promise<{ physical_table_name: string }> {
   return fetchApi("/standard-dataset-types/suggest-table-name", { dataset_code: datasetCode });
+}
+
+/** B18: read-only target table sample rows preview. */
+export async function previewTargetTableSample(
+  targetTable: string,
+  limit = 20,
+): Promise<TargetTableSamplePreview> {
+  return fetchApi("/standard-dataset-types/target-table-preview", {
+    target_table: targetTable,
+    limit,
+  });
 }
 
 export async function validateDatasetDefinition(id: string): Promise<WizardValidationResult> {

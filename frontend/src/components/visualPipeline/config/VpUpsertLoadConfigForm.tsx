@@ -4,8 +4,9 @@ import type {
   VisualPipelineComponentConfigSchema,
   VisualPipelineNodeConfigValues,
 } from "@/types/visualPipeline";
-import type { DatasetCategoryOption, StandardDatasetType } from "@/types/standardDatasets";
-import { getStandardDatasetMetadataOptions } from "@/api/standardDatasets";
+import type { DatasetCategoryOption, StandardDatasetType, TargetTableSamplePreview } from "@/types/standardDatasets";
+import { extractApiErrorMessage } from "@/api/client";
+import { getStandardDatasetMetadataOptions, previewTargetTableSample } from "@/api/standardDatasets";
 import { VpColumnListField } from "@/components/visualPipeline/config/VpColumnListField";
 import { VpConfigFieldShell } from "@/components/visualPipeline/config/VpConfigFieldShell";
 import {
@@ -157,6 +158,13 @@ export function VpUpsertLoadConfigForm({
   const [keyTransformType, setKeyTransformType] = useState("");
   const [showKeyRecommend, setShowKeyRecommend] = useState(false);
   const [showAdvancedConflictInput, setShowAdvancedConflictInput] = useState(false);
+  const [previewLimit, setPreviewLimit] = useState(20);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewResult, setPreviewResult] = useState<TargetTableSamplePreview | null>(null);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+  const [previewErrorKind, setPreviewErrorKind] = useState<"missing" | "not_found" | "forbidden" | "error" | null>(
+    null,
+  );
 
   const loadDatasets = useCallback(async (keyword?: string) => {
     setDatasetsLoading(true);
@@ -511,6 +519,65 @@ export function VpUpsertLoadConfigForm({
       setConflictKeys(selectedConflictKeys.filter((k) => normalizeColumnName(k) !== norm));
     } else {
       setConflictKeys([...selectedConflictKeys, columnName]);
+    }
+  };
+
+  const handleTargetTablePreview = async () => {
+    if (disabled || previewLoading) return;
+    const table = strVal(values, "target_table").trim();
+    if (!table) {
+      setPreviewResult(null);
+      setPreviewError("Upsert target_table을 먼저 선택하거나 생성해 주세요.");
+      setPreviewErrorKind("missing");
+      return;
+    }
+    setPreviewLoading(true);
+    setPreviewError(null);
+    setPreviewErrorKind(null);
+    try {
+      const result = await previewTargetTableSample(table, previewLimit);
+      setPreviewResult(result);
+      if ((result.rows?.length ?? 0) === 0) {
+        setPreviewError(null);
+      }
+    } catch (err) {
+      setPreviewResult(null);
+      const status = (err as { response?: { status?: number } })?.response?.status;
+      const message = extractApiErrorMessage(err, "샘플 조회에 실패했습니다.");
+      if (status === 404) {
+        setPreviewErrorKind("not_found");
+        setPreviewError(
+          message.includes("찾을 수 없")
+            ? message
+            : "대상 테이블을 찾을 수 없습니다. 표준 데이터셋이 아직 ACTIVE/물리 테이블 생성 전일 수 있습니다.",
+        );
+      } else if (status === 403) {
+        setPreviewErrorKind("forbidden");
+        setPreviewError(message);
+      } else if (status === 400) {
+        setPreviewErrorKind("error");
+        setPreviewError(message);
+      } else {
+        setPreviewErrorKind("error");
+        setPreviewError(
+          message || "샘플 조회에 실패했습니다. 실행 상태와 target table 권한을 확인해 주세요.",
+        );
+      }
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
+
+  const formatPreviewCell = (value: unknown): string => {
+    if (value == null) return "";
+    if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+      return String(value);
+    }
+    try {
+      const s = JSON.stringify(value);
+      return s.length > 80 ? `${s.slice(0, 77)}...` : s;
+    } catch {
+      return String(value);
     }
   };
 
@@ -983,6 +1050,117 @@ export function VpUpsertLoadConfigForm({
             data-testid="visual-pipeline-target-table-input"
           />
         </VpConfigFieldShell>
+
+        <div
+          className="rounded-md border border-slate-200 bg-slate-50 p-2.5 space-y-2"
+          data-testid="visual-pipeline-target-table-preview"
+        >
+          <div className="text-[10px] font-medium text-slate-600">Target Table 샘플 미리보기</div>
+          <p className="text-[10px] text-slate-500">
+            읽기 전용 조회입니다. DRAFT 표준 데이터셋은 물리 테이블이 없을 수 있어 「테이블 없음」이 정상일 수
+            있습니다. 최근 실행 SUCCESS 후 확인을 권장합니다.
+          </p>
+          <p className="text-[10px] text-slate-600">
+            대상 테이블: {strVal(values, "target_table") || "(미설정)"}
+          </p>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <label className="text-[10px] text-slate-500">limit</label>
+            <select
+              className={INPUT_CLASS}
+              style={{ width: "5rem" }}
+              value={previewLimit}
+              disabled={disabled || previewLoading}
+              data-testid="visual-pipeline-target-table-preview-limit"
+              onChange={(e) => setPreviewLimit(Number(e.target.value))}
+            >
+              <option value={10}>10</option>
+              <option value={20}>20</option>
+              <option value={50}>50</option>
+            </select>
+            <button
+              type="button"
+              className={BTN_SECONDARY}
+              disabled={disabled || previewLoading}
+              data-testid="visual-pipeline-target-table-preview-query-button"
+              onClick={() => void handleTargetTablePreview()}
+            >
+              {previewLoading ? "조회 중…" : "샘플 조회"}
+            </button>
+            <button
+              type="button"
+              className={BTN_GHOST}
+              disabled={disabled || previewLoading || !previewResult}
+              data-testid="visual-pipeline-target-table-preview-refresh-button"
+              onClick={() => void handleTargetTablePreview()}
+            >
+              새로고침
+            </button>
+          </div>
+          {previewErrorKind === "missing" && previewError && (
+            <p className="text-[10px] text-amber-700" data-testid="visual-pipeline-target-table-preview-error">
+              {previewError}
+            </p>
+          )}
+          {previewErrorKind === "not_found" && previewError && (
+            <p className="text-[10px] text-amber-700" data-testid="visual-pipeline-target-table-preview-not-found">
+              {previewError}
+            </p>
+          )}
+          {(previewErrorKind === "forbidden" || previewErrorKind === "error") && previewError && (
+            <p className="text-[10px] text-red-700" data-testid="visual-pipeline-target-table-preview-error">
+              {previewError}
+            </p>
+          )}
+          {previewResult && (
+            <>
+              <p
+                className="text-[10px] text-slate-600"
+                data-testid="visual-pipeline-target-table-preview-summary"
+              >
+                row count: {previewResult.row_count.toLocaleString()} · sample limit: {previewResult.limit} ·
+                조회 시각: {previewResult.sampled_at}
+              </p>
+              {(previewResult.rows?.length ?? 0) === 0 ? (
+                <p className="text-[10px] text-slate-500" data-testid="visual-pipeline-target-table-preview-empty">
+                  대상 테이블은 존재하지만 표시할 row가 없습니다.
+                </p>
+              ) : (
+                <div className="overflow-x-auto" data-testid="visual-pipeline-target-table-preview-table">
+                  <table className="w-full text-[10px] text-left border-collapse">
+                    <thead>
+                      <tr className="text-slate-500 border-b border-slate-200">
+                        {(previewResult.columns?.length
+                          ? previewResult.columns.map((c) => c.name)
+                          : Object.keys(previewResult.rows[0] || {})
+                        ).map((col) => (
+                          <th key={col} className="py-1 pr-2 font-medium whitespace-nowrap">
+                            {col}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {previewResult.rows.map((row, idx) => {
+                        const cols = previewResult.columns?.length
+                          ? previewResult.columns.map((c) => c.name)
+                          : Object.keys(row);
+                        return (
+                          <tr key={idx} className="border-b border-slate-100 align-top">
+                            {cols.map((col) => (
+                              <td key={col} className="py-1 pr-2 text-slate-700 whitespace-nowrap">
+                                {formatPreviewCell(row[col])}
+                              </td>
+                            ))}
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </>
+          )}
+        </div>
       </section>
 
       <section className="rounded-lg border border-slate-100 p-2.5 space-y-2.5">

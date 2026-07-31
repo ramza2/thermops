@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 const BASE = process.env.CHECK_PAGES_BASE || "http://localhost:5173";
 const API_BASE = process.env.THERMOOPS_API_BASE || "http://localhost:8000/api/v1";
 const FRONTEND_SRC = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../src");
+const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const PATHS = [
   "/dashboard",
   "/data/sources",
@@ -420,6 +421,61 @@ function assertStudioUpsertConflictKeysUx() {
   }
 }
 
+/** B18: Target Table sample rows read-only preview. */
+function assertStudioTargetTableSamplePreview() {
+  const apiClient = fs.readFileSync(path.join(FRONTEND_SRC, "api/standardDatasets.ts"), "utf8");
+  if (!apiClient.includes("previewTargetTableSample") || !apiClient.includes("target-table-preview")) {
+    throw new Error("B18 regression: previewTargetTableSample client missing");
+  }
+
+  const backendService = fs.readFileSync(
+    path.join(REPO_ROOT, "backend/app/services/target_table_preview_service.py"),
+    "utf8",
+  );
+  for (const token of ["preview_target_table_sample", "quote_ident", "MAX_PREVIEW_LIMIT = 100", "SELECT COUNT(*)"]) {
+    if (!backendService.includes(token)) {
+      throw new Error(`B18 regression: target_table_preview_service missing ${token}`);
+    }
+  }
+  for (const banned of ["DROP TABLE", "TRUNCATE", "DELETE FROM", "UPDATE ", "INSERT INTO"]) {
+    if (backendService.includes(banned)) {
+      throw new Error(`B18 regression: preview service must not contain '${banned.trim()}'`);
+    }
+  }
+
+  const backendApi = fs.readFileSync(
+    path.join(REPO_ROOT, "backend/app/api/v1/standard_dataset.py"),
+    "utf8",
+  );
+  if (!backendApi.includes('"/standard-dataset-types/target-table-preview"')) {
+    throw new Error("B18 regression: target-table-preview endpoint missing");
+  }
+
+  const form = fs.readFileSync(
+    path.join(FRONTEND_SRC, "components/visualPipeline/config/VpUpsertLoadConfigForm.tsx"),
+    "utf8",
+  );
+  for (const token of [
+    "visual-pipeline-target-table-preview",
+    "visual-pipeline-target-table-preview-query-button",
+    "visual-pipeline-target-table-preview-limit",
+    "previewTargetTableSample",
+    "읽기 전용",
+  ]) {
+    if (!form.includes(token)) {
+      throw new Error(`B18 regression: VpUpsertLoadConfigForm missing ${token}`);
+    }
+  }
+  if (!form.includes("option value={50}") && !form.includes("value={50}")) {
+    throw new Error("B18 regression: preview limit options incomplete");
+  }
+  for (const banned of ["DROP TABLE", "TRUNCATE TABLE", "DELETE FROM", "INSERT INTO"]) {
+    if (form.includes(banned)) {
+      throw new Error(`B18 regression: Upsert form must not contain '${banned}'`);
+    }
+  }
+}
+
 async function api(method, path, body) {
   const url = `${API_BASE}${path}`;
   const res = await fetch(url, {
@@ -454,6 +510,7 @@ assertStudioUpsertStandardDatasetInlineCreate();
 assertStudioUpsertTransformColumnProposal();
 assertStudioUpsertColumnMatchPreview();
 assertStudioUpsertConflictKeysUx();
+assertStudioTargetTableSamplePreview();
 
 const browser = await chromium.launch();
 const page = await browser.newPage();

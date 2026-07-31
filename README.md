@@ -1862,6 +1862,15 @@ cd frontend && node scripts/check-visual-pipeline-studio.mjs
 - **Known limitation:** Source missing은 WARNING · synonym 번역 없음 · 물리 unique 제약은 다루지 않음
 - **Backlog:** B27 done
 
+### R11-S8-9-14 Studio Upsert Target Table sample rows 미리보기
+
+- **범위:** B18. Upsert Load Inspector에서 `config.values.target_table` 기준 읽기 전용 sample rows 미리보기.
+- **변경:** `GET /api/v1/standard-dataset-types/target-table-preview` · whitelist(비-ARCHIVED SDS) · `quote_ident` SELECT only · limit default 20 / max 100 · FE 패널(limit 10/20/50) · check-pages/studio smoke B18
+- **검증:** `cd frontend && npm run build` · `node scripts/check-pages.mjs` · `node scripts/check-visual-pipeline-studio.mjs` · ops smoke 참고 1회
+- **제외:** migration/package · compile/run/worker · DDL/DML · Run Detail 연동 · B15/B20/B21/B27 대규모 재작성 · 「R10 설정 반영」재노출 금지
+- **Known limitation:** DRAFT/미생성 테이블은 404 · 미등록 target_table은 403 · 임의 SQL/필터/정렬 UI 없음 · Run Detail 없음
+- **Backlog:** B18 done
+
 ## 설계 문서 참조
 
 - `docs/md/THERMOps_R11-S8-9_Backlog.md`

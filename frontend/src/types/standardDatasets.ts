@@ -139,6 +139,19 @@ export interface StandardDatasetRecipeReadiness {
   available_count: number;
 }
 
+/** B18: GET /standard-dataset-types/target-table-preview */
+export interface TargetTableSamplePreview {
+  table_name: string;
+  dataset_type_id?: string;
+  dataset_status?: string;
+  physical_table_exists: boolean;
+  row_count: number;
+  limit: number;
+  columns: { name: string; data_type: string }[];
+  rows: Record<string, unknown>[];
+  sampled_at: string;
+}
+
 export const R9_DATASET_WIZARD_NOTE =
   "R9-S2-1부터 clean 설치 후 표준 데이터셋은 0건으로 시작합니다. Wizard로 논리 데이터셋·컬럼을 정의한 뒤 Backend가 생성한 SQL Preview를 확인하고 내부 물리 테이블(std_ prefix)을 생성하세요. 사용자가 SQL을 직접 입력·수정해 실행하는 방식은 허용하지 않습니다.";
 

@@ -41,7 +41,7 @@
 | B15 | Source ↔ Target Column Normalization UX | API `ND_ID` vs 테이블 `nd_id` 등 대소문자·snake_case 불일치. Upsert conflict key 오류(`MATERIALIZE_WRITE_POLICY_FAILED`) 방지. Transform 스키마·Upsert target 비교·매핑·conflict key 힌트 (범용) | B | **done** | **R11-S8-9-12** |
 | B16 | 검증 → Compile dirty 흐름 개선 | Graph 검증 후 `applyConfigValidationCache`가 노드에 결과를 써 dirty 재발. **A안:** UI 전용 `configValidationByNodeId` + dirty/save에서 `config.validation` canonicalize | A | **done** | **R11-S8-9-3** |
 | B17 | Studio 이중 스크롤 정리 | Node Inspector·하단 패널 누적 스크롤. viewport 고정 작업대 + Bottom Operations Dock | A | **done** | **R11-S8-9-1** 완료 |
-| B18 | Target Table sample rows 미리보기 | 즉시 실행 SUCCESS 후 Studio에서 적재 row·건수 확인 UI 없음 (현재 SQL만). Run Detail 또는 Upsert 연계 LIMIT N preview | C | open | |
+| B18 | Target Table sample rows 미리보기 | 즉시 실행 SUCCESS 후 Studio에서 적재 row·건수 확인 UI 없음 (현재 SQL만). Run Detail 또는 Upsert 연계 LIMIT N preview | C | **done** | **R11-S8-9-14** |
 | B19 | Studio REST — Data Source 인라인 생성 | Inspector에서 REST_API Data Source 최소 생성(이름·base URL·domain, auth=NONE) 후 ID 자동 선택. 선택 UI는 B11 검색/더 보기/새로고침 재사용. secret/credential 저장 UI 없음 | B | **done** | **R11-S8-9-9** |
 | B20 | Studio Upsert — 표준 데이터셋 인라인 생성 | Inspector에서 Standard Dataset 선택·DRAFT 인라인 생성 후 `standard_dataset_id`+`target_table` 자동 반영. 물리 테이블/ACTIVE/DROP 제외 | B | **done** | **R11-S8-9-10** |
 | B21 | Transform 출력 → 표준 테이블 컬럼 자동 제안 | Transform 스키마/미리보기에서 Upsert·표준 데이터셋 컬럼·conflict key 제안. B15·B20 연계 | B | **done** | **R11-S8-9-11** |
@@ -79,7 +79,7 @@ B1, B2, B3, B15(done), B19(done), B20(done), B21(done), B27(done)
 
 ### C — 운영 가시성 / 복구 UX
 
-B4, B6, B8, B9, B10, B18, B26(done)
+B4, B6, B8, B9, B10, B18(done), B26(done)
 
 ### D — 범용 MLOps 확장 / 문서 / 장기
 
@@ -104,6 +104,7 @@ B5, B7, B12, B22, B23
 | R11-S8-9-11 | B21 | Transform 출력 기반 표준 컬럼 후보 제안 + 컬럼 editor + DRAFT 생성 payload 반영 | |
 | R11-S8-9-12 | B15 | Source↔Target 컬럼 정합성 미리보기 (FE diagnosis, mapping 저장 없음) | |
 | R11-S8-9-13 | B27 | Upsert conflict_key_columns_json 선택·검증·추천 UX (자동 확정 없음) | |
+| R11-S8-9-14 | B18 | Upsert Target Table sample rows 읽기 전용 미리보기 (GET target-table-preview) | |
 
 ---
 
@@ -127,6 +128,7 @@ B5, B7, B12, B22, B23
 | 2026-07-30 | B21 → `done` (S8-9-11). Transform 출력 기반 컬럼 후보 제안 + 컬럼 editor + DRAFT 생성 payload 반영 |
 | 2026-07-31 | B15 → `done` (S8-9-12). Source↔Target 컬럼 정합성 미리보기 (FE diagnosis only) |
 | 2026-07-31 | B27 추가 후 → `done` (S8-9-13). Upsert conflict_key_columns_json 선택·검증·추천 UX |
+| 2026-07-31 | B18 → `done` (S8-9-14). Target Table sample rows 읽기 전용 미리보기 (Inspector, Run Detail 제외) |
 
 ---
 

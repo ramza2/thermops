@@ -25,6 +25,10 @@ from app.services.standard_dataset_service import (
     validate_standard_dataset_definition,
     validate_target_table_allowed,
 )
+from app.services.target_table_preview_service import (
+    TargetTablePreviewError,
+    preview_target_table_sample,
+)
 
 router = APIRouter(tags=["Standard Dataset"])
 
@@ -73,6 +77,20 @@ async def get_standard_dataset_types(
 @router.get("/standard-dataset-types/suggest-table-name")
 async def get_suggest_table_name(dataset_code: str = Query(..., min_length=1)):
     return ok({"physical_table_name": suggest_table_name_from_code(dataset_code)})
+
+
+@router.get("/standard-dataset-types/target-table-preview")
+async def get_target_table_preview(
+    target_table: str = Query(..., min_length=1),
+    limit: int = Query(default=20, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+):
+    """Read-only SELECT sample rows for a registered standard dataset target_table."""
+    try:
+        item = await preview_target_table_sample(db, target_table=target_table, limit=limit)
+    except TargetTablePreviewError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
+    return ok(item)
 
 
 @router.get("/standard-dataset-types/{dataset_type_id}")

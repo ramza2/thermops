@@ -786,6 +786,38 @@ async function runBrowserSmoke(pipeline) {
     await assertConfigFormVisible(page, ["target_table", "write_mode", "conflict_key_columns_json"]);
     console.log("  [ok] Upsert config form visible");
 
+    // --- R11-S8-9-14 / B18: Target Table sample rows preview ---
+    {
+      const previewPanel = inspector.getByTestId("visual-pipeline-target-table-preview");
+      await previewPanel.scrollIntoViewIfNeeded();
+      await previewPanel.waitFor({ state: "visible", timeout: 10000 });
+      const targetValue = await inspector.getByTestId("visual-pipeline-target-table-input").inputValue();
+      if (!targetValue) {
+        fail("B18: expected target_table to be set on fixture Upsert node");
+      }
+      await inspector.getByTestId("visual-pipeline-target-table-preview-limit").selectOption("20");
+      await inspector.getByTestId("visual-pipeline-target-table-preview-query-button").click();
+      await page.waitForTimeout(1200);
+      const hasSummary = (await inspector.getByTestId("visual-pipeline-target-table-preview-summary").count()) > 0;
+      const hasEmpty = (await inspector.getByTestId("visual-pipeline-target-table-preview-empty").count()) > 0;
+      const hasNotFound = (await inspector.getByTestId("visual-pipeline-target-table-preview-not-found").count()) > 0;
+      const hasError = (await inspector.getByTestId("visual-pipeline-target-table-preview-error").count()) > 0;
+      const hasTable = (await inspector.getByTestId("visual-pipeline-target-table-preview-table").count()) > 0;
+      if (!(hasSummary || hasEmpty || hasNotFound || hasError || hasTable)) {
+        fail("B18: preview query must show summary/empty/not-found/error/table state");
+      }
+      if (hasSummary && !hasEmpty && !hasTable) {
+        // summary with row_count 0 should show empty; with rows should show table
+        const summaryText = await inspector.getByTestId("visual-pipeline-target-table-preview-summary").innerText();
+        if (!summaryText.includes("row count") || !summaryText.includes("sample limit")) {
+          fail(`B18: summary missing metadata, got ${summaryText}`);
+        }
+      }
+      console.log(
+        `  [ok] B18 target table preview (table=${targetValue}, summary=${hasSummary}, empty=${hasEmpty}, notFound=${hasNotFound}, error=${hasError}, rowsTable=${hasTable})`,
+      );
+    }
+
     // --- R11-S8-9-10 / B20: Studio Upsert Standard Dataset select + inline create ---
     {
       await assertConfigFormVisible(page, ["standard_dataset_id", "target_table"]);
