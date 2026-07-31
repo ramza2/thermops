@@ -5,6 +5,8 @@ interface VpActionRequiredCardProps {
   loading?: boolean;
   onRefresh?: () => void;
   onOpenDetail?: (pipelineId: string, visualRunId: string) => void;
+  /** Optional scroll/jump to B9 Schedule Skip history panel (no auto action). */
+  onOpenSkipHistory?: () => void;
 }
 
 function severityClass(severity: OpsActionGroup["severity"]): string {
@@ -20,9 +22,11 @@ function severityBadge(severity: OpsActionGroup["severity"]): string {
 function GroupBlock({
   group,
   onOpenDetail,
+  onOpenSkipHistory,
 }: {
   group: OpsActionGroup;
   onOpenDetail?: (pipelineId: string, visualRunId: string) => void;
+  onOpenSkipHistory?: () => void;
 }) {
   return (
     <div
@@ -38,7 +42,13 @@ function GroupBlock({
       </div>
       <ul className="space-y-1.5">
         {group.items.map((item) => (
-          <ActionItemRow key={item.id} item={item} onOpenDetail={onOpenDetail} />
+          <ActionItemRow
+            key={item.id}
+            item={item}
+            groupId={group.id}
+            onOpenDetail={onOpenDetail}
+            onOpenSkipHistory={onOpenSkipHistory}
+          />
         ))}
       </ul>
     </div>
@@ -47,13 +57,18 @@ function GroupBlock({
 
 function ActionItemRow({
   item,
+  groupId,
   onOpenDetail,
+  onOpenSkipHistory,
 }: {
   item: OpsActionItem;
+  groupId: OpsActionGroup["id"];
   onOpenDetail?: (pipelineId: string, visualRunId: string) => void;
+  onOpenSkipHistory?: () => void;
 }) {
   const canOpen =
     item.openDetail && !!item.pipelineId && !!item.visualRunId && typeof onOpenDetail === "function";
+  const showSkipLink = groupId === "catchup_hint" && typeof onOpenSkipHistory === "function";
 
   return (
     <li
@@ -69,16 +84,28 @@ function ActionItemRow({
         {item.reason}
       </p>
       {item.meta && <p className="text-[9px] text-slate-400 font-mono">{item.meta}</p>}
-      {canOpen && (
-        <button
-          type="button"
-          className="mt-1 text-[10px] font-medium text-violet-800 border border-violet-200 bg-white rounded px-2 py-0.5 hover:bg-violet-50"
-          data-testid="visual-pipeline-ops-action-required-detail-button"
-          onClick={() => onOpenDetail?.(String(item.pipelineId), String(item.visualRunId))}
-        >
-          상세 보기
-        </button>
-      )}
+      <div className="flex flex-wrap gap-1.5 mt-1">
+        {canOpen && (
+          <button
+            type="button"
+            className="text-[10px] font-medium text-violet-800 border border-violet-200 bg-white rounded px-2 py-0.5 hover:bg-violet-50"
+            data-testid="visual-pipeline-ops-action-required-detail-button"
+            onClick={() => onOpenDetail?.(String(item.pipelineId), String(item.visualRunId))}
+          >
+            상세 보기
+          </button>
+        )}
+        {showSkipLink && (
+          <button
+            type="button"
+            className="text-[10px] font-medium text-slate-700 border border-slate-200 bg-white rounded px-2 py-0.5 hover:bg-slate-50"
+            data-testid="visual-pipeline-ops-action-required-skip-history-link"
+            onClick={() => onOpenSkipHistory?.()}
+          >
+            Skip 이력 보기
+          </button>
+        )}
+      </div>
     </li>
   );
 }
@@ -88,6 +115,7 @@ export function VpActionRequiredCard({
   loading,
   onRefresh,
   onOpenDetail,
+  onOpenSkipHistory,
 }: VpActionRequiredCardProps) {
   return (
     <section
@@ -133,7 +161,12 @@ export function VpActionRequiredCard({
             {model.generatedAt ? ` · generated_at=${model.generatedAt}` : ""}
           </div>
           {model.groups.map((group) => (
-            <GroupBlock key={group.id} group={group} onOpenDetail={onOpenDetail} />
+            <GroupBlock
+              key={group.id}
+              group={group}
+              onOpenDetail={onOpenDetail}
+              onOpenSkipHistory={onOpenSkipHistory}
+            />
           ))}
         </div>
       )}

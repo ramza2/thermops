@@ -17,9 +17,12 @@ from app.services.visual_pipeline.audit_service import (
 from app.services.visual_pipeline.ops_service import (
     DEFAULT_PENDING_AGE_SECONDS,
     DEFAULT_RUNNING_LOCK_GRACE_SECONDS,
+    DEFAULT_SCHEDULE_SKIP_LIMIT,
     DEFAULT_STUCK_LIMIT,
+    MAX_SCHEDULE_SKIP_LIMIT,
     MarkFailedError,
     get_ops_summary,
+    list_schedule_skips,
     list_stuck_runs,
     mark_single_stuck_run_failed,
 )
@@ -102,6 +105,20 @@ async def post_visual_pipeline_ops_mark_failed(
         if code == "VISUAL_PIPELINE_RUN_NOT_FOUND":
             raise HTTPException(status_code=404, detail=code) from None
         raise HTTPException(status_code=409, detail=code) from None
+    return ok(data)
+
+
+@router.get("/schedule-skips")
+async def get_visual_pipeline_ops_schedule_skips(
+    limit: int = Query(
+        default=DEFAULT_SCHEDULE_SKIP_LIMIT,
+        ge=1,
+        le=MAX_SCHEDULE_SKIP_LIMIT,
+    ),
+    db: AsyncSession = Depends(get_db),
+):
+    """List recent schedule skip events (audit + activation last_skip snapshot). Read-only."""
+    data = await list_schedule_skips(db, limit=limit)
     return ok(data)
 
 

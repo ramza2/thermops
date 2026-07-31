@@ -14,10 +14,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings, get_settings
 from app.core.time import utc_now
-from app.models.entities import VisualPipelineRun, VisualPipelineScheduleActivation
+from app.models.entities import (
+    PipelineDefinition,
+    VisualPipelineAuditLog,
+    VisualPipelineRun,
+    VisualPipelineScheduleActivation,
+)
 from app.services.visual_pipeline.audit_service import (
     ACTOR_CLI,
     ACTOR_USER,
+    EVENT_SCHEDULE_WORKER_SKIPPED_ACTIVE_RUN,
     SOURCE_API,
     SOURCE_CLI,
     record_ops_mark_failed_batch_event,
@@ -35,6 +41,17 @@ DEFAULT_RUNNING_LOCK_GRACE_SECONDS = 0
 DEFAULT_STUCK_LIMIT = 50
 DEFAULT_RECENT_FAILURES = 10
 DEFAULT_HEARTBEAT_STALE_HINT_SECONDS = 600
+DEFAULT_SCHEDULE_SKIP_LIMIT = 20
+MAX_SCHEDULE_SKIP_LIMIT = 50
+
+# Worker-recorded skip reasons (see schedule_worker_service). Internal early-returns
+# (not_active / not_due / …) are never persisted on last_skip_* and are excluded here.
+SKIP_REASON_ACTIVE_RUN = "ACTIVE_RUN_EXISTS"
+SKIP_REASON_STALE = "STALE_OR_INVALID"
+SKIP_REASON_DUPLICATE = "DUPLICATE_DEDUP_KEY"
+KNOWN_SCHEDULE_SKIP_REASONS = frozenset(
+    {SKIP_REASON_ACTIVE_RUN, SKIP_REASON_STALE, SKIP_REASON_DUPLICATE}
+)
 
 REASON_PENDING_TOO_OLD = "PENDING_TOO_OLD"
 REASON_RUNNING_LOCK_EXPIRED = "RUNNING_LOCK_EXPIRED"
@@ -353,6 +370,157 @@ async def get_ops_summary(
         },
         "recent_failures": recent_failures,
         "generated_at": _iso(now),
+    }
+
+
+def _dedupe_key(activation_id: str | None, reason_code: str, scheduled_at: str | None) -> str:
+    return f"{activation_id or ''}|{reason_code}|{scheduled_at or ''}"
+
+
+def _scheduled_at_from_audit(row: VisualPipelineAuditLog) -> str | None:
+    meta = dict(row.metadata_json or {})
+    return _iso(meta.get("scheduled_for")) or None
+
+
+def _scheduled_at_from_activation(row: VisualPipelineScheduleActivation) -> str | None:
+    meta = dict(row.metadata_json or {})
+    worker = dict(meta.get("last_worker_result") or {})
+    return _iso(worker.get("scheduled_for")) or _iso(row.last_due_at) or _iso(row.last_skip_at)
+
+
+def _pipeline_name_map(
+    db_rows: list[PipelineDefinition],
+) -> dict[str, str]:
+    return {str(r.pipeline_id): str(r.pipeline_name) for r in db_rows if r.pipeline_id}
+
+
+async def list_schedule_skips(
+    db: AsyncSession,
+    *,
+    limit: int = DEFAULT_SCHEDULE_SKIP_LIMIT,
+) -> dict[str, Any]:
+    """Read-only schedule skip history for Ops.
+
+    Merges:
+    - audit SCHEDULE_WORKER_SKIPPED_ACTIVE_RUN rows (ACTIVE_RUN_EXISTS timeline)
+    - activation last_skip_* snapshots (STALE / DUPLICATE / ACTIVE latest)
+
+    Does not mutate activations, enqueue catch-up, or change worker emit policy.
+    """
+    lim = max(1, min(MAX_SCHEDULE_SKIP_LIMIT, int(limit or DEFAULT_SCHEDULE_SKIP_LIMIT)))
+    pool = max(lim * 3, lim)
+
+    audit_rows = (
+        await db.execute(
+            select(VisualPipelineAuditLog)
+            .where(
+                VisualPipelineAuditLog.event_type == EVENT_SCHEDULE_WORKER_SKIPPED_ACTIVE_RUN
+            )
+            .order_by(VisualPipelineAuditLog.created_at.desc())
+            .limit(pool)
+        )
+    ).scalars().all()
+
+    activation_rows = (
+        await db.execute(
+            select(VisualPipelineScheduleActivation)
+            .where(VisualPipelineScheduleActivation.last_skip_at.is_not(None))
+            .order_by(VisualPipelineScheduleActivation.last_skip_at.desc())
+            .limit(pool)
+        )
+    ).scalars().all()
+
+    pipeline_ids = {
+        str(r.pipeline_id)
+        for r in (*audit_rows, *activation_rows)
+        if r.pipeline_id
+    }
+    name_by_id: dict[str, str] = {}
+    if pipeline_ids:
+        defn_rows = (
+            await db.execute(
+                select(PipelineDefinition).where(
+                    PipelineDefinition.pipeline_id.in_(sorted(pipeline_ids))
+                )
+            )
+        ).scalars().all()
+        name_by_id = _pipeline_name_map(list(defn_rows))
+
+    merged: list[dict[str, Any]] = []
+    seen: set[str] = set()
+
+    # Audit first so ACTIVE_RUN_EXISTS history wins on dedupe.
+    for row in audit_rows:
+        reason_code = str(row.reason or "").strip() or SKIP_REASON_ACTIVE_RUN
+        if reason_code not in KNOWN_SCHEDULE_SKIP_REASONS:
+            # Keep unexpected audit reason but never invent internal early-returns.
+            if not reason_code:
+                reason_code = SKIP_REASON_ACTIVE_RUN
+        scheduled_at = _scheduled_at_from_audit(row)
+        key = _dedupe_key(row.activation_id, reason_code, scheduled_at)
+        if key in seen:
+            continue
+        seen.add(key)
+        meta = dict(row.metadata_json or {})
+        active_run_id = meta.get("active_run_id")
+        pid = str(row.pipeline_id) if row.pipeline_id else None
+        merged.append(
+            {
+                "event_id": row.audit_id,
+                "pipeline_id": pid,
+                "pipeline_name": name_by_id.get(pid or "") if pid else None,
+                "activation_id": row.activation_id,
+                "scheduled_at": scheduled_at,
+                "reason_code": reason_code,
+                "reason_message": str(row.reason or reason_code),
+                "created_at": _iso(row.created_at),
+                "source": "audit",
+                "visual_run_id": str(active_run_id) if active_run_id else row.visual_run_id,
+                "r10_schedule_id": row.r10_schedule_id,
+            }
+        )
+
+    for row in activation_rows:
+        reason_code = str(row.last_skip_reason or "").strip()
+        if not reason_code:
+            continue
+        # Only worker-persisted skip reasons (excludes not_active / not_due etc.).
+        if reason_code not in KNOWN_SCHEDULE_SKIP_REASONS:
+            # Still surface unknown persisted reasons with UNKNOWN-safe FE mapping.
+            pass
+        scheduled_at = _scheduled_at_from_activation(row)
+        key = _dedupe_key(row.activation_id, reason_code, scheduled_at)
+        if key in seen:
+            continue
+        seen.add(key)
+        pid = str(row.pipeline_id) if row.pipeline_id else None
+        merged.append(
+            {
+                "event_id": f"ACT-SKIP-{row.activation_id}",
+                "pipeline_id": pid,
+                "pipeline_name": name_by_id.get(pid or "") if pid else None,
+                "activation_id": row.activation_id,
+                "scheduled_at": scheduled_at,
+                "reason_code": reason_code,
+                "reason_message": reason_code,
+                "created_at": _iso(row.last_skip_at),
+                "source": "activation_latest",
+                "visual_run_id": None,
+                "r10_schedule_id": row.r10_schedule_id,
+            }
+        )
+
+    def _sort_key(item: dict[str, Any]) -> str:
+        return str(item.get("created_at") or "")
+
+    merged.sort(key=_sort_key, reverse=True)
+    total = len(merged)
+    items = merged[:lim]
+    return {
+        "items": items,
+        "total": total,
+        "limit": lim,
+        "criteria": {"limit": lim},
     }
 
 

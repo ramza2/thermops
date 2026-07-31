@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { RefreshCw } from "lucide-react";
 import {
   getVisualPipelineOpsAuditLogs,
+  getVisualPipelineOpsScheduleSkips,
   getVisualPipelineOpsStuckRuns,
   getVisualPipelineOpsSummary,
   markFailedErrorMessage,
@@ -14,6 +15,7 @@ import { Modal } from "@/components/Modal";
 import { LoadingState, ErrorState } from "@/components/Pagination";
 import { VpActionRequiredCard } from "@/components/visualPipeline/VpActionRequiredCard";
 import { VpRunDetailPanel } from "@/components/visualPipeline/VpRunDetailPanel";
+import { VpScheduleSkipHistoryPanel } from "@/components/visualPipeline/VpScheduleSkipHistoryPanel";
 import { PageHeader } from "@/layouts/MainLayout";
 import { useRole } from "@/hooks/useRole";
 import { PAGE_DESCRIPTIONS, PAGE_TITLES } from "@/constants/displayLabels";
@@ -22,8 +24,10 @@ import type {
   VisualPipelineAuditLogListItem,
   VisualPipelineOpsStuckRun,
   VisualPipelineOpsSummary,
+  VisualPipelineScheduleSkipItem,
 } from "@/types/visualPipelineOps";
 import { buildOpsActionRequired } from "@/utils/opsActionRequired";
+
 
 const RUN_STATUSES = ["PENDING", "RUNNING", "SUCCESS", "FAILED", "PARTIAL", "CANCELLED"] as const;
 const ACT_STATUSES = ["ACTIVE", "PAUSED", "INACTIVE", "ERROR"] as const;
@@ -104,6 +108,19 @@ export default function VisualPipelineOpsPage() {
   const [runDetailLoading, setRunDetailLoading] = useState(false);
   const [runDetailError, setRunDetailError] = useState<string | null>(null);
 
+  const [skipItems, setSkipItems] = useState<VisualPipelineScheduleSkipItem[]>([]);
+  const [skipLoading, setSkipLoading] = useState(false);
+  const [skipError, setSkipError] = useState<string | null>(null);
+  const [skipLimit, setSkipLimit] = useState(20);
+  const [skipFocusPipelineId, setSkipFocusPipelineId] = useState<string | null>(null);
+
+  const scrollToSkipHistory = useCallback(() => {
+    const el = document.getElementById("visual-pipeline-ops-schedule-skip-history");
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }, []);
+
   const openRunDetail = async (pipelineId?: string | null, visualRunId?: string | null) => {
     if (!pipelineId || !visualRunId) return;
     setRunDetailOpen(true);
@@ -144,6 +161,23 @@ export default function VisualPipelineOpsPage() {
     }
   }, [canViewVpOps, auditEventType]);
 
+  const loadSkips = useCallback(async () => {
+    if (!canViewVpOps) return;
+    setSkipLoading(true);
+    setSkipError(null);
+    try {
+      const data = await getVisualPipelineOpsScheduleSkips({ limit: skipLimit });
+      setSkipItems(data.items ?? []);
+    } catch (err) {
+      setSkipItems([]);
+      setSkipError(
+        extractApiErrorMessage(err, "스케줄 skip 이력을 불러오지 못했습니다."),
+      );
+    } finally {
+      setSkipLoading(false);
+    }
+  }, [canViewVpOps, skipLimit]);
+
   const load = useCallback(async () => {
     if (!canViewVpOps) return;
     setLoading(true);
@@ -178,7 +212,8 @@ export default function VisualPipelineOpsPage() {
       );
     }
     setLoading(false);
-  }, [canViewVpOps]);
+    void loadSkips();
+  }, [canViewVpOps, loadSkips]);
 
   useEffect(() => {
     void load();
@@ -187,6 +222,10 @@ export default function VisualPipelineOpsPage() {
   useEffect(() => {
     void loadAudit();
   }, [loadAudit]);
+
+  useEffect(() => {
+    void loadSkips();
+  }, [loadSkips]);
 
   const openMarkFailed = (row: VisualPipelineOpsStuckRun) => {
     setMarkTarget(row);
@@ -326,7 +365,33 @@ export default function VisualPipelineOpsPage() {
             onOpenDetail={(pipelineId, visualRunId) => {
               void openRunDetail(pipelineId, visualRunId);
             }}
+            onOpenSkipHistory={scrollToSkipHistory}
           />
+
+          <VpScheduleSkipHistoryPanel
+            items={skipItems}
+            loading={skipLoading}
+            error={skipError}
+            limit={skipLimit}
+            onLimitChange={setSkipLimit}
+            onRefresh={() => void loadSkips()}
+            onOpenDetail={(pipelineId, visualRunId) => {
+              void openRunDetail(pipelineId, visualRunId);
+            }}
+            onSelectPipeline={(pipelineId) => {
+              setSkipFocusPipelineId(pipelineId);
+            }}
+          />
+          {skipFocusPipelineId && (
+            <p
+              className="text-[11px] text-slate-500 -mt-1"
+              data-testid="visual-pipeline-ops-schedule-skip-focus"
+            >
+              선택한 pipeline:{" "}
+              <span className="font-mono text-slate-700">{skipFocusPipelineId}</span>
+              {" · "}Studio Catch-up / Activation에서 이 pipeline을 검토하세요. 자동 조치는 없습니다.
+            </p>
+          )}
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
             <CountGrid

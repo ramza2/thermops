@@ -1899,6 +1899,15 @@ cd frontend && node scripts/check-visual-pipeline-studio.mjs
 - **Known limitation:** PARTIAL/retryable은 count 안내만 · Catch-up은 skip hint · CANCELLED 그룹 제외 · Dock 미배치
 - **Backlog:** B10 done
 
+### R11-S8-9-18 Schedule Skip 이력 UI
+
+- **범위:** B9. Ops 「스케줄 Skip 이력」패널 + read-only `GET /api/v1/visual-pipeline-ops/schedule-skips`.
+- **변경:** audit skip + activation `last_skip_*` 합성 · reason 매핑 helper · B10 catch-up hint → Skip 이력 앵커 · check-pages/ops smoke B9
+- **검증:** `cd frontend && npm run build` · `check-pages.mjs` · `check-visual-pipeline-ops.mjs` · studio/e2e 회귀 · `python -m compileall backend/app`
+- **제외:** migration · worker emit/due/catch-up/retry 정책 · B4/B5/B8 · auto action · package · 「R10 설정 반영」재노출 금지
+- **Known limitation:** STALE/DUPLICATE는 activation 최신 skip 스냅샷 위주 · ACTIVE_RUN은 audit 이력 · Studio Dock 미배치
+- **Backlog:** B9 done
+
 ## 설계 문서 참조
 
 - `docs/md/THERMOps_R11-S8-9_Backlog.md`

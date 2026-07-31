@@ -594,6 +594,76 @@ function assertOpsActionRequiredCard() {
   }
 }
 
+/** B9: Ops Schedule Skip history panel (read-only API + FE mapping, no auto actions). */
+function assertScheduleSkipHistoryUx() {
+  const helper = fs.readFileSync(path.join(FRONTEND_SRC, "utils/scheduleSkipReason.ts"), "utf8");
+  for (const token of [
+    "describeScheduleSkipReason",
+    "ACTIVE_RUN_EXISTS",
+    "STALE_OR_INVALID",
+    "DUPLICATE_DEDUP_KEY",
+  ]) {
+    if (!helper.includes(token)) {
+      throw new Error(`B9 regression: scheduleSkipReason missing ${token}`);
+    }
+  }
+
+  const panel = fs.readFileSync(
+    path.join(FRONTEND_SRC, "components/visualPipeline/VpScheduleSkipHistoryPanel.tsx"),
+    "utf8",
+  );
+  for (const token of [
+    "visual-pipeline-ops-schedule-skip-history",
+    "스케줄 Skip 이력",
+    "visual-pipeline-ops-schedule-skip-empty",
+    "visual-pipeline-ops-schedule-skip-refresh",
+    "describeScheduleSkipReason",
+  ]) {
+    if (!panel.includes(token)) {
+      throw new Error(`B9 regression: VpScheduleSkipHistoryPanel missing ${token}`);
+    }
+  }
+  for (const banned of [
+    "자동 Catch-up 실행",
+    "자동 재시도 실행",
+    "자동 중단 실행",
+    "autoCatchup(",
+    "autoRetry(",
+    "autoCancel(",
+  ]) {
+    if (panel.includes(banned)) {
+      throw new Error(`B9 regression: skip panel must not advertise ${banned}`);
+    }
+  }
+  if (panel.includes("R10 설정 반영")) {
+    throw new Error("B9 regression: must not re-expose R10 label");
+  }
+  if (panel.includes("notification") && /badge|read.?unread|readAt/i.test(panel)) {
+    throw new Error("B9 regression: must not implement notification badge/read-unread");
+  }
+
+  const api = fs.readFileSync(path.join(FRONTEND_SRC, "api/visualPipelineOps.ts"), "utf8");
+  if (!api.includes("getVisualPipelineOpsScheduleSkips") || !api.includes("/schedule-skips")) {
+    throw new Error("B9 regression: visualPipelineOps client must call /schedule-skips");
+  }
+
+  const page = fs.readFileSync(path.join(FRONTEND_SRC, "pages/VisualPipelineOpsPage.tsx"), "utf8");
+  if (!page.includes("VpScheduleSkipHistoryPanel") || !page.includes("getVisualPipelineOpsScheduleSkips")) {
+    throw new Error("B9 regression: VisualPipelineOpsPage must mount skip history panel");
+  }
+  if (page.includes("R10 설정 반영")) {
+    throw new Error("B9 regression: Ops page must not re-expose R10 label");
+  }
+
+  const card = fs.readFileSync(
+    path.join(FRONTEND_SRC, "components/visualPipeline/VpActionRequiredCard.tsx"),
+    "utf8",
+  );
+  if (!card.includes("visual-pipeline-ops-action-required-skip-history-link")) {
+    throw new Error("B9 regression: B10 card should expose Skip 이력 anchor link");
+  }
+}
+
 async function api(method, path, body) {
   const url = `${API_BASE}${path}`;
   const res = await fetch(url, {
@@ -632,6 +702,7 @@ assertStudioTargetTableSamplePreview();
 assertVisualPipelineE2eSmoke();
 assertRunFailureSummaryUx();
 assertOpsActionRequiredCard();
+assertScheduleSkipHistoryUx();
 
 const browser = await chromium.launch();
 const page = await browser.newPage();

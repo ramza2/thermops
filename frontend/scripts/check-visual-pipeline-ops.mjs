@@ -237,6 +237,60 @@ try {
       }
     }
 
+    // --- B9: Schedule Skip history ---
+    {
+      const skipPanel = page.getByTestId("visual-pipeline-ops-schedule-skip-history");
+      await skipPanel.waitFor({ state: "visible", timeout: 15000 });
+      // Wait until loading finishes (empty or table)
+      await page
+        .getByTestId("visual-pipeline-ops-schedule-skip-loading")
+        .waitFor({ state: "hidden", timeout: 20000 })
+        .catch(() => {});
+      const isEmpty = (await skipPanel.getAttribute("data-empty")) === "true";
+      if (isEmpty) {
+        await page.getByTestId("visual-pipeline-ops-schedule-skip-empty").waitFor({
+          state: "visible",
+          timeout: 5000,
+        });
+        console.log("  [ok] B9 schedule-skip empty state");
+      } else {
+        await page.getByTestId("visual-pipeline-ops-schedule-skip-table").waitFor({
+          state: "visible",
+          timeout: 5000,
+        });
+        const row = page.getByTestId("visual-pipeline-ops-schedule-skip-row").first();
+        await row.waitFor({ state: "visible", timeout: 5000 });
+        const code = (
+          await row.getByTestId("visual-pipeline-ops-schedule-skip-reason-code").innerText()
+        ).trim();
+        const desc = (
+          await row.getByTestId("visual-pipeline-ops-schedule-skip-reason-desc").innerText()
+        ).trim();
+        if (!code) fail("B9: skip row must show reason code");
+        if (!desc) fail("B9: skip row must show reason description");
+        console.log(`  [ok] B9 schedule-skip item reason=${code}`);
+      }
+      const skipText = (await skipPanel.innerText()).toLowerCase();
+      if (
+        skipText.includes("자동 catch-up 실행") ||
+        skipText.includes("자동 재시도 실행") ||
+        skipText.includes("auto retry")
+      ) {
+        fail("B9: skip history must not expose auto actions");
+      }
+      await page.getByTestId("visual-pipeline-ops-schedule-skip-refresh").waitFor({
+        state: "visible",
+        timeout: 5000,
+      });
+      await page.getByTestId("visual-pipeline-ops-schedule-skip-refresh").click();
+      await skipPanel.waitFor({ state: "visible", timeout: 15000 });
+      await page
+        .getByTestId("visual-pipeline-ops-schedule-skip-loading")
+        .waitFor({ state: "hidden", timeout: 20000 })
+        .catch(() => {});
+      console.log("  [ok] B9 schedule-skip refresh keeps panel");
+    }
+
     const stuckTable = page.getByTestId("visual-pipeline-ops-stuck-runs-table");
     const stuckEmpty = page.getByText("현재 stuck run이 없습니다.");
     const stuckVisible =

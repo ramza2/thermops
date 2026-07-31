@@ -147,6 +147,34 @@ export interface VisualPipelineAuditLogsParams {
   limit?: number;
 }
 
+/** R11-S8-9-18 / B9 Schedule skip history (read-only). */
+export type VisualPipelineScheduleSkipSource = "audit" | "activation_latest" | string;
+
+export interface VisualPipelineScheduleSkipItem {
+  event_id: string;
+  pipeline_id?: string | null;
+  pipeline_name?: string | null;
+  activation_id?: string | null;
+  scheduled_at?: string | null;
+  reason_code?: string | null;
+  reason_message?: string | null;
+  created_at?: string | null;
+  source?: VisualPipelineScheduleSkipSource | null;
+  visual_run_id?: string | null;
+  r10_schedule_id?: string | null;
+}
+
+export interface VisualPipelineScheduleSkipsResponse {
+  items: VisualPipelineScheduleSkipItem[];
+  total: number;
+  limit: number;
+  criteria?: { limit?: number };
+}
+
+export interface VisualPipelineScheduleSkipsParams {
+  limit?: number;
+}
+
 /** R11-S7-14 Admin mark-failed */
 export interface MarkVisualPipelineRunFailedRequest {
   reason: string;

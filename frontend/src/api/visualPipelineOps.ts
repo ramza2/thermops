@@ -7,6 +7,8 @@ import type {
   VisualPipelineOpsStuckRunsParams,
   VisualPipelineOpsStuckRunsResponse,
   VisualPipelineOpsSummary,
+  VisualPipelineScheduleSkipsParams,
+  VisualPipelineScheduleSkipsResponse,
 } from "@/types/visualPipelineOps";
 
 /** R11-S7-12/S7-13/S7-14 — ops summary/stuck/audit + mark-failed. */
@@ -57,6 +59,15 @@ export async function getVisualPipelineOpsAuditLogs(
 ): Promise<VisualPipelineAuditLogsResponse> {
   return fetchApi<VisualPipelineAuditLogsResponse>(
     "/visual-pipeline-ops/audit-logs",
+    params as Record<string, unknown> | undefined,
+  );
+}
+
+export async function getVisualPipelineOpsScheduleSkips(
+  params?: VisualPipelineScheduleSkipsParams,
+): Promise<VisualPipelineScheduleSkipsResponse> {
+  return fetchApi<VisualPipelineScheduleSkipsResponse>(
+    "/visual-pipeline-ops/schedule-skips",
     params as Record<string, unknown> | undefined,
   );
 }
