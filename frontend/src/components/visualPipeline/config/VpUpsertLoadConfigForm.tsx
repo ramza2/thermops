@@ -9,6 +9,7 @@ import { extractApiErrorMessage } from "@/api/client";
 import { getStandardDatasetMetadataOptions, previewTargetTableSample } from "@/api/standardDatasets";
 import { VpColumnListField } from "@/components/visualPipeline/config/VpColumnListField";
 import { VpConfigFieldShell } from "@/components/visualPipeline/config/VpConfigFieldShell";
+import { VpSchemaKeyMappingHelper } from "@/components/visualPipeline/VpSchemaKeyMappingHelper";
 import {
   DEFAULT_DATASET_CATEGORY,
   STANDARD_DATASET_INLINE_CREATE_HINT,
@@ -41,6 +42,7 @@ import {
   suggestConflictKeyCandidates,
   validateConflictKeys,
 } from "@/utils/conflictKeyValidation";
+import { buildSchemaKeyMappingSummary } from "@/utils/schemaKeyMappingHelper";
 import { ensureNodeConfig } from "@/utils/visualPipelineNodeConfig";
 import { findUpstreamTransformForUpsert } from "@/utils/visualPipelineGraph";
 import {
@@ -495,6 +497,28 @@ export function VpUpsertLoadConfigForm({
       writeMode,
       keyTargetKnown,
       keySourceKnown,
+    ],
+  );
+
+  const schemaKeyHelperSummary = useMemo(
+    () =>
+      buildSchemaKeyMappingSummary({
+        sourceColumns: keySourceColumns,
+        targetColumns: keyTargetColumns,
+        currentConflictKeys: selectedConflictKeys,
+        transformType: keyTransformType,
+        writeMode,
+        sourceColumnsKnown: keySourceKnown,
+        targetColumnsKnown: keyTargetKnown,
+      }),
+    [
+      keySourceColumns,
+      keyTargetColumns,
+      selectedConflictKeys,
+      keyTransformType,
+      writeMode,
+      keySourceKnown,
+      keyTargetKnown,
     ],
   );
 
@@ -1180,6 +1204,13 @@ export function VpUpsertLoadConfigForm({
             ))}
           </select>
         </VpConfigFieldShell>
+
+        <VpSchemaKeyMappingHelper
+          summary={schemaKeyHelperSummary}
+          disabled={disabled}
+          onApplyRecommendedKeys={(keys) => setConflictKeys(keys)}
+        />
+
         <VpConfigFieldShell
           fieldKey="conflict_key_columns_json"
           label="Upsert 기준키 (conflict_key_columns_json)"

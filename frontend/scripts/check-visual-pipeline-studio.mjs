@@ -976,6 +976,71 @@ async function runBrowserSmoke(pipeline) {
       }
       console.log(`  [ok] B21 column proposal (${columnRowCount} rows, heat_demand/measured_at visible, editable)`);
 
+      // --- R11-S8-9-22 / B3: Schema / Key Mapping Helper ---
+      {
+        const helper = inspector.getByTestId("visual-pipeline-schema-key-helper");
+        await helper.waitFor({ state: "visible", timeout: 10000 });
+        await page.waitForTimeout(400);
+        if ((await helper.getByTestId("visual-pipeline-schema-key-helper-body").count()) === 0) {
+          await helper.getByTestId("visual-pipeline-schema-key-helper-toggle").click();
+        }
+        await helper.getByTestId("visual-pipeline-schema-key-helper-summary").waitFor({
+          state: "visible",
+          timeout: 10000,
+        });
+        const summaryText = await helper.getByTestId("visual-pipeline-schema-key-helper-summary").innerText();
+        if (!/Source\s+\d+개/.test(summaryText) || !/Target\s+\d+개/.test(summaryText)) {
+          fail(`B3: helper summary should include Source/Target counts, got ${summaryText}`);
+        }
+        // Clear current keys so recommend-apply path can be exercised (form state only).
+        await inspector.getByTestId("visual-pipeline-conflict-keys-panel").waitFor({
+          state: "visible",
+          timeout: 10000,
+        });
+        if ((await inspector.getByTestId("visual-pipeline-conflict-keys-advanced-toggle").count()) > 0) {
+          await inspector.getByTestId("visual-pipeline-conflict-keys-advanced-toggle").click();
+          const advancedInput = inspector.locator(
+            '[data-testid="visual-pipeline-conflict-keys-panel"] input[type="text"]',
+          );
+          if ((await advancedInput.count()) > 0) {
+            await advancedInput.fill("");
+            await page.waitForTimeout(200);
+          }
+        }
+        const applyBtn = helper.getByTestId("visual-pipeline-schema-key-helper-apply");
+        const applyUnavailable = helper.getByTestId("visual-pipeline-schema-key-helper-apply-unavailable");
+        if ((await applyBtn.count()) > 0) {
+          await applyBtn.click();
+          await page.waitForTimeout(300);
+          const selectedKeysText = await inspector
+            .getByTestId("visual-pipeline-conflict-keys-selected")
+            .innerText();
+          if (!selectedKeysText || selectedKeysText.includes("(없음)")) {
+            fail(`B3: apply recommended keys should update conflict_key selection, got ${selectedKeysText}`);
+          }
+          const dirtyAfter = (await toolbar.getByText("● 저장되지 않음").count()) > 0;
+          if (!dirtyAfter) {
+            fail("B3: applying recommended keys should mark graph dirty (no auto-save)");
+          }
+          console.log(`  [ok] B3 Schema/Key Helper apply → keys=${selectedKeysText.replace(/\s+/g, " ").trim()}`);
+        } else if ((await applyUnavailable.count()) > 0) {
+          console.log("  [ok] B3 Schema/Key Helper visible (apply unavailable / no recommend fallback)");
+        } else {
+          fail("B3: expected apply button or apply-unavailable fallback");
+        }
+        // Leave advanced editor closed so B27 toggle-open still works.
+        const advancedInputAfter = inspector.locator(
+          '[data-testid="visual-pipeline-conflict-keys-panel"] input[type="text"]',
+        );
+        if ((await advancedInputAfter.count()) > 0 && (await advancedInputAfter.first().isVisible())) {
+          await inspector.getByTestId("visual-pipeline-conflict-keys-advanced-toggle").click();
+        }
+        await helper.getByTestId("visual-pipeline-schema-key-helper-preview-hint").waitFor({
+          state: "visible",
+          timeout: 5000,
+        });
+      }
+
       // --- R11-S8-9-13 / B27: conflict_key_columns_json select + validate ---
       {
         await inspector.getByTestId("visual-pipeline-conflict-keys-panel").waitFor({

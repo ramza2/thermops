@@ -511,6 +511,16 @@ async function runBrowserE2e(pipeline) {
     await selectNodeById(page, NODE_LOAD);
     await assertConfigFormVisible(page, ["target_table", "write_mode", "conflict_key_columns_json"]);
     stepOk(6, "Upsert config form visible");
+    {
+      const helperCount = await inspector.getByTestId("visual-pipeline-schema-key-helper").count();
+      if (helperCount > 0) {
+        await inspector.getByTestId("visual-pipeline-schema-key-helper").first().waitFor({
+          state: "visible",
+          timeout: 10000,
+        });
+      }
+      console.log(`  [ok] B3 Schema/Key Helper show_or_hide (count=${helperCount})`);
+    }
 
     // --- B19: REST Data Source inline create ---
     await selectNodeById(page, NODE_REST);

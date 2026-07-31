@@ -53,6 +53,7 @@ export const PARTIAL_IMPACT_CHECKLIST: string[] = [
   "실패 요약에서 중단 단계와 reason 확인",
   "Studio Upsert Inspector의 Target Table sample rows에서 일부 적재 여부 확인",
   "conflict_key_columns_json이 최신 target 컬럼 기준으로 설정되어 있는지 확인",
+  "Studio Upsert Schema/Key Helper에서 source↔target·기준키 추천을 확인",
   "동일 scheduled_at/run이 이미 생성되어 있는지 Run History 확인",
   "필요한 경우 Retry 실행 전 원천 데이터 중복 가능성 확인",
 ];

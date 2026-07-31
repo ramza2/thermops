@@ -800,6 +800,80 @@ function assertPartialImpactUx() {
   if (!opsHelper.includes("영향") && !opsHelper.includes("Run Detail")) {
     throw new Error("B8 regression: B10 PARTIAL reason should point to Run Detail impact check");
   }
+  if (!helper.includes("Schema/Key Helper")) {
+    throw new Error("B8 regression: PARTIAL checklist should mention Schema/Key Helper (B3 bridge)");
+  }
+}
+
+/** B3: Schema / Key Mapping Helper (FE-only diagnosis + recommend apply to form state). */
+function assertSchemaKeyMappingHelper() {
+  const helper = fs.readFileSync(path.join(FRONTEND_SRC, "utils/schemaKeyMappingHelper.ts"), "utf8");
+  for (const token of [
+    "buildSchemaKeyMappingSummary",
+    "SCHEMA_KEY_HELPER_HINT",
+    "buildColumnMatchPreview",
+    "suggestConflictKeyCandidates",
+    "validateConflictKeys",
+    "canApplyRecommendedKeys",
+    "recommendedConflictKeys",
+  ]) {
+    if (!helper.includes(token)) {
+      throw new Error(`B3 regression: schemaKeyMappingHelper missing ${token}`);
+    }
+  }
+  for (const banned of [
+    "autoSave",
+    "autoCompile",
+    "autoMaterialize",
+    "CREATE UNIQUE",
+    "unique index",
+    "DROP TABLE",
+    "TRUNCATE",
+    "R10 설정 반영",
+    "tb_visual_pipeline_notification",
+  ]) {
+    if (helper.includes(banned)) {
+      throw new Error(`B3 regression: helper must not include '${banned}'`);
+    }
+  }
+  if (!helper.includes("자동 저장되지 않으며")) {
+    throw new Error("B3 regression: helper hint must state no auto-save");
+  }
+
+  const card = fs.readFileSync(
+    path.join(FRONTEND_SRC, "components/visualPipeline/VpSchemaKeyMappingHelper.tsx"),
+    "utf8",
+  );
+  for (const token of [
+    "visual-pipeline-schema-key-helper",
+    "visual-pipeline-schema-key-helper-summary",
+    "visual-pipeline-schema-key-helper-apply",
+    "Schema / Key Helper",
+    "추천 기준키 적용",
+  ]) {
+    if (!card.includes(token)) {
+      throw new Error(`B3 regression: VpSchemaKeyMappingHelper missing ${token}`);
+    }
+  }
+  if (card.includes("R10 설정 반영") || card.includes("CREATE UNIQUE") || card.includes("autoCompile")) {
+    throw new Error("B3 regression: card must not include R10 / unique index / autoCompile");
+  }
+
+  const form = fs.readFileSync(
+    path.join(FRONTEND_SRC, "components/visualPipeline/config/VpUpsertLoadConfigForm.tsx"),
+    "utf8",
+  );
+  if (!form.includes("VpSchemaKeyMappingHelper") || !form.includes("buildSchemaKeyMappingSummary")) {
+    throw new Error("B3 regression: Upsert form must mount Schema/Key Helper");
+  }
+  if (!form.includes("onApplyRecommendedKeys")) {
+    throw new Error("B3 regression: Upsert form must wire recommend apply");
+  }
+  for (const banned of ["CREATE UNIQUE", "unique index", "DROP TABLE", "R10 설정 반영", "autoMaterialize("]) {
+    if (form.includes(banned)) {
+      throw new Error(`B3 regression: Upsert form must not contain '${banned}'`);
+    }
+  }
 }
 
 /** B5: Ops action badge PoC (read-model, no notification table / read-unread). */
@@ -943,6 +1017,7 @@ assertOpsActionRequiredCard();
 assertScheduleSkipHistoryUx();
 assertCatchupGuidanceUx();
 assertPartialImpactUx();
+assertSchemaKeyMappingHelper();
 assertOpsActionBadgePoC();
 
 const browser = await chromium.launch();

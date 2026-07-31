@@ -1935,6 +1935,15 @@ cd frontend && node scripts/check-visual-pipeline-studio.mjs
 - **Known limitation:** polling 기본 없음 · badge는 현재 Ops 상태 스냅샷 · retryable 그룹은 count 제외
 - **Backlog:** B5 done
 
+### R11-S8-9-22 Schema / Key Mapping Helper
+
+- **범위:** FE-only — B3. Upsert Load Inspector에 Schema/Key Helper(진단·추천·추천키 form 적용).
+- **변경:** `schemaKeyMappingHelper` · `VpSchemaKeyMappingHelper` · B15/B27/B21 재사용 · B8 checklist 1줄 · check-pages/studio/e2e
+- **검증:** `cd frontend && npm run build` · pages/studio/ops/e2e · package/requirements diff empty
+- **제외:** backend/API/DB · 물리 schema/unique index · auto save/compile · B15/B27/B18 정책 대규모 변경 · package · 「R10 설정 반영」재노출 금지
+- **Known limitation:** mapping editor 본구현 아님 · REST→Upsert 직결 시 source fallback · 추천은 FE helper이며 자동 저장/물리 스키마 변경 없음
+- **Backlog:** B3 done
+
 ## 설계 문서 참조
 
 - `docs/md/THERMOps_R11-S8-9_Backlog.md`
