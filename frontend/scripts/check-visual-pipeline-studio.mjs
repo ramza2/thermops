@@ -1503,6 +1503,48 @@ async function runBrowserSmoke(pipeline) {
       state: "visible",
       timeout: 15000,
     });
+
+    // --- B4: Catch-up guidance ---
+    {
+      const guidance = actPanel.getByTestId("visual-pipeline-catchup-guidance");
+      await guidance.waitFor({ state: "visible", timeout: 10000 });
+      const summary = (
+        await actPanel.getByTestId("visual-pipeline-catchup-guidance-summary").innerText()
+      ).trim();
+      if (!summary.includes("누락 후보") && !summary.toLowerCase().includes("catch-up")) {
+        fail("B4: Catch-up guidance summary missing");
+      }
+      const notAuto = (
+        await actPanel.getByTestId("visual-pipeline-catchup-guidance-not-auto").innerText()
+      ).trim();
+      if (!notAuto.includes("자동 복구가 아닙니다")) {
+        fail("B4: must state Catch-up is not automatic recovery");
+      }
+      await actPanel.getByTestId("visual-pipeline-catchup-guidance-toggle").click();
+      await actPanel.getByTestId("visual-pipeline-catchup-guidance-details").waitFor({
+        state: "visible",
+        timeout: 5000,
+      });
+      for (const termId of ["missed", "candidate", "window", "skip_reason"]) {
+        await actPanel
+          .getByTestId(`visual-pipeline-catchup-guidance-term-${termId}`)
+          .waitFor({ state: "visible", timeout: 3000 });
+      }
+      await actPanel.getByTestId("visual-pipeline-catchup-guidance-checklist").waitFor({
+        state: "visible",
+        timeout: 3000,
+      });
+      const guidanceText = (await guidance.innerText()).toLowerCase();
+      if (
+        guidanceText.includes("자동 catch-up 실행") ||
+        guidanceText.includes("자동 복구됨") ||
+        guidanceText.includes("auto catchup")
+      ) {
+        fail("B4: guidance must not advertise auto catch-up / auto recovery done");
+      }
+      console.log("  [ok] B4 Catch-up guidance (terms + checklist + not auto recovery)");
+    }
+
     await actPanel.getByTestId("visual-pipeline-schedule-catchup-refresh").click();
     const catchupEligible = actPanel.getByTestId("visual-pipeline-schedule-catchup-eligible");
     const catchupUnavailable = actPanel.getByTestId("visual-pipeline-schedule-catchup-unavailable");

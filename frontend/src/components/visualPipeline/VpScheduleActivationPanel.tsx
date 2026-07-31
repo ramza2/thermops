@@ -5,6 +5,7 @@ import {
   enqueueScheduleCatchupRun,
   getScheduleCatchupCandidate,
 } from "@/api/visualPipelines";
+import { VpCatchupGuidance } from "@/components/visualPipeline/VpCatchupGuidance";
 import type {
   VisualPipelineScheduleActivationResponse,
   VisualPipelineScheduleCatchupCandidate,
@@ -366,6 +367,11 @@ export function VpScheduleActivationPanel({
                 <p className="text-[11px] text-amber-900 bg-amber-50 border border-amber-100 rounded px-2 py-1">
                   과거 스케줄 기준으로 다시 실행되므로, 입력 데이터의 기준시점과 중복 적재 가능성을 확인하세요.
                 </p>
+                <VpCatchupGuidance
+                  skipReasonCode={
+                    candidate?.last_skip_reason ?? result.last_skip_reason ?? null
+                  }
+                />
                 {candidateLoading && (
                   <p className="text-[11px] text-slate-500" data-testid="visual-pipeline-schedule-catchup-loading">
                     누락 실행 후보를 확인하는 중입니다.

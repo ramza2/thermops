@@ -289,6 +289,17 @@ try {
         .waitFor({ state: "hidden", timeout: 20000 })
         .catch(() => {});
       console.log("  [ok] B9 schedule-skip refresh keeps panel");
+      await page.getByTestId("visual-pipeline-ops-schedule-skip-catchup-bridge").waitFor({
+        state: "visible",
+        timeout: 5000,
+      });
+      const bridge = (
+        await page.getByTestId("visual-pipeline-ops-schedule-skip-catchup-bridge").innerText()
+      ).trim();
+      if (!bridge.includes("자동 복구가 아닙니다") && !bridge.includes("원인 확인용")) {
+        fail("B4: Ops skip panel should include Catch-up bridge guidance");
+      }
+      console.log("  [ok] B4 Ops skip↔Catch-up bridge copy");
     }
 
     const stuckTable = page.getByTestId("visual-pipeline-ops-stuck-runs-table");

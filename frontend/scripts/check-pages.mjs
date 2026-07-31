@@ -664,6 +664,73 @@ function assertScheduleSkipHistoryUx() {
   }
 }
 
+/** B4: Catch-up guidance copy (FE-only, no auto recovery / policy change). */
+function assertCatchupGuidanceUx() {
+  const guidance = fs.readFileSync(path.join(FRONTEND_SRC, "utils/catchupGuidance.ts"), "utf8");
+  for (const token of [
+    "CATCHUP_SUMMARY",
+    "CATCHUP_NOT_AUTO_RECOVERY",
+    "CATCHUP_TERM_DEFINITIONS",
+    "CATCHUP_PRE_RUN_CHECKLIST",
+    "CATCHUP_OPS_SKIP_BRIDGE",
+    "missed",
+    "candidate",
+    "window",
+    "skip_reason",
+    "자동 복구가 아니",
+  ]) {
+    if (!guidance.includes(token)) {
+      throw new Error(`B4 regression: catchupGuidance missing ${token}`);
+    }
+  }
+  for (const banned of ["자동 복구됨", "자동 처리", "autoCatchup(", "enqueueAutoCatchup"]) {
+    if (guidance.includes(banned)) {
+      throw new Error(`B4 regression: catchupGuidance must not imply ${banned}`);
+    }
+  }
+
+  const skipHelper = fs.readFileSync(path.join(FRONTEND_SRC, "utils/scheduleSkipReason.ts"), "utf8");
+  if (!skipHelper.includes("nextChecksForScheduleSkipReason")) {
+    throw new Error("B4 regression: scheduleSkipReason must export nextChecksForScheduleSkipReason");
+  }
+
+  const card = fs.readFileSync(
+    path.join(FRONTEND_SRC, "components/visualPipeline/VpCatchupGuidance.tsx"),
+    "utf8",
+  );
+  for (const token of [
+    "visual-pipeline-catchup-guidance",
+    "visual-pipeline-catchup-guidance-toggle",
+    "visual-pipeline-catchup-guidance-details",
+    "visual-pipeline-catchup-guidance-terms",
+    "visual-pipeline-catchup-guidance-checklist",
+    "CATCHUP_NOT_AUTO_RECOVERY",
+  ]) {
+    if (!card.includes(token)) {
+      throw new Error(`B4 regression: VpCatchupGuidance missing ${token}`);
+    }
+  }
+  if (card.includes("R10 설정 반영")) {
+    throw new Error("B4 regression: must not re-expose R10 label");
+  }
+
+  const panel = fs.readFileSync(
+    path.join(FRONTEND_SRC, "components/visualPipeline/VpScheduleActivationPanel.tsx"),
+    "utf8",
+  );
+  if (!panel.includes("VpCatchupGuidance") || !panel.includes("visual-pipeline-schedule-catchup-section")) {
+    throw new Error("B4 regression: Schedule Activation Catch-up section must mount VpCatchupGuidance");
+  }
+
+  const skipPanel = fs.readFileSync(
+    path.join(FRONTEND_SRC, "components/visualPipeline/VpScheduleSkipHistoryPanel.tsx"),
+    "utf8",
+  );
+  if (!skipPanel.includes("visual-pipeline-ops-schedule-skip-catchup-bridge") || !skipPanel.includes("CATCHUP_OPS_SKIP_BRIDGE")) {
+    throw new Error("B4 regression: Ops skip panel must include Catch-up bridge copy");
+  }
+}
+
 async function api(method, path, body) {
   const url = `${API_BASE}${path}`;
   const res = await fetch(url, {
@@ -703,6 +770,7 @@ assertVisualPipelineE2eSmoke();
 assertRunFailureSummaryUx();
 assertOpsActionRequiredCard();
 assertScheduleSkipHistoryUx();
+assertCatchupGuidanceUx();
 
 const browser = await chromium.launch();
 const page = await browser.newPage();

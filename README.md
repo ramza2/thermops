@@ -1908,6 +1908,15 @@ cd frontend && node scripts/check-visual-pipeline-studio.mjs
 - **Known limitation:** STALE/DUPLICATE는 activation 최신 skip 스냅샷 위주 · ACTIVE_RUN은 audit 이력 · Studio Dock 미배치
 - **Backlog:** B9 done
 
+### R11-S8-9-19 Catch-up 안내 UX 개선
+
+- **범위:** FE-only — B4. Studio Catch-up 섹션 용어·실행 전 checklist·skip reason 다음 확인 + Ops Skip 보조 안내.
+- **변경:** `catchupGuidance.ts` · `VpCatchupGuidance` · `nextChecksForScheduleSkipReason` · check-pages/studio/ops B4
+- **검증:** `cd frontend && npm run build` · `check-pages.mjs` · studio/ops/e2e
+- **제외:** backend/API/DB · catch-up/window/worker 정책 · B9/B10 대규모 · auto action · package · 「R10 설정 반영」재노출 금지
+- **Known limitation:** window hours는 서버 설정 의존(개념 설명만) · Ops→Studio 딥링크 없음 · checklist 비저장
+- **Backlog:** B4 done
+
 ## 설계 문서 참조
 
 - `docs/md/THERMOps_R11-S8-9_Backlog.md`

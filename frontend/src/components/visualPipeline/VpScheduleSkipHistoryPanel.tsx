@@ -1,3 +1,4 @@
+import { CATCHUP_OPS_SKIP_BRIDGE } from "@/utils/catchupGuidance";
 import { describeScheduleSkipReason } from "@/utils/scheduleSkipReason";
 import type { VisualPipelineScheduleSkipItem } from "@/types/visualPipelineOps";
 
@@ -46,6 +47,12 @@ export function VpScheduleSkipHistoryPanel({
           <p className="text-[11px] text-slate-500 mt-0.5">
             스케줄이 실행을 생성하지 않은 최근 사유입니다. 자동 Catch-up·재시도·중단은 수행하지
             않습니다.
+          </p>
+          <p
+            className="text-[11px] text-slate-600 mt-1.5"
+            data-testid="visual-pipeline-ops-schedule-skip-catchup-bridge"
+          >
+            {CATCHUP_OPS_SKIP_BRIDGE}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2 shrink-0">

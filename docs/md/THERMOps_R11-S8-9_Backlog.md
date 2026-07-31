@@ -27,7 +27,7 @@
 | B1 | Visual Pipeline Starter Template | 범용 multi-source ingestion 스타터. REST Source 여러 개 → Transform 병렬/정규화 → Upsert Load 기본 그래프를 빠르게 생성. 열수요 실적+기상+특일은 **샘플 시나리오 중 하나**로만 제공 | D | open | 구 S8-8 B1 확장 |
 | B2 | Domain Preset Framework | 업무 도메인별 preset 등록·선택 구조. 노드 라벨, 기본 CRON, target table/conflict key, Transform 기본 mapping 포함. 열수요 preset은 **예시 preset 하나**로만 | D | open | 구 S8-8 B2 확장 |
 | B3 | Schema / Key Mapping Helper | 원천 필드 → 표준 컬럼 mapping 범용 helper. 날짜/시간, 엔티티 ID, 지사/노드 코드, 측정값 category 자동 제안 | B | open | 구 S8-8 B3 확장 |
-| B4 | Catch-up 안내 개선 | missed 의미·window·경고 카피 강화 (Studio Catch-up 섹션) | C | open | |
+| B4 | Catch-up 안내 개선 | missed 의미·window·경고 카피 강화 (Studio Catch-up 섹션) | C | **done** | **R11-S8-9-19** |
 | B5 | Notification badge PoC | S8-7-1 read-model badge (Ops/Studio). S8-7 설계 범위 | D | open | S8-7-1과 병행 |
 | B6 | 실패 원인 요약 개선 | Run Detail에 step+reason 한줄 요약 | C | **done** | **R11-S8-9-16** |
 | B7 | Data Load → ML Workflow Handoff Guide | Visual Pipeline 적재 이후 Feature Dataset / Training / Batch Prediction으로 넘기는 **범용 handoff 가이드** (docs) | D | open | 구 B7 확장 |
@@ -79,7 +79,7 @@ B1, B2, B3, B15(done), B19(done), B20(done), B21(done), B27(done)
 
 ### C — 운영 가시성 / 복구 UX
 
-B4, B6(done), B8, B9(done), B10(done), B18(done), B26(done)
+B4(done), B6(done), B8, B9(done), B10(done), B18(done), B26(done)
 
 ### D — 범용 MLOps 확장 / 문서 / 장기
 
@@ -109,6 +109,7 @@ B5, B7, B12(done), B22, B23
 | R11-S8-9-16 | B6 | Run Detail 실패 원인 한 줄 요약 (FE-only) | |
 | R11-S8-9-17 | B10 | Ops 「조치 필요」카드 (stuck/failed/partial/catch-up hint) | |
 | R11-S8-9-18 | B9 | Ops Schedule Skip 이력 UI (read-only schedule-skips + reason 매핑) | |
+| R11-S8-9-19 | B4 | Studio Catch-up 안내 UX (용어·checklist·reason 다음 확인, FE-only) | |
 
 ---
 
@@ -137,6 +138,7 @@ B5, B7, B12(done), B22, B23
 | 2026-07-31 | B6 → `done` (S8-9-16). Run Detail 실패 원인 한 줄 요약 (FE-only) |
 | 2026-07-31 | B10 → `done` (S8-9-17). Ops 「조치 필요」카드 (FE-only, auto-action 없음) |
 | 2026-07-31 | B9 → `done` (S8-9-18). Ops Schedule Skip 이력 UI (read-only `GET .../schedule-skips`, worker emit 미변경) |
+| 2026-07-31 | B4 → `done` (S8-9-19). Studio Catch-up 안내 UX (FE-only, auto 복구 암시 없음) |
 
 ---
 
