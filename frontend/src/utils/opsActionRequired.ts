@@ -149,7 +149,7 @@ export function buildOpsActionRequired(input: {
           id: "partial-count",
           title: `PARTIAL ${partialCount}건`,
           reason:
-            "부분 완료 Run이 있습니다. Studio 실행 이력에서 PARTIAL을 검토하세요. (목록 API 없음)",
+            "부분 완료 Run이 있습니다. Run Detail에서 PARTIAL 영향·Retry 전 확인을 검토하세요. (목록 API 없음 · Studio 실행 이력에서도 확인 가능)",
           openDetail: false,
         },
       ],

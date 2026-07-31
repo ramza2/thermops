@@ -731,6 +731,77 @@ function assertCatchupGuidanceUx() {
   }
 }
 
+/** B8: PARTIAL impact / retry-precheck card (FE-only, no auto dedup). */
+function assertPartialImpactUx() {
+  const helper = fs.readFileSync(path.join(FRONTEND_SRC, "utils/partialImpactSummary.ts"), "utf8");
+  for (const token of [
+    "buildPartialImpactSummary",
+    "extractUpsertHintsFromGraph",
+    "PARTIAL_IMPACT_CHECKLIST",
+    "duplicateRisk",
+    "확인 필요",
+  ]) {
+    if (!helper.includes(token)) {
+      throw new Error(`B8 regression: partialImpactSummary missing ${token}`);
+    }
+  }
+  for (const banned of [
+    "중복이 발생했습니다",
+    "안전하게 재실행",
+    "자동으로 중복 제거",
+    "autoDedup(",
+    "autoRetry(",
+  ]) {
+    if (helper.includes(banned)) {
+      throw new Error(`B8 regression: helper must not use ${banned}`);
+    }
+  }
+
+  const card = fs.readFileSync(
+    path.join(FRONTEND_SRC, "components/visualPipeline/VpPartialImpactCard.tsx"),
+    "utf8",
+  );
+  for (const token of [
+    "partial-impact",
+    "partial-impact-checklist",
+    "partial-impact-duplicate-risk",
+    "partial-impact-preview-hint",
+    "Target Preview",
+    "summary.title",
+  ]) {
+    if (!card.includes(token)) {
+      throw new Error(`B8 regression: VpPartialImpactCard missing ${token}`);
+    }
+  }
+  for (const banned of ["중복이 발생했습니다", "자동으로 중복 제거", "autoDedup("]) {
+    if (card.includes(banned)) {
+      throw new Error(`B8 regression: card must not claim ${banned}`);
+    }
+  }
+  if (card.includes("R10 설정 반영")) {
+    throw new Error("B8 regression: must not re-expose R10 label");
+  }
+
+  const panel = fs.readFileSync(
+    path.join(FRONTEND_SRC, "components/visualPipeline/VpRunDetailPanel.tsx"),
+    "utf8",
+  );
+  if (!panel.includes("VpPartialImpactCard") || !panel.includes("buildPartialImpactSummary")) {
+    throw new Error("B8 regression: VpRunDetailPanel must mount PARTIAL impact card");
+  }
+  if (panel.includes("R10 설정 반영")) {
+    throw new Error("B8 regression: Run Detail must not re-expose R10 label");
+  }
+
+  const opsHelper = fs.readFileSync(path.join(FRONTEND_SRC, "utils/opsActionRequired.ts"), "utf8");
+  if (!opsHelper.includes("PARTIAL") || !opsHelper.includes("Retry")) {
+    throw new Error("B8 regression: B10 PARTIAL reason should mention PARTIAL / Retry precheck");
+  }
+  if (!opsHelper.includes("영향") && !opsHelper.includes("Run Detail")) {
+    throw new Error("B8 regression: B10 PARTIAL reason should point to Run Detail impact check");
+  }
+}
+
 async function api(method, path, body) {
   const url = `${API_BASE}${path}`;
   const res = await fetch(url, {
@@ -771,6 +842,7 @@ assertRunFailureSummaryUx();
 assertOpsActionRequiredCard();
 assertScheduleSkipHistoryUx();
 assertCatchupGuidanceUx();
+assertPartialImpactUx();
 
 const browser = await chromium.launch();
 const page = await browser.newPage();

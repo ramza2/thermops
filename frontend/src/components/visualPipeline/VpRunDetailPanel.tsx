@@ -2,15 +2,22 @@ import { useEffect, useState } from "react";
 import { extractApiErrorMessage } from "@/api/client";
 import {
   cancelVisualPipelineRun,
+  getVisualPipeline,
   getVisualPipelineRunProgress,
   listVisualPipelineRunEvents,
   retryVisualPipelineRun,
 } from "@/api/visualPipelines";
+import { VpPartialImpactCard } from "@/components/visualPipeline/VpPartialImpactCard";
 import type {
   VisualPipelineRunEvent,
   VisualPipelineRunProgress,
   VisualPipelineRunResponse,
 } from "@/types/visualPipeline";
+import {
+  buildPartialImpactSummary,
+  extractUpsertHintsFromGraph,
+  type PartialImpactConfigHints,
+} from "@/utils/partialImpactSummary";
 import { buildRunFailureSummary } from "@/utils/runFailureSummary";
 
 interface VpRunDetailPanelProps {
@@ -141,6 +148,9 @@ export function VpRunDetailPanel({
   const [cancelError, setCancelError] = useState<string | null>(null);
   const [cancelSuccess, setCancelSuccess] = useState<string | null>(null);
 
+  const [configHints, setConfigHints] = useState<PartialImpactConfigHints | null>(null);
+  const [conflictKeysFallback, setConflictKeysFallback] = useState(false);
+
   useEffect(() => {
     if (!detail?.pipeline_id || !detail.visual_run_id) {
       setProgress(null);
@@ -175,6 +185,37 @@ export function VpRunDetailPanel({
   }, [detail?.pipeline_id, detail?.visual_run_id]);
 
   useEffect(() => {
+    const status = String(detail?.run_status || "").toUpperCase();
+    if (!detail?.pipeline_id || status !== "PARTIAL") {
+      setConfigHints(null);
+      setConflictKeysFallback(false);
+      return;
+    }
+    let cancelled = false;
+    setConfigHints(null);
+    setConflictKeysFallback(false);
+    void getVisualPipeline(detail.pipeline_id)
+      .then((pipe) => {
+        if (cancelled) return;
+        const hints = extractUpsertHintsFromGraph(pipe.graph);
+        setConfigHints({
+          conflictKeys: hints.conflictKeys,
+          writeMode: hints.writeMode,
+          graphChecked: true,
+        });
+        setConflictKeysFallback(hints.conflictKeys.length === 0);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setConfigHints({ conflictKeys: [], graphChecked: true });
+        setConflictKeysFallback(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [detail?.pipeline_id, detail?.run_status, detail?.visual_run_id]);
+
+  useEffect(() => {
     setRetryOpen(false);
     setConfirmRunId("");
     setRetryReason("");
@@ -192,6 +233,8 @@ export function VpRunDetailPanel({
 
   const failureSummary = buildRunFailureSummary(detail, events, progress);
   const showFailureSummary = failureSummary.severity !== "none";
+  const partialImpact = buildPartialImpactSummary(detail, events, progress, configHints);
+  const showPartialImpact = partialImpact.severity !== "none";
 
   const retryable = canRetryStatus(detail?.run_status);
   const canConfirmRetry =
@@ -359,6 +402,14 @@ export function VpRunDetailPanel({
                   진단 보조 요약입니다. 상세는 아래 진행 이력·이슈를 확인하세요.
                 </p>
               </section>
+            )}
+
+            {showPartialImpact && (
+              <VpPartialImpactCard
+                summary={partialImpact}
+                conflictKeysFallback={conflictKeysFallback}
+                testIdPrefix={testIdPrefix}
+              />
             )}
 
             <section

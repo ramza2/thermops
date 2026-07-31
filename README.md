@@ -1917,6 +1917,15 @@ cd frontend && node scripts/check-visual-pipeline-studio.mjs
 - **Known limitation:** window hours는 서버 설정 의존(개념 설명만) · Ops→Studio 딥링크 없음 · checklist 비저장
 - **Backlog:** B4 done
 
+### R11-S8-9-20 PARTIAL 영향 범위 안내
+
+- **범위:** FE-only — B8. Run Detail PARTIAL 전용 영향/Retry 전 확인 카드.
+- **변경:** `partialImpactSummary` · `VpPartialImpactCard` · graph best-effort conflict keys · B10 PARTIAL reason 문구 · check-pages/ops/e2e
+- **검증:** `cd frontend && npm run build` · pages/ops/studio/e2e
+- **제외:** backend/API/DB · retry 정책 · 물리 테이블 변경 · 실제 중복 분석 · B6/B18/B27 대규모 · package · 「R10 설정 반영」재노출 금지
+- **Known limitation:** Ops PARTIAL 목록 없음(smoke conditional) · conflict keys는 graph best-effort · row-level 중복 미분석
+- **Backlog:** B8 done
+
 ## 설계 문서 참조
 
 - `docs/md/THERMOps_R11-S8-9_Backlog.md`

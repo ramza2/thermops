@@ -800,8 +800,12 @@ async function runBrowserE2e(pipeline) {
       if ((await page.getByTestId("visual-pipeline-run-detail-failure-summary").count()) > 0) {
         fail(19, "B6: SUCCESS run detail must not show failure-summary card");
       }
+      // B8: SUCCESS run must not show PARTIAL impact card
+      if ((await page.getByTestId("visual-pipeline-run-detail-partial-impact").count()) > 0) {
+        fail(19, "B8: SUCCESS run detail must not show partial-impact card");
+      }
       await page.getByTestId("visual-pipeline-run-detail-close").click();
-      stepOk(19, "Run Detail progress/retry/cancel sections visible (no failure summary)");
+      stepOk(19, "Run Detail progress/retry/cancel sections visible (no failure summary / no PARTIAL impact)");
     }
 
     // --- B18 Target Table Preview (seed table after SUCCESS run) ---

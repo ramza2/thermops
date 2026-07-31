@@ -18,6 +18,7 @@ import { chromium } from "playwright";
 
 const BASE = process.env.CHECK_PAGES_BASE || "http://localhost:5173";
 const EXPECT_ADMIN = process.env.CHECK_VP_OPS_EXPECT_ADMIN !== "0";
+const API_BASE = process.env.THERMOOPS_API_BASE || "http://localhost:8000/api/v1";
 
 const TERMINAL_STATUSES = new Set(["SUCCESS", "FAILED", "PARTIAL", "CANCELLED"]);
 const DETAIL_PANEL = "visual-pipeline-ops-run-detail-panel";
@@ -332,6 +333,10 @@ try {
       // B6: RUNNING must not show failure summary card
       if ((await page.getByTestId("visual-pipeline-ops-run-detail-failure-summary").count()) > 0) {
         fail("B6: RUNNING run detail must not show failure-summary card");
+      // B8: RUNNING must not show PARTIAL impact card
+      if ((await page.getByTestId("visual-pipeline-ops-run-detail-partial-impact").count()) > 0) {
+        fail("B8: RUNNING run detail must not show partial-impact card");
+      }
       }
       await assertSoftCancelForRunning(page, runningStuck);
       await closeRunDetail(page);
@@ -357,7 +362,12 @@ try {
           await page.getByTestId("visual-pipeline-ops-run-detail-failure-summary-title").innerText()
         ).trim();
         if (!title) fail("B6: failure summary title must be non-empty for FAILED run");
+        // B8: FAILED must not show PARTIAL impact card
+        if ((await page.getByTestId("visual-pipeline-ops-run-detail-partial-impact").count()) > 0) {
+          fail("B8: FAILED run detail must not show partial-impact card");
+        }
         console.log(`  [ok] B6 failure summary on FAILED detail (title=${title.slice(0, 80)})`);
+        console.log("  [ok] B8 FAILED detail has no PARTIAL impact card");
         await closeRunDetail(page);
         openedDetail = false;
       } else {
@@ -365,6 +375,61 @@ try {
       }
     } else {
       console.log("  [skip] B6 no recent failures table for failure-summary check");
+    }
+
+    // --- B8: PARTIAL impact card (conditional; stay on Ops page) ---
+    {
+      const stuckForPartial = await listStuckRunRows(page);
+      const partialStuck = stuckForPartial.find((r) => r.status === "PARTIAL");
+      if (partialStuck) {
+        await openRunDetail(page, partialStuck.detailButton);
+        const impact = page.getByTestId("visual-pipeline-ops-run-detail-partial-impact");
+        await impact.waitFor({ state: "visible", timeout: 15000 });
+        await page.getByTestId("visual-pipeline-ops-run-detail-partial-impact-duplicate-risk").waitFor({
+          state: "visible",
+          timeout: 5000,
+        });
+        await page.getByTestId("visual-pipeline-ops-run-detail-partial-impact-checklist").waitFor({
+          state: "visible",
+          timeout: 5000,
+        });
+        const impactText = await impact.innerText();
+        if (impactText.includes("중복이 발생했습니다") || impactText.includes("자동으로 중복 제거")) {
+          fail("B8: PARTIAL impact must not assert duplicate occurred / auto-dedup");
+        }
+        console.log(`  [ok] B8 PARTIAL impact card (run_id=${partialStuck.runId})`);
+        await closeRunDetail(page);
+      } else {
+        let apiPartial = false;
+        try {
+          const pipesRes = await fetch(`${API_BASE}/visual-pipelines?limit=30`);
+          const pipesJson = await pipesRes.json();
+          const pipes = pipesJson?.data?.items || pipesJson?.items || [];
+          for (const pipe of pipes.slice(0, 15)) {
+            const pid = pipe.pipeline_id;
+            if (!pid) continue;
+            const runsRes = await fetch(
+              `${API_BASE}/visual-pipelines/${encodeURIComponent(pid)}/runs?run_status=PARTIAL&limit=1`,
+            );
+            if (!runsRes.ok) continue;
+            const runsJson = await runsRes.json();
+            const runs = runsJson?.data?.items || runsJson?.items || [];
+            if (runs.length > 0) {
+              apiPartial = true;
+              break;
+            }
+          }
+        } catch {
+          /* ignore */
+        }
+        if (apiPartial) {
+          console.log(
+            "  [skip] B8 PARTIAL exists via API but not in Ops stuck list (conditional pass; e2e checks SUCCESS hide)",
+          );
+        } else {
+          console.log("  [skip] B8 no PARTIAL run available (conditional pass)");
+        }
+      }
     }
 
     // 2) non-RUNNING negative check: prefer recent failure (terminal), then PENDING, then other terminal stuck
