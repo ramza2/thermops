@@ -476,6 +476,31 @@ function assertStudioTargetTableSamplePreview() {
   }
 }
 
+/** B12: Visual Pipeline E2E smoke script (journey regression). */
+function assertVisualPipelineE2eSmoke() {
+  const e2ePath = path.join(path.dirname(fileURLToPath(import.meta.url)), "check-visual-pipeline-e2e.mjs");
+  if (!fs.existsSync(e2ePath)) {
+    throw new Error("B12 regression: frontend/scripts/check-visual-pipeline-e2e.mjs missing");
+  }
+  const text = fs.readFileSync(e2ePath, "utf8");
+  for (const token of ["E2E_B12_", "[B12][", "실행 설정 반영", "fail(", "throw new Error"]) {
+    if (!text.includes(token)) {
+      throw new Error(`B12 regression: e2e script missing ${token}`);
+    }
+  }
+  if (text.includes("R10 설정 반영")) {
+    throw new Error("B12 regression: e2e script must not re-expose 「R10 설정 반영」");
+  }
+  if (!/function fail\([\s\S]*?throw new Error/.test(text)) {
+    throw new Error("B12 regression: fail() must throw");
+  }
+  for (const banned of ["DROP TABLE", "TRUNCATE TABLE", "DELETE FROM", "UPDATE ", "INSERT INTO"]) {
+    if (text.includes(banned)) {
+      throw new Error(`B12 regression: e2e script must not contain physical DML '${banned.trim()}'`);
+    }
+  }
+}
+
 async function api(method, path, body) {
   const url = `${API_BASE}${path}`;
   const res = await fetch(url, {
@@ -511,6 +536,7 @@ assertStudioUpsertTransformColumnProposal();
 assertStudioUpsertColumnMatchPreview();
 assertStudioUpsertConflictKeysUx();
 assertStudioTargetTableSamplePreview();
+assertVisualPipelineE2eSmoke();
 
 const browser = await chromium.launch();
 const page = await browser.newPage();

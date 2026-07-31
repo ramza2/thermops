@@ -1871,6 +1871,16 @@ cd frontend && node scripts/check-visual-pipeline-studio.mjs
 - **Known limitation:** DRAFT/미생성 테이블은 404 · 미등록 target_table은 403 · 임의 SQL/필터/정렬 UI 없음 · Run Detail 없음
 - **Backlog:** B18 done
 
+### R11-S8-9-15 Visual Pipeline E2E Smoke Scenario
+
+- **범위:** smoke/docs — B12. REST→Transform→Upsert→Compile→실행 설정 반영→즉시 실행→History/Detail→Target Preview 여정 고정.
+- **변경:** 신규 `frontend/scripts/check-visual-pipeline-e2e.mjs` · prefix `E2E_B12_` · C-mix(API seed + UI) · Manual Run SUCCESS hard · check-pages B12 assert
+- **실행:** `cd frontend && node scripts/check-visual-pipeline-e2e.mjs`
+- **검증:** `npm run build` · `check-pages.mjs` · `check-visual-pipeline-studio.mjs` · `check-visual-pipeline-ops.mjs` · `check-visual-pipeline-e2e.mjs`
+- **제외:** product/backend/DB/migration/package · Schedule 활성화 사이클 · 물리 DROP/TRUNCATE · 「R10 설정 반영」재노출 금지
+- **Known limitation:** load 타깃은 platform seed sample 테이블 · Studio 회귀 smoke와 일부 경로 중복
+- **Backlog:** B12 done
+
 ## 설계 문서 참조
 
 - `docs/md/THERMOps_R11-S8-9_Backlog.md`
