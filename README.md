@@ -1926,6 +1926,15 @@ cd frontend && node scripts/check-visual-pipeline-studio.mjs
 - **Known limitation:** Ops PARTIAL 목록 없음(smoke conditional) · conflict keys는 graph best-effort · row-level 중복 미분석
 - **Backlog:** B8 done
 
+### R11-S8-9-21 운영 확인 필요 badge PoC
+
+- **범위:** FE-only — B5 / S8-7-1 read-model badge. Ops 상태에서 파생된 「확인 필요」count.
+- **변경:** `buildOpsActionBadgeSummary` (retryable 제외) · `VpOpsActionBadge` · `useOpsActionBadge` · Sidebar/Ops title/Studio Ops 링크 · `#visual-pipeline-ops-action-required` · check-pages/ops/studio/e2e
+- **검증:** `cd frontend && npm run build` · pages/ops/studio/e2e · package/requirements diff empty
+- **제외:** notification table · read/unread · email/Slack/webhook/push · backend write · worker · auto action · package · 「R10 설정 반영」재노출 금지
+- **Known limitation:** polling 기본 없음 · badge는 현재 Ops 상태 스냅샷 · retryable 그룹은 count 제외
+- **Backlog:** B5 done
+
 ## 설계 문서 참조
 
 - `docs/md/THERMOps_R11-S8-9_Backlog.md`

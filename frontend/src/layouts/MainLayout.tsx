@@ -24,14 +24,19 @@ interface PageHeaderProps {
   description?: string;
   actions?: React.ReactNode;
   breadcrumbs?: BreadcrumbItem[];
+  /** Optional node rendered next to the title (e.g. Ops action badge). */
+  titleAddon?: React.ReactNode;
 }
 
-export function PageHeader({ title, description, actions, breadcrumbs }: PageHeaderProps) {
+export function PageHeader({ title, description, actions, breadcrumbs, titleAddon }: PageHeaderProps) {
   return (
     <div className="flex items-start justify-between mb-5">
       <div>
         {breadcrumbs && breadcrumbs.length > 0 && <Breadcrumb items={breadcrumbs} />}
-        <h1 className="text-xl font-bold text-slate-900">{title}</h1>
+        <div className="inline-flex items-center gap-2 flex-wrap">
+          <h1 className="text-xl font-bold text-slate-900">{title}</h1>
+          {titleAddon}
+        </div>
         {description && <p className="text-sm text-slate-500 mt-1">{description}</p>}
       </div>
       {actions && <div className="flex gap-2">{actions}</div>}

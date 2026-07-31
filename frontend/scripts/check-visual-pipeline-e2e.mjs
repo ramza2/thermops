@@ -462,6 +462,16 @@ async function runBrowserE2e(pipeline) {
     await toolbar.waitFor({ state: "visible", timeout: 15000 });
     const inspector = page.getByTestId("visual-pipeline-inspector");
 
+    // B5: Ops link/badge show-or-hide without crash
+    {
+      const opsLinkCount = await page.getByTestId("visual-pipeline-studio-ops-link").count();
+      const badgeCount = await page.getByTestId("visual-pipeline-studio-ops-action-badge").count();
+      const badgeErrCount = await page.getByTestId("visual-pipeline-studio-ops-action-badge-error").count();
+      console.log(
+        `  [ok] B5 studio Ops link/badge show_or_hide (link=${opsLinkCount}, badge=${badgeCount}, err=${badgeErrCount})`,
+      );
+    }
+
     for (const nodeId of [NODE_CRON, NODE_REST, NODE_TRANSFORM, NODE_LOAD]) {
       await page.getByTestId(`visual-pipeline-node-${nodeId}`).waitFor({ state: "visible", timeout: 20000 });
     }

@@ -119,7 +119,8 @@ export function VpActionRequiredCard({
 }: VpActionRequiredCardProps) {
   return (
     <section
-      className="bg-white border border-slate-200 rounded-lg p-4 shadow-sm space-y-3"
+      id="visual-pipeline-ops-action-required"
+      className="bg-white border border-slate-200 rounded-lg p-4 shadow-sm space-y-3 scroll-mt-4"
       data-testid="visual-pipeline-ops-action-required"
       data-empty={model.empty ? "true" : "false"}
       data-total={model.totalActionCount}

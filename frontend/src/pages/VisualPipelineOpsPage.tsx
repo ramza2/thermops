@@ -26,7 +26,8 @@ import type {
   VisualPipelineOpsSummary,
   VisualPipelineScheduleSkipItem,
 } from "@/types/visualPipelineOps";
-import { buildOpsActionRequired } from "@/utils/opsActionRequired";
+import { buildOpsActionRequired, buildOpsActionBadgeSummary, OPS_ACTION_REQUIRED_ANCHOR } from "@/utils/opsActionRequired";
+import { VpOpsActionBadge } from "@/components/visualPipeline/VpOpsActionBadge";
 
 
 const RUN_STATUSES = ["PENDING", "RUNNING", "SUCCESS", "FAILED", "PARTIAL", "CANCELLED"] as const;
@@ -120,6 +121,21 @@ export default function VisualPipelineOpsPage() {
       el.scrollIntoView({ behavior: "smooth", block: "start" });
     }
   }, []);
+
+  const scrollToActionRequired = useCallback(() => {
+    const el = document.getElementById(OPS_ACTION_REQUIRED_ANCHOR);
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!summary) return;
+    if (typeof window === "undefined") return;
+    if (window.location.hash.replace(/^#/, "") !== OPS_ACTION_REQUIRED_ANCHOR) return;
+    const t = window.setTimeout(() => scrollToActionRequired(), 50);
+    return () => window.clearTimeout(t);
+  }, [summary, scrollToActionRequired]);
 
   const openRunDetail = async (pipelineId?: string | null, visualRunId?: string | null) => {
     if (!pipelineId || !visualRunId) return;
@@ -297,12 +313,24 @@ export default function VisualPipelineOpsPage() {
   const hints = summary?.activity_hints;
   const failures = summary?.recent_failures ?? [];
   const actionRequired = buildOpsActionRequired({ summary, stuckItems });
+  const actionBadge = buildOpsActionBadgeSummary({ summary, stuckItems });
 
   return (
     <div data-testid="visual-pipeline-ops-page" className="space-y-4">
       <PageHeader
         title={PAGE_TITLES.visualPipelineOps}
         description={PAGE_DESCRIPTIONS.visualPipelineOps}
+        titleAddon={
+          <VpOpsActionBadge
+            badge={actionBadge}
+            loading={loading && !summary}
+            error={Boolean(summaryError) && !summary}
+            label="조치 필요"
+            asLink={false}
+            onClick={scrollToActionRequired}
+            testId="visual-pipeline-ops-title-action-badge"
+          />
+        }
         actions={
           <Button
             variant="secondary"

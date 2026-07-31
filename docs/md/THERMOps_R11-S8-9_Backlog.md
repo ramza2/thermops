@@ -28,7 +28,7 @@
 | B2 | Domain Preset Framework | 업무 도메인별 preset 등록·선택 구조. 노드 라벨, 기본 CRON, target table/conflict key, Transform 기본 mapping 포함. 열수요 preset은 **예시 preset 하나**로만 | D | open | 구 S8-8 B2 확장 |
 | B3 | Schema / Key Mapping Helper | 원천 필드 → 표준 컬럼 mapping 범용 helper. 날짜/시간, 엔티티 ID, 지사/노드 코드, 측정값 category 자동 제안 | B | open | 구 S8-8 B3 확장 |
 | B4 | Catch-up 안내 개선 | missed 의미·window·경고 카피 강화 (Studio Catch-up 섹션) | C | **done** | **R11-S8-9-19** |
-| B5 | Notification badge PoC | S8-7-1 read-model badge (Ops/Studio). S8-7 설계 범위 | D | open | S8-7-1과 병행 |
+| B5 | Notification badge PoC | S8-7-1 read-model badge (Ops/Studio). S8-7 설계 범위 | D | **done** | **R11-S8-9-21** |
 | B6 | 실패 원인 요약 개선 | Run Detail에 step+reason 한줄 요약 | C | **done** | **R11-S8-9-16** |
 | B7 | Data Load → ML Workflow Handoff Guide | Visual Pipeline 적재 이후 Feature Dataset / Training / Batch Prediction으로 넘기는 **범용 handoff 가이드** (docs) | D | open | 구 B7 확장 |
 | B8 | PARTIAL 중복 적재 가시화 | Retry 전 영향 범위 힌트 | C | **done** | **R11-S8-9-20** |
@@ -83,7 +83,7 @@ B4(done), B6(done), B8(done), B9(done), B10(done), B18(done), B26(done)
 
 ### D — 범용 MLOps 확장 / 문서 / 장기
 
-B5, B7, B12(done), B22, B23
+B5(done), B7, B12(done), B22, B23
 
 ---
 
@@ -111,6 +111,7 @@ B5, B7, B12(done), B22, B23
 | R11-S8-9-18 | B9 | Ops Schedule Skip 이력 UI (read-only schedule-skips + reason 매핑) | |
 | R11-S8-9-19 | B4 | Studio Catch-up 안내 UX (용어·checklist·reason 다음 확인, FE-only) | |
 | R11-S8-9-20 | B8 | PARTIAL 영향/Retry 전 확인 카드 (FE-only, 중복 단정 없음) | |
+| R11-S8-9-21 | B5 | Ops/Studio 운영 확인 필요 badge PoC (read-model, no table) | |
 
 ---
 
@@ -141,6 +142,7 @@ B5, B7, B12(done), B22, B23
 | 2026-07-31 | B9 → `done` (S8-9-18). Ops Schedule Skip 이력 UI (read-only `GET .../schedule-skips`, worker emit 미변경) |
 | 2026-07-31 | B4 → `done` (S8-9-19). Studio Catch-up 안내 UX (FE-only, auto 복구 암시 없음) |
 | 2026-07-31 | B8 → `done` (S8-9-20). PARTIAL 영향 범위 안내 (FE-only, 실제 중복 단정 없음) |
+| 2026-07-31 | B5 → `done` (S8-9-21). Ops/Studio 운영 확인 필요 badge PoC (read-model, no notification table) |
 
 ---
 

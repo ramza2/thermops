@@ -645,6 +645,21 @@ async function runBrowserSmoke(pipeline) {
     }
     console.log("  [ok] toolbar controls visible");
 
+    // B5: Ops link/badge — show when ADMIN mock role; hide otherwise. Never crash.
+    {
+      const opsLink = page.getByTestId("visual-pipeline-studio-ops-link");
+      const opsLinkCount = await opsLink.count();
+      if (opsLinkCount > 0) {
+        await opsLink.first().waitFor({ state: "visible", timeout: 5000 });
+        const badge = page.getByTestId("visual-pipeline-studio-ops-action-badge");
+        const badgeErr = page.getByTestId("visual-pipeline-studio-ops-action-badge-error");
+        const badgeNodes = (await badge.count()) + (await badgeErr.count());
+        console.log(`  [ok] B5 studio Ops link present; badge nodes=${badgeNodes}`);
+      } else {
+        console.log("  [ok] B5 studio Ops link hidden (non-ADMIN or gated)");
+      }
+    }
+
     const palette = page.getByTestId("visual-pipeline-palette");
     await palette.waitFor({ state: "visible", timeout: 30000 });
     for (const name of ["REST API Source", "Transform", "Upsert Load", "CRON Schedule"]) {

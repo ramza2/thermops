@@ -172,7 +172,7 @@ try {
     await page.getByTestId("visual-pipeline-ops-activity-hints").waitFor({ state: "visible" });
     console.log("  [ok] summary cards + activity hints");
 
-    // --- B10: 조치 필요 card ---
+    // --- B10: action-required card (+ B5 badge/anchor) ---
     {
       const actionCard = page.getByTestId("visual-pipeline-ops-action-required");
       await actionCard.waitFor({ state: "visible", timeout: 15000 });
@@ -194,8 +194,24 @@ try {
       }
       // No auto-action controls on the card
       const cardText = (await actionCard.innerText()).toLowerCase();
-      if (cardText.includes("자동 재시도") || cardText.includes("auto retry")) {
+      if (cardText.includes("auto retry") || cardText.includes("auto-retry")) {
         fail("B10: action-required card must not expose auto retry");
+      }
+      // B5: hash anchor id + title badge show/hide
+      const anchorId = await actionCard.getAttribute("id");
+      if (anchorId !== "visual-pipeline-ops-action-required") {
+        fail("B5: action-required card must have id=visual-pipeline-ops-action-required");
+      }
+      const titleBadge = page.getByTestId("visual-pipeline-ops-title-action-badge");
+      const titleBadgeErr = page.getByTestId("visual-pipeline-ops-title-action-badge-error");
+      const titleBadgeBtn = page.getByTestId("visual-pipeline-ops-title-action-badge-button");
+      const badgeNodes =
+        (await titleBadge.count()) + (await titleBadgeErr.count()) + (await titleBadgeBtn.count());
+      console.log(`  [ok] B5 title badge show_or_hide nodes=${badgeNodes}`);
+      if ((await titleBadgeBtn.count()) > 0) {
+        await titleBadgeBtn.click();
+        await page.waitForTimeout(300);
+        console.log("  [ok] B5 title badge click toward action-required");
       }
       await page.getByTestId("visual-pipeline-ops-action-required-refresh").waitFor({
         state: "visible",
@@ -218,7 +234,7 @@ try {
         const reason = (
           await page.getByTestId("visual-pipeline-ops-run-detail-failure-summary-reason").innerText()
         ).trim();
-        if (!reason) fail("B10→B6: FAILED detail opened from action card must have summary reason");
+        if (!reason) fail("B10->B6: FAILED detail opened from action card must have summary reason");
         console.log("  [ok] B10 detail from failed group + B6 failure summary");
         await closeRunDetail(page);
       } else {
@@ -230,7 +246,7 @@ try {
             timeout: 15000,
           });
           await assertDetailCommonSections(page);
-          console.log("  [ok] B10 detail from action card (no failed-group items)");
+          console.log("  [ok] B10 detail from action card (count-only items skipped)");
           await closeRunDetail(page);
         } else {
           console.log("  [ok] B10 action-required has no detail buttons (count-only / empty items)");

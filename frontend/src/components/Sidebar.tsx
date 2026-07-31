@@ -6,6 +6,9 @@ import {
 import { useState } from "react";
 import { APP_TAGLINE, MENU_GROUPS } from "@/constants/displayLabels";
 import { useRole } from "@/hooks/useRole";
+import { useOpsActionBadge } from "@/hooks/useOpsActionBadge";
+import { VpOpsActionBadge } from "@/components/visualPipeline/VpOpsActionBadge";
+import { OPS_ACTION_REQUIRED_HREF } from "@/utils/opsActionRequired";
 
 type MenuChild = { label: string; path: string; adminOnly?: boolean };
 type MenuItem =
@@ -69,6 +72,7 @@ const MENU: MenuItem[] = [
 
 export function Sidebar() {
   const { canViewVpOps } = useRole();
+  const { badge, loading, error } = useOpsActionBadge({ enabled: canViewVpOps });
   // Default-open groups: keep 운영 모니터링 closed so check-pages can toggle-open it.
   const [open, setOpen] = useState<Record<string, boolean>>({
     [MENU_GROUPS.dataPrep]: true,
@@ -106,10 +110,24 @@ export function Sidebar() {
                 {isOpen ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
               </button>
               {isOpen && children.map((c) => (
-                <NavLink key={c.path} to={c.path} className={({ isActive }) =>
-                  `block pl-10 pr-4 py-1.5 text-xs ${isActive ? "text-blue-400 bg-sidebar-accent/50" : "text-slate-500 hover:text-slate-300"}`
-                }>
-                  {c.label}
+                <NavLink
+                  key={c.path}
+                  to={c.path === "/visual-pipeline-ops" ? OPS_ACTION_REQUIRED_HREF : c.path}
+                  className={({ isActive }) =>
+                    `flex items-center gap-1.5 pl-10 pr-4 py-1.5 text-xs ${isActive ? "text-blue-400 bg-sidebar-accent/50" : "text-slate-500 hover:text-slate-300"}`
+                  }
+                >
+                  <span className="truncate">{c.label}</span>
+                  {c.path === "/visual-pipeline-ops" && (
+                    <VpOpsActionBadge
+                      badge={badge}
+                      loading={loading}
+                      error={error}
+                      label="운영 확인 필요"
+                      asLink={false}
+                      testId="visual-pipeline-ops-sidebar-action-badge"
+                    />
+                  )}
                 </NavLink>
               ))}
             </div>

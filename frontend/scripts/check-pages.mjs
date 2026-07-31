@@ -802,6 +802,106 @@ function assertPartialImpactUx() {
   }
 }
 
+/** B5: Ops action badge PoC (read-model, no notification table / read-unread). */
+function assertOpsActionBadgePoC() {
+  const helper = fs.readFileSync(path.join(FRONTEND_SRC, "utils/opsActionRequired.ts"), "utf8");
+  for (const token of [
+    "buildOpsActionBadgeSummary",
+    "OPS_ACTION_REQUIRED_ANCHOR",
+    "OPS_ACTION_REQUIRED_HREF",
+    "retryable",
+  ]) {
+    if (!helper.includes(token)) {
+      throw new Error(`B5 regression: opsActionRequired missing ${token}`);
+    }
+  }
+  if (!helper.includes("errorCount") || !helper.includes("warningCount")) {
+    throw new Error("B5 regression: badge summary must expose errorCount / warningCount");
+  }
+  for (const banned of [
+    "readAt",
+    "read_at",
+    "read_unread",
+    "새 알림",
+    "읽지 않음",
+    "미확인 알림",
+    "tb_visual_pipeline_notification",
+  ]) {
+    if (helper.includes(banned)) {
+      throw new Error(`B5 regression: helper must not include '${banned}'`);
+    }
+  }
+
+  if (!helper.includes("99+") || !helper.includes("displayCount")) {
+    throw new Error("B5 regression: badge summary must format 99+ displayCount");
+  }
+
+  const badge = fs.readFileSync(
+    path.join(FRONTEND_SRC, "components/visualPipeline/VpOpsActionBadge.tsx"),
+    "utf8",
+  );
+  for (const token of [
+    "VpOpsActionBadge",
+    "visual-pipeline-ops-action-badge",
+    "확인 필요",
+    "displayCount",
+  ]) {
+    if (!badge.includes(token)) {
+      throw new Error(`B5 regression: VpOpsActionBadge missing ${token}`);
+    }
+  }
+  for (const banned of ["새 알림", "읽지 않음", "미확인 알림", "readAt", "read_unread"]) {
+    if (badge.includes(banned)) {
+      throw new Error(`B5 regression: badge must not include '${banned}'`);
+    }
+  }
+
+  const hook = fs.readFileSync(path.join(FRONTEND_SRC, "hooks/useOpsActionBadge.ts"), "utf8");
+  if (!hook.includes("getVisualPipelineOpsSummary") || !hook.includes("getVisualPipelineOpsStuckRuns")) {
+    throw new Error("B5 regression: useOpsActionBadge must use summary + stuck-runs APIs only");
+  }
+  if (hook.includes("schedule-skips") || hook.includes("/notifications") || hook.includes("getNotification")) {
+    throw new Error("B5 regression: hook must not call schedule-skips or notification APIs");
+  }
+  if (/setInterval|setTimeout\([^,]*,\s*[0-9]{4,}/.test(hook)) {
+    throw new Error("B5 regression: default hook must not poll (no setInterval)");
+  }
+
+  const card = fs.readFileSync(
+    path.join(FRONTEND_SRC, "components/visualPipeline/VpActionRequiredCard.tsx"),
+    "utf8",
+  );
+  if (!card.includes('id="visual-pipeline-ops-action-required"')) {
+    throw new Error("B5 regression: action-required card must expose id for hash navigation");
+  }
+
+  const sidebar = fs.readFileSync(path.join(FRONTEND_SRC, "components/Sidebar.tsx"), "utf8");
+  if (!sidebar.includes("VpOpsActionBadge") || !sidebar.includes("useOpsActionBadge")) {
+    throw new Error("B5 regression: Sidebar must mount Ops action badge");
+  }
+  if (!sidebar.includes("visual-pipeline-ops-sidebar-action-badge")) {
+    throw new Error("B5 regression: Sidebar badge testid missing");
+  }
+
+  const opsPage = fs.readFileSync(path.join(FRONTEND_SRC, "pages/VisualPipelineOpsPage.tsx"), "utf8");
+  if (!opsPage.includes("buildOpsActionBadgeSummary") || !opsPage.includes("visual-pipeline-ops-title-action-badge")) {
+    throw new Error("B5 regression: Ops page title must show action badge");
+  }
+  if (!opsPage.includes("OPS_ACTION_REQUIRED_ANCHOR")) {
+    throw new Error("B5 regression: Ops page must scroll to action-required anchor");
+  }
+
+  const studio = fs.readFileSync(path.join(FRONTEND_SRC, "pages/VisualPipelineStudioPage.tsx"), "utf8");
+  if (!studio.includes("visual-pipeline-studio-ops-link") || !studio.includes("VpOpsActionBadge")) {
+    throw new Error("B5 regression: Studio must expose Ops link + badge");
+  }
+  for (const banned of ["새 알림", "읽지 않음", "미확인 알림", "R10 설정 반영"]) {
+    if (sidebar.includes(banned) || opsPage.includes(banned) || studio.includes(banned) || badge.includes(banned)) {
+      throw new Error(`B5 regression: must not use banned phrase '${banned}'`);
+    }
+  }
+}
+
 async function api(method, path, body) {
   const url = `${API_BASE}${path}`;
   const res = await fetch(url, {
@@ -843,6 +943,7 @@ assertOpsActionRequiredCard();
 assertScheduleSkipHistoryUx();
 assertCatchupGuidanceUx();
 assertPartialImpactUx();
+assertOpsActionBadgePoC();
 
 const browser = await chromium.launch();
 const page = await browser.newPage();
@@ -916,6 +1017,20 @@ for (const path of PATHS) {
       (await page.getByTestId("visual-pipeline-ops-admin-required").count()) > 0;
     if (!hasOps) {
       errors.push(`${path}: read-only notice or admin-required expected`);
+    }
+    // B5: action-required anchor id must exist when admin panels are shown
+    if ((await page.getByTestId("visual-pipeline-ops-read-only-notice").count()) > 0) {
+      const actionCard = page.getByTestId("visual-pipeline-ops-action-required");
+      await actionCard.waitFor({ state: "visible", timeout: 30000 });
+      const anchorId = await actionCard.getAttribute("id");
+      if (anchorId !== "visual-pipeline-ops-action-required") {
+        errors.push(`${path}: B5 action-required card missing id=visual-pipeline-ops-action-required`);
+      }
+      // title badge may be hidden when count=0 — never crash
+      const titleBadge = page.getByTestId("visual-pipeline-ops-title-action-badge");
+      const titleBadgeErr = page.getByTestId("visual-pipeline-ops-title-action-badge-error");
+      const badgeCount = (await titleBadge.count()) + (await titleBadgeErr.count());
+      console.log(`  [ok] B5 ops title badge visible_or_hidden count=${badgeCount}`);
     }
   } else {
     await page.locator("main h1").first().waitFor({ state: "visible", timeout: 60000 });

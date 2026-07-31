@@ -27,6 +27,7 @@ import {
   Play,
   Save,
   ShieldCheck,
+  Activity,
   Zap,
 } from "lucide-react";
 import {
@@ -68,7 +69,11 @@ import { VpRunPanel } from "@/components/visualPipeline/VpRunPanel";
 import { VpScheduleActivationPanel } from "@/components/visualPipeline/VpScheduleActivationPanel";
 import { VpValidationPanel } from "@/components/visualPipeline/VpValidationPanel";
 import { VpVersionHistoryModal } from "@/components/visualPipeline/VpVersionHistoryModal";
+import { VpOpsActionBadge } from "@/components/visualPipeline/VpOpsActionBadge";
+import { useOpsActionBadge } from "@/hooks/useOpsActionBadge";
+import { useRole } from "@/hooks/useRole";
 import { useToast } from "@/hooks/useToast";
+import { OPS_ACTION_REQUIRED_HREF } from "@/utils/opsActionRequired";
 import type {
   ComponentCatalogItem,
   ConnectionRule,
@@ -112,6 +117,12 @@ function StudioCanvasInner() {
   const navigate = useNavigate();
   const { showToast } = useToast();
   const { fitView } = useReactFlow();
+  const { canViewVpOps } = useRole();
+  const {
+    badge: opsActionBadge,
+    loading: opsActionBadgeLoading,
+    error: opsActionBadgeError,
+  } = useOpsActionBadge({ enabled: canViewVpOps });
 
   const [pipeline, setPipeline] = useState<VisualPipelineDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -1089,6 +1100,26 @@ function StudioCanvasInner() {
             Fit View
           </Button>
           <Button variant="secondary" onClick={() => void openVersions()}>이력</Button>
+          {canViewVpOps && (
+            <button
+              type="button"
+              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-white text-slate-700 text-xs font-medium rounded-md border border-slate-200 hover:bg-slate-50"
+              title="Visual Pipeline 운영 — 조치 필요 확인"
+              data-testid="visual-pipeline-studio-ops-link"
+              onClick={() => navigate(OPS_ACTION_REQUIRED_HREF)}
+            >
+              <Activity className="w-3 h-3" />
+              운영
+              <VpOpsActionBadge
+                badge={opsActionBadge}
+                loading={opsActionBadgeLoading}
+                error={opsActionBadgeError}
+                label="운영 확인 필요"
+                asLink={false}
+                testId="visual-pipeline-studio-ops-action-badge"
+              />
+            </button>
+          )}
           <Button
             variant="secondary"
             icon={<ShieldCheck className="w-4 h-4" />}

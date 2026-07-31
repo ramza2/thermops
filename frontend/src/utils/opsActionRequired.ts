@@ -1,6 +1,7 @@
 /**
  * R11-S8-9-17 / B10: Ops 「조치 필요」card grouping (FE-only).
- * Uses existing ops summary + stuck runs — no automated actions, no Notification badge.
+ * R11-S8-9-21 / B5: read-model badge summary (retryable 제외, no read/unread table).
+ * Uses existing ops summary + stuck runs — no automated actions.
  */
 
 import type {
@@ -201,5 +202,52 @@ export function buildOpsActionRequired(input: {
     totalActionCount,
     groups,
     generatedAt: summary.generated_at ?? null,
+  };
+}
+
+/** Badge / deep-link target for Ops 「조치 필요」card (hash without #). */
+export const OPS_ACTION_REQUIRED_ANCHOR = "visual-pipeline-ops-action-required";
+
+/** Navigate target for badge clicks. */
+export const OPS_ACTION_REQUIRED_HREF = `/visual-pipeline-ops#${OPS_ACTION_REQUIRED_ANCHOR}`;
+
+export type OpsActionBadgeTone = "error" | "warning";
+
+export type OpsActionBadgeSummary = {
+  empty: boolean;
+  /** stuck + failed + partial + catchup_hint (retryable 제외) */
+  totalCount: number;
+  errorCount: number;
+  warningCount: number;
+  /** Display text: number or "99+" */
+  displayCount: string;
+  tone: OpsActionBadgeTone;
+  generatedAt?: string | null;
+};
+
+/**
+ * B5 read-model badge counts from B10 groups.
+ * Excludes `retryable` so FAILED/PARTIAL are not double-counted.
+ */
+export function buildOpsActionBadgeSummary(input: {
+  summary: VisualPipelineOpsSummary | null | undefined;
+  stuckItems?: VisualPipelineOpsStuckRun[] | null;
+}): OpsActionBadgeSummary {
+  const model = buildOpsActionRequired(input);
+  const countOf = (id: OpsActionGroupId): number =>
+    model.groups.find((g) => g.id === id)?.count ?? 0;
+
+  const errorCount = countOf("stuck") + countOf("failed");
+  const warningCount = countOf("partial") + countOf("catchup_hint");
+  const totalCount = errorCount + warningCount;
+
+  return {
+    empty: totalCount === 0,
+    totalCount,
+    errorCount,
+    warningCount,
+    displayCount: totalCount > 99 ? "99+" : String(totalCount),
+    tone: errorCount > 0 ? "error" : "warning",
+    generatedAt: model.generatedAt ?? null,
   };
 }
