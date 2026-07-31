@@ -48,6 +48,17 @@ export async function fetchStandardDatasetById(id: string): Promise<StandardData
   }
 }
 
+/** B15: load columns for Source↔Target preview. Failure returns null (non-blocking). */
+export async function fetchStandardDatasetColumns(id: string): Promise<StandardDatasetType | null> {
+  const trimmed = id.trim();
+  if (!trimmed) return null;
+  try {
+    return await getStandardDatasetType(trimmed, { include_columns: true });
+  } catch {
+    return null;
+  }
+}
+
 export async function suggestStandardTargetTable(datasetCode: string): Promise<string> {
   const code = datasetCode.trim();
   if (!code) return "";

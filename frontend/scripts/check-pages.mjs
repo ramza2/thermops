@@ -290,6 +290,72 @@ function assertStudioUpsertTransformColumnProposal() {
   }
 }
 
+/** B15: Source ↔ Target column match preview (FE diagnosis only, no mapping save). */
+function assertStudioUpsertColumnMatchPreview() {
+  const helper = fs.readFileSync(
+    path.join(FRONTEND_SRC, "utils/columnNormalizationPreview.ts"),
+    "utf8",
+  );
+  for (const token of [
+    "normalizeColumnName",
+    "buildColumnMatchPreview",
+    "EXACT",
+    "NORMALIZED",
+    "UNMATCHED_SOURCE",
+    "MISSING_TARGET",
+    "TYPE_MISMATCH",
+    "AMBIGUOUS",
+    "COLUMN_MATCH_PREVIEW_HINT",
+  ]) {
+    if (!helper.includes(token)) {
+      throw new Error(`B15 regression: columnNormalizationPreview missing ${token}`);
+    }
+  }
+  if (helper.includes("conflict_key") && /recommend|auto.?conflict/i.test(helper)) {
+    throw new Error("B15 regression: helper must not auto-recommend conflict keys");
+  }
+
+  const listHelper = fs.readFileSync(path.join(FRONTEND_SRC, "constants/standardDatasetList.ts"), "utf8");
+  if (!listHelper.includes("fetchStandardDatasetColumns") || !listHelper.includes("include_columns: true")) {
+    throw new Error("B15 regression: fetchStandardDatasetColumns helper missing");
+  }
+
+  const form = fs.readFileSync(
+    path.join(FRONTEND_SRC, "components/visualPipeline/config/VpUpsertLoadConfigForm.tsx"),
+    "utf8",
+  );
+  for (const token of [
+    "visual-pipeline-column-match-preview",
+    "visual-pipeline-column-match-compare-button",
+    "visual-pipeline-column-match-summary",
+    "buildColumnMatchPreview",
+    "컬럼 정합성 미리보기",
+    "Source ↔ Target 컬럼 비교",
+  ]) {
+    if (!form.includes(token)) {
+      throw new Error(`B15 regression: VpUpsertLoadConfigForm missing ${token}`);
+    }
+  }
+  for (const banned of [
+    "column_mapping:",
+    "field_mapping:",
+    "conflict_keys recommend",
+    "auto conflict",
+    "영구 삭제",
+    "테이블 삭제",
+    "DROP TABLE",
+    "createPhysicalTable",
+  ]) {
+    if (form.includes(banned)) {
+      throw new Error(`B15 regression: Upsert form must not contain '${banned}'`);
+    }
+  }
+  // Preview must be local-state only — no config.values mapping write.
+  if (/onChange\(\s*\{\s*[^}]*column_mapping/.test(form) || /onChange\(\s*\{\s*[^}]*field_mapping/.test(form)) {
+    throw new Error("B15 regression: must not save column_mapping/field_mapping via onChange");
+  }
+}
+
 async function api(method, path, body) {
   const url = `${API_BASE}${path}`;
   const res = await fetch(url, {
@@ -322,6 +388,7 @@ assertDataSourcePagedSelectUx();
 assertStudioRestDataSourceInlineCreate();
 assertStudioUpsertStandardDatasetInlineCreate();
 assertStudioUpsertTransformColumnProposal();
+assertStudioUpsertColumnMatchPreview();
 
 const browser = await chromium.launch();
 const page = await browser.newPage();

@@ -18,11 +18,22 @@ import {
   createStandardDatasetErrorMessage,
   fetchActiveStandardDatasets,
   fetchStandardDatasetById,
+  fetchStandardDatasetColumns,
   formatStandardDatasetOptionLabel,
   mergeStandardDatasetItems,
   selectedStandardDatasetMissingLabel,
   suggestStandardTargetTable,
 } from "@/constants/standardDatasetList";
+import {
+  COLUMN_MATCH_PREVIEW_HINT,
+  COLUMN_MATCH_STATUS_LABEL,
+  buildColumnMatchPreview,
+  formatUnmappedPolicyHint,
+  type ColumnMatchPreviewResult,
+  type PreviewColumn,
+} from "@/utils/columnNormalizationPreview";
+import { ensureNodeConfig } from "@/utils/visualPipelineNodeConfig";
+import { findUpstreamTransformForUpsert } from "@/utils/visualPipelineGraph";
 import {
   STANDARD_DATASET_DATA_TYPE_OPTIONS,
   TRANSFORM_COLUMN_PROPOSAL_HINT,
@@ -127,6 +138,10 @@ export function VpUpsertLoadConfigForm({
   const [draftColumns, setDraftColumns] = useState<DraftColumnRow[]>([]);
   const [proposalInfo, setProposalInfo] = useState<string | null>(null);
   const [proposalUnavailable, setProposalUnavailable] = useState<string | null>(null);
+  const [matchPreview, setMatchPreview] = useState<ColumnMatchPreviewResult | null>(null);
+  const [matchPreviewError, setMatchPreviewError] = useState<string | null>(null);
+  const [matchPreviewHint, setMatchPreviewHint] = useState<string | null>(null);
+  const [matchPreviewLoading, setMatchPreviewLoading] = useState(false);
 
   const loadDatasets = useCallback(async (keyword?: string) => {
     setDatasetsLoading(true);
@@ -283,6 +298,108 @@ export function VpUpsertLoadConfigForm({
     setProposalInfo(
       `${result.columns.length}개 컬럼 후보 (source: ${result.source}, transform: ${result.transform_type})`,
     );
+  };
+
+  const resolveSourceColumns = (): { columns: PreviewColumn[]; error?: string } => {
+    if (!studioGraph?.upsertNodeId) {
+      return { columns: [], error: "Source column 정보를 찾을 수 없습니다. Transform 노드를 연결해 주세요." };
+    }
+    const result = proposeTransformOutputColumns(
+      studioGraph.upsertNodeId,
+      studioGraph.nodes,
+      studioGraph.edges,
+    );
+    if (!result.ok) {
+      return { columns: [], error: result.reason || "Source column 정보를 찾을 수 없습니다." };
+    }
+    return {
+      columns: result.columns.map((c) => ({
+        column_name: c.column_name,
+        data_type: c.data_type,
+        required: c.required,
+      })),
+    };
+  };
+
+  const resolveTargetColumns = async (): Promise<{ columns: PreviewColumn[]; error?: string }> => {
+    const draftNamed = draftColumns.filter((c) => c.column_name.trim());
+    if (createOpen && draftNamed.length > 0) {
+      return {
+        columns: draftNamed.map((c) => ({
+          column_name: c.column_name.trim(),
+          data_type: c.data_type,
+          required: c.required,
+        })),
+      };
+    }
+    if (selectedId) {
+      const detail = await fetchStandardDatasetColumns(selectedId);
+      const cols = detail?.columns ?? [];
+      if (cols.length === 0) {
+        return {
+          columns: [],
+          error: "선택한 표준 데이터셋의 컬럼 정보를 불러오지 못했습니다. 인라인 등록 컬럼을 사용하거나 다시 시도해 주세요.",
+        };
+      }
+      return {
+        columns: cols.map((c) => ({
+          column_name: c.column_name,
+          data_type: c.data_type,
+          required: c.required,
+        })),
+      };
+    }
+    return {
+      columns: [],
+      error: "Target column 정보를 찾을 수 없습니다. 표준 데이터셋을 선택하거나 인라인 등록에서 컬럼을 정의해 주세요.",
+    };
+  };
+
+  const handleCompareColumns = async () => {
+    if (disabled || matchPreviewLoading) return;
+    setMatchPreviewLoading(true);
+    setMatchPreviewError(null);
+    setMatchPreviewHint(null);
+    try {
+      const source = resolveSourceColumns();
+      const target = await resolveTargetColumns();
+      if (source.columns.length === 0 && target.columns.length === 0) {
+        setMatchPreview(null);
+        setMatchPreviewError(source.error || target.error || "비교할 컬럼 정보가 없습니다.");
+        return;
+      }
+      if (source.columns.length === 0) {
+        setMatchPreview(null);
+        setMatchPreviewError(source.error || "Source column 정보를 찾을 수 없습니다.");
+        return;
+      }
+      if (target.columns.length === 0) {
+        setMatchPreview(null);
+        setMatchPreviewError(target.error || "Target column 정보를 찾을 수 없습니다.");
+        return;
+      }
+      setMatchPreview(buildColumnMatchPreview(source.columns, target.columns));
+      if (studioGraph?.upsertNodeId) {
+        const upstream = findUpstreamTransformForUpsert(
+          studioGraph.upsertNodeId,
+          studioGraph.nodes,
+          studioGraph.edges,
+        );
+        if (upstream) {
+          const values = ensureNodeConfig(upstream.transformNode, "VP_TRANSFORM").values;
+          setMatchPreviewHint(formatUnmappedPolicyHint(String(values.unmapped_policy || "")));
+        } else {
+          setMatchPreviewHint(formatUnmappedPolicyHint(undefined));
+        }
+      } else {
+        setMatchPreviewHint(formatUnmappedPolicyHint(undefined));
+      }
+    } catch {
+      setMatchPreview(null);
+      setMatchPreviewError("컬럼 정합성 미리보기를 계산하지 못했습니다.");
+    } finally {
+      setMatchPreviewLoading(false);
+    }
   };
 
   const categorySelectOptions = useMemo(() => {
@@ -661,6 +778,81 @@ export function VpUpsertLoadConfigForm({
             )}
           </div>
         </VpConfigFieldShell>
+
+        <div
+          className="rounded-md border border-slate-200 bg-slate-50 p-2.5 space-y-2"
+          data-testid="visual-pipeline-column-match-preview"
+        >
+          <div className="text-[10px] font-medium text-slate-600">컬럼 정합성 미리보기</div>
+          <p className="text-[10px] text-slate-500">{COLUMN_MATCH_PREVIEW_HINT}</p>
+          <button
+            type="button"
+            className={BTN_SECONDARY}
+            disabled={disabled || matchPreviewLoading}
+            data-testid="visual-pipeline-column-match-compare-button"
+            onClick={() => void handleCompareColumns()}
+          >
+            {matchPreviewLoading ? "비교 중…" : "Source ↔ Target 컬럼 비교"}
+          </button>
+          {matchPreviewError && (
+            <p className="text-[10px] text-amber-700" data-testid="visual-pipeline-column-match-error">
+              {matchPreviewError}
+            </p>
+          )}
+          {matchPreviewHint && (
+            <p className="text-[10px] text-slate-500" data-testid="visual-pipeline-column-match-policy-hint">
+              {matchPreviewHint}
+            </p>
+          )}
+          {matchPreview && (
+            <>
+              <p
+                className="text-[10px] text-slate-600"
+                data-testid="visual-pipeline-column-match-summary"
+              >
+                일치 {matchPreview.summary.exact} · 정규화 일치 {matchPreview.summary.normalized} · Source만 있음{" "}
+                {matchPreview.summary.unmatched_source} · Target 필수 누락 {matchPreview.summary.missing_target} ·
+                타입 확인 필요 {matchPreview.summary.type_mismatch} · 중복 후보 {matchPreview.summary.ambiguous}
+              </p>
+              <div className="overflow-x-auto">
+                <table className="w-full text-[10px] text-left border-collapse">
+                  <thead>
+                    <tr className="text-slate-500 border-b border-slate-200">
+                      <th className="py-1 pr-1 font-medium">Source</th>
+                      <th className="py-1 pr-1 font-medium">S Type</th>
+                      <th className="py-1 pr-1 font-medium">Target</th>
+                      <th className="py-1 pr-1 font-medium">T Type</th>
+                      <th className="py-1 pr-1 font-medium">상태</th>
+                      <th className="py-1 font-medium">비고</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {matchPreview.rows.map((row, idx) => (
+                      <tr
+                        key={`${row.level}-${row.source_column || ""}-${row.target_column || ""}-${idx}`}
+                        className="border-b border-slate-100 align-top"
+                        data-testid={`visual-pipeline-column-match-row-${idx}`}
+                        data-match-level={row.level}
+                      >
+                        <td className="py-1 pr-1 text-slate-700">{row.source_column || "—"}</td>
+                        <td className="py-1 pr-1 text-slate-500">{row.source_type || "—"}</td>
+                        <td className="py-1 pr-1 text-slate-700">{row.target_column || "—"}</td>
+                        <td className="py-1 pr-1 text-slate-500">{row.target_type || "—"}</td>
+                        <td
+                          className="py-1 pr-1 text-slate-700"
+                          data-testid="visual-pipeline-column-match-status"
+                        >
+                          {COLUMN_MATCH_STATUS_LABEL[row.level]}
+                        </td>
+                        <td className="py-1 text-slate-500">{row.note || ""}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+        </div>
 
         <VpConfigFieldShell
           fieldKey="target_table"

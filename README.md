@@ -1844,6 +1844,15 @@ cd frontend && node scripts/check-visual-pipeline-studio.mjs
 - **제외:** backend/DB · Transform 실행/API schema inference · conflict_keys 자동 추천 · B15 mapping UX · 물리 테이블/ACTIVE/DROP · B19/B24/B26 재수정 · compile/run · 「R10 설정 반영」재노출 금지
 - **Backlog:** B21 done
 
+### R11-S8-9-12 Studio Upsert Source↔Target 컬럼 정합성 미리보기
+
+- **범위:** FE-only — B15. Upsert Load Inspector에서 Source Transform 출력과 Target Standard Dataset 컬럼 정합성 진단 미리보기.
+- **변경:** `normalizeColumnName` + match preview · EXACT/NORMALIZED/UNMATCHED/MISSING/TYPE_MISMATCH/AMBIGUOUS · draftColumns 또는 `include_columns` API · unmapped_policy 참고 안내 · mapping/conflict_keys 저장·추천 없음 · check-pages/studio smoke B15
+- **검증:** `cd frontend && npm run build` · `node scripts/check-pages.mjs` · `node scripts/check-visual-pipeline-studio.mjs`
+- **제외:** backend/DB · compile/run/materialization · mapping config 저장 · conflict_keys 자동 추천 · B20/B21 대규모 재작성 · package · 「R10 설정 반영」재노출 금지
+- **Known limitation:** synonym/의미 번역 없음 · REST raw_rows 직결 시 source 없음 · preview는 적재 정책을 바꾸지 않음
+- **Backlog:** B15 done
+
 ## 설계 문서 참조
 
 - `docs/md/THERMOps_R11-S8-9_Backlog.md`

@@ -842,12 +842,86 @@ async function runBrowserSmoke(pipeline) {
       if (!columnNames.includes("measured_at")) {
         fail(`B21: expected measured_at in column proposals, got ${JSON.stringify(columnNames)}`);
       }
+
+      // --- R11-S8-9-12 / B15: Source ↔ Target column match preview ---
+      {
+        const measuredAtIdx = columnNames.indexOf("measured_at");
+        await inspector
+          .getByTestId("visual-pipeline-standard-dataset-column-name")
+          .nth(measuredAtIdx)
+          .fill("Measured At");
+        await inspector.getByTestId("visual-pipeline-column-match-preview").waitFor({
+          state: "visible",
+          timeout: 10000,
+        });
+        const dirtyBeforeCompare = (await toolbar.getByText("● 저장되지 않음").count()) > 0;
+        await inspector.getByTestId("visual-pipeline-column-match-compare-button").click();
+        await inspector.getByTestId("visual-pipeline-column-match-summary").waitFor({
+          state: "visible",
+          timeout: 10000,
+        });
+        const dirtyAfterCompare = (await toolbar.getByText("● 저장되지 않음").count()) > 0;
+        if (dirtyBeforeCompare !== dirtyAfterCompare) {
+          fail(
+            `B15: compare preview must not change dirty state (before=${dirtyBeforeCompare}, after=${dirtyAfterCompare})`,
+          );
+        }
+        const summaryText = await inspector.getByTestId("visual-pipeline-column-match-summary").innerText();
+        if (!summaryText.includes("정규화 일치") || !/\d+/.test(summaryText)) {
+          fail(`B15: summary should include normalized count, got ${summaryText}`);
+        }
+        const matchLevels = await inspector
+          .locator('[data-testid^="visual-pipeline-column-match-row-"]')
+          .evaluateAll((rows) => rows.map((r) => r.getAttribute("data-match-level")));
+        if (!matchLevels.includes("NORMALIZED")) {
+          fail(`B15: expected NORMALIZED match for Measured At, got ${JSON.stringify(matchLevels)}`);
+        }
+        if (!matchLevels.includes("EXACT")) {
+          fail(`B15: expected EXACT match for heat_demand, got ${JSON.stringify(matchLevels)}`);
+        }
+        const heatIdxForType = (
+          await inspector
+            .getByTestId("visual-pipeline-standard-dataset-column-name")
+            .evaluateAll((inputs) => inputs.map((i) => i.value))
+        ).indexOf("heat_demand");
+        if (heatIdxForType >= 0) {
+          await inspector
+            .getByTestId("visual-pipeline-standard-dataset-column-type")
+            .nth(heatIdxForType)
+            .selectOption("VARCHAR");
+          await inspector.getByTestId("visual-pipeline-column-match-compare-button").click();
+          await page.waitForTimeout(400);
+          const levelsAfterType = await inspector
+            .locator('[data-testid^="visual-pipeline-column-match-row-"]')
+            .evaluateAll((rows) => rows.map((r) => r.getAttribute("data-match-level")));
+          if (!levelsAfterType.includes("TYPE_MISMATCH")) {
+            fail(`B15: expected TYPE_MISMATCH after VARCHAR on heat_demand, got ${JSON.stringify(levelsAfterType)}`);
+          }
+          // Restore NUMERIC for subsequent create smoke
+          await inspector
+            .getByTestId("visual-pipeline-standard-dataset-column-type")
+            .nth(heatIdxForType)
+            .selectOption("NUMERIC");
+        }
+        console.log(
+          `  [ok] B15 column match preview (NORMALIZED Measured At, EXACT heat_demand, TYPE_MISMATCH check)`,
+        );
+      }
+
       const typeSelects = inspector.getByTestId("visual-pipeline-standard-dataset-column-type");
-      const measuredAtIdx = columnNames.indexOf("measured_at");
+      const measuredAtIdx = (
+        await inspector
+          .getByTestId("visual-pipeline-standard-dataset-column-name")
+          .evaluateAll((inputs) => inputs.map((i) => i.value))
+      ).indexOf("Measured At");
       if (measuredAtIdx >= 0) {
         await typeSelects.nth(measuredAtIdx).selectOption("TIMESTAMP");
       }
-      const heatIdx = columnNames.indexOf("heat_demand");
+      const heatIdx = (
+        await inspector
+          .getByTestId("visual-pipeline-standard-dataset-column-name")
+          .evaluateAll((inputs) => inputs.map((i) => i.value))
+      ).indexOf("heat_demand");
       if (heatIdx >= 0) {
         await inspector.getByTestId("visual-pipeline-standard-dataset-column-name").nth(heatIdx).fill("heat_demand_kw");
       }

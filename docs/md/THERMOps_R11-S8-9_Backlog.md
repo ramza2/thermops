@@ -38,7 +38,7 @@
 | B12 | Visual Pipeline E2E Smoke Scenario | REST → Transform → Upsert → Compile → 실행 설정 반영 → 즉시 실행 → History 범용 smoke. fixture는 generic sample dataset | D | open | |
 | B13 | Inspector select 기본값 미반영 | `http_method`·`transform_type` 등 select **표시** 기본값이 config에 저장되지 않아 Graph 검증 required 경고. **A+B:** schema default 주입 + Type B placeholder | A | **done** | **R11-S8-9-4** |
 | B14 | Transform Unmapped Policy enum 정렬 | Studio `KEEP`/`DROP`/`ERROR` → backend `FAIL_LOAD`/`SKIP_UNMAPPED`/`LOG_ONLY`. Wizard 공통 상수. legacy C안(ERROR/DROP remap, KEEP 재선택) | A | **done** | **R11-S8-9-5** |
-| B15 | Source ↔ Target Column Normalization UX | API `ND_ID` vs 테이블 `nd_id` 등 대소문자·snake_case 불일치. Upsert conflict key 오류(`MATERIALIZE_WRITE_POLICY_FAILED`) 방지. Transform 스키마·Upsert target 비교·매핑·conflict key 힌트 (범용) | B | open | |
+| B15 | Source ↔ Target Column Normalization UX | API `ND_ID` vs 테이블 `nd_id` 등 대소문자·snake_case 불일치. Upsert conflict key 오류(`MATERIALIZE_WRITE_POLICY_FAILED`) 방지. Transform 스키마·Upsert target 비교·매핑·conflict key 힌트 (범용) | B | **done** | **R11-S8-9-12** |
 | B16 | 검증 → Compile dirty 흐름 개선 | Graph 검증 후 `applyConfigValidationCache`가 노드에 결과를 써 dirty 재발. **A안:** UI 전용 `configValidationByNodeId` + dirty/save에서 `config.validation` canonicalize | A | **done** | **R11-S8-9-3** |
 | B17 | Studio 이중 스크롤 정리 | Node Inspector·하단 패널 누적 스크롤. viewport 고정 작업대 + Bottom Operations Dock | A | **done** | **R11-S8-9-1** 완료 |
 | B18 | Target Table sample rows 미리보기 | 즉시 실행 SUCCESS 후 Studio에서 적재 row·건수 확인 UI 없음 (현재 SQL만). Run Detail 또는 Upsert 연계 LIMIT N preview | C | open | |
@@ -74,7 +74,7 @@ B11(done), B13(done), B14(done), B16(done), B17(done), B24(done), B25(done)
 
 ### B — 범용 Visual Pipeline 구성 편의
 
-B1, B2, B3, B15, B19(done), B20(done), B21(done)
+B1, B2, B3, B15(done), B19(done), B20(done), B21(done)
 
 ### C — 운영 가시성 / 복구 UX
 
@@ -101,6 +101,7 @@ B5, B7, B12, B22, B23
 | R11-S8-9-9 | B19 | Studio REST Data Source 선택 + REST_API 인라인 생성 (auth=NONE, secret UI 없음) | `2310c21` |
 | R11-S8-9-10 | B20 | Studio Upsert Standard Dataset 선택 + DRAFT 인라인 생성 | |
 | R11-S8-9-11 | B21 | Transform 출력 기반 표준 컬럼 후보 제안 + 컬럼 editor + DRAFT 생성 payload 반영 | |
+| R11-S8-9-12 | B15 | Source↔Target 컬럼 정합성 미리보기 (FE diagnosis, mapping 저장 없음) | |
 
 ---
 
@@ -122,6 +123,7 @@ B5, B7, B12, B22, B23
 | 2026-07-30 | B19 → `done` (S8-9-9). Studio REST Data Source 선택·인라인 생성 (secret/credential 저장 UI 제외) |
 | 2026-07-30 | B19 push (`2310c21`). B20 → `done` (S8-9-10). Studio Upsert Standard Dataset 선택·DRAFT 인라인 생성 |
 | 2026-07-30 | B21 → `done` (S8-9-11). Transform 출력 기반 컬럼 후보 제안 + 컬럼 editor + DRAFT 생성 payload 반영 |
+| 2026-07-31 | B15 → `done` (S8-9-12). Source↔Target 컬럼 정합성 미리보기 (FE diagnosis only) |
 
 ---
 
