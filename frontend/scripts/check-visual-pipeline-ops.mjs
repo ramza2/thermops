@@ -171,6 +171,72 @@ try {
     await page.getByTestId("visual-pipeline-ops-activity-hints").waitFor({ state: "visible" });
     console.log("  [ok] summary cards + activity hints");
 
+    // --- B10: 조치 필요 card ---
+    {
+      const actionCard = page.getByTestId("visual-pipeline-ops-action-required");
+      await actionCard.waitFor({ state: "visible", timeout: 15000 });
+      const isEmpty = (await actionCard.getAttribute("data-empty")) === "true";
+      if (isEmpty) {
+        await page.getByTestId("visual-pipeline-ops-action-required-empty").waitFor({
+          state: "visible",
+          timeout: 5000,
+        });
+        console.log("  [ok] B10 action-required empty state");
+      } else {
+        await page.getByTestId("visual-pipeline-ops-action-required-groups").waitFor({
+          state: "visible",
+          timeout: 5000,
+        });
+        const total = Number((await actionCard.getAttribute("data-total")) || "0");
+        if (!(total > 0)) fail("B10: non-empty action-required card must have data-total > 0");
+        console.log(`  [ok] B10 action-required groups total=${total}`);
+      }
+      // No auto-action controls on the card
+      const cardText = (await actionCard.innerText()).toLowerCase();
+      if (cardText.includes("자동 재시도") || cardText.includes("auto retry")) {
+        fail("B10: action-required card must not expose auto retry");
+      }
+      await page.getByTestId("visual-pipeline-ops-action-required-refresh").waitFor({
+        state: "visible",
+        timeout: 5000,
+      });
+
+      const failedGroup = page.getByTestId("visual-pipeline-ops-action-required-group-failed");
+      const failedDetailBtn = failedGroup.getByTestId("visual-pipeline-ops-action-required-detail-button");
+      if ((await failedGroup.count()) > 0 && (await failedDetailBtn.count()) > 0) {
+        await failedDetailBtn.first().click();
+        await page.getByTestId("visual-pipeline-ops-run-detail-panel").waitFor({
+          state: "visible",
+          timeout: 15000,
+        });
+        await assertDetailCommonSections(page);
+        await page.getByTestId("visual-pipeline-ops-run-detail-failure-summary").waitFor({
+          state: "visible",
+          timeout: 10000,
+        });
+        const reason = (
+          await page.getByTestId("visual-pipeline-ops-run-detail-failure-summary-reason").innerText()
+        ).trim();
+        if (!reason) fail("B10→B6: FAILED detail opened from action card must have summary reason");
+        console.log("  [ok] B10 detail from failed group + B6 failure summary");
+        await closeRunDetail(page);
+      } else {
+        const detailBtns = page.getByTestId("visual-pipeline-ops-action-required-detail-button");
+        if ((await detailBtns.count()) > 0) {
+          await detailBtns.first().click();
+          await page.getByTestId("visual-pipeline-ops-run-detail-panel").waitFor({
+            state: "visible",
+            timeout: 15000,
+          });
+          await assertDetailCommonSections(page);
+          console.log("  [ok] B10 detail from action card (no failed-group items)");
+          await closeRunDetail(page);
+        } else {
+          console.log("  [ok] B10 action-required has no detail buttons (count-only / empty items)");
+        }
+      }
+    }
+
     const stuckTable = page.getByTestId("visual-pipeline-ops-stuck-runs-table");
     const stuckEmpty = page.getByText("현재 stuck run이 없습니다.");
     const stuckVisible =

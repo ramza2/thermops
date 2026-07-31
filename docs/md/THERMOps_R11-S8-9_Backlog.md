@@ -33,7 +33,7 @@
 | B7 | Data Load → ML Workflow Handoff Guide | Visual Pipeline 적재 이후 Feature Dataset / Training / Batch Prediction으로 넘기는 **범용 handoff 가이드** (docs) | D | open | 구 B7 확장 |
 | B8 | PARTIAL 중복 적재 가시화 | Retry 전 영향 범위 힌트 | C | open | |
 | B9 | Schedule skip 이력 UI | `ACTIVE_RUN_EXISTS` 등 skip 반복 가시화 | C | open | |
-| B10 | Ops 「조치 필요」카드 | stuck / failures / catch-up 후보 그룹 (notification 전단계) | C | open | |
+| B10 | Ops 「조치 필요」카드 | stuck / failures / catch-up 후보 그룹 (notification 전단계) | C | **done** | **R11-S8-9-17** |
 | B11 | Connector / Data Source 선택 UX | Wizard/Mappings에서 `size≤100` 유지 + 클라이언트 검색·더 보기·새로고침. 서버 keyword 없음 한계 안내 | A | **done** | **R11-S8-9-8** |
 | B12 | Visual Pipeline E2E Smoke Scenario | REST → Transform → Upsert → Compile → 실행 설정 반영 → 즉시 실행 → History 범용 smoke. fixture는 generic sample dataset | D | **done** | **R11-S8-9-15** |
 | B13 | Inspector select 기본값 미반영 | `http_method`·`transform_type` 등 select **표시** 기본값이 config에 저장되지 않아 Graph 검증 required 경고. **A+B:** schema default 주입 + Type B placeholder | A | **done** | **R11-S8-9-4** |
@@ -79,7 +79,7 @@ B1, B2, B3, B15(done), B19(done), B20(done), B21(done), B27(done)
 
 ### C — 운영 가시성 / 복구 UX
 
-B4, B6(done), B8, B9, B10, B18(done), B26(done)
+B4, B6(done), B8, B9, B10(done), B18(done), B26(done)
 
 ### D — 범용 MLOps 확장 / 문서 / 장기
 
@@ -107,6 +107,7 @@ B5, B7, B12(done), B22, B23
 | R11-S8-9-14 | B18 | Upsert Target Table sample rows 읽기 전용 미리보기 (GET target-table-preview) | |
 | R11-S8-9-15 | B12 | Visual Pipeline E2E smoke (`check-visual-pipeline-e2e.mjs`) | |
 | R11-S8-9-16 | B6 | Run Detail 실패 원인 한 줄 요약 (FE-only) | |
+| R11-S8-9-17 | B10 | Ops 「조치 필요」카드 (stuck/failed/partial/catch-up hint) | |
 
 ---
 
@@ -133,6 +134,7 @@ B5, B7, B12(done), B22, B23
 | 2026-07-31 | B18 → `done` (S8-9-14). Target Table sample rows 읽기 전용 미리보기 (Inspector, Run Detail 제외) |
 | 2026-07-31 | B12 → `done` (S8-9-15). Visual Pipeline E2E smoke scenario (`check-visual-pipeline-e2e.mjs`) |
 | 2026-07-31 | B6 → `done` (S8-9-16). Run Detail 실패 원인 한 줄 요약 (FE-only) |
+| 2026-07-31 | B10 → `done` (S8-9-17). Ops 「조치 필요」카드 (FE-only, auto-action 없음) |
 
 ---
 

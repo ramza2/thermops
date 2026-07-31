@@ -1890,6 +1890,15 @@ cd frontend && node scripts/check-visual-pipeline-studio.mjs
 - **Known limitation:** progress step에 FAILED 플래그 없음 · RUNNING stale 요약 v1 제외 · 진단 보조(원인 단정 아님)
 - **Backlog:** B6 done
 
+### R11-S8-9-17 Ops 「조치 필요」카드
+
+- **범위:** FE-only — B10. Visual Pipeline Ops 상단에 stuck/failed/partial/catch-up hint 조치 필요 카드.
+- **변경:** `buildOpsActionRequired` · `VpActionRequiredCard` · 상세 보기→기존 Run Detail · auto-action/Notification 없음 · check-pages/ops smoke B10
+- **검증:** `cd frontend && npm run build` · `check-pages.mjs` · `check-visual-pipeline-ops.mjs` · studio/e2e 회귀
+- **제외:** backend · Studio Dock · B5 badge · B8/B9 상세 · auto retry/catch-up/cancel · package · 「R10 설정 반영」재노출 금지
+- **Known limitation:** PARTIAL/retryable은 count 안내만 · Catch-up은 skip hint · CANCELLED 그룹 제외 · Dock 미배치
+- **Backlog:** B10 done
+
 ## 설계 문서 참조
 
 - `docs/md/THERMOps_R11-S8-9_Backlog.md`

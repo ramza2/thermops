@@ -545,6 +545,55 @@ function assertRunFailureSummaryUx() {
   }
 }
 
+/** B10: Ops action-required card (FE-only, no auto actions / notification badge). */
+function assertOpsActionRequiredCard() {
+  const helper = fs.readFileSync(path.join(FRONTEND_SRC, "utils/opsActionRequired.ts"), "utf8");
+  for (const token of ["buildOpsActionRequired", "stuck", "failed", "partial", "catchup_hint"]) {
+    if (!helper.includes(token)) {
+      throw new Error(`B10 regression: opsActionRequired missing ${token}`);
+    }
+  }
+  for (const banned of ["function autoRetry", "autoRetry(", "autoCatchup(", "autoCancel(", "enqueueAuto"]) {
+    if (helper.includes(banned)) {
+      throw new Error(`B10 regression: helper must not implement ${banned}`);
+    }
+  }
+
+  const card = fs.readFileSync(
+    path.join(FRONTEND_SRC, "components/visualPipeline/VpActionRequiredCard.tsx"),
+    "utf8",
+  );
+  for (const token of [
+    "visual-pipeline-ops-action-required",
+    "조치 필요",
+    "visual-pipeline-ops-action-required-empty",
+    "visual-pipeline-ops-action-required-detail-button",
+  ]) {
+    if (!card.includes(token)) {
+      throw new Error(`B10 regression: VpActionRequiredCard missing ${token}`);
+    }
+  }
+  if (card.includes("notification") && /badge|read.?unread|readAt/i.test(card)) {
+    throw new Error("B10 regression: must not implement notification badge/read-unread");
+  }
+  if (card.includes("R10 설정 반영")) {
+    throw new Error("B10 regression: must not re-expose R10 label");
+  }
+  for (const banned of ["자동 재시도 실행", "자동 Catch-up 실행", "자동 중단 실행", "autoRetry(", "autoCatchup("]) {
+    if (card.includes(banned)) {
+      throw new Error(`B10 regression: card must not advertise ${banned}`);
+    }
+  }
+
+  const page = fs.readFileSync(path.join(FRONTEND_SRC, "pages/VisualPipelineOpsPage.tsx"), "utf8");
+  if (!page.includes("VpActionRequiredCard") || !page.includes("buildOpsActionRequired")) {
+    throw new Error("B10 regression: VisualPipelineOpsPage must mount action-required card");
+  }
+  if (page.includes("R10 설정 반영")) {
+    throw new Error("B10 regression: Ops page must not re-expose R10 label");
+  }
+}
+
 async function api(method, path, body) {
   const url = `${API_BASE}${path}`;
   const res = await fetch(url, {
@@ -582,6 +631,7 @@ assertStudioUpsertConflictKeysUx();
 assertStudioTargetTableSamplePreview();
 assertVisualPipelineE2eSmoke();
 assertRunFailureSummaryUx();
+assertOpsActionRequiredCard();
 
 const browser = await chromium.launch();
 const page = await browser.newPage();

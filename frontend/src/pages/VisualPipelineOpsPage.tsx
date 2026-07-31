@@ -12,6 +12,7 @@ import { getVisualPipelineRun } from "@/api/visualPipelines";
 import { Button } from "@/components/Button";
 import { Modal } from "@/components/Modal";
 import { LoadingState, ErrorState } from "@/components/Pagination";
+import { VpActionRequiredCard } from "@/components/visualPipeline/VpActionRequiredCard";
 import { VpRunDetailPanel } from "@/components/visualPipeline/VpRunDetailPanel";
 import { PageHeader } from "@/layouts/MainLayout";
 import { useRole } from "@/hooks/useRole";
@@ -22,6 +23,7 @@ import type {
   VisualPipelineOpsStuckRun,
   VisualPipelineOpsSummary,
 } from "@/types/visualPipelineOps";
+import { buildOpsActionRequired } from "@/utils/opsActionRequired";
 
 const RUN_STATUSES = ["PENDING", "RUNNING", "SUCCESS", "FAILED", "PARTIAL", "CANCELLED"] as const;
 const ACT_STATUSES = ["ACTIVE", "PAUSED", "INACTIVE", "ERROR"] as const;
@@ -255,6 +257,7 @@ export default function VisualPipelineOpsPage() {
   const stuck = summary?.stuck_summary;
   const hints = summary?.activity_hints;
   const failures = summary?.recent_failures ?? [];
+  const actionRequired = buildOpsActionRequired({ summary, stuckItems });
 
   return (
     <div data-testid="visual-pipeline-ops-page" className="space-y-4">
@@ -316,6 +319,15 @@ export default function VisualPipelineOpsPage() {
 
       {summary && (
         <>
+          <VpActionRequiredCard
+            model={actionRequired}
+            loading={loading}
+            onRefresh={() => void load()}
+            onOpenDetail={(pipelineId, visualRunId) => {
+              void openRunDetail(pipelineId, visualRunId);
+            }}
+          />
+
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
             <CountGrid
               testId="visual-pipeline-ops-run-counts"
