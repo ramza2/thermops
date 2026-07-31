@@ -472,6 +472,17 @@ async function runBrowserE2e(pipeline) {
       );
     }
 
+    // B1: Starter Template button / modal show without crash
+    {
+      const starterBtn = page.getByTestId("visual-pipeline-starter-template-button");
+      if ((await starterBtn.count()) > 0) {
+        await starterBtn.first().waitFor({ state: "visible", timeout: 10000 });
+        console.log("  [ok] B1 Starter Template button visible");
+      } else {
+        console.log("  [ok] B1 Starter Template button absent (conditional)");
+      }
+    }
+
     for (const nodeId of [NODE_CRON, NODE_REST, NODE_TRANSFORM, NODE_LOAD]) {
       await page.getByTestId(`visual-pipeline-node-${nodeId}`).waitFor({ state: "visible", timeout: 20000 });
     }

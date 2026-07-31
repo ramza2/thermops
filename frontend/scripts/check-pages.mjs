@@ -876,6 +876,85 @@ function assertSchemaKeyMappingHelper() {
   }
 }
 
+/** B1: Visual Pipeline Starter Template (FE-only skeleton, no fake Type B ids). */
+function assertStarterTemplateUx() {
+  const catalog = fs.readFileSync(path.join(FRONTEND_SRC, "utils/starterTemplateCatalog.ts"), "utf8");
+  for (const token of [
+    "STARTER_TEMPLATE_CATALOG",
+    "cron-full",
+    "rest-upsert",
+    "Scheduled REST Data Load",
+    "Manual REST Data Load",
+    "STARTER_TEMPLATE_APPLY_TOAST",
+    "STARTER_TEMPLATE_TYPE_B_FIELDS",
+  ]) {
+    if (!catalog.includes(token)) {
+      throw new Error(`B1 regression: starterTemplateCatalog missing ${token}`);
+    }
+  }
+  for (const banned of [
+    "DS-SAMPLE",
+    "SDS-SAMPLE",
+    "CRED-SAMPLE",
+    "즉시 실행 가능",
+    "자동으로 저장",
+    "자동으로 설정",
+    "R10 설정 반영",
+  ]) {
+    if (catalog.includes(banned)) {
+      throw new Error(`B1 regression: catalog must not include '${banned}'`);
+    }
+  }
+
+  const graphUtil = fs.readFileSync(path.join(FRONTEND_SRC, "utils/visualPipelineGraph.ts"), "utf8");
+  if (!graphUtil.includes("buildStarterTemplateFlow") || !graphUtil.includes("buildTemplateGraph")) {
+    throw new Error("B1 regression: buildStarterTemplateFlow must reuse buildTemplateGraph");
+  }
+  if (!graphUtil.includes("newNodeId")) {
+    throw new Error("B1 regression: starter apply must remap with newNodeId");
+  }
+
+  const modal = fs.readFileSync(
+    path.join(FRONTEND_SRC, "components/visualPipeline/VpStarterTemplateModal.tsx"),
+    "utf8",
+  );
+  for (const token of [
+    "visual-pipeline-starter-template-modal",
+    "visual-pipeline-starter-template-apply",
+    "visual-pipeline-starter-template-option-",
+  ]) {
+    if (!modal.includes(token)) {
+      throw new Error(`B1 regression: VpStarterTemplateModal missing ${token}`);
+    }
+  }
+
+  const page = fs.readFileSync(path.join(FRONTEND_SRC, "pages/VisualPipelineStudioPage.tsx"), "utf8");
+  for (const token of [
+    "VpStarterTemplateModal",
+    "buildStarterTemplateFlow",
+    "visual-pipeline-starter-template-button",
+    "visual-pipeline-canvas-empty-starter-cta",
+    "STARTER_TEMPLATE_APPLY_TOAST",
+  ]) {
+    if (!page.includes(token)) {
+      throw new Error(`B1 regression: Studio page missing ${token}`);
+    }
+  }
+  for (const banned of [
+    "즉시 실행 가능합니다",
+    "자동으로 저장되었습니다",
+    "자동으로 설정되었습니다",
+    "R10 설정 반영",
+  ]) {
+    if (page.includes(banned)) {
+      throw new Error(`B1 regression: Studio must not advertise '${banned}'`);
+    }
+  }
+  if (/createVisualPipeline\(|updateVisualPipeline\(/.test(page) && /applyStarterTemplate[\s\S]{0,800}updateVisualPipeline/.test(page)) {
+    throw new Error("B1 regression: starter apply must not auto-save via updateVisualPipeline");
+  }
+}
+
 /** B5: Ops action badge PoC (read-model, no notification table / read-unread). */
 function assertOpsActionBadgePoC() {
   const helper = fs.readFileSync(path.join(FRONTEND_SRC, "utils/opsActionRequired.ts"), "utf8");
@@ -1019,6 +1098,7 @@ assertCatchupGuidanceUx();
 assertPartialImpactUx();
 assertSchemaKeyMappingHelper();
 assertOpsActionBadgePoC();
+assertStarterTemplateUx();
 
 const browser = await chromium.launch();
 const page = await browser.newPage();

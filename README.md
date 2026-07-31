@@ -1944,6 +1944,15 @@ cd frontend && node scripts/check-visual-pipeline-studio.mjs
 - **Known limitation:** mapping editor 본구현 아님 · REST→Upsert 직결 시 source fallback · 추천은 FE helper이며 자동 저장/물리 스키마 변경 없음
 - **Backlog:** B3 done
 
+### R11-S8-9-23 Visual Pipeline Starter Template
+
+- **범위:** FE-only — B1. Studio Starter Template (cron-full / rest-upsert skeleton).
+- **변경:** `starterTemplateCatalog` · `buildStarterTemplateFlow` · `VpStarterTemplateModal` · toolbar/empty CTA · check-pages/studio/e2e
+- **검증:** `cd frontend && npm run build` · pages/studio/ops/e2e · package/requirements diff empty
+- **제외:** backend/API/DB · auto save/compile/run · B2 Domain Preset · fake Type B ids · package · 「R10 설정 반영」재노출 금지
+- **Known limitation:** FE-only starter skeleton · 자동 저장/실행 없음 · Type B 필드 비움 · multi-source/열수요 preset은 B2 이후
+- **Backlog:** B1 done
+
 ## 설계 문서 참조
 
 - `docs/md/THERMOps_R11-S8-9_Backlog.md`

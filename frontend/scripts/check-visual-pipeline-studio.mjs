@@ -645,6 +645,60 @@ async function runBrowserSmoke(pipeline) {
     }
     console.log("  [ok] toolbar controls visible");
 
+    // --- R11-S8-9-23 / B1: Starter Template ---
+    {
+      page.once("dialog", async (dialog) => {
+        await dialog.accept();
+      });
+      await toolbar.getByTestId("visual-pipeline-starter-template-button").waitFor({
+        state: "visible",
+        timeout: 10000,
+      });
+      await toolbar.getByTestId("visual-pipeline-starter-template-button").click();
+      await page.getByTestId("visual-pipeline-starter-template-modal").waitFor({
+        state: "visible",
+        timeout: 10000,
+      });
+      await page.getByTestId("visual-pipeline-starter-template-option-cron-full").click();
+      await page.getByTestId("visual-pipeline-starter-template-apply").click();
+      await page.waitForTimeout(500);
+      const cronNodes = await page.locator('[data-testid^="visual-pipeline-node-"]').count();
+      if (cronNodes !== 4) fail(`B1 cron-full: expected 4 nodes, got ${cronNodes}`);
+      const cronEdges = await page.locator(".react-flow__edge").count();
+      if (cronEdges < 3) fail(`B1 cron-full: expected >=3 edges, got ${cronEdges}`);
+      if ((await toolbar.getByText("● 저장되지 않음").count()) === 0) {
+        fail("B1: starter apply must mark graph dirty (no auto-save)");
+      }
+      // Type B fake ids must not appear in graph status / inspector snapshot
+      const pageText = await page.locator('[data-testid="visual-studio-root"]').innerText();
+      for (const banned of ["DS-SAMPLE", "SDS-SAMPLE", "CRED-SAMPLE", "SD-001"]) {
+        if (pageText.includes(banned)) {
+          fail(`B1: starter graph must not inject fake id ${banned}`);
+        }
+      }
+      console.log("  [ok] B1 cron-full starter apply (4 nodes, dirty, no fake Type B ids)");
+
+      page.once("dialog", async (dialog) => {
+        await dialog.accept();
+      });
+      await toolbar.getByTestId("visual-pipeline-starter-template-button").click();
+      await page.getByTestId("visual-pipeline-starter-template-option-rest-upsert").click();
+      await page.getByTestId("visual-pipeline-starter-template-apply").click();
+      await page.waitForTimeout(500);
+      const manualNodes = await page.locator('[data-testid^="visual-pipeline-node-"]').count();
+      if (manualNodes !== 3) fail(`B1 rest-upsert: expected 3 nodes, got ${manualNodes}`);
+      const manualEdges = await page.locator(".react-flow__edge").count();
+      if (manualEdges < 2) fail(`B1 rest-upsert: expected >=2 edges, got ${manualEdges}`);
+      console.log("  [ok] B1 rest-upsert starter apply (3 nodes)");
+
+      // Restore fixture graph for subsequent smoke
+      await openStudio(page, pipeline.pipeline_id);
+      await page.getByTestId("visual-pipeline-toolbar").waitFor({ state: "visible", timeout: 15000 });
+      const restored = await page.locator('[data-testid^="visual-pipeline-node-"]').count();
+      if (restored < 4) fail(`B1: expected fixture nodes restored after reload, got ${restored}`);
+      console.log("  [ok] B1 fixture graph restored after starter smoke");
+    }
+
     // B5: Ops link/badge — show when ADMIN mock role; hide otherwise. Never crash.
     {
       const opsLink = page.getByTestId("visual-pipeline-studio-ops-link");

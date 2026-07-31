@@ -186,6 +186,49 @@ export function buildTemplateGraph(templateId: GraphTemplateId): VisualPipelineG
   };
 }
 
+/**
+ * R11-S8-9-23 / B1: remap template node ids with newNodeId for Studio apply (collision-safe).
+ * Does not persist, compile, or inject Type B sample ids.
+ */
+export function buildStarterTemplateFlow(
+  templateId: GraphTemplateId,
+  options?: { idFactory?: () => string },
+): { nodes: Node[]; edges: Edge[]; preferredSelectId: string | null } {
+  const idFactory = options?.idFactory ?? newNodeId;
+  const graph = buildTemplateGraph(templateId);
+  if (!graph.nodes.length) {
+    return { nodes: [], edges: [], preferredSelectId: null };
+  }
+
+  const idMap = new Map<string, string>();
+  for (const n of graph.nodes) {
+    idMap.set(n.id, idFactory());
+  }
+
+  const remapped: VisualPipelineGraph = {
+    ...graph,
+    nodes: graph.nodes.map((n) => ({
+      ...n,
+      id: idMap.get(n.id) ?? idFactory(),
+    })),
+    edges: (graph.edges ?? []).map((e, idx) => ({
+      ...e,
+      id: `edge-${idMap.get(e.source) ?? e.source}-${idMap.get(e.target) ?? e.target}-${idx}`,
+      source: idMap.get(e.source) ?? e.source,
+      target: idMap.get(e.target) ?? e.target,
+    })),
+  };
+
+  const flow = graphToFlow(remapped);
+  const preferred =
+    flow.nodes.find((n) => getNodeComponentType(n) === "VP_REST_API_SOURCE")?.id ??
+    flow.nodes.find((n) => getNodeComponentType(n) === "VP_UPSERT_LOAD")?.id ??
+    flow.nodes[0]?.id ??
+    null;
+
+  return { nodes: flow.nodes, edges: flow.edges, preferredSelectId: preferred };
+}
+
 export function graphToFlow(graph: VisualPipelineGraph | undefined | null): { nodes: Node[]; edges: Edge[] } {
   const g = graph ?? emptyGraph();
   const nodes: Node[] = (g.nodes ?? []).map((n) => {

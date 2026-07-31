@@ -23,6 +23,7 @@ import {
   Database,
   History,
   Layers,
+  LayoutTemplate,
   Maximize2,
   Play,
   Save,
@@ -69,11 +70,16 @@ import { VpRunPanel } from "@/components/visualPipeline/VpRunPanel";
 import { VpScheduleActivationPanel } from "@/components/visualPipeline/VpScheduleActivationPanel";
 import { VpValidationPanel } from "@/components/visualPipeline/VpValidationPanel";
 import { VpVersionHistoryModal } from "@/components/visualPipeline/VpVersionHistoryModal";
+import { VpStarterTemplateModal } from "@/components/visualPipeline/VpStarterTemplateModal";
 import { VpOpsActionBadge } from "@/components/visualPipeline/VpOpsActionBadge";
 import { useOpsActionBadge } from "@/hooks/useOpsActionBadge";
 import { useRole } from "@/hooks/useRole";
 import { useToast } from "@/hooks/useToast";
 import { OPS_ACTION_REQUIRED_HREF } from "@/utils/opsActionRequired";
+import {
+  STARTER_TEMPLATE_APPLY_TOAST,
+  type StarterTemplateId,
+} from "@/utils/starterTemplateCatalog";
 import type {
   ComponentCatalogItem,
   ConnectionRule,
@@ -92,6 +98,7 @@ import {
   findConnectionRuleWarning,
   flowToGraph,
   graphToFlow,
+  buildStarterTemplateFlow,
   newNodeId,
   NODE_STYLE,
   parsePortHandleId,
@@ -143,6 +150,7 @@ function StudioCanvasInner() {
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [jsonExpanded, setJsonExpanded] = useState(false);
   const [versionsOpen, setVersionsOpen] = useState(false);
+  const [starterTemplateOpen, setStarterTemplateOpen] = useState(false);
   const [versionsLoading, setVersionsLoading] = useState(false);
   const [versions, setVersions] = useState<VisualPipelineVersion[]>([]);
   const [validating, setValidating] = useState(false);
@@ -440,6 +448,38 @@ function StudioCanvasInner() {
     setNodes((nds) => [...nds, newNode]);
     setSelectedNodeId(id);
   };
+
+  const confirmStarterTemplateReplace = useCallback((): boolean => {
+    if (nodes.length === 0 && edges.length === 0) return true;
+    if (dirty) {
+      return window.confirm(
+        "현재 graph에 저장되지 않은 변경이 있습니다. Starter Template을 적용하면 현재 graph가 교체됩니다. 계속할까요?",
+      );
+    }
+    return window.confirm(
+      "현재 graph가 비어 있지 않습니다. Starter Template을 적용하면 현재 graph가 교체됩니다. 계속할까요?",
+    );
+  }, [nodes.length, edges.length, dirty]);
+
+  const applyStarterTemplate = useCallback(
+    (templateId: StarterTemplateId) => {
+      if (!confirmStarterTemplateReplace()) return;
+      const flow = buildStarterTemplateFlow(templateId);
+      setNodes(flow.nodes);
+      setEdges(flow.edges);
+      setSelectedNodeId(flow.preferredSelectId);
+      setStarterTemplateOpen(false);
+      showToast("success", STARTER_TEMPLATE_APPLY_TOAST);
+      window.setTimeout(() => {
+        try {
+          fitView({ padding: 0.2 });
+        } catch {
+          /* fitView may fail if ReactFlow unmounted */
+        }
+      }, 50);
+    },
+    [confirmStarterTemplateReplace, setNodes, setEdges, showToast, fitView],
+  );
 
   const handleLabelChange = (label: string) => {
     if (!selectedNodeId) return;
@@ -1099,6 +1139,15 @@ function StudioCanvasInner() {
           <Button variant="secondary" icon={<Maximize2 className="w-4 h-4" />} onClick={() => fitView({ padding: 0.2 })}>
             Fit View
           </Button>
+          <Button
+            variant="secondary"
+            icon={<LayoutTemplate className="w-4 h-4" />}
+            onClick={() => setStarterTemplateOpen(true)}
+            title="자주 쓰는 Data Load graph 골격을 적용합니다. 자동 저장·실행하지 않습니다."
+            data-testid="visual-pipeline-starter-template-button"
+          >
+            Starter Template
+          </Button>
           <Button variant="secondary" onClick={() => void openVersions()}>이력</Button>
           {canViewVpOps && (
             <button
@@ -1282,12 +1331,24 @@ function StudioCanvasInner() {
               </div>
             </Panel>
             {nodes.length === 0 && (
-              <Panel position="top-center" className="m-8 pointer-events-none">
-                <div className="bg-white/95 border border-dashed border-slate-300 rounded-lg shadow-sm px-6 py-5 text-center max-w-sm">
+              <Panel position="top-center" className="m-8">
+                <div
+                  className="bg-white/95 border border-dashed border-slate-300 rounded-lg shadow-sm px-6 py-5 text-center max-w-sm pointer-events-auto"
+                  data-testid="visual-pipeline-canvas-empty"
+                >
                   <p className="text-sm font-medium text-slate-700">왼쪽 팔레트에서 노드를 추가해 주세요.</p>
                   <p className="text-xs text-slate-500 mt-1.5 leading-relaxed">
                     REST API Source부터 추가한 뒤 Transform · Upsert Load를 연결하면 기본 적재 흐름을 구성할 수 있습니다.
                   </p>
+                  <button
+                    type="button"
+                    className="mt-3 inline-flex items-center justify-center gap-1.5 h-8 px-3 text-xs font-medium rounded-md bg-blue-700 text-white hover:bg-blue-800"
+                    data-testid="visual-pipeline-canvas-empty-starter-cta"
+                    onClick={() => setStarterTemplateOpen(true)}
+                  >
+                    <LayoutTemplate className="w-3.5 h-3.5" />
+                    Starter Template으로 시작
+                  </button>
                 </div>
               </Panel>
             )}
@@ -1412,6 +1473,11 @@ function StudioCanvasInner() {
         loading={versionsLoading}
         versions={versions}
         onClose={() => setVersionsOpen(false)}
+      />
+      <VpStarterTemplateModal
+        open={starterTemplateOpen}
+        onClose={() => setStarterTemplateOpen(false)}
+        onApply={applyStarterTemplate}
       />
     </div>
   );
