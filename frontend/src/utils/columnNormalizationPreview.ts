@@ -71,6 +71,14 @@ function canonType(value: string | undefined): string {
 
 type TypeCompat = "compatible" | "warning" | "mismatch";
 
+/** Soft type compatibility used by B15 preview and B27 conflict-key checks. */
+export function compareColumnDataTypes(
+  sourceType: string | undefined,
+  targetType: string | undefined,
+): TypeCompat {
+  return compareDataTypes(sourceType, targetType);
+}
+
 function compareDataTypes(sourceType: string | undefined, targetType: string | undefined): TypeCompat {
   const a = canonType(sourceType);
   const b = canonType(targetType);

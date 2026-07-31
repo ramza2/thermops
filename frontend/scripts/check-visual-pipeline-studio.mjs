@@ -478,7 +478,9 @@ async function assertConfigFormVisible(page, fieldKeys) {
     timeout: 10000,
   });
   for (const fieldKey of fieldKeys) {
-    await inspector.getByTestId(`visual-pipeline-inspector-config-field-${fieldKey}`).waitFor({
+    const field = inspector.getByTestId(`visual-pipeline-inspector-config-field-${fieldKey}`);
+    await field.scrollIntoViewIfNeeded();
+    await field.waitFor({
       state: "visible",
       timeout: 10000,
     });
@@ -927,6 +929,72 @@ async function runBrowserSmoke(pipeline) {
       }
       console.log(`  [ok] B21 column proposal (${columnRowCount} rows, heat_demand/measured_at visible, editable)`);
 
+      // --- R11-S8-9-13 / B27: conflict_key_columns_json select + validate ---
+      {
+        await inspector.getByTestId("visual-pipeline-conflict-keys-panel").waitFor({
+          state: "visible",
+          timeout: 10000,
+        });
+        await page.waitForTimeout(600);
+        const dirtyBeforeRecommend = (await toolbar.getByText("● 저장되지 않음").count()) > 0;
+        await inspector.getByTestId("visual-pipeline-conflict-keys-recommend-toggle").click();
+        await inspector.getByTestId("visual-pipeline-conflict-keys-recommend-list").waitFor({
+          state: "visible",
+          timeout: 10000,
+        });
+        const dirtyAfterToggle = (await toolbar.getByText("● 저장되지 않음").count()) > 0;
+        if (dirtyBeforeRecommend !== dirtyAfterToggle) {
+          fail("B27: opening recommend list must not change dirty state");
+        }
+        const recommendText = await inspector.getByTestId("visual-pipeline-conflict-keys-recommend-list").innerText();
+        if (!recommendText.includes("entity_id") || !/measured_at|Measured At/i.test(recommendText)) {
+          fail(`B27: expected entity_id + measured_at recommend candidate, got ${recommendText}`);
+        }
+        // Clear keys via advanced input to assert UPSERT empty warning
+        await inspector.getByTestId("visual-pipeline-conflict-keys-advanced-toggle").click();
+        const advancedInput = inspector.locator(
+          '[data-testid="visual-pipeline-conflict-keys-panel"] input[type="text"]',
+        );
+        await advancedInput.waitFor({ state: "visible", timeout: 10000 });
+        await advancedInput.fill("");
+        await inspector.getByTestId("visual-pipeline-conflict-keys-empty-error").waitFor({
+          state: "visible",
+          timeout: 10000,
+        });
+        // Apply first recommend candidate
+        await inspector
+          .getByTestId("visual-pipeline-conflict-keys-recommend-item")
+          .first()
+          .getByRole("button", { name: "적용" })
+          .click();
+        const selectedKeysText = await inspector.getByTestId("visual-pipeline-conflict-keys-selected").innerText();
+        if (!selectedKeysText.includes("entity_id")) {
+          fail(`B27: selected keys should include entity_id, got ${selectedKeysText}`);
+        }
+        const validation = inspector.getByTestId("visual-pipeline-conflict-keys-validation");
+        await validation.waitFor({ state: "visible", timeout: 10000 });
+        const overall = await validation.getAttribute("data-overall");
+        if (overall === "ERROR") {
+          const validationText = await validation.innerText();
+          fail(`B27: expected non-ERROR validation after recommend apply, got ${overall}: ${validationText}`);
+        }
+        // INSERT_ONLY should not show empty-keys required error
+        const writeModeSelect = inspector.locator('select').filter({ has: page.locator('option[value="UPSERT"]') }).first();
+        await writeModeSelect.selectOption("INSERT_ONLY");
+        await advancedInput.fill("");
+        await page.waitForTimeout(300);
+        if ((await inspector.getByTestId("visual-pipeline-conflict-keys-empty-error").count()) > 0) {
+          fail("B27: INSERT_ONLY must not show conflict_keys required empty error");
+        }
+        await writeModeSelect.selectOption("UPSERT");
+        await inspector
+          .getByTestId("visual-pipeline-conflict-keys-recommend-item")
+          .first()
+          .getByRole("button", { name: "적용" })
+          .click();
+        console.log(`  [ok] B27 conflict keys recommend/select/validate (${selectedKeysText})`);
+      }
+
       await inspector.getByTestId("visual-pipeline-standard-dataset-create-name").fill(createName);
       await inspector.getByTestId("visual-pipeline-standard-dataset-create-code").fill(createCode);
       await inspector.getByTestId("visual-pipeline-standard-dataset-suggest-table").click();
@@ -971,9 +1039,22 @@ async function runBrowserSmoke(pipeline) {
           `B20: saved config.values.target_table expected ${targetAfterCreate}, got ${savedTargetTable}`,
         );
       }
+      const savedConflictKeys = loadAfterB20?.data?.config?.values?.conflict_key_columns_json;
+      if (!Array.isArray(savedConflictKeys) || !savedConflictKeys.includes("entity_id")) {
+        fail(
+          `B27: saved conflict_key_columns_json should include entity_id, got ${JSON.stringify(savedConflictKeys)}`,
+        );
+      }
+      const hasMeasured = savedConflictKeys.some((k) => /measured_at/i.test(String(k).replace(/\s+/g, "_")));
+      if (!hasMeasured) {
+        fail(
+          `B27: saved conflict_key_columns_json should include measured_at variant, got ${JSON.stringify(savedConflictKeys)}`,
+        );
+      }
       console.log(
         `  [ok] B20/B21 inline create → select → save standard_dataset_id=${savedDatasetId} target_table=${savedTargetTable}`,
       );
+      console.log(`  [ok] B27 saved conflict_key_columns_json=${JSON.stringify(savedConflictKeys)}`);
 
       try {
         const detail = await api(
@@ -1125,7 +1206,12 @@ async function runBrowserSmoke(pipeline) {
     await assertConfigFormVisible(page, ["target_table", "write_mode"]);
     await fillTextField(page, "target_table", "tb_e2e_dirty_smoke");
     await selectFieldOption(page, "write_mode", "UPSERT");
-    await fillTextField(page, "conflict_key_columns_json", "entity_id, measured_at");
+    const conflictPanel = inspector.getByTestId("visual-pipeline-conflict-keys-panel");
+    await conflictPanel.scrollIntoViewIfNeeded();
+    if ((await conflictPanel.locator('input[type="text"]').count()) === 0) {
+      await inspector.getByTestId("visual-pipeline-conflict-keys-advanced-toggle").click();
+    }
+    await conflictPanel.locator('input[type="text"]').fill("entity_id, measured_at");
     await toolbar.getByText("● 저장되지 않음").first().waitFor({ state: "visible", timeout: 10000 });
     console.log("  [ok] Upsert field smoke -> dirty");
 

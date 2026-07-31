@@ -20,7 +20,7 @@
 
 ---
 
-## 2. 전체 Backlog (B1 ~ B26)
+## 2. 전체 Backlog (B1 ~ B27)
 
 | ID | 제목 | 설명 | 그룹 | 상태 | 비고 |
 |----|------|------|------|------|------|
@@ -50,6 +50,7 @@
 | B24 | 표준 데이터셋 보관(archive) UI | `POST /standard-dataset-types/{id}/archive` FE 보관 버튼·confirm·refresh. 물리 테이블 DROP/unarchive 제외 | A | **done** | **R11-S8-9-6** |
 | B25 | REST API 연결 목록 로드 버그 | `ApiConnectorPanel`이 `GET /data-sources?size=200` 호출 → API max 100으로 **422** → Wizard 데이터 소스 셀렉트 항상 빈 목록. `DATA_SOURCE_LIST_PAGE_SIZE=100` + 등록/수정/삭제 후 패널 refresh + empty/error 구분 | A | **done** | **R11-S8-9-2**. 100건 초과 1페이지 제한 → B11 |
 | B26 | Ops smoke soft-cancel assertion 안정화 | `check-visual-pipeline-ops.mjs`가 첫 번째 `run-detail-button`을 상태 확인 없이 클릭해, stuck 목록에 `RUNNING`이 있으면 soft-cancel 버튼 표시 여부 assertion이 깨지는 flaky 이슈. run 상태별 대상 선택과 assertion 분기로 안정화 | C | **done** | **R11-S8-9-7** |
+| B27 | Upsert conflict_keys 선택/검증 UX | Upsert Load 노드에서 INSERT/UPDATE 기준이 되는 conflict_keys를 Target 컬럼 기준으로 선택하고, Source/Transform 출력 컬럼과의 존재 여부·nullable·type mismatch를 미리 검증하는 UX. 자동 확정이나 backend upsert 정책 변경은 제외 | B | **done** | **R11-S8-9-13** |
 
 ---
 
@@ -74,7 +75,7 @@ B11(done), B13(done), B14(done), B16(done), B17(done), B24(done), B25(done)
 
 ### B — 범용 Visual Pipeline 구성 편의
 
-B1, B2, B3, B15(done), B19(done), B20(done), B21(done)
+B1, B2, B3, B15(done), B19(done), B20(done), B21(done), B27(done)
 
 ### C — 운영 가시성 / 복구 UX
 
@@ -102,6 +103,7 @@ B5, B7, B12, B22, B23
 | R11-S8-9-10 | B20 | Studio Upsert Standard Dataset 선택 + DRAFT 인라인 생성 | |
 | R11-S8-9-11 | B21 | Transform 출력 기반 표준 컬럼 후보 제안 + 컬럼 editor + DRAFT 생성 payload 반영 | |
 | R11-S8-9-12 | B15 | Source↔Target 컬럼 정합성 미리보기 (FE diagnosis, mapping 저장 없음) | |
+| R11-S8-9-13 | B27 | Upsert conflict_key_columns_json 선택·검증·추천 UX (자동 확정 없음) | |
 
 ---
 
@@ -124,6 +126,7 @@ B5, B7, B12, B22, B23
 | 2026-07-30 | B19 push (`2310c21`). B20 → `done` (S8-9-10). Studio Upsert Standard Dataset 선택·DRAFT 인라인 생성 |
 | 2026-07-30 | B21 → `done` (S8-9-11). Transform 출력 기반 컬럼 후보 제안 + 컬럼 editor + DRAFT 생성 payload 반영 |
 | 2026-07-31 | B15 → `done` (S8-9-12). Source↔Target 컬럼 정합성 미리보기 (FE diagnosis only) |
+| 2026-07-31 | B27 추가 후 → `done` (S8-9-13). Upsert conflict_key_columns_json 선택·검증·추천 UX |
 
 ---
 

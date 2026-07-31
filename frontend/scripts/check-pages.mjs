@@ -356,6 +356,70 @@ function assertStudioUpsertColumnMatchPreview() {
   }
 }
 
+/** B27: Upsert conflict_key_columns_json select / validate / recommend (no auto-confirm). */
+function assertStudioUpsertConflictKeysUx() {
+  const helper = fs.readFileSync(path.join(FRONTEND_SRC, "utils/conflictKeyValidation.ts"), "utf8");
+  for (const token of [
+    "suggestConflictKeyCandidates",
+    "validateConflictKeys",
+    "parseConflictKeyColumns",
+    "CONFLICT_KEYS_RECOMMEND_HINT",
+    "entity_id",
+    "measured_at",
+  ]) {
+    if (!helper.includes(token)) {
+      throw new Error(`B27 regression: conflictKeyValidation missing ${token}`);
+    }
+  }
+  if (/auto.?apply|autosave|자동 저장/.test(helper) && /recommend/.test(helper)) {
+    // soft check — recommend hint must say not auto-saved
+  }
+  if (!helper.includes("자동 저장되지 않습니다")) {
+    throw new Error("B27 regression: recommend hint must state recommendations are not auto-saved");
+  }
+  for (const banned of ["CREATE INDEX", "create index", "unique index", "migration"]) {
+    if (helper.includes(banned)) {
+      throw new Error(`B27 regression: helper must not contain '${banned}'`);
+    }
+  }
+
+  const form = fs.readFileSync(
+    path.join(FRONTEND_SRC, "components/visualPipeline/config/VpUpsertLoadConfigForm.tsx"),
+    "utf8",
+  );
+  for (const token of [
+    "visual-pipeline-conflict-keys-panel",
+    "visual-pipeline-conflict-keys-recommend-toggle",
+    "visual-pipeline-conflict-keys-recommend-item",
+    "visual-pipeline-conflict-keys-selected",
+    "visual-pipeline-conflict-keys-validation",
+    "conflict_key_columns_json",
+    "suggestConflictKeyCandidates",
+    "validateConflictKeys",
+  ]) {
+    if (!form.includes(token)) {
+      throw new Error(`B27 regression: VpUpsertLoadConfigForm missing ${token}`);
+    }
+  }
+  for (const banned of [
+    "CREATE INDEX",
+    "unique index",
+    "영구 삭제",
+    "DROP TABLE",
+    "conflict_keys:",
+    "auto confirm",
+    "자동 확정",
+  ]) {
+    if (form.includes(banned)) {
+      throw new Error(`B27 regression: Upsert form must not contain '${banned}'`);
+    }
+  }
+  // Must save via existing contract field only
+  if (!form.includes("onChange({ conflict_key_columns_json:")) {
+    throw new Error("B27 regression: must persist via conflict_key_columns_json onChange");
+  }
+}
+
 async function api(method, path, body) {
   const url = `${API_BASE}${path}`;
   const res = await fetch(url, {
@@ -389,6 +453,7 @@ assertStudioRestDataSourceInlineCreate();
 assertStudioUpsertStandardDatasetInlineCreate();
 assertStudioUpsertTransformColumnProposal();
 assertStudioUpsertColumnMatchPreview();
+assertStudioUpsertConflictKeysUx();
 
 const browser = await chromium.launch();
 const page = await browser.newPage();

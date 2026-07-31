@@ -1853,6 +1853,15 @@ cd frontend && node scripts/check-visual-pipeline-studio.mjs
 - **Known limitation:** synonym/의미 번역 없음 · REST raw_rows 직결 시 source 없음 · preview는 적재 정책을 바꾸지 않음
 - **Backlog:** B15 done
 
+### R11-S8-9-13 Studio Upsert conflict keys 선택/검증 UX
+
+- **범위:** FE-only — B27. Upsert Load Inspector에서 Target 컬럼 기준 `conflict_key_columns_json` 다중 선택·검증·추천.
+- **변경:** checkbox 선택 UI · WIDE_HOUR_TO_LONG 등 추천 후보(자동 확정 금지) · Source/Target 존재·nullable·type 검증 · `string[]` 계약 유지 · 고급 직접 입력 유지 · check-pages/studio smoke B27
+- **검증:** `cd frontend && npm run build` · `node scripts/check-pages.mjs` · `node scripts/check-visual-pipeline-studio.mjs`
+- **제외:** backend/DB · compile/run/materialization · unique index · 자동 확정/자동 저장 · B15/B20/B21 대규모 재작성 · package · 「R10 설정 반영」재노출 금지
+- **Known limitation:** Source missing은 WARNING · synonym 번역 없음 · 물리 unique 제약은 다루지 않음
+- **Backlog:** B27 done
+
 ## 설계 문서 참조
 
 - `docs/md/THERMOps_R11-S8-9_Backlog.md`

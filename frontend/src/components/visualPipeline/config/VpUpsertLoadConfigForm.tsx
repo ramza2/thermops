@@ -29,9 +29,17 @@ import {
   COLUMN_MATCH_STATUS_LABEL,
   buildColumnMatchPreview,
   formatUnmappedPolicyHint,
+  normalizeColumnName,
   type ColumnMatchPreviewResult,
   type PreviewColumn,
 } from "@/utils/columnNormalizationPreview";
+import {
+  CONFLICT_KEYS_HINT,
+  CONFLICT_KEYS_RECOMMEND_HINT,
+  parseConflictKeyColumns,
+  suggestConflictKeyCandidates,
+  validateConflictKeys,
+} from "@/utils/conflictKeyValidation";
 import { ensureNodeConfig } from "@/utils/visualPipelineNodeConfig";
 import { findUpstreamTransformForUpsert } from "@/utils/visualPipelineGraph";
 import {
@@ -142,6 +150,13 @@ export function VpUpsertLoadConfigForm({
   const [matchPreviewError, setMatchPreviewError] = useState<string | null>(null);
   const [matchPreviewHint, setMatchPreviewHint] = useState<string | null>(null);
   const [matchPreviewLoading, setMatchPreviewLoading] = useState(false);
+  const [keyTargetColumns, setKeyTargetColumns] = useState<PreviewColumn[]>([]);
+  const [keyTargetKnown, setKeyTargetKnown] = useState(false);
+  const [keySourceColumns, setKeySourceColumns] = useState<PreviewColumn[]>([]);
+  const [keySourceKnown, setKeySourceKnown] = useState(false);
+  const [keyTransformType, setKeyTransformType] = useState("");
+  const [showKeyRecommend, setShowKeyRecommend] = useState(false);
+  const [showAdvancedConflictInput, setShowAdvancedConflictInput] = useState(false);
 
   const loadDatasets = useCallback(async (keyword?: string) => {
     setDatasetsLoading(true);
@@ -399,6 +414,103 @@ export function VpUpsertLoadConfigForm({
       setMatchPreviewError("컬럼 정합성 미리보기를 계산하지 못했습니다.");
     } finally {
       setMatchPreviewLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+    const refreshKeyColumns = async () => {
+      const source = resolveSourceColumns();
+      if (!cancelled) {
+        setKeySourceColumns(source.columns);
+        setKeySourceKnown(source.columns.length > 0);
+      }
+
+      if (studioGraph?.upsertNodeId) {
+        const upstream = findUpstreamTransformForUpsert(
+          studioGraph.upsertNodeId,
+          studioGraph.nodes,
+          studioGraph.edges,
+        );
+        if (upstream) {
+          const values = ensureNodeConfig(upstream.transformNode, "VP_TRANSFORM").values;
+          if (!cancelled) setKeyTransformType(String(values.transform_type || ""));
+        } else if (!cancelled) {
+          setKeyTransformType("");
+        }
+      } else if (!cancelled) {
+        setKeyTransformType("");
+      }
+
+      const target = await resolveTargetColumns();
+      if (!cancelled) {
+        setKeyTargetColumns(target.columns);
+        setKeyTargetKnown(target.columns.length > 0);
+      }
+    };
+    void refreshKeyColumns();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- refresh when column sources change
+  }, [createOpen, draftColumns, selectedId, studioGraph]);
+
+  const selectedConflictKeys = useMemo(
+    () => parseConflictKeyColumns(values.conflict_key_columns_json),
+    [values.conflict_key_columns_json],
+  );
+
+  const conflictKeyCandidates = useMemo(
+    () =>
+      suggestConflictKeyCandidates({
+        targetColumns: keyTargetColumns,
+        sourceColumns: keySourceColumns,
+        transformType: keyTransformType,
+      }),
+    [keyTargetColumns, keySourceColumns, keyTransformType],
+  );
+
+  const conflictKeyValidation = useMemo(
+    () =>
+      validateConflictKeys({
+        selectedKeys: selectedConflictKeys,
+        targetColumns: keyTargetColumns,
+        sourceColumns: keySourceColumns,
+        writeMode,
+        targetColumnsKnown: keyTargetKnown,
+        sourceColumnsKnown: keySourceKnown,
+      }),
+    [
+      selectedConflictKeys,
+      keyTargetColumns,
+      keySourceColumns,
+      writeMode,
+      keyTargetKnown,
+      keySourceKnown,
+    ],
+  );
+
+  const setConflictKeys = (keys: string[]) => {
+    const unique: string[] = [];
+    const seen = new Set<string>();
+    for (const key of keys) {
+      const trimmed = key.trim();
+      if (!trimmed) continue;
+      const norm = normalizeColumnName(trimmed);
+      if (!norm || seen.has(norm)) continue;
+      seen.add(norm);
+      unique.push(trimmed);
+    }
+    onChange({ conflict_key_columns_json: unique.length ? unique : undefined });
+  };
+
+  const toggleConflictKey = (columnName: string) => {
+    const norm = normalizeColumnName(columnName);
+    const exists = selectedConflictKeys.some((k) => normalizeColumnName(k) === norm);
+    if (exists) {
+      setConflictKeys(selectedConflictKeys.filter((k) => normalizeColumnName(k) !== norm));
+    } else {
+      setConflictKeys([...selectedConflictKeys, columnName]);
     }
   };
 
@@ -890,21 +1002,184 @@ export function VpUpsertLoadConfigForm({
             ))}
           </select>
         </VpConfigFieldShell>
-        <VpColumnListField
+        <VpConfigFieldShell
           fieldKey="conflict_key_columns_json"
-          label="Conflict Key Columns"
-          value={values.conflict_key_columns_json}
-          placeholder="entity_id, measured_at"
+          label="Upsert 기준키 (conflict_key_columns_json)"
           required={conflictRequired}
-          help={
-            conflictRequired
-              ? "DEDUPLICATE/UPSERT 시 conflict key가 필요합니다 (저장은 차단하지 않음)."
-              : "쉼표로 구분된 컬럼 목록 → string[]로 저장"
-          }
+          help={CONFLICT_KEYS_HINT}
           warning={warn("conflict_key_columns_json")}
-          disabled={disabled}
-          onChange={onChange}
-        />
+        >
+        <div
+          className="rounded-md border border-slate-200 bg-slate-50 p-2.5 space-y-2"
+          data-testid="visual-pipeline-conflict-keys-panel"
+        >
+          <p className="text-[10px] text-slate-500">{CONFLICT_KEYS_RECOMMEND_HINT}</p>
+          {conflictKeyValidation.empty_keys_error && (
+            <p
+              className="text-[10px] text-red-700"
+              data-testid="visual-pipeline-conflict-keys-empty-error"
+            >
+              {conflictKeyValidation.message}
+            </p>
+          )}
+          <button
+            type="button"
+            className={BTN_SECONDARY}
+            disabled={disabled}
+            data-testid="visual-pipeline-conflict-keys-recommend-toggle"
+            onClick={() => setShowKeyRecommend((v) => !v)}
+          >
+            {showKeyRecommend ? "추천 후보 숨기기" : "추천 후보 보기"}
+          </button>
+          {showKeyRecommend && (
+            <div className="space-y-1.5" data-testid="visual-pipeline-conflict-keys-recommend-list">
+              {conflictKeyCandidates.length === 0 ? (
+                <p className="text-[10px] text-slate-500">표시할 추천 후보가 없습니다. Target 컬럼을 직접 선택하세요.</p>
+              ) : (
+                conflictKeyCandidates.map((c) => (
+                  <div
+                    key={c.id}
+                    className="flex flex-wrap items-center justify-between gap-1 rounded border border-slate-200 bg-white px-2 py-1.5"
+                    data-testid="visual-pipeline-conflict-keys-recommend-item"
+                  >
+                    <div>
+                      <div className="text-[10px] font-medium text-slate-700">{c.label}</div>
+                      <div className="text-[9px] text-slate-500">{c.reason}</div>
+                    </div>
+                    <button
+                      type="button"
+                      className={BTN_GHOST}
+                      disabled={disabled}
+                      onClick={() => setConflictKeys(c.keys)}
+                    >
+                      적용
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+          )}
+          {keyTargetColumns.length > 0 ? (
+            <div className="space-y-1">
+              <div className="text-[9px] text-slate-500">Target 컬럼</div>
+              <div className="grid grid-cols-1 gap-1">
+                {keyTargetColumns.map((col) => {
+                  const checked = selectedConflictKeys.some(
+                    (k) => normalizeColumnName(k) === normalizeColumnName(col.column_name),
+                  );
+                  const safeId = col.column_name.replace(/[^a-zA-Z0-9_-]/g, "_");
+                  return (
+                    <label
+                      key={col.column_name}
+                      className="inline-flex items-center gap-1.5 text-[10px] text-slate-700"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        disabled={disabled}
+                        data-testid={`visual-pipeline-conflict-keys-checkbox-${safeId}`}
+                        onChange={() => toggleConflictKey(col.column_name)}
+                      />
+                      <span>
+                        {col.column_name}
+                        {col.data_type ? ` (${col.data_type})` : ""}
+                        {col.required ? " · required" : ""}
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+          ) : (
+            <p className="text-[10px] text-amber-700">
+              Target 컬럼 목록을 아직 불러오지 못했습니다. 표준 데이터셋을 선택하거나 인라인 등록에서 컬럼을 정의한 뒤 다시 확인해 주세요.
+            </p>
+          )}
+          {conflictKeyValidation.orphan_keys.length > 0 && (
+            <div
+              className="space-y-1"
+              data-testid="visual-pipeline-conflict-keys-orphan-warning"
+            >
+              <p className="text-[10px] text-amber-700">
+                현재 저장된 기준키 중 target 컬럼 목록에 없는 항목이 있습니다:{" "}
+                {conflictKeyValidation.orphan_keys.join(", ")}
+              </p>
+              <div className="flex flex-wrap gap-1">
+                {conflictKeyValidation.orphan_keys.map((key) => (
+                  <button
+                    key={key}
+                    type="button"
+                    className={BTN_GHOST}
+                    disabled={disabled}
+                    onClick={() =>
+                      setConflictKeys(selectedConflictKeys.filter((k) => k.toLowerCase() !== key.toLowerCase()))
+                    }
+                  >
+                    {key} 해제
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+          <p className="text-[10px] text-slate-700" data-testid="visual-pipeline-conflict-keys-selected">
+            선택된 기준키:{" "}
+            {selectedConflictKeys.length ? selectedConflictKeys.join(" + ") : "(없음)"}
+          </p>
+          <div
+            className="space-y-1 rounded border border-slate-200 bg-white p-2"
+            data-testid="visual-pipeline-conflict-keys-validation"
+            data-overall={conflictKeyValidation.overall}
+          >
+            <p className="text-[10px] font-medium text-slate-700">
+              검증: {conflictKeyValidation.overall} — {conflictKeyValidation.message}
+            </p>
+            {conflictKeyValidation.checks.map((check) => (
+              <div key={check.key} className="text-[9px] text-slate-600">
+                <span className="font-medium">{check.key}</span>: {check.target_status} /{" "}
+                {check.source_status}
+                {check.notes.length ? ` · ${check.notes.join("; ")}` : ""}
+              </div>
+            ))}
+          </div>
+          {createOpen &&
+            draftColumns.length > 0 &&
+            selectedConflictKeys.some(
+              (k) =>
+                !draftColumns.some((c) => c.column_name.trim().toLowerCase() === k.toLowerCase()),
+            ) && (
+              <p className="text-[10px] text-amber-700">
+                인라인 컬럼 editor에서 삭제한 컬럼이 기준키에 남아 있을 수 있습니다. 필요하면 기준키를 다시
+                선택하세요.
+              </p>
+            )}
+          <button
+            type="button"
+            className={BTN_GHOST}
+            disabled={disabled}
+            data-testid="visual-pipeline-conflict-keys-advanced-toggle"
+            onClick={() => setShowAdvancedConflictInput((v) => !v)}
+          >
+            {showAdvancedConflictInput ? "고급 직접 입력 숨기기" : "고급: 직접 입력"}
+          </button>
+          {showAdvancedConflictInput && (
+            <VpColumnListField
+              fieldKey="conflict_key_columns_json"
+              label="Conflict Key Columns (직접 입력)"
+              value={values.conflict_key_columns_json}
+              placeholder="entity_id, measured_at"
+              required={conflictRequired}
+              help={
+                conflictRequired
+                  ? "DEDUPLICATE/UPSERT 시 conflict key가 필요합니다 (저장은 차단하지 않음)."
+                  : "쉼표로 구분된 컬럼 목록 → string[]로 저장"
+              }
+              warning={warn("conflict_key_columns_json")}
+              disabled={disabled}
+              onChange={onChange}
+            />
+          )}
+        </div>
+        </VpConfigFieldShell>
       </section>
 
       <section className="rounded-lg border border-slate-100 p-2.5 space-y-2.5">
