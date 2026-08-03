@@ -1285,6 +1285,55 @@ function assertVisualPipelineCloseoutReleaseNote() {
   }
 }
 
+/** R12: Candidate Prioritization Draft (docs only; not an implementation kickoff). */
+function assertR12CandidatePrioritizationDraft() {
+  const guidePath = path.join(REPO_ROOT, "docs/md/THERMOps_R12_Candidate_Prioritization_Draft.md");
+  if (!fs.existsSync(guidePath)) {
+    throw new Error("R12 regression: Candidate Prioritization Draft markdown missing");
+  }
+  const guide = fs.readFileSync(guidePath, "utf8");
+  for (const token of [
+    "구현 착수 문서가 아니며",
+    "별도 승인",
+    "R12-A",
+    "R12-B",
+    "R12-C",
+    "R12-D",
+    "R12-E",
+    "R13",
+    "Data Quality Gate",
+    "Feature Dataset Builder",
+    "추천 우선순위 초안",
+  ]) {
+    if (!guide.includes(token)) {
+      throw new Error(`R12 regression: Prioritization Draft missing '${token}'`);
+    }
+  }
+  for (const banned of [
+    "R12 착수 확정",
+    "R12 일정 확정",
+    "자동 학습 실행",
+    "자동 예측 실행",
+    "즉시 예측 실행",
+    "ML Workflow가 이미 구현",
+    "DISABLED 컴포넌트 활성화 완료",
+    "신규 node 구현 완료",
+    "R10 설정 반영",
+  ]) {
+    if (guide.includes(banned)) {
+      throw new Error(`R12 regression: Prioritization Draft must not claim '${banned}'`);
+    }
+  }
+
+  const readme = fs.readFileSync(path.join(REPO_ROOT, "README.md"), "utf8");
+  if (!readme.includes("THERMOps_R12_Candidate_Prioritization_Draft.md")) {
+    throw new Error("R12 regression: README must link Candidate Prioritization Draft");
+  }
+  if (!readme.includes("R12 Candidate Prioritization Draft")) {
+    throw new Error("R12 regression: README must mention R12 Candidate Prioritization Draft");
+  }
+}
+
 /** B5: Ops action badge PoC (read-model, no notification table / read-unread). */
 function assertOpsActionBadgePoC() {
   const helper = fs.readFileSync(path.join(FRONTEND_SRC, "utils/opsActionRequired.ts"), "utf8");
@@ -1434,6 +1483,7 @@ assertDataLoadMlHandoffGuide();
 assertDisabledComponentsRoadmap();
 assertProductBrandingGeneralization();
 assertVisualPipelineCloseoutReleaseNote();
+assertR12CandidatePrioritizationDraft();
 
 const browser = await chromium.launch();
 const page = await browser.newPage();

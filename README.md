@@ -1998,6 +1998,15 @@ cd frontend && node scripts/check-visual-pipeline-studio.mjs
 - **Known limitation:** closeout 문서이며 신규 기능 구현이 아님 · ML handoff 기준만(B7) · DISABLED는 roadmap(B22) · branding은 제품명 유지(B23)
 - **Backlog:** Closeout 메타 기록 (B23 상태 변경 없음)
 
+### R12 Candidate Prioritization Draft
+
+- **범위:** docs — R11-S8-9 closeout 이후 R12/R13 후보 우선순위 **초안**. 구현 착수 문서 아님 · 범위·일정·순서 미확정 · 최종은 별도 승인.
+- **변경:** `THERMOps_R12_Candidate_Prioritization_Draft.md` · README 링크 · Closeout/Backlog 후속 참고 · check-pages 정적 검사
+- **검증:** `cd frontend && npm run build` · pages/studio/ops/e2e · package/requirements diff empty
+- **제외:** R12 기능 구현 · backend/API/DB/FE 본기능 · registry/palette · DISABLED 활성화 · DQ/Feature/Train/Predict/Notification 본구현 · package 변경
+- **Known limitation:** 점수표는 의사결정 참고용 · 추천 초안은 A→B→C→D→E→R13 · Notification은 운영 요구 시 병렬/앞당김 검토 가능
+- **추천 초안(미확정):** R12-A DQ Gate → R12-B Feature → R12-C Training → R12-D Prediction → R12-E Notification → R13
+
 ## 설계 문서 참조
 
 - `docs/md/THERMOps_R11-S8-9_Backlog.md`
@@ -2005,6 +2014,7 @@ cd frontend && node scripts/check-visual-pipeline-studio.mjs
 - `docs/md/THERMOps_R11-S8-9-26_DISABLED_Components_Implementation_Roadmap.md`
 - `docs/md/THERMOps_R11-S8-9-27_Product_Branding_Generalization.md`
 - `docs/md/THERMOps_R11-S8-9-28_Visual_Pipeline_Closeout_Release_Note.md`
+- `docs/md/THERMOps_R12_Candidate_Prioritization_Draft.md`
 - `docs/md/THERMOps_R11-S8-8_열수요예측_Full_Scenario_이용가이드.md` — 대표 예시 시나리오
 - `docs/md/THERMOps_R11-S8-7_Notification_설계.md`
 - `docs/md/THERMOps_R11-S8-0_Run_History_Progress_Retry_설계.md`

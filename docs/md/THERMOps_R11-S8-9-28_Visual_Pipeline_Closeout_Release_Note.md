@@ -300,6 +300,7 @@ docker compose -f docker-compose.traefik.yml --env-file .env.deploy up -d --buil
 
 ## 14. 관련 문서
 
+- [THERMOps_R12_Candidate_Prioritization_Draft.md](./THERMOps_R12_Candidate_Prioritization_Draft.md) — R12/R13 후보 우선순위 초안 (구현 착수 문서 아님 · 범위·순서 미확정)
 - [THERMOps_R11-S8-9_Backlog.md](./THERMOps_R11-S8-9_Backlog.md)
 - [THERMOps_R11-S8-9-25_Data_Load_to_ML_Workflow_Handoff_Guide.md](./THERMOps_R11-S8-9-25_Data_Load_to_ML_Workflow_Handoff_Guide.md)
 - [THERMOps_R11-S8-9-26_DISABLED_Components_Implementation_Roadmap.md](./THERMOps_R11-S8-9-26_DISABLED_Components_Implementation_Roadmap.md)
