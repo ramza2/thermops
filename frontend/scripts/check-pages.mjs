@@ -1157,6 +1157,77 @@ function assertDisabledComponentsRoadmap() {
   }
 }
 
+/** B23: Product Branding Generalization (docs + Header tagline; no ID/route changes). */
+function assertProductBrandingGeneralization() {
+  const guidePath = path.join(
+    REPO_ROOT,
+    "docs/md/THERMOps_R11-S8-9-27_Product_Branding_Generalization.md",
+  );
+  if (!fs.existsSync(guidePath)) {
+    throw new Error("B23 regression: Product Branding Generalization markdown missing");
+  }
+  const guide = fs.readFileSync(guidePath, "utf8");
+  for (const token of [
+    "THERMOps 제품명은 유지",
+    "대표 적용 예시",
+    "Data Load / Workflow",
+    "route / API / component ID",
+  ]) {
+    if (!guide.includes(token)) {
+      throw new Error(`B23 regression: Branding guide missing '${token}'`);
+    }
+  }
+  for (const banned of [
+    "열수요 전용 플랫폼",
+    "열수요 예측 전용 시스템",
+    "자동 학습 실행",
+    "자동 예측 실행",
+    "즉시 예측 실행",
+    "ML Workflow가 이미 구현",
+    "DISABLED 컴포넌트 활성화 완료",
+    "신규 node 구현 완료",
+    "R10 설정 반영",
+  ]) {
+    if (guide.includes(banned)) {
+      throw new Error(`B23 regression: Branding guide must not claim '${banned}'`);
+    }
+  }
+
+  const readme = fs.readFileSync(path.join(REPO_ROOT, "README.md"), "utf8");
+  if (!readme.includes("THERMOps_R11-S8-9-27_Product_Branding_Generalization.md")) {
+    throw new Error("B23 regression: README must link Branding Generalization guide");
+  }
+  if (!readme.includes("R11-S8-9-27")) {
+    throw new Error("B23 regression: README must mention R11-S8-9-27");
+  }
+  const readmeHead = readme.slice(0, 800);
+  for (const banned of [
+    "열수요 전용 플랫폼",
+    "열수요 예측 전용 시스템",
+    "한국지역난방공사",
+  ]) {
+    if (readmeHead.includes(banned)) {
+      throw new Error(`B23 regression: README intro must not include '${banned}'`);
+    }
+  }
+
+  const header = fs.readFileSync(path.join(FRONTEND_SRC, "components/Header.tsx"), "utf8");
+  if (header.includes("한국지역난방공사")) {
+    throw new Error("B23 regression: Header must not hardcode customer name");
+  }
+  if (!header.includes("Data Load / Workflow")) {
+    throw new Error("B23 regression: Header tagline should use generic Data Load / Workflow wording");
+  }
+
+  const backlog = fs.readFileSync(path.join(REPO_ROOT, "docs/md/THERMOps_R11-S8-9_Backlog.md"), "utf8");
+  if (!backlog.includes("R11-S8-9-27") || !backlog.includes("B23(done)")) {
+    throw new Error("B23 regression: Backlog must reflect B23 done / R11-S8-9-27");
+  }
+  if (!/\|\s*B23\s*\|[\s\S]*?\|\s*\*\*done\*\*\s*\|\s*\*\*R11-S8-9-27\*\*/.test(backlog)) {
+    throw new Error("B23 regression: Backlog table row B23 must be done with R11-S8-9-27");
+  }
+}
+
 /** B5: Ops action badge PoC (read-model, no notification table / read-unread). */
 function assertOpsActionBadgePoC() {
   const helper = fs.readFileSync(path.join(FRONTEND_SRC, "utils/opsActionRequired.ts"), "utf8");
@@ -1304,6 +1375,7 @@ assertStarterTemplateUx();
 assertDomainPresetFramework();
 assertDataLoadMlHandoffGuide();
 assertDisabledComponentsRoadmap();
+assertProductBrandingGeneralization();
 
 const browser = await chromium.launch();
 const page = await browser.newPage();

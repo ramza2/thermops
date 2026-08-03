@@ -3,7 +3,7 @@ import { Bell, User } from "lucide-react";
 export function Header() {
   return (
     <header className="h-14 bg-white border-b border-slate-200 flex items-center justify-between px-6 shrink-0">
-      <div className="text-sm text-slate-500">한국지역난방공사 · 열수요 예측 모델 운영 자동화</div>
+      <div className="text-sm text-slate-500">Data Load / Workflow · MLOps 운영 플랫폼</div>
       <div className="flex items-center gap-4">
         <button className="relative text-slate-500 hover:text-slate-700">
           <Bell className="w-5 h-5" />

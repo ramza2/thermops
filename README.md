@@ -1,6 +1,6 @@
-# THERMOps: 열수요 예측 모델 운영 자동화 플랫폼
+# THERMOps
 
-오픈소스 기반 열수요 예측 MLOps 스타터 솔루션입니다. 데이터 적재부터 Feature 구성, 모델 학습, 배치 예측, 성능 모니터링까지 전체 운영 흐름을 웹 UI에서 시연할 수 있습니다.
+오픈소스 기반 **Data Load / Workflow · MLOps 운영 플랫폼**입니다. REST Source → Transform → Upsert → Schedule · Ops로 표준 데이터 적재와 운영 가시성을 구성하며, Feature · 학습 · 예측은 후속 연계 후보로 둡니다. **열수요 예측은 대표 적용 예시**입니다.
 
 ## 프로젝트 구조
 
@@ -1980,12 +1980,22 @@ cd frontend && node scripts/check-visual-pipeline-studio.mjs
 - **Known limitation:** roadmap 문서이며 DISABLED component 본구현/활성화는 아님
 - **Backlog:** B22 done
 
+### R11-S8-9-27 Product Branding Generalization
+
+- **범위:** docs + Header 문구 — B23. THERMOps 제품명 유지, Visual Pipeline을 범용 Data Load/Workflow로 설명, 열수요는 대표 예시.
+- **변경:** `THERMOps_R11-S8-9-27_Product_Branding_Generalization.md` · README 서두 · Header tagline · Backlog B23 done · check-pages 정적 검사
+- **검증:** `cd frontend && npm run build` · pages/studio/ops/e2e · package/requirements diff empty
+- **제외:** 제품명·ID·route/API/DB/package 변경 · DISABLED 활성화 · ML 본구현 · 「R10 설정 반영」재노출 금지
+- **Known limitation:** branding 문구 정리이며 제품명·ID·route/API 변경은 아님 · 과거 제안서 일괄 개편 제외
+- **Backlog:** B23 done
+
 ## 설계 문서 참조
 
 - `docs/md/THERMOps_R11-S8-9_Backlog.md`
 - `docs/md/THERMOps_R11-S8-9-25_Data_Load_to_ML_Workflow_Handoff_Guide.md`
 - `docs/md/THERMOps_R11-S8-9-26_DISABLED_Components_Implementation_Roadmap.md`
-- `docs/md/THERMOps_R11-S8-8_열수요예측_Full_Scenario_이용가이드.md`
+- `docs/md/THERMOps_R11-S8-9-27_Product_Branding_Generalization.md`
+- `docs/md/THERMOps_R11-S8-8_열수요예측_Full_Scenario_이용가이드.md` — 대표 예시 시나리오
 - `docs/md/THERMOps_R11-S8-7_Notification_설계.md`
 - `docs/md/THERMOps_R11-S8-0_Run_History_Progress_Retry_설계.md`
 - `docs/md/THERMOps_R11-S7-15_Visual_Pipeline_운영기능_마감정리.md`
