@@ -1047,6 +1047,60 @@ function assertDomainPresetFramework() {
   }
 }
 
+/** B7: Data Load → ML Workflow Handoff Guide (docs only, no ML implementation claims). */
+function assertDataLoadMlHandoffGuide() {
+  const guidePath = path.join(
+    REPO_ROOT,
+    "docs/md/THERMOps_R11-S8-9-25_Data_Load_to_ML_Workflow_Handoff_Guide.md",
+  );
+  if (!fs.existsSync(guidePath)) {
+    throw new Error("B7 regression: Handoff Guide markdown missing");
+  }
+  const guide = fs.readFileSync(guidePath, "utf8");
+  for (const token of [
+    "운영·설계 가이드",
+    "신규 ML 학습/예측 기능을 구현하지 않는다",
+    "Handoff 대상 산출물",
+    "Handoff 전 검증",
+    "Run 상태별 handoff",
+    "Domain Preset",
+    "backend source of truth가 아니다",
+    "후속 구현 Roadmap",
+    "예시",
+  ]) {
+    if (!guide.includes(token)) {
+      throw new Error(`B7 regression: Handoff Guide missing '${token}'`);
+    }
+  }
+  for (const banned of [
+    "자동 학습 실행",
+    "ML Workflow가 이미 구현",
+    "즉시 예측 실행",
+    "자동 예측 실행",
+    "R10 설정 반영",
+  ]) {
+    if (guide.includes(banned)) {
+      throw new Error(`B7 regression: Handoff Guide must not claim '${banned}'`);
+    }
+  }
+
+  const readme = fs.readFileSync(path.join(REPO_ROOT, "README.md"), "utf8");
+  if (!readme.includes("THERMOps_R11-S8-9-25_Data_Load_to_ML_Workflow_Handoff_Guide.md")) {
+    throw new Error("B7 regression: README must link Handoff Guide");
+  }
+  if (!readme.includes("R11-S8-9-25")) {
+    throw new Error("B7 regression: README must mention R11-S8-9-25");
+  }
+
+  const backlog = fs.readFileSync(path.join(REPO_ROOT, "docs/md/THERMOps_R11-S8-9_Backlog.md"), "utf8");
+  if (!backlog.includes("R11-S8-9-25") || !backlog.includes("B7(done)")) {
+    throw new Error("B7 regression: Backlog must reflect B7 done / R11-S8-9-25");
+  }
+  if (!/\|\s*B7\s*\|[\s\S]*?\|\s*\*\*done\*\*\s*\|\s*\*\*R11-S8-9-25\*\*/.test(backlog)) {
+    throw new Error("B7 regression: Backlog table row B7 must be done with R11-S8-9-25");
+  }
+}
+
 /** B5: Ops action badge PoC (read-model, no notification table / read-unread). */
 function assertOpsActionBadgePoC() {
   const helper = fs.readFileSync(path.join(FRONTEND_SRC, "utils/opsActionRequired.ts"), "utf8");
@@ -1192,6 +1246,7 @@ assertSchemaKeyMappingHelper();
 assertOpsActionBadgePoC();
 assertStarterTemplateUx();
 assertDomainPresetFramework();
+assertDataLoadMlHandoffGuide();
 
 const browser = await chromium.launch();
 const page = await browser.newPage();

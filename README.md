@@ -1962,9 +1962,19 @@ cd frontend && node scripts/check-visual-pipeline-studio.mjs
 - **Known limitation:** FE-only preset hint · Type B 자동 설정 없음 · 실행 가능한 완성 preset 아님 · UI state만 보관(reload 시 소실)
 - **Backlog:** B2 done
 
+### R11-S8-9-25 Data Load → ML Workflow Handoff Guide
+
+- **범위:** docs — B7. Data Load Visual Pipeline 산출물을 후속 ML Workflow로 넘기기 위한 handoff 기준 가이드.
+- **변경:** `THERMOps_R11-S8-9-25_Data_Load_to_ML_Workflow_Handoff_Guide.md` · README 링크 · Backlog B7 done · check-pages 정적 검사
+- **검증:** `cd frontend && npm run build` · pages/studio/ops/e2e · package/requirements diff empty
+- **제외:** ML 학습/예측 구현 · Feature Store · Airflow/MLflow · backend/API/DB · package · 「R10 설정 반영」재노출 금지
+- **Known limitation:** 가이드 문서이며 ML Workflow 구현이 아님 · 자동 학습/예측 연계 없음
+- **Backlog:** B7 done
+
 ## 설계 문서 참조
 
 - `docs/md/THERMOps_R11-S8-9_Backlog.md`
+- `docs/md/THERMOps_R11-S8-9-25_Data_Load_to_ML_Workflow_Handoff_Guide.md`
 - `docs/md/THERMOps_R11-S8-8_열수요예측_Full_Scenario_이용가이드.md`
 - `docs/md/THERMOps_R11-S8-7_Notification_설계.md`
 - `docs/md/THERMOps_R11-S8-0_Run_History_Progress_Retry_설계.md`

@@ -30,7 +30,7 @@
 | B4 | Catch-up 안내 개선 | missed 의미·window·경고 카피 강화 (Studio Catch-up 섹션) | C | **done** | **R11-S8-9-19** |
 | B5 | Notification badge PoC | S8-7-1 read-model badge (Ops/Studio). S8-7 설계 범위 | D | **done** | **R11-S8-9-21** |
 | B6 | 실패 원인 요약 개선 | Run Detail에 step+reason 한줄 요약 | C | **done** | **R11-S8-9-16** |
-| B7 | Data Load → ML Workflow Handoff Guide | Visual Pipeline 적재 이후 Feature Dataset / Training / Batch Prediction으로 넘기는 **범용 handoff 가이드** (docs) | D | open | 구 B7 확장 |
+| B7 | Data Load → ML Workflow Handoff Guide | Visual Pipeline 적재 이후 Feature Dataset / Training / Batch Prediction으로 넘기는 **범용 handoff 가이드** (docs) | D | **done** | **R11-S8-9-25** |
 | B8 | PARTIAL 중복 적재 가시화 | Retry 전 영향 범위 힌트 | C | **done** | **R11-S8-9-20** |
 | B9 | Schedule skip 이력 UI | `ACTIVE_RUN_EXISTS` 등 skip 반복 가시화 | C | **done** | **R11-S8-9-18** |
 | B10 | Ops 「조치 필요」카드 | stuck / failures / catch-up 후보 그룹 (notification 전단계) | C | **done** | **R11-S8-9-17** |
@@ -83,7 +83,7 @@ B4(done), B6(done), B8(done), B9(done), B10(done), B18(done), B26(done)
 
 ### D — 범용 MLOps 확장 / 문서 / 장기
 
-B5(done), B7, B12(done), B22, B23
+B5(done), B7(done), B12(done), B22, B23
 
 ---
 
@@ -115,6 +115,7 @@ B5(done), B7, B12(done), B22, B23
 | R11-S8-9-22 | B3 | Schema / Key Mapping Helper (FE-only, 자동 저장·물리 스키마 변경 없음) | |
 | R11-S8-9-23 | B1 | Visual Pipeline Starter Template (FE-only skeleton, Type B 비움) | |
 | R11-S8-9-24 | B2 | Domain Preset Framework (FE-only hint, Type B 자동 설정 없음) | |
+| R11-S8-9-25 | B7 | Data Load → ML Workflow Handoff Guide (docs, ML 구현 아님) | |
 
 ---
 
@@ -149,11 +150,13 @@ B5(done), B7, B12(done), B22, B23
 | 2026-07-31 | B3 → `done` (S8-9-22). Schema / Key Mapping Helper (FE-only 진단·추천·form 적용, 자동 저장/물리 스키마 변경 없음) |
 | 2026-07-31 | B1 → `done` (S8-9-23). Visual Pipeline Starter Template (FE-only skeleton, 자동 저장/실행 없음, Type B 비움) |
 | 2026-08-03 | B2 → `done` (S8-9-24). Domain Preset Framework (FE-only preset hint, Type B 자동 설정 없음, 실행 가능한 완성 preset 아님) |
+| 2026-08-03 | B7 → `done` (S8-9-25). Data Load → ML Workflow Handoff Guide (docs only; ML Workflow 구현 아님) |
 
 ---
 
 ## 7. 관련 문서
 
+- [R11-S8-9-25 Data Load → ML Workflow Handoff Guide](./THERMOps_R11-S8-9-25_Data_Load_to_ML_Workflow_Handoff_Guide.md) — handoff 기준 (가이드, ML 구현 아님)
 - [R11-S8-8 열수요 예측 Full Scenario 이용가이드](./THERMOps_R11-S8-8_열수요예측_Full_Scenario_이용가이드.md) — 운영자 여정 (backlog 본편 제외)
 - [R11-S8-0 Run History / Progress / Retry 설계](./THERMOps_R11-S8-0_Run_History_Progress_Retry_설계.md)
 - [R11-S8-7 Notification 설계](./THERMOps_R11-S8-7_Notification_설계.md)
