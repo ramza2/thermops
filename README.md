@@ -1989,12 +1989,22 @@ cd frontend && node scripts/check-visual-pipeline-studio.mjs
 - **Known limitation:** branding 문구 정리이며 제품명·ID·route/API 변경은 아님 · 과거 제안서 일괄 개편 제외
 - **Backlog:** B23 done
 
+### R11-S8-9-28 Visual Pipeline Studio/Ops Closeout Release Note
+
+- **범위:** docs — R11-S8-9 전체 closeout / release note. B1~B27 완료 요약 · smoke · 배포 전 확인 · known limitation · R12/R13 후속 후보.
+- **변경:** `THERMOps_R11-S8-9-28_Visual_Pipeline_Closeout_Release_Note.md` · README 링크 · Backlog §5/§6 · check-pages 정적 검사
+- **검증:** `cd frontend && npm run build` · pages/studio/ops/e2e · package/requirements diff empty
+- **제외:** 신규 기능 · backend/API/DB/worker · FE 본기능 · registry/palette · DISABLED 활성화 · ML 본구현 · package 변경
+- **Known limitation:** closeout 문서이며 신규 기능 구현이 아님 · ML handoff 기준만(B7) · DISABLED는 roadmap(B22) · branding은 제품명 유지(B23)
+- **Backlog:** Closeout 메타 기록 (B23 상태 변경 없음)
+
 ## 설계 문서 참조
 
 - `docs/md/THERMOps_R11-S8-9_Backlog.md`
 - `docs/md/THERMOps_R11-S8-9-25_Data_Load_to_ML_Workflow_Handoff_Guide.md`
 - `docs/md/THERMOps_R11-S8-9-26_DISABLED_Components_Implementation_Roadmap.md`
 - `docs/md/THERMOps_R11-S8-9-27_Product_Branding_Generalization.md`
+- `docs/md/THERMOps_R11-S8-9-28_Visual_Pipeline_Closeout_Release_Note.md`
 - `docs/md/THERMOps_R11-S8-8_열수요예측_Full_Scenario_이용가이드.md` — 대표 예시 시나리오
 - `docs/md/THERMOps_R11-S8-7_Notification_설계.md`
 - `docs/md/THERMOps_R11-S8-0_Run_History_Progress_Retry_설계.md`

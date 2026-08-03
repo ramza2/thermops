@@ -1228,6 +1228,63 @@ function assertProductBrandingGeneralization() {
   }
 }
 
+/** R11-S8-9-28: Visual Pipeline Closeout Release Note (docs only; not a feature implementation). */
+function assertVisualPipelineCloseoutReleaseNote() {
+  const guidePath = path.join(
+    REPO_ROOT,
+    "docs/md/THERMOps_R11-S8-9-28_Visual_Pipeline_Closeout_Release_Note.md",
+  );
+  if (!fs.existsSync(guidePath)) {
+    throw new Error("S8-9-28 regression: Closeout Release Note markdown missing");
+  }
+  const guide = fs.readFileSync(guidePath, "utf8");
+  for (const token of [
+    "신규 기능 구현 문서가 아니며",
+    "ML Workflow / 학습·예측 실행 경로는 구현하지 않음",
+    "DISABLED components는 활성화되지 않음",
+    "후속 후보",
+    "Data Load / Workflow",
+    "check-visual-pipeline-e2e",
+    "Studio Onboarding",
+  ]) {
+    if (!guide.includes(token)) {
+      throw new Error(`S8-9-28 regression: Closeout note missing '${token}'`);
+    }
+  }
+  for (const banned of [
+    "자동 학습 실행",
+    "자동 예측 실행",
+    "즉시 예측 실행",
+    "ML Workflow가 이미 구현",
+    "DISABLED 컴포넌트 활성화 완료",
+    "신규 node 구현 완료",
+    "R10 설정 반영",
+  ]) {
+    if (guide.includes(banned)) {
+      throw new Error(`S8-9-28 regression: Closeout note must not claim '${banned}'`);
+    }
+  }
+
+  const readme = fs.readFileSync(path.join(REPO_ROOT, "README.md"), "utf8");
+  if (!readme.includes("THERMOps_R11-S8-9-28_Visual_Pipeline_Closeout_Release_Note.md")) {
+    throw new Error("S8-9-28 regression: README must link Closeout Release Note");
+  }
+  if (!readme.includes("R11-S8-9-28")) {
+    throw new Error("S8-9-28 regression: README must mention R11-S8-9-28");
+  }
+
+  const backlog = fs.readFileSync(path.join(REPO_ROOT, "docs/md/THERMOps_R11-S8-9_Backlog.md"), "utf8");
+  if (!backlog.includes("R11-S8-9-28")) {
+    throw new Error("S8-9-28 regression: Backlog must record R11-S8-9-28");
+  }
+  if (!backlog.includes("Closeout Release Note")) {
+    throw new Error("S8-9-28 regression: Backlog must mention Closeout Release Note");
+  }
+  if (!backlog.includes("신규 기능 구현 아님")) {
+    throw new Error("S8-9-28 regression: Backlog closeout note must state docs-only / not a feature implementation");
+  }
+}
+
 /** B5: Ops action badge PoC (read-model, no notification table / read-unread). */
 function assertOpsActionBadgePoC() {
   const helper = fs.readFileSync(path.join(FRONTEND_SRC, "utils/opsActionRequired.ts"), "utf8");
@@ -1376,6 +1433,7 @@ assertDomainPresetFramework();
 assertDataLoadMlHandoffGuide();
 assertDisabledComponentsRoadmap();
 assertProductBrandingGeneralization();
+assertVisualPipelineCloseoutReleaseNote();
 
 const browser = await chromium.launch();
 const page = await browser.newPage();

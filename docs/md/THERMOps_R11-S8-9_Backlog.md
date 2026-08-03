@@ -117,7 +117,10 @@ B5(done), B7(done), B12(done), B22(done), B23(done)
 | R11-S8-9-24 | B2 | Domain Preset Framework (FE-only hint, Type B 자동 설정 없음) | |
 | R11-S8-9-25 | B7 | Data Load → ML Workflow Handoff Guide (docs, ML 구현 아님) | |
 | R11-S8-9-26 | B22 | DISABLED Components Implementation Roadmap (docs, 활성화 아님) | |
-| R11-S8-9-27 | B23 | Product Branding Generalization (문구 정리, ID/route 변경 아님) | |
+| R11-S8-9-27 | B23 | Product Branding Generalization (문구 정리, ID/route 변경 아님) | `f1fa489` |
+| R11-S8-9-28 | Closeout | Visual Pipeline Studio/Ops Closeout Release Note (docs only; 신규 기능 구현 아님) | |
+
+> **Known limitation (closeout):** R11-S8-9-28은 closeout / release note 문서이며 신규 기능 구현이 아니다. B1~B27 상태는 유지하고 B23을 변경하지 않는다.
 
 ---
 
@@ -155,11 +158,13 @@ B5(done), B7(done), B12(done), B22(done), B23(done)
 | 2026-08-03 | B7 → `done` (S8-9-25). Data Load → ML Workflow Handoff Guide (docs only; ML Workflow 구현 아님) |
 | 2026-08-03 | B22 → `done` (S8-9-26). DISABLED Components Implementation Roadmap (docs only; 본구현/활성화 아님) |
 | 2026-08-03 | B23 → `done` (S8-9-27). Product Branding Generalization (문구 정리; 제품명·ID·route/API 변경 아님) |
+| 2026-08-03 | R11-S8-9-28 Closeout Release Note 추가 (docs only; B1~B27 done 요약; 신규 기능 구현 아님) |
 
 ---
 
 ## 7. 관련 문서
 
+- [R11-S8-9-28 Visual Pipeline Studio/Ops Closeout Release Note](./THERMOps_R11-S8-9-28_Visual_Pipeline_Closeout_Release_Note.md) — S8-9 closeout / release note (신규 기능 구현 아님)
 - [R11-S8-9-27 Product Branding Generalization](./THERMOps_R11-S8-9-27_Product_Branding_Generalization.md) — branding/terminology (ID·route 변경 아님)
 - [R11-S8-9-26 DISABLED Components Implementation Roadmap](./THERMOps_R11-S8-9-26_DISABLED_Components_Implementation_Roadmap.md) — DISABLED/후순위 component roadmap (활성화 아님)
 - [R11-S8-9-25 Data Load → ML Workflow Handoff Guide](./THERMOps_R11-S8-9-25_Data_Load_to_ML_Workflow_Handoff_Guide.md) — handoff 기준 (가이드, ML 구현 아님)
