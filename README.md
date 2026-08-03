@@ -1971,10 +1971,20 @@ cd frontend && node scripts/check-visual-pipeline-studio.mjs
 - **Known limitation:** 가이드 문서이며 ML Workflow 구현이 아님 · 자동 학습/예측 연계 없음
 - **Backlog:** B7 done
 
+### R11-S8-9-26 DISABLED Components Implementation Roadmap
+
+- **범위:** docs — B22. DISABLED/후순위 Visual Pipeline component 본구현 판단 기준·roadmap.
+- **변경:** `THERMOps_R11-S8-9-26_DISABLED_Components_Implementation_Roadmap.md` · README 링크 · Backlog B22 done · check-pages 정적 검사
+- **검증:** `cd frontend && npm run build` · pages/studio/ops/e2e · package/requirements diff empty
+- **제외:** DISABLED 활성화 · 신규 node · registry/palette 변경 · ML/DQ 본구현 · backend/API/DB · package · 「R10 설정 반영」재노출 금지
+- **Known limitation:** roadmap 문서이며 DISABLED component 본구현/활성화는 아님
+- **Backlog:** B22 done
+
 ## 설계 문서 참조
 
 - `docs/md/THERMOps_R11-S8-9_Backlog.md`
 - `docs/md/THERMOps_R11-S8-9-25_Data_Load_to_ML_Workflow_Handoff_Guide.md`
+- `docs/md/THERMOps_R11-S8-9-26_DISABLED_Components_Implementation_Roadmap.md`
 - `docs/md/THERMOps_R11-S8-8_열수요예측_Full_Scenario_이용가이드.md`
 - `docs/md/THERMOps_R11-S8-7_Notification_설계.md`
 - `docs/md/THERMOps_R11-S8-0_Run_History_Progress_Retry_설계.md`

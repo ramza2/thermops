@@ -1101,6 +1101,62 @@ function assertDataLoadMlHandoffGuide() {
   }
 }
 
+/** B22: DISABLED Components Implementation Roadmap (docs only, no enablement). */
+function assertDisabledComponentsRoadmap() {
+  const guidePath = path.join(
+    REPO_ROOT,
+    "docs/md/THERMOps_R11-S8-9-26_DISABLED_Components_Implementation_Roadmap.md",
+  );
+  if (!fs.existsSync(guidePath)) {
+    throw new Error("B22 regression: DISABLED Components Roadmap markdown missing");
+  }
+  const guide = fs.readFileSync(guidePath, "utf8");
+  for (const token of [
+    "기획·설계 roadmap",
+    "활성화하거나 신규 node를 구현하지 않는다",
+    "VP_REST_API_SOURCE",
+    "VP_DATA_QUALITY",
+    "VP_FEATURE_BUILD",
+    "VP_MODEL_TRAINING",
+    "VP_BATCH_PREDICTION",
+    "VP_NOTIFICATION",
+    "R12-A",
+    "Coming later",
+  ]) {
+    if (!guide.includes(token)) {
+      throw new Error(`B22 regression: Roadmap missing '${token}'`);
+    }
+  }
+  for (const banned of [
+    "DISABLED 컴포넌트 활성화 완료",
+    "신규 node 구현 완료",
+    "자동 학습 실행",
+    "즉시 예측 실행",
+    "자동 예측 실행",
+    "R10 설정 반영",
+  ]) {
+    if (guide.includes(banned)) {
+      throw new Error(`B22 regression: Roadmap must not claim '${banned}'`);
+    }
+  }
+
+  const readme = fs.readFileSync(path.join(REPO_ROOT, "README.md"), "utf8");
+  if (!readme.includes("THERMOps_R11-S8-9-26_DISABLED_Components_Implementation_Roadmap.md")) {
+    throw new Error("B22 regression: README must link DISABLED Components Roadmap");
+  }
+  if (!readme.includes("R11-S8-9-26")) {
+    throw new Error("B22 regression: README must mention R11-S8-9-26");
+  }
+
+  const backlog = fs.readFileSync(path.join(REPO_ROOT, "docs/md/THERMOps_R11-S8-9_Backlog.md"), "utf8");
+  if (!backlog.includes("R11-S8-9-26") || !backlog.includes("B22(done)")) {
+    throw new Error("B22 regression: Backlog must reflect B22 done / R11-S8-9-26");
+  }
+  if (!/\|\s*B22\s*\|[\s\S]*?\|\s*\*\*done\*\*\s*\|\s*\*\*R11-S8-9-26\*\*/.test(backlog)) {
+    throw new Error("B22 regression: Backlog table row B22 must be done with R11-S8-9-26");
+  }
+}
+
 /** B5: Ops action badge PoC (read-model, no notification table / read-unread). */
 function assertOpsActionBadgePoC() {
   const helper = fs.readFileSync(path.join(FRONTEND_SRC, "utils/opsActionRequired.ts"), "utf8");
@@ -1247,6 +1303,7 @@ assertOpsActionBadgePoC();
 assertStarterTemplateUx();
 assertDomainPresetFramework();
 assertDataLoadMlHandoffGuide();
+assertDisabledComponentsRoadmap();
 
 const browser = await chromium.launch();
 const page = await browser.newPage();

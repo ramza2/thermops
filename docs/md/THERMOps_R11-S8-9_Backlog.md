@@ -45,7 +45,7 @@
 | B19 | Studio REST — Data Source 인라인 생성 | Inspector에서 REST_API Data Source 최소 생성(이름·base URL·domain, auth=NONE) 후 ID 자동 선택. 선택 UI는 B11 검색/더 보기/새로고침 재사용. secret/credential 저장 UI 없음 | B | **done** | **R11-S8-9-9** |
 | B20 | Studio Upsert — 표준 데이터셋 인라인 생성 | Inspector에서 Standard Dataset 선택·DRAFT 인라인 생성 후 `standard_dataset_id`+`target_table` 자동 반영. 물리 테이블/ACTIVE/DROP 제외 | B | **done** | **R11-S8-9-10** |
 | B21 | Transform 출력 → 표준 테이블 컬럼 자동 제안 | Transform 스키마/미리보기에서 Upsert·표준 데이터셋 컬럼·conflict key 제안. B15·B20 연계 | B | **done** | **R11-S8-9-11** |
-| B22 | DISABLED(Coming later) 컴포넌트 본구현 | Palette DISABLED 노드 활성화 로드맵. **DATA_INPUT:** `VP_DB_SOURCE`, `VP_CSV_SOURCE`, `VP_FORECAST_PROVIDER`. **QUALITY:** `VP_DATA_QUALITY`. **FEATURE:** `VP_FEATURE_BUILD`. **MODEL:** `VP_MODEL_TRAINING`. **PREDICTION:** `VP_BATCH_PREDICTION`. **OPERATION:** `VP_NOTIFICATION` (S8-7 운영 알림과 구분) | D | open | 우선순위 별도 승인 |
+| B22 | DISABLED(Coming later) 컴포넌트 본구현 | Palette DISABLED 노드 활성화 로드맵. **DATA_INPUT:** `VP_DB_SOURCE`, `VP_CSV_SOURCE`, `VP_FORECAST_PROVIDER`. **QUALITY:** `VP_DATA_QUALITY`. **FEATURE:** `VP_FEATURE_BUILD`. **MODEL:** `VP_MODEL_TRAINING`. **PREDICTION:** `VP_BATCH_PREDICTION`. **OPERATION:** `VP_NOTIFICATION` (S8-7 운영 알림과 구분) | D | **done** | **R11-S8-9-26** |
 | B23 | Product Branding Generalization | 특정 고객/도메인 문구를 범용 MLOps 운영 플랫폼 기준으로 정리. 고객명·도메인명은 demo scenario / tenant / project label로 분리 | D | open | |
 | B24 | 표준 데이터셋 보관(archive) UI | `POST /standard-dataset-types/{id}/archive` FE 보관 버튼·confirm·refresh. 물리 테이블 DROP/unarchive 제외 | A | **done** | **R11-S8-9-6** |
 | B25 | REST API 연결 목록 로드 버그 | `ApiConnectorPanel`이 `GET /data-sources?size=200` 호출 → API max 100으로 **422** → Wizard 데이터 소스 셀렉트 항상 빈 목록. `DATA_SOURCE_LIST_PAGE_SIZE=100` + 등록/수정/삭제 후 패널 refresh + empty/error 구분 | A | **done** | **R11-S8-9-2**. 100건 초과 1페이지 제한 → B11 |
@@ -83,7 +83,7 @@ B4(done), B6(done), B8(done), B9(done), B10(done), B18(done), B26(done)
 
 ### D — 범용 MLOps 확장 / 문서 / 장기
 
-B5(done), B7(done), B12(done), B22, B23
+B5(done), B7(done), B12(done), B22(done), B23
 
 ---
 
@@ -116,6 +116,7 @@ B5(done), B7(done), B12(done), B22, B23
 | R11-S8-9-23 | B1 | Visual Pipeline Starter Template (FE-only skeleton, Type B 비움) | |
 | R11-S8-9-24 | B2 | Domain Preset Framework (FE-only hint, Type B 자동 설정 없음) | |
 | R11-S8-9-25 | B7 | Data Load → ML Workflow Handoff Guide (docs, ML 구현 아님) | |
+| R11-S8-9-26 | B22 | DISABLED Components Implementation Roadmap (docs, 활성화 아님) | |
 
 ---
 
@@ -151,11 +152,13 @@ B5(done), B7(done), B12(done), B22, B23
 | 2026-07-31 | B1 → `done` (S8-9-23). Visual Pipeline Starter Template (FE-only skeleton, 자동 저장/실행 없음, Type B 비움) |
 | 2026-08-03 | B2 → `done` (S8-9-24). Domain Preset Framework (FE-only preset hint, Type B 자동 설정 없음, 실행 가능한 완성 preset 아님) |
 | 2026-08-03 | B7 → `done` (S8-9-25). Data Load → ML Workflow Handoff Guide (docs only; ML Workflow 구현 아님) |
+| 2026-08-03 | B22 → `done` (S8-9-26). DISABLED Components Implementation Roadmap (docs only; 본구현/활성화 아님) |
 
 ---
 
 ## 7. 관련 문서
 
+- [R11-S8-9-26 DISABLED Components Implementation Roadmap](./THERMOps_R11-S8-9-26_DISABLED_Components_Implementation_Roadmap.md) — DISABLED/후순위 component roadmap (활성화 아님)
 - [R11-S8-9-25 Data Load → ML Workflow Handoff Guide](./THERMOps_R11-S8-9-25_Data_Load_to_ML_Workflow_Handoff_Guide.md) — handoff 기준 (가이드, ML 구현 아님)
 - [R11-S8-8 열수요 예측 Full Scenario 이용가이드](./THERMOps_R11-S8-8_열수요예측_Full_Scenario_이용가이드.md) — 운영자 여정 (backlog 본편 제외)
 - [R11-S8-0 Run History / Progress / Retry 설계](./THERMOps_R11-S8-0_Run_History_Progress_Retry_설계.md)
