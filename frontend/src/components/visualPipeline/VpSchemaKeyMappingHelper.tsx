@@ -5,12 +5,16 @@ import {
   formatConflictKeysLabel,
   type SchemaKeyMappingSummary,
 } from "@/utils/schemaKeyMappingHelper";
+import type { DomainPreset } from "@/utils/domainPresetCatalog";
+import { formatDomainPresetKeys } from "@/utils/domainPresetCatalog";
 
 export type VpSchemaKeyMappingHelperProps = {
   summary: SchemaKeyMappingSummary;
   disabled?: boolean;
   onApplyRecommendedKeys?: (keys: string[]) => void;
   defaultOpen?: boolean;
+  /** B2: optional Domain Preset hint (keys/columns). Does not auto-apply. */
+  domainPreset?: DomainPreset | null;
 };
 
 export function VpSchemaKeyMappingHelper({
@@ -18,6 +22,7 @@ export function VpSchemaKeyMappingHelper({
   disabled,
   onApplyRecommendedKeys,
   defaultOpen = true,
+  domainPreset = null,
 }: VpSchemaKeyMappingHelperProps) {
   const [open, setOpen] = useState(defaultOpen);
 
@@ -45,6 +50,30 @@ export function VpSchemaKeyMappingHelper({
 
       {!open ? null : (
         <div className="space-y-2" data-testid="visual-pipeline-schema-key-helper-body">
+          {domainPreset ? (
+            <div
+              className="rounded border border-violet-200 bg-white px-2 py-1.5 space-y-0.5"
+              data-testid="visual-pipeline-schema-key-helper-domain-preset-hint"
+              data-preset-id={domainPreset.id}
+            >
+              <div className="text-[10px] font-medium text-slate-800">
+                Domain Preset 힌트: {domainPreset.title}
+              </div>
+              <div className="text-[10px] text-slate-600">
+                추천 기준키: {formatDomainPresetKeys(domainPreset.recommendedConflictKeys)}
+              </div>
+              {domainPreset.expectedOutputColumns?.length ? (
+                <div className="text-[10px] text-slate-600">
+                  예상 출력:{" "}
+                  {domainPreset.expectedOutputColumns.map((c) => c.name).join(", ")}
+                </div>
+              ) : null}
+              <div className="text-[10px] text-slate-500">
+                안내용이며 conflict_key_columns_json에 자동 저장되지 않습니다.
+              </div>
+            </div>
+          ) : null}
+
           <p
             className="text-[10px] text-slate-600"
             data-testid="visual-pipeline-schema-key-helper-status"

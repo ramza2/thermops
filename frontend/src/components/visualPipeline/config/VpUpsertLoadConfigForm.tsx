@@ -43,6 +43,7 @@ import {
   validateConflictKeys,
 } from "@/utils/conflictKeyValidation";
 import { buildSchemaKeyMappingSummary } from "@/utils/schemaKeyMappingHelper";
+import type { DomainPreset } from "@/utils/domainPresetCatalog";
 import { ensureNodeConfig } from "@/utils/visualPipelineNodeConfig";
 import { findUpstreamTransformForUpsert } from "@/utils/visualPipelineGraph";
 import {
@@ -79,6 +80,8 @@ export type VpUpsertLoadConfigFormProps = {
     nodes: Node[];
     edges: Edge[];
   };
+  /** B2: Domain Preset hint for Schema/Key Helper (UI-only). */
+  domainPreset?: DomainPreset | null;
 };
 
 type DraftColumnRow = ProposedColumnDraft & { row_id: string };
@@ -120,6 +123,7 @@ export function VpUpsertLoadConfigForm({
   onChange,
   disabled,
   studioGraph,
+  domainPreset = null,
 }: VpUpsertLoadConfigFormProps) {
   const writeMode = strVal(values, "write_mode");
   const conflictRequired = writeMode === "DEDUPLICATE" || writeMode === "UPSERT";
@@ -1209,6 +1213,7 @@ export function VpUpsertLoadConfigForm({
           summary={schemaKeyHelperSummary}
           disabled={disabled}
           onApplyRecommendedKeys={(keys) => setConflictKeys(keys)}
+          domainPreset={domainPreset}
         />
 
         <VpConfigFieldShell

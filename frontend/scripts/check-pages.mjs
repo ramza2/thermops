@@ -955,6 +955,98 @@ function assertStarterTemplateUx() {
   }
 }
 
+/** B2: Domain Preset Framework (FE-only hints, no Type B auto-fill). */
+function assertDomainPresetFramework() {
+  const catalog = fs.readFileSync(path.join(FRONTEND_SRC, "utils/domainPresetCatalog.ts"), "utf8");
+  for (const token of [
+    "DOMAIN_PRESET_CATALOG",
+    "generic_time_series_load",
+    "heat_demand_forecast",
+    "Generic Time-Series Load",
+    "Heat Demand Forecast Data Load",
+    "열수요 예측 데이터 적재 예시",
+    "DOMAIN_PRESET_APPLY_TOAST",
+    "DOMAIN_PRESET_TYPE_B_FIELDS",
+    "WIDE_HOUR_TO_LONG",
+  ]) {
+    if (!catalog.includes(token)) {
+      throw new Error(`B2 regression: domainPresetCatalog missing ${token}`);
+    }
+  }
+  for (const banned of [
+    "DS-SAMPLE",
+    "SDS-SAMPLE",
+    "CRED-SAMPLE",
+    "즉시 실행 가능",
+    "자동으로 적재",
+    "자동으로 저장",
+    "한국지역난방",
+    "R10 설정 반영",
+  ]) {
+    if (catalog.includes(banned)) {
+      throw new Error(`B2 regression: catalog must not include '${banned}'`);
+    }
+  }
+
+  const applyHelper = fs.readFileSync(path.join(FRONTEND_SRC, "utils/applyDomainPreset.ts"), "utf8");
+  if (!applyHelper.includes("applyDomainPresetToFlow") || !applyHelper.includes("recommendedTransformType")) {
+    throw new Error("B2 regression: applyDomainPresetToFlow must patch recommendedTransformType only");
+  }
+  if (
+    /data_source_id\s*:/.test(applyHelper) ||
+    /standard_dataset_id\s*:/.test(applyHelper) ||
+    /credential_ref\s*:/.test(applyHelper) ||
+    /conflict_key_columns_json\s*:/.test(applyHelper)
+  ) {
+    throw new Error("B2 regression: apply helper must not touch Type B / conflict keys");
+  }
+
+  const modal = fs.readFileSync(
+    path.join(FRONTEND_SRC, "components/visualPipeline/VpStarterTemplateModal.tsx"),
+    "utf8",
+  );
+  for (const token of [
+    "visual-pipeline-domain-preset-section",
+    "visual-pipeline-domain-preset-option-none",
+    "visual-pipeline-domain-preset-option-",
+    "domainPresetId",
+    "DOMAIN_PRESET_CATALOG",
+  ]) {
+    if (!modal.includes(token)) {
+      throw new Error(`B2 regression: VpStarterTemplateModal missing ${token}`);
+    }
+  }
+  if (!modal.includes("generic_time_series_load") && !modal.includes("DOMAIN_PRESET_CATALOG")) {
+    throw new Error("B2 regression: modal must render domain preset catalog options");
+  }
+
+  const page = fs.readFileSync(path.join(FRONTEND_SRC, "pages/VisualPipelineStudioPage.tsx"), "utf8");
+  for (const token of ["applyDomainPresetToFlow", "DOMAIN_PRESET_APPLY_TOAST", "activeDomainPresetId"]) {
+    if (!page.includes(token)) {
+      throw new Error(`B2 regression: Studio page missing ${token}`);
+    }
+  }
+  if (/applyStarterTemplate[\s\S]{0,1200}updateVisualPipeline/.test(page)) {
+    throw new Error("B2 regression: starter+preset apply must not auto-save");
+  }
+  for (const banned of ["즉시 실행 가능합니다", "자동으로 적재됩니다", "R10 설정 반영"]) {
+    if (page.includes(banned)) {
+      throw new Error(`B2 regression: Studio must not advertise '${banned}'`);
+    }
+  }
+
+  const helper = fs.readFileSync(
+    path.join(FRONTEND_SRC, "components/visualPipeline/VpSchemaKeyMappingHelper.tsx"),
+    "utf8",
+  );
+  if (!helper.includes("visual-pipeline-schema-key-helper-domain-preset-hint")) {
+    throw new Error("B2 regression: B3 helper must show domain preset hint testid");
+  }
+  if (helper.includes("onChange({ conflict_key_columns_json") && /domainPreset[\s\S]{0,200}onChange/.test(helper)) {
+    throw new Error("B2 regression: preset hint must not auto-write conflict keys");
+  }
+}
+
 /** B5: Ops action badge PoC (read-model, no notification table / read-unread). */
 function assertOpsActionBadgePoC() {
   const helper = fs.readFileSync(path.join(FRONTEND_SRC, "utils/opsActionRequired.ts"), "utf8");
@@ -1099,6 +1191,7 @@ assertPartialImpactUx();
 assertSchemaKeyMappingHelper();
 assertOpsActionBadgePoC();
 assertStarterTemplateUx();
+assertDomainPresetFramework();
 
 const browser = await chromium.launch();
 const page = await browser.newPage();

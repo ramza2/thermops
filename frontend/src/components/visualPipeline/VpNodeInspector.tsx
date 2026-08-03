@@ -10,6 +10,8 @@ import type {
   VisualPipelineConfigValidationStatus,
   VisualPipelineNodeConfigValidation,
 } from "@/types/visualPipeline";
+import type { DomainPresetId } from "@/utils/domainPresetCatalog";
+import { getDomainPreset } from "@/utils/domainPresetCatalog";
 import { getVisualPipelineConfigSchema } from "@/utils/visualPipelineConfigRegistry";
 import { ensureNodeConfig, formatNodeConfigPreviewJson } from "@/utils/visualPipelineNodeConfig";
 
@@ -21,6 +23,8 @@ interface VpNodeInspectorProps {
   fieldWarnings?: Record<string, string>;
   studioNodes?: Node[];
   studioEdges?: Edge[];
+  /** B2: UI-only Domain Preset id for Upsert/B3 hints (not persisted). */
+  domainPresetId?: DomainPresetId | null;
   onLabelChange: (label: string) => void;
   onConfigChange: (patch: Record<string, unknown>) => void;
   onDelete: () => void;
@@ -79,6 +83,7 @@ function ConfigFormForType({
   fieldWarnings,
   onConfigChange,
   studioGraph,
+  domainPresetId,
 }: {
   componentType: string;
   values: Record<string, unknown>;
@@ -89,6 +94,7 @@ function ConfigFormForType({
     nodes: Node[];
     edges: Edge[];
   };
+  domainPresetId?: DomainPresetId | null;
 }) {
   if (componentType === "VP_REST_API_SOURCE") {
     return (
@@ -118,6 +124,7 @@ function ConfigFormForType({
         fieldWarnings={fieldWarnings}
         onChange={onConfigChange}
         studioGraph={studioGraph}
+        domainPreset={getDomainPreset(domainPresetId) ?? null}
       />
     );
   }
@@ -148,6 +155,7 @@ export function VpNodeInspector({
   fieldWarnings,
   studioNodes,
   studioEdges,
+  domainPresetId = null,
   onLabelChange,
   onConfigChange,
   onDelete,
@@ -259,6 +267,7 @@ export function VpNodeInspector({
               fieldWarnings={fieldWarnings}
               onConfigChange={onConfigChange}
               studioGraph={studioGraph}
+              domainPresetId={domainPresetId}
             />
           ) : (
             <>

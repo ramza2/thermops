@@ -25,7 +25,7 @@
 | ID | 제목 | 설명 | 그룹 | 상태 | 비고 |
 |----|------|------|------|------|------|
 | B1 | Visual Pipeline Starter Template | 범용 multi-source ingestion 스타터. REST Source 여러 개 → Transform 병렬/정규화 → Upsert Load 기본 그래프를 빠르게 생성. 열수요 실적+기상+특일은 **샘플 시나리오 중 하나**로만 제공 | D | **done** | **R11-S8-9-23** |
-| B2 | Domain Preset Framework | 업무 도메인별 preset 등록·선택 구조. 노드 라벨, 기본 CRON, target table/conflict key, Transform 기본 mapping 포함. 열수요 preset은 **예시 preset 하나**로만 | D | open | 구 S8-8 B2 확장 |
+| B2 | Domain Preset Framework | 업무 도메인별 preset 등록·선택 구조. 노드 라벨, 기본 CRON, target table/conflict key, Transform 기본 mapping 포함. 열수요 preset은 **예시 preset 하나**로만 | D | **done** | **R11-S8-9-24** |
 | B3 | Schema / Key Mapping Helper | 원천 필드 → 표준 컬럼 mapping 범용 helper. 날짜/시간, 엔티티 ID, 지사/노드 코드, 측정값 category 자동 제안 | B | **done** | **R11-S8-9-22** |
 | B4 | Catch-up 안내 개선 | missed 의미·window·경고 카피 강화 (Studio Catch-up 섹션) | C | **done** | **R11-S8-9-19** |
 | B5 | Notification badge PoC | S8-7-1 read-model badge (Ops/Studio). S8-7 설계 범위 | D | **done** | **R11-S8-9-21** |
@@ -75,7 +75,7 @@ B11(done), B13(done), B14(done), B16(done), B17(done), B24(done), B25(done)
 
 ### B — 범용 Visual Pipeline 구성 편의
 
-B1(done), B2, B3(done), B15(done), B19(done), B20(done), B21(done), B27(done)
+B1(done), B2(done), B3(done), B15(done), B19(done), B20(done), B21(done), B27(done)
 
 ### C — 운영 가시성 / 복구 UX
 
@@ -114,6 +114,7 @@ B5(done), B7, B12(done), B22, B23
 | R11-S8-9-21 | B5 | Ops/Studio 운영 확인 필요 badge PoC (read-model, no table) | |
 | R11-S8-9-22 | B3 | Schema / Key Mapping Helper (FE-only, 자동 저장·물리 스키마 변경 없음) | |
 | R11-S8-9-23 | B1 | Visual Pipeline Starter Template (FE-only skeleton, Type B 비움) | |
+| R11-S8-9-24 | B2 | Domain Preset Framework (FE-only hint, Type B 자동 설정 없음) | |
 
 ---
 
@@ -147,6 +148,7 @@ B5(done), B7, B12(done), B22, B23
 | 2026-07-31 | B5 → `done` (S8-9-21). Ops/Studio 운영 확인 필요 badge PoC (read-model, no notification table) |
 | 2026-07-31 | B3 → `done` (S8-9-22). Schema / Key Mapping Helper (FE-only 진단·추천·form 적용, 자동 저장/물리 스키마 변경 없음) |
 | 2026-07-31 | B1 → `done` (S8-9-23). Visual Pipeline Starter Template (FE-only skeleton, 자동 저장/실행 없음, Type B 비움) |
+| 2026-08-03 | B2 → `done` (S8-9-24). Domain Preset Framework (FE-only preset hint, Type B 자동 설정 없음, 실행 가능한 완성 preset 아님) |
 
 ---
 

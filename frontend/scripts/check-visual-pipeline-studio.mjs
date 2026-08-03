@@ -691,6 +691,94 @@ async function runBrowserSmoke(pipeline) {
       if (manualEdges < 2) fail(`B1 rest-upsert: expected >=2 edges, got ${manualEdges}`);
       console.log("  [ok] B1 rest-upsert starter apply (3 nodes)");
 
+      // --- R11-S8-9-24 / B2: Domain Preset ---
+      page.once("dialog", async (dialog) => {
+        await dialog.accept();
+      });
+      await toolbar.getByTestId("visual-pipeline-starter-template-button").click();
+      await page.getByTestId("visual-pipeline-starter-template-modal").waitFor({
+        state: "visible",
+        timeout: 10000,
+      });
+      await page.getByTestId("visual-pipeline-domain-preset-section").waitFor({
+        state: "visible",
+        timeout: 5000,
+      });
+      await page.getByTestId("visual-pipeline-domain-preset-option-none").waitFor({ state: "visible" });
+      await page
+        .getByTestId("visual-pipeline-domain-preset-option-generic_time_series_load")
+        .waitFor({ state: "visible" });
+      await page
+        .getByTestId("visual-pipeline-domain-preset-option-heat_demand_forecast")
+        .waitFor({ state: "visible" });
+      await page.getByTestId("visual-pipeline-domain-preset-option-none").click();
+      await page.getByTestId("visual-pipeline-starter-template-option-cron-full").click();
+      await page.getByTestId("visual-pipeline-domain-preset-option-heat_demand_forecast").click();
+      await page.getByTestId("visual-pipeline-domain-preset-guide").waitFor({ state: "visible" });
+      await page.getByTestId("visual-pipeline-starter-template-apply").click();
+      await page.waitForTimeout(500);
+      const heatNodes = await page.locator('[data-testid^="visual-pipeline-node-"]').count();
+      if (heatNodes !== 4) fail(`B2 heat demand: expected 4 nodes, got ${heatNodes}`);
+      const heatEdges = await page.locator(".react-flow__edge").count();
+      if (heatEdges < 3) fail(`B2 heat demand: expected >=3 edges, got ${heatEdges}`);
+      if ((await toolbar.getByText("● 저장되지 않음").count()) === 0) {
+        fail("B2: preset apply must mark graph dirty (no auto-save)");
+      }
+      const heatPageText = await page.locator('[data-testid="visual-studio-root"]').innerText();
+      for (const banned of ["DS-SAMPLE", "SDS-SAMPLE", "CRED-SAMPLE", "즉시 실행 가능"]) {
+        if (heatPageText.includes(banned)) {
+          fail(`B2: preset graph must not inject/advertise '${banned}'`);
+        }
+      }
+
+      // Select Transform node (starter ids are remapped) and assert transform_type
+      const transformNodeId = await page.evaluate(() => {
+        const nodes = Array.from(document.querySelectorAll(".react-flow__node"));
+        for (const n of nodes) {
+          const label = (n.textContent || "").toUpperCase();
+          if (label.includes("TRANSFORM") && !label.includes("UPSERT")) {
+            return n.getAttribute("data-id");
+          }
+        }
+        return null;
+      });
+      if (!transformNodeId) fail("B2: could not find Transform node after preset apply");
+      await selectNodeById(page, transformNodeId);
+      const inspector = page.getByTestId("visual-pipeline-inspector");
+      await inspector
+        .getByTestId("visual-pipeline-inspector-config-field-transform_type")
+        .waitFor({ state: "visible", timeout: 10000 });
+      const transformUi = await inspector
+        .getByTestId("visual-pipeline-inspector-config-field-transform_type")
+        .locator("select")
+        .inputValue();
+      if (transformUi !== "WIDE_HOUR_TO_LONG") {
+        fail(`B2: expected transform_type=WIDE_HOUR_TO_LONG after Heat Demand preset, got ${transformUi}`);
+      }
+
+      const upsertNodeId = await page.evaluate(() => {
+        const nodes = Array.from(document.querySelectorAll(".react-flow__node"));
+        for (const n of nodes) {
+          const label = (n.textContent || "").toUpperCase();
+          if (label.includes("UPSERT") || label.includes("LOAD")) {
+            return n.getAttribute("data-id");
+          }
+        }
+        return null;
+      });
+      if (upsertNodeId) {
+        await selectNodeById(page, upsertNodeId);
+        const presetHint = inspector.getByTestId("visual-pipeline-schema-key-helper-domain-preset-hint");
+        if ((await presetHint.count()) > 0) {
+          await presetHint.waitFor({ state: "visible", timeout: 5000 });
+          const hintText = await presetHint.innerText();
+          if (!hintText.includes("entity_id") || !hintText.includes("measured_at")) {
+            fail(`B2: B3 preset hint should mention recommended keys, got ${hintText}`);
+          }
+        }
+      }
+      console.log("  [ok] B2 Domain Preset heat_demand (4 nodes, dirty, Type B empty, transform_type)");
+
       // Restore fixture graph for subsequent smoke
       await openStudio(page, pipeline.pipeline_id);
       await page.getByTestId("visual-pipeline-toolbar").waitFor({ state: "visible", timeout: 15000 });

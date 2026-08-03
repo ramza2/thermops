@@ -1953,6 +1953,15 @@ cd frontend && node scripts/check-visual-pipeline-studio.mjs
 - **Known limitation:** FE-only starter skeleton · 자동 저장/실행 없음 · Type B 필드 비움 · multi-source/열수요 preset은 B2 이후
 - **Backlog:** B1 done
 
+### R11-S8-9-24 Domain Preset Framework
+
+- **범위:** FE-only — B2. Starter Template modal에 Domain Preset 선택(가이드 + Type A hint).
+- **변경:** `domainPresetCatalog` · `applyDomainPresetToFlow` · modal preset section · B3 Helper hint · check-pages/studio/e2e
+- **검증:** `cd frontend && npm run build` · pages/studio/ops/e2e · package/requirements diff empty
+- **제외:** backend/API/DB · Type B 자동 채움 · conflict_key 자동 저장 · auto save/compile/run · package · 「R10 설정 반영」재노출 금지
+- **Known limitation:** FE-only preset hint · Type B 자동 설정 없음 · 실행 가능한 완성 preset 아님 · UI state만 보관(reload 시 소실)
+- **Backlog:** B2 done
+
 ## 설계 문서 참조
 
 - `docs/md/THERMOps_R11-S8-9_Backlog.md`

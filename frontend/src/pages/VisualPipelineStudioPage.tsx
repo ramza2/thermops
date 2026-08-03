@@ -70,16 +70,22 @@ import { VpRunPanel } from "@/components/visualPipeline/VpRunPanel";
 import { VpScheduleActivationPanel } from "@/components/visualPipeline/VpScheduleActivationPanel";
 import { VpValidationPanel } from "@/components/visualPipeline/VpValidationPanel";
 import { VpVersionHistoryModal } from "@/components/visualPipeline/VpVersionHistoryModal";
-import { VpStarterTemplateModal } from "@/components/visualPipeline/VpStarterTemplateModal";
+import {
+  VpStarterTemplateModal,
+  type VpStarterTemplateApplyPayload,
+} from "@/components/visualPipeline/VpStarterTemplateModal";
 import { VpOpsActionBadge } from "@/components/visualPipeline/VpOpsActionBadge";
 import { useOpsActionBadge } from "@/hooks/useOpsActionBadge";
 import { useRole } from "@/hooks/useRole";
 import { useToast } from "@/hooks/useToast";
 import { OPS_ACTION_REQUIRED_HREF } from "@/utils/opsActionRequired";
+import { applyDomainPresetToFlow } from "@/utils/applyDomainPreset";
 import {
-  STARTER_TEMPLATE_APPLY_TOAST,
-  type StarterTemplateId,
-} from "@/utils/starterTemplateCatalog";
+  DOMAIN_PRESET_APPLY_TOAST,
+  getDomainPreset,
+  type DomainPresetId,
+} from "@/utils/domainPresetCatalog";
+import { STARTER_TEMPLATE_APPLY_TOAST } from "@/utils/starterTemplateCatalog";
 import type {
   ComponentCatalogItem,
   ConnectionRule,
@@ -151,6 +157,9 @@ function StudioCanvasInner() {
   const [jsonExpanded, setJsonExpanded] = useState(false);
   const [versionsOpen, setVersionsOpen] = useState(false);
   const [starterTemplateOpen, setStarterTemplateOpen] = useState(false);
+  /** UI-only Domain Preset selection (B2). Not persisted to API/graph schema. */
+  const [activeDomainPresetId, setActiveDomainPresetId] = useState<DomainPresetId | null>(null);
+
   const [versionsLoading, setVersionsLoading] = useState(false);
   const [versions, setVersions] = useState<VisualPipelineVersion[]>([]);
   const [validating, setValidating] = useState(false);
@@ -462,14 +471,18 @@ function StudioCanvasInner() {
   }, [nodes.length, edges.length, dirty]);
 
   const applyStarterTemplate = useCallback(
-    (templateId: StarterTemplateId) => {
+    (payload: VpStarterTemplateApplyPayload) => {
       if (!confirmStarterTemplateReplace()) return;
+      const { templateId, domainPresetId } = payload;
       const flow = buildStarterTemplateFlow(templateId);
-      setNodes(flow.nodes);
+      const preset = getDomainPreset(domainPresetId) ?? null;
+      const nodesWithPreset = applyDomainPresetToFlow(flow.nodes, preset);
+      setNodes(nodesWithPreset);
       setEdges(flow.edges);
       setSelectedNodeId(flow.preferredSelectId);
+      setActiveDomainPresetId(domainPresetId);
       setStarterTemplateOpen(false);
-      showToast("success", STARTER_TEMPLATE_APPLY_TOAST);
+      showToast("success", domainPresetId ? DOMAIN_PRESET_APPLY_TOAST : STARTER_TEMPLATE_APPLY_TOAST);
       window.setTimeout(() => {
         try {
           fitView({ padding: 0.2 });
@@ -1361,6 +1374,7 @@ function StudioCanvasInner() {
           fieldWarnings={fieldWarnings}
           studioNodes={nodes}
           studioEdges={edges}
+          domainPresetId={activeDomainPresetId}
           onLabelChange={handleLabelChange}
           onConfigChange={handleNodeConfigChange}
           onDelete={handleDeleteNode}

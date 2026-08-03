@@ -472,12 +472,26 @@ async function runBrowserE2e(pipeline) {
       );
     }
 
-    // B1: Starter Template button / modal show without crash
+    // B1/B2: Starter Template + Domain Preset section show without crash
     {
       const starterBtn = page.getByTestId("visual-pipeline-starter-template-button");
       if ((await starterBtn.count()) > 0) {
         await starterBtn.first().waitFor({ state: "visible", timeout: 10000 });
         console.log("  [ok] B1 Starter Template button visible");
+        await starterBtn.first().click();
+        const modal = page.getByTestId("visual-pipeline-starter-template-modal");
+        await modal.waitFor({ state: "visible", timeout: 10000 });
+        await page.getByTestId("visual-pipeline-domain-preset-section").waitFor({
+          state: "visible",
+          timeout: 5000,
+        });
+        console.log("  [ok] B2 Domain Preset section visible");
+        await page.keyboard.press("Escape").catch(() => {});
+        // close via cancel if still open
+        const cancel = page.getByRole("button", { name: "취소" });
+        if ((await cancel.count()) > 0 && (await modal.count()) > 0) {
+          await cancel.first().click().catch(() => {});
+        }
       } else {
         console.log("  [ok] B1 Starter Template button absent (conditional)");
       }
