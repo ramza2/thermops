@@ -1334,6 +1334,63 @@ function assertR12CandidatePrioritizationDraft() {
   }
 }
 
+/** R12-A-0: DQ Gate MVP Scope Design Draft (docs only; not an implementation kickoff). */
+function assertR12ADqGateMvpScopeDesignDraft() {
+  const guidePath = path.join(REPO_ROOT, "docs/md/THERMOps_R12-A_DQ_Gate_MVP_Scope_Design_Draft.md");
+  if (!fs.existsSync(guidePath)) {
+    throw new Error("R12-A regression: DQ Gate MVP Scope Design Draft markdown missing");
+  }
+  const guide = fs.readFileSync(guidePath, "utf8");
+  for (const token of [
+    "구현 착수 문서가 아니며",
+    "별도 승인",
+    "non-blocking",
+    "read-only",
+    "VP_DATA_QUALITY` node 활성화는 별도 단계",
+    "DQ-001",
+    "DQ-002",
+    "DQ-003",
+    "R12-A-0",
+  ]) {
+    if (!guide.includes(token)) {
+      throw new Error(`R12-A regression: Scope Design Draft missing '${token}'`);
+    }
+  }
+  for (const banned of [
+    "DQ Gate 구현 완료",
+    "Data Quality node 활성화",
+    "R12-A 착수 확정",
+    "Run 차단 기능 완료",
+    "자동 학습 실행",
+    "자동 예측 실행",
+    "즉시 예측 실행",
+    "ML Workflow가 이미 구현",
+    "DISABLED 컴포넌트 활성화 완료",
+    "신규 node 구현 완료",
+    "R10 설정 반영",
+  ]) {
+    if (guide.includes(banned)) {
+      throw new Error(`R12-A regression: Scope Design Draft must not claim '${banned}'`);
+    }
+  }
+
+  const readme = fs.readFileSync(path.join(REPO_ROOT, "README.md"), "utf8");
+  if (!readme.includes("THERMOps_R12-A_DQ_Gate_MVP_Scope_Design_Draft.md")) {
+    throw new Error("R12-A regression: README must link DQ Gate MVP Scope Design Draft");
+  }
+  if (!readme.includes("R12-A Data Quality Gate MVP Scope Design Draft")) {
+    throw new Error("R12-A regression: README must mention R12-A Data Quality Gate MVP Scope Design Draft");
+  }
+
+  const prioritization = fs.readFileSync(
+    path.join(REPO_ROOT, "docs/md/THERMOps_R12_Candidate_Prioritization_Draft.md"),
+    "utf8",
+  );
+  if (!prioritization.includes("THERMOps_R12-A_DQ_Gate_MVP_Scope_Design_Draft.md")) {
+    throw new Error("R12-A regression: Prioritization Draft must link R12-A-0 Scope Design Draft");
+  }
+}
+
 /** B5: Ops action badge PoC (read-model, no notification table / read-unread). */
 function assertOpsActionBadgePoC() {
   const helper = fs.readFileSync(path.join(FRONTEND_SRC, "utils/opsActionRequired.ts"), "utf8");
@@ -1484,6 +1541,7 @@ assertDisabledComponentsRoadmap();
 assertProductBrandingGeneralization();
 assertVisualPipelineCloseoutReleaseNote();
 assertR12CandidatePrioritizationDraft();
+assertR12ADqGateMvpScopeDesignDraft();
 
 const browser = await chromium.launch();
 const page = await browser.newPage();

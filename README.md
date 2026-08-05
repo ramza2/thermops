@@ -2007,6 +2007,15 @@ cd frontend && node scripts/check-visual-pipeline-studio.mjs
 - **Known limitation:** 점수표는 의사결정 참고용 · 추천 초안은 A→B→C→D→E→R13 · Notification은 운영 요구 시 병렬/앞당김 검토 가능
 - **추천 초안(미확정):** R12-A DQ Gate → R12-B Feature → R12-C Training → R12-D Prediction → R12-E Notification → R13
 
+### R12-A Data Quality Gate MVP Scope Design Draft
+
+- **범위:** docs — R12-A-0. DQ Gate & Handoff Hardening **MVP 범위·설계 초안**. 구현 착수 문서 아님 · non-blocking / read-only 우선 · 최종 범위·착수는 별도 승인.
+- **변경:** `THERMOps_R12-A_DQ_Gate_MVP_Scope_Design_Draft.md` · README 링크 · R12 Candidate/Closeout/Backlog 후속 참고 · check-pages 정적 검사
+- **검증:** `cd frontend && npm run build` · pages/studio/ops/e2e · package/requirements diff empty
+- **제외:** DQ engine/API/UI · Run blocking · `VP_DATA_QUALITY` 상태 변경 · Feature/Train/Predict · backend/DB/FE 본기능 · package 변경
+- **Known limitation:** 설계 초안만 · Rule/Profiling/Result/표시 위치는 문서 후보 · Phase A~C non-blocking · node 활성화는 Phase G 별도 검토
+- **후속 후보(미착수):** R12-A-1 Catalog → A-2 Profiling API → … → A-8 node 활성화 검토
+
 ## 설계 문서 참조
 
 - `docs/md/THERMOps_R11-S8-9_Backlog.md`
@@ -2015,6 +2024,7 @@ cd frontend && node scripts/check-visual-pipeline-studio.mjs
 - `docs/md/THERMOps_R11-S8-9-27_Product_Branding_Generalization.md`
 - `docs/md/THERMOps_R11-S8-9-28_Visual_Pipeline_Closeout_Release_Note.md`
 - `docs/md/THERMOps_R12_Candidate_Prioritization_Draft.md`
+- `docs/md/THERMOps_R12-A_DQ_Gate_MVP_Scope_Design_Draft.md`
 - `docs/md/THERMOps_R11-S8-8_열수요예측_Full_Scenario_이용가이드.md` — 대표 예시 시나리오
 - `docs/md/THERMOps_R11-S8-7_Notification_설계.md`
 - `docs/md/THERMOps_R11-S8-0_Run_History_Progress_Retry_설계.md`

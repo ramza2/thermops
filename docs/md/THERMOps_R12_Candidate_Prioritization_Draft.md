@@ -245,6 +245,7 @@ B22 권장 흐름과의 정합:
 
 ### 10.1 R12-A DQ Gate MVP 후보
 
+- **R12-A-0:** [DQ Gate MVP Scope Design Draft](./THERMOps_R12-A_DQ_Gate_MVP_Scope_Design_Draft.md) (본 단계 문서 · 구현 착수 아님)
 - DQ rule catalog 설계 문서
 - Target table profiling **read-only** API 검토
 - DQ result model 초안
@@ -344,6 +345,7 @@ B22 권장 흐름과의 정합:
 
 ## 15. 관련 문서
 
+- [THERMOps_R12-A_DQ_Gate_MVP_Scope_Design_Draft.md](./THERMOps_R12-A_DQ_Gate_MVP_Scope_Design_Draft.md) — R12-A-0 Scope / Design Draft (구현 착수 문서 아님)
 - [THERMOps_R11-S8-9-28_Visual_Pipeline_Closeout_Release_Note.md](./THERMOps_R11-S8-9-28_Visual_Pipeline_Closeout_Release_Note.md)
 - [THERMOps_R11-S8-9_Backlog.md](./THERMOps_R11-S8-9_Backlog.md)
 - [THERMOps_R11-S8-9-25_Data_Load_to_ML_Workflow_Handoff_Guide.md](./THERMOps_R11-S8-9-25_Data_Load_to_ML_Workflow_Handoff_Guide.md)
