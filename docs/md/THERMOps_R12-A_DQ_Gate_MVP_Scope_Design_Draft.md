@@ -149,7 +149,7 @@ Blocking 가능성: `NONE` / `LATER` / `POSSIBLE`
 
 - **MVP 우선:** DQ-001, DQ-002, DQ-003, DQ-004, DQ-006, DQ-007  
 - **후속:** DQ-005, DQ-008, DQ-009, DQ-010  
-- threshold·도메인 기본값은 **catalog 정책 문서(R12-A-1)** 에서 분리한다.
+- threshold·도메인 기본값 후보는 **[R12-A-1 DQ Rule Catalog & Policy](./THERMOps_R12-A-1_DQ_Rule_Catalog_Policy.md)** 에서 정의한다 (엔진·저장 미구현).
 
 ---
 
@@ -277,8 +277,8 @@ Blocking 가능성: `NONE` / `LATER` / `POSSIBLE`
 
 | ID | 내용 | 비고 |
 |----|------|------|
-| **R12-A-0** | DQ Gate MVP Scope Design Draft | **본 문서** |
-| R12-A-1 | DQ Rule Catalog & Policy 문서 | threshold·severity |
+| **R12-A-0** | DQ Gate MVP Scope Design Draft | 상위 문서 |
+| **R12-A-1** | DQ Rule Catalog & Policy 문서 | [본 단계 문서](./THERMOps_R12-A-1_DQ_Rule_Catalog_Policy.md) · threshold·severity (엔진 미구현) |
 | R12-A-2 | Target Profiling Read-only API PoC | 별도 승인 |
 | R12-A-3 | DQ Summary Response Contract | |
 | R12-A-4 | Run Detail DQ Summary UI PoC | |
@@ -366,6 +366,7 @@ R12-A-2 이후는 **별도 승인** 없이 착수하지 않는다.
 
 ## 21. 관련 문서
 
+- [THERMOps_R12-A-1_DQ_Rule_Catalog_Policy.md](./THERMOps_R12-A-1_DQ_Rule_Catalog_Policy.md) — R12-A-1 Rule Catalog & Policy (구현 착수 문서 아님)
 - [THERMOps_R12_Candidate_Prioritization_Draft.md](./THERMOps_R12_Candidate_Prioritization_Draft.md)
 - [THERMOps_R11-S8-9-28_Visual_Pipeline_Closeout_Release_Note.md](./THERMOps_R11-S8-9-28_Visual_Pipeline_Closeout_Release_Note.md)
 - [THERMOps_R11-S8-9-25_Data_Load_to_ML_Workflow_Handoff_Guide.md](./THERMOps_R11-S8-9-25_Data_Load_to_ML_Workflow_Handoff_Guide.md)

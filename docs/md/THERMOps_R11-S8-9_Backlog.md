@@ -164,6 +164,7 @@ B5(done), B7(done), B12(done), B22(done), B23(done)
 
 ## 7. 관련 문서
 
+- [R12-A-1 DQ Rule Catalog & Policy](./THERMOps_R12-A-1_DQ_Rule_Catalog_Policy.md) — 후속 참고: Rule Catalog·Policy (구현 착수 문서 아님 · S8-9 done 상태 변경 없음)
 - [R12-A DQ Gate MVP Scope Design Draft](./THERMOps_R12-A_DQ_Gate_MVP_Scope_Design_Draft.md) — 후속 참고: R12-A-0 설계 초안 (구현 착수 문서 아님 · S8-9 done 상태 변경 없음)
 - [R12 Candidate Prioritization Draft](./THERMOps_R12_Candidate_Prioritization_Draft.md) — 후속 참고: R12/R13 후보 우선순위 초안 (구현 착수 문서 아님 · S8-9 done 상태 변경 없음)
 - [R11-S8-9-28 Visual Pipeline Studio/Ops Closeout Release Note](./THERMOps_R11-S8-9-28_Visual_Pipeline_Closeout_Release_Note.md) — S8-9 closeout / release note (신규 기능 구현 아님)

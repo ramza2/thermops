@@ -1391,6 +1391,75 @@ function assertR12ADqGateMvpScopeDesignDraft() {
   }
 }
 
+/** R12-A-1: DQ Rule Catalog & Policy (docs only; no rule engine / blocking / node enablement). */
+function assertR12A1DqRuleCatalogPolicy() {
+  const guidePath = path.join(REPO_ROOT, "docs/md/THERMOps_R12-A-1_DQ_Rule_Catalog_Policy.md");
+  if (!fs.existsSync(guidePath)) {
+    throw new Error("R12-A-1 regression: DQ Rule Catalog & Policy markdown missing");
+  }
+  const guide = fs.readFileSync(guidePath, "utf8");
+  for (const token of [
+    "구현 착수 문서가 아니며",
+    "별도 승인",
+    "DQ-001",
+    "DQ-002",
+    "DQ-003",
+    "DQ-010",
+    "MVP rule set",
+    "handoff_recommendation",
+    "Threshold는 후보",
+    "VP_DATA_QUALITY` 활성화는 별도 단계",
+    "non-blocking",
+  ]) {
+    if (!guide.includes(token)) {
+      throw new Error(`R12-A-1 regression: Rule Catalog Policy missing '${token}'`);
+    }
+  }
+  for (const banned of [
+    "DQ Gate 구현 완료",
+    "Data Quality node 활성화",
+    "Rule engine 구현 완료",
+    "DQ 평가 실행 가능",
+    "R12-A 착수 확정",
+    "Run 차단 기능 완료",
+    "자동 학습 실행",
+    "자동 예측 실행",
+    "즉시 예측 실행",
+    "ML Workflow가 이미 구현",
+    "DISABLED 컴포넌트 활성화 완료",
+    "신규 node 구현 완료",
+    "R10 설정 반영",
+  ]) {
+    if (guide.includes(banned)) {
+      throw new Error(`R12-A-1 regression: Rule Catalog Policy must not claim '${banned}'`);
+    }
+  }
+
+  const readme = fs.readFileSync(path.join(REPO_ROOT, "README.md"), "utf8");
+  if (!readme.includes("THERMOps_R12-A-1_DQ_Rule_Catalog_Policy.md")) {
+    throw new Error("R12-A-1 regression: README must link DQ Rule Catalog & Policy");
+  }
+  if (!readme.includes("R12-A-1 DQ Rule Catalog & Policy")) {
+    throw new Error("R12-A-1 regression: README must mention R12-A-1 DQ Rule Catalog & Policy");
+  }
+
+  const scope = fs.readFileSync(
+    path.join(REPO_ROOT, "docs/md/THERMOps_R12-A_DQ_Gate_MVP_Scope_Design_Draft.md"),
+    "utf8",
+  );
+  if (!scope.includes("THERMOps_R12-A-1_DQ_Rule_Catalog_Policy.md")) {
+    throw new Error("R12-A-1 regression: R12-A-0 Scope Draft must link Rule Catalog Policy");
+  }
+
+  const prioritization = fs.readFileSync(
+    path.join(REPO_ROOT, "docs/md/THERMOps_R12_Candidate_Prioritization_Draft.md"),
+    "utf8",
+  );
+  if (!prioritization.includes("THERMOps_R12-A-1_DQ_Rule_Catalog_Policy.md")) {
+    throw new Error("R12-A-1 regression: Prioritization Draft must link Rule Catalog Policy");
+  }
+}
+
 /** B5: Ops action badge PoC (read-model, no notification table / read-unread). */
 function assertOpsActionBadgePoC() {
   const helper = fs.readFileSync(path.join(FRONTEND_SRC, "utils/opsActionRequired.ts"), "utf8");
@@ -1542,6 +1611,7 @@ assertProductBrandingGeneralization();
 assertVisualPipelineCloseoutReleaseNote();
 assertR12CandidatePrioritizationDraft();
 assertR12ADqGateMvpScopeDesignDraft();
+assertR12A1DqRuleCatalogPolicy();
 
 const browser = await chromium.launch();
 const page = await browser.newPage();

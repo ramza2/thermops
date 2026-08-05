@@ -2014,7 +2014,16 @@ cd frontend && node scripts/check-visual-pipeline-studio.mjs
 - **검증:** `cd frontend && npm run build` · pages/studio/ops/e2e · package/requirements diff empty
 - **제외:** DQ engine/API/UI · Run blocking · `VP_DATA_QUALITY` 상태 변경 · Feature/Train/Predict · backend/DB/FE 본기능 · package 변경
 - **Known limitation:** 설계 초안만 · Rule/Profiling/Result/표시 위치는 문서 후보 · Phase A~C non-blocking · node 활성화는 Phase G 별도 검토
-- **후속 후보(미착수):** R12-A-1 Catalog → A-2 Profiling API → … → A-8 node 활성화 검토
+- **후속 후보:** R12-A-1 Catalog(아래) → A-2 Profiling API → … → A-8 node 활성화 검토
+
+### R12-A-1 DQ Rule Catalog & Policy
+
+- **범위:** docs — R12-A-1. DQ-001~DQ-010 Rule Catalog · Severity/Status/Threshold/Handoff Recommendation 정책. 구현 착수 문서 아님.
+- **변경:** `THERMOps_R12-A-1_DQ_Rule_Catalog_Policy.md` · README 링크 · R12-A-0/Candidate/Closeout/Backlog 후속 참고 · check-pages 정적 검사
+- **검증:** `cd frontend && npm run build` · pages/studio/ops/e2e · package/requirements diff empty
+- **제외:** Rule engine 실행 · Run blocking · `VP_DATA_QUALITY` 활성화 · threshold 저장 · profiling API/UI · backend/DB/FE 본기능 · package 변경 · `data/samples/classification_sample.csv` 추가 금지
+- **Known limitation:** threshold 수치는 후보 · DQ 결과는 Handoff 판단 보조(자동 승인/차단 아님) · Domain Preset≠SoT · 열수요는 대표 예시
+- **MVP rule set:** DQ-001, 002, 003, 004, 006, 007 · **후속:** 005, 008, 009, 010
 
 ## 설계 문서 참조
 
@@ -2025,6 +2034,7 @@ cd frontend && node scripts/check-visual-pipeline-studio.mjs
 - `docs/md/THERMOps_R11-S8-9-28_Visual_Pipeline_Closeout_Release_Note.md`
 - `docs/md/THERMOps_R12_Candidate_Prioritization_Draft.md`
 - `docs/md/THERMOps_R12-A_DQ_Gate_MVP_Scope_Design_Draft.md`
+- `docs/md/THERMOps_R12-A-1_DQ_Rule_Catalog_Policy.md`
 - `docs/md/THERMOps_R11-S8-8_열수요예측_Full_Scenario_이용가이드.md` — 대표 예시 시나리오
 - `docs/md/THERMOps_R11-S8-7_Notification_설계.md`
 - `docs/md/THERMOps_R11-S8-0_Run_History_Progress_Retry_설계.md`
