@@ -170,7 +170,7 @@ Blocking 가능성: `NONE` / `LATER` / `POSSIBLE`
 
 주의:
 - full profiling은 대용량에서 비용이 클 수 있다 → **sampling / limit / async**는 후속 검토.
-- 첫 MVP는 **read-only / summary** 중심이며 API 구현은 R12-A-2 이후 **별도 승인**.
+- 첫 MVP는 **read-only / summary** 중심이며 API 구현은 [R12-A-2 Plan](./THERMOps_R12-A-2_Target_Profiling_Readonly_API_PoC_Plan.md) 이후 **별도 승인**.
 
 ---
 
@@ -279,7 +279,7 @@ Blocking 가능성: `NONE` / `LATER` / `POSSIBLE`
 |----|------|------|
 | **R12-A-0** | DQ Gate MVP Scope Design Draft | 상위 문서 |
 | **R12-A-1** | DQ Rule Catalog & Policy 문서 | [본 단계 문서](./THERMOps_R12-A-1_DQ_Rule_Catalog_Policy.md) · threshold·severity (엔진 미구현) |
-| R12-A-2 | Target Profiling Read-only API PoC | 별도 승인 |
+| **R12-A-2** | Target Profiling Read-only API PoC | [Plan R12-A-2-0](./THERMOps_R12-A-2_Target_Profiling_Readonly_API_PoC_Plan.md) · API 구현은 별도 승인 |
 | R12-A-3 | DQ Summary Response Contract | |
 | R12-A-4 | Run Detail DQ Summary UI PoC | |
 | R12-A-5 | Handoff Readiness Status PoC | |
@@ -366,6 +366,7 @@ R12-A-2 이후는 **별도 승인** 없이 착수하지 않는다.
 
 ## 21. 관련 문서
 
+- [THERMOps_R12-A-2_Target_Profiling_Readonly_API_PoC_Plan.md](./THERMOps_R12-A-2_Target_Profiling_Readonly_API_PoC_Plan.md) — R12-A-2-0 Profiling API PoC Plan (API 구현 문서 아님)
 - [THERMOps_R12-A-1_DQ_Rule_Catalog_Policy.md](./THERMOps_R12-A-1_DQ_Rule_Catalog_Policy.md) — R12-A-1 Rule Catalog & Policy (구현 착수 문서 아님)
 - [THERMOps_R12_Candidate_Prioritization_Draft.md](./THERMOps_R12_Candidate_Prioritization_Draft.md)
 - [THERMOps_R11-S8-9-28_Visual_Pipeline_Closeout_Release_Note.md](./THERMOps_R11-S8-9-28_Visual_Pipeline_Closeout_Release_Note.md)

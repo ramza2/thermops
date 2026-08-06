@@ -1460,6 +1460,87 @@ function assertR12A1DqRuleCatalogPolicy() {
   }
 }
 
+/** R12-A-2-0: Target Profiling Read-only API PoC Plan (docs only; no API implementation). */
+function assertR12A2TargetProfilingReadonlyApiPocPlan() {
+  const guidePath = path.join(
+    REPO_ROOT,
+    "docs/md/THERMOps_R12-A-2_Target_Profiling_Readonly_API_PoC_Plan.md",
+  );
+  if (!fs.existsSync(guidePath)) {
+    throw new Error("R12-A-2 regression: Target Profiling API PoC Plan markdown missing");
+  }
+  const guide = fs.readFileSync(guidePath, "utf8");
+  for (const token of [
+    "API 구현 문서가 아니며",
+    "별도 승인 후 진행",
+    "read-only",
+    "SELECT only",
+    "no INSERT",
+    "no UPDATE",
+    "no DELETE",
+    "row_count",
+    "null_ratio",
+    "duplicate_key_count",
+    "freshness",
+    "VP_DATA_QUALITY",
+    "R12-A-2-0",
+    "BASIC",
+  ]) {
+    if (!guide.includes(token)) {
+      throw new Error(`R12-A-2 regression: Profiling API PoC Plan missing '${token}'`);
+    }
+  }
+  if (!guide.includes("활성화하지 않는다") && !guide.includes("활성화는 범위 밖")) {
+    // node enablement must be out of scope
+    if (!guide.includes("node를 **활성화하지 않는다**") && !guide.includes("활성화하지 않는다")) {
+      throw new Error("R12-A-2 regression: Plan must state VP_DATA_QUALITY activation is out of scope");
+    }
+  }
+  for (const banned of [
+    "Target Profiling API 제공 완료",
+    "DQ Gate 구현 완료",
+    "DQ 평가 실행 가능",
+    "Data Quality node 활성화",
+    "R12-A 착수 확정",
+    "Run 차단 기능 완료",
+    "Rule engine 구현 완료",
+    "자동 학습 실행",
+    "자동 예측 실행",
+    "즉시 예측 실행",
+    "ML Workflow가 이미 구현",
+    "DISABLED 컴포넌트 활성화 완료",
+    "신규 node 구현 완료",
+    "R10 설정 반영",
+  ]) {
+    if (guide.includes(banned)) {
+      throw new Error(`R12-A-2 regression: Profiling API PoC Plan must not claim '${banned}'`);
+    }
+  }
+
+  const readme = fs.readFileSync(path.join(REPO_ROOT, "README.md"), "utf8");
+  if (!readme.includes("THERMOps_R12-A-2_Target_Profiling_Readonly_API_PoC_Plan.md")) {
+    throw new Error("R12-A-2 regression: README must link Target Profiling API PoC Plan");
+  }
+  if (!readme.includes("R12-A-2 Target Profiling Read-only API PoC Plan")) {
+    throw new Error("R12-A-2 regression: README must mention R12-A-2 Target Profiling Read-only API PoC Plan");
+  }
+
+  const scope = fs.readFileSync(
+    path.join(REPO_ROOT, "docs/md/THERMOps_R12-A_DQ_Gate_MVP_Scope_Design_Draft.md"),
+    "utf8",
+  );
+  const catalog = fs.readFileSync(
+    path.join(REPO_ROOT, "docs/md/THERMOps_R12-A-1_DQ_Rule_Catalog_Policy.md"),
+    "utf8",
+  );
+  if (
+    !scope.includes("THERMOps_R12-A-2_Target_Profiling_Readonly_API_PoC_Plan.md") &&
+    !catalog.includes("THERMOps_R12-A-2_Target_Profiling_Readonly_API_PoC_Plan.md")
+  ) {
+    throw new Error("R12-A-2 regression: R12-A-0 or R12-A-1 must link Profiling API PoC Plan");
+  }
+}
+
 /** B5: Ops action badge PoC (read-model, no notification table / read-unread). */
 function assertOpsActionBadgePoC() {
   const helper = fs.readFileSync(path.join(FRONTEND_SRC, "utils/opsActionRequired.ts"), "utf8");
@@ -1612,6 +1693,7 @@ assertVisualPipelineCloseoutReleaseNote();
 assertR12CandidatePrioritizationDraft();
 assertR12ADqGateMvpScopeDesignDraft();
 assertR12A1DqRuleCatalogPolicy();
+assertR12A2TargetProfilingReadonlyApiPocPlan();
 
 const browser = await chromium.launch();
 const page = await browser.newPage();

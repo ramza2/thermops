@@ -247,7 +247,7 @@ B22 권장 흐름과의 정합:
 
 - **R12-A-0:** [DQ Gate MVP Scope Design Draft](./THERMOps_R12-A_DQ_Gate_MVP_Scope_Design_Draft.md) (Scope · 구현 착수 아님)
 - **R12-A-1:** [DQ Rule Catalog & Policy](./THERMOps_R12-A-1_DQ_Rule_Catalog_Policy.md) (Catalog/Policy · 엔진 미구현)
-- Target table profiling **read-only** API 검토 (R12-A-2 · 별도 승인)
+- **R12-A-2-0:** [Target Profiling Read-only API PoC Plan](./THERMOps_R12-A-2_Target_Profiling_Readonly_API_PoC_Plan.md) (Plan · API 구현 문서 아님 · 구현은 별도 승인)
 - DQ result model 초안
 - Run **blocking vs non-blocking** policy (첫 단계에서는 blocking 강제 지양)
 - Studio / Run Detail **read-only** DQ summary
@@ -345,6 +345,7 @@ B22 권장 흐름과의 정합:
 
 ## 15. 관련 문서
 
+- [THERMOps_R12-A-2_Target_Profiling_Readonly_API_PoC_Plan.md](./THERMOps_R12-A-2_Target_Profiling_Readonly_API_PoC_Plan.md) — R12-A-2-0 Profiling API PoC Plan (API 구현 문서 아님)
 - [THERMOps_R12-A-1_DQ_Rule_Catalog_Policy.md](./THERMOps_R12-A-1_DQ_Rule_Catalog_Policy.md) — R12-A-1 DQ Rule Catalog & Policy (구현 착수 문서 아님 · 엔진 미실행)
 - [THERMOps_R12-A_DQ_Gate_MVP_Scope_Design_Draft.md](./THERMOps_R12-A_DQ_Gate_MVP_Scope_Design_Draft.md) — R12-A-0 Scope / Design Draft (구현 착수 문서 아님)
 - [THERMOps_R11-S8-9-28_Visual_Pipeline_Closeout_Release_Note.md](./THERMOps_R11-S8-9-28_Visual_Pipeline_Closeout_Release_Note.md)

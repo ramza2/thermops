@@ -2025,6 +2025,15 @@ cd frontend && node scripts/check-visual-pipeline-studio.mjs
 - **Known limitation:** threshold 수치는 후보 · DQ 결과는 Handoff 판단 보조(자동 승인/차단 아님) · Domain Preset≠SoT · 열수요는 대표 예시
 - **MVP rule set:** DQ-001, 002, 003, 004, 006, 007 · **후속:** 005, 008, 009, 010
 
+### R12-A-2 Target Profiling Read-only API PoC Plan
+
+- **범위:** docs — R12-A-2-0. Target Profiling Read-only API PoC **Scope / Implementation Plan**. API 구현 문서 아님 · 실제 구현·테스트는 별도 승인.
+- **변경:** `THERMOps_R12-A-2_Target_Profiling_Readonly_API_PoC_Plan.md` · README 링크 · A-0/A-1/Candidate/Closeout/Backlog 후속 참고 · check-pages 정적 검사
+- **검증:** `cd frontend && npm run build` · pages/studio/ops/e2e · package/requirements/CSV diff empty
+- **제외:** backend route/service/schema · migration · DML · rule engine · persist · blocking · FE UI · `VP_DATA_QUALITY` 활성화 · package · CSV 수정
+- **Known limitation:** endpoint/contract는 후보 · Profile≠Rule Result · handoff는 A-3/A-5 · BASIC/read-only/no persist · table은 run/materialization 메타만
+- **후속(미착수):** R12-A-2-1 contract → … → 2-7 fixture review
+
 ## 설계 문서 참조
 
 - `docs/md/THERMOps_R11-S8-9_Backlog.md`
@@ -2035,6 +2044,7 @@ cd frontend && node scripts/check-visual-pipeline-studio.mjs
 - `docs/md/THERMOps_R12_Candidate_Prioritization_Draft.md`
 - `docs/md/THERMOps_R12-A_DQ_Gate_MVP_Scope_Design_Draft.md`
 - `docs/md/THERMOps_R12-A-1_DQ_Rule_Catalog_Policy.md`
+- `docs/md/THERMOps_R12-A-2_Target_Profiling_Readonly_API_PoC_Plan.md`
 - `docs/md/THERMOps_R11-S8-8_열수요예측_Full_Scenario_이용가이드.md` — 대표 예시 시나리오
 - `docs/md/THERMOps_R11-S8-7_Notification_설계.md`
 - `docs/md/THERMOps_R11-S8-0_Run_History_Progress_Retry_설계.md`

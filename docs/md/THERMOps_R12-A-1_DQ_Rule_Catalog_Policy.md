@@ -338,7 +338,7 @@ Heat Demand Domain Preset은 **FE hint**이며 catalog threshold의 SoT가 아�
 | Rule ID/정책 정의 | ✅ | — |
 | Threshold 후보 문서화 | ✅ | 테넌트별 확정은 별도 |
 | Rule engine 실행 | ❌ | R12-A-2+ |
-| Profiling API | ❌ | R12-A-2 |
+| Profiling API | ❌ | [R12-A-2 Plan](./THERMOps_R12-A-2_Target_Profiling_Readonly_API_PoC_Plan.md) (구현은 별도 승인) |
 | Summary UI | ❌ | R12-A-4 |
 | Threshold DB 저장 | ❌ | 별도 승인 |
 | Run blocking | ❌ | R12-A-7 / Phase F |
@@ -400,6 +400,7 @@ Heat Demand Domain Preset은 **FE hint**이며 catalog threshold의 SoT가 아�
 
 ## 19. 관련 문서
 
+- [THERMOps_R12-A-2_Target_Profiling_Readonly_API_PoC_Plan.md](./THERMOps_R12-A-2_Target_Profiling_Readonly_API_PoC_Plan.md) — R12-A-2-0 Profiling API PoC Plan (API 구현 문서 아님)
 - [THERMOps_R12-A_DQ_Gate_MVP_Scope_Design_Draft.md](./THERMOps_R12-A_DQ_Gate_MVP_Scope_Design_Draft.md) — R12-A-0
 - [THERMOps_R12_Candidate_Prioritization_Draft.md](./THERMOps_R12_Candidate_Prioritization_Draft.md)
 - [THERMOps_R11-S8-9-28_Visual_Pipeline_Closeout_Release_Note.md](./THERMOps_R11-S8-9-28_Visual_Pipeline_Closeout_Release_Note.md)

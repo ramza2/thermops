@@ -300,6 +300,7 @@ docker compose -f docker-compose.traefik.yml --env-file .env.deploy up -d --buil
 
 ## 14. 관련 문서
 
+- [THERMOps_R12-A-2_Target_Profiling_Readonly_API_PoC_Plan.md](./THERMOps_R12-A-2_Target_Profiling_Readonly_API_PoC_Plan.md) — R12-A-2-0 Profiling API PoC Plan (API 구현 문서 아님)
 - [THERMOps_R12-A-1_DQ_Rule_Catalog_Policy.md](./THERMOps_R12-A-1_DQ_Rule_Catalog_Policy.md) — R12-A-1 DQ Rule Catalog & Policy (구현 착수 문서 아님)
 - [THERMOps_R12-A_DQ_Gate_MVP_Scope_Design_Draft.md](./THERMOps_R12-A_DQ_Gate_MVP_Scope_Design_Draft.md) — R12-A-0 DQ Gate MVP Scope Design Draft (구현 착수 문서 아님)
 - [THERMOps_R12_Candidate_Prioritization_Draft.md](./THERMOps_R12_Candidate_Prioritization_Draft.md) — R12/R13 후보 우선순위 초안 (구현 착수 문서 아님 · 범위·순서 미확정)
